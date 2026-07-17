@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:SoulsTracker.Desktop"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="SoulsTracker"
-        Icon="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull.ico"
+        Icon="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull-compact.ico"
         Width="1060"
         Height="760"
         MinWidth="560"
@@ -252,7 +252,7 @@
         <Border Grid.Row="0" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,16">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                <Image x:Name="SoulsTrackerSkullIcon" Width="38" Height="38" VerticalAlignment="Center" Source="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull.png" AutomationProperties.Name="SoulsTracker skull application icon" />
+                <Image x:Name="SoulsTrackerSkullIcon" Width="38" Height="38" VerticalAlignment="Center" Source="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull-compact.png" AutomationProperties.Name="SoulsTracker skull application icon" />
                 <StackPanel Grid.Column="1" Margin="12,0,0,0">
                     <TextBlock FontSize="22" FontWeight="SemiBold" Text="SoulsTracker" />
                     <TextBlock x:Name="HeaderSubtitleTextBlock" Style="{StaticResource MutedText}" Text="Death Tracker and Boss List" />

@@ -27,7 +27,7 @@
     <UseWPF>true</UseWPF>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <ApplicationIcon>../../assets/branding/souls-tracker-skull.ico</ApplicationIcon>
+    <ApplicationIcon>../../assets/branding/souls-tracker-skull-compact.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>
