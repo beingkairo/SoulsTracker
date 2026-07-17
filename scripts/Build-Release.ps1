@@ -140,7 +140,7 @@ if (-not $SkipInstaller) {
 
     Invoke-External $isccPath @(
         "/DAppVersion=$version",
-        "/DBuildOutput=$publishPath",
+        "/DBuildOutput=$releasePath",
         (Join-Path $root "installer\SoulsTracker.iss")
     )
 }
