@@ -36,15 +36,38 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
         Assert.False(await TextExportStatePublisher.WriteAsync(state));
     }
 
-    [Fact]
-    public async Task UsesTheSelectedAutomaticGameDisplayedTotalAndDoesNotWriteBeforeItIsAvailable()
+    [Theory]
+    [InlineData("ds1")]
+    [InlineData("ds2")]
+    [InlineData("ds3")]
+    [InlineData("sekiro")]
+    public async Task UsesTheSelectedAutomaticGameDisplayedTotalAndDoesNotWriteBeforeItIsAvailable(string selectedGameValue)
     {
+        GameId selectedGame = GameId.Parse(selectedGameValue);
         string deathsPath = Path.Combine(root, "automatic-deaths.txt");
-        PersistentTrackerState state = new(1, GameId.Ds3, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 4), BossProgress.Empty, OverlayConfiguration.Default, textExports: new TextExportConfiguration(deathsPath, true, null, false));
+        PersistentTrackerState state = new(1, selectedGame, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 4), BossProgress.Empty, OverlayConfiguration.Default, textExports: new TextExportConfiguration(deathsPath, true, null, false));
 
         Assert.True(await TextExportStatePublisher.WriteAsync(state));
         Assert.False(File.Exists(deathsPath));
         Assert.True(await TextExportStatePublisher.WriteAsync(state, 17));
         Assert.Equal("Total Deaths: 17", await File.ReadAllTextAsync(deathsPath));
+    }
+
+    [Fact]
+    public async Task ReusesTheConfiguredDeathsFileForTheCurrentlySelectedManualGameWithoutSharingTotals()
+    {
+        string deathsPath = Path.Combine(root, "manual-deaths.txt");
+        TextExportConfiguration exports = new(deathsPath, true, null, false);
+        ManualBloodborneDeathCounter bloodborne = ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 4);
+        ManualBloodborneDeathCounter demonsSouls = ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 9);
+
+        PersistentTrackerState bloodborneState = new(1, GameId.Bloodborne, bloodborne, BossProgress.Empty, OverlayConfiguration.Default, textExports: exports, manualDemonsSoulsDeathCounter: demonsSouls);
+        PersistentTrackerState demonsSoulsState = new(1, GameId.DemonsSouls, bloodborne, BossProgress.Empty, OverlayConfiguration.Default, textExports: exports, manualDemonsSoulsDeathCounter: demonsSouls);
+
+        Assert.True(await TextExportStatePublisher.WriteAsync(bloodborneState));
+        Assert.Equal("Total Deaths: 4", await File.ReadAllTextAsync(deathsPath));
+
+        Assert.True(await TextExportStatePublisher.WriteAsync(demonsSoulsState));
+        Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
     }
 }

@@ -1,5 +1,6 @@
 <Window x:Class="SoulsTracker.Desktop.MainWindow"
         DataContextChanged="Window_DataContextChanged"
+        PreviewKeyDown="Window_PreviewKeyDown"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:domain="clr-namespace:SoulsTracker.Domain;assembly=SoulsTracker.Domain"
@@ -322,8 +323,8 @@
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="MANUAL HOTKEYS" />
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose a field to record. Enter saves and returns to the main menu; Esc cancels." />
-                                <DockPanel Margin="0,0,0,5"><TextBlock Width="90" VerticalAlignment="Center" Text="Increment" /><TextBox x:Name="IncrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingIncrementHotkey, Mode=OneWay}" GotKeyboardFocus="HotkeyTextBox_GotKeyboardFocus" PreviewKeyDown="IncrementHotkeyTextBox_PreviewKeyDown" AutomationProperties.Name="Increment manual hotkey" /></DockPanel>
-                                <DockPanel><TextBlock Width="90" VerticalAlignment="Center" Text="Decrement" /><TextBox x:Name="DecrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingDecrementHotkey, Mode=OneWay}" GotKeyboardFocus="HotkeyTextBox_GotKeyboardFocus" PreviewKeyDown="DecrementHotkeyTextBox_PreviewKeyDown" AutomationProperties.Name="Decrement manual hotkey" /></DockPanel>
+                                <DockPanel Margin="0,0,0,5"><TextBlock Width="90" VerticalAlignment="Center" Text="Increment" /><TextBox x:Name="IncrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingIncrementHotkey, Mode=OneWay}" GotKeyboardFocus="IncrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Increment manual hotkey" /></DockPanel>
+                                <DockPanel><TextBlock Width="90" VerticalAlignment="Center" Text="Decrement" /><TextBox x:Name="DecrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingDecrementHotkey, Mode=OneWay}" GotKeyboardFocus="DecrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Decrement manual hotkey" /></DockPanel>
                                 <Button x:Name="ApplyHotkeysButton" Margin="0,8,0,0" HorizontalAlignment="Left" Click="ApplyHotkeysButton_Click" Content="Apply hotkeys" AutomationProperties.Name="Apply manual hotkeys" />
                             </StackPanel>
                             <TextBlock x:Name="ErrorMessageTextBlock" Margin="0,8,0,0" Foreground="{StaticResource DangerBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" AutomationProperties.Name="Tracker error status" />
@@ -509,5 +510,24 @@
         <Border Grid.Row="2" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,10">
             <TextBlock HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
         </Border>
+
+        <Grid x:Name="HotkeyRecordingOverlay"
+              Grid.RowSpan="3"
+              Panel.ZIndex="20"
+              Background="#A8000000"
+              Visibility="{Binding IsHotkeyRecording, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Focusable="True"
+              AutomationProperties.Name="Manual hotkey recording">
+            <Border Width="430" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="10" Height="10" Margin="0,0,9,0" Fill="#FF4D4D" />
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Currently recording input" />
+                    </StackPanel>
+                    <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="Press the input that you want to use as a hotkey then click enter to save." />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Press ESC to exit without saving" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

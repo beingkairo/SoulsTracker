@@ -68,15 +68,16 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void ManualHotkeyGuidanceAndRecorderPromptUseTheApprovedWording()
+    public void ManualHotkeyGuidanceAndInAppRecorderUseTheApprovedWording()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
-        string codeBehind = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml.cs"));
         Assert.Contains("Choose a field to record. Enter saves and returns to the main menu; Esc cancels.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Ctrl+Alt plus a key", xaml, StringComparison.Ordinal);
-        Assert.Contains("Recording input", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("Press Enter to save and go back to main menu.", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("Press Esc to exit without saving.", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageBox.Show", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml.cs")), StringComparison.Ordinal);
+        Assert.Contains("Currently recording input", xaml, StringComparison.Ordinal);
+        Assert.Contains("Press the input that you want to use as a hotkey then click enter to save.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Press ESC to exit without saving", xaml, StringComparison.Ordinal);
+        Assert.Contains("HotkeyRecordingOverlay", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

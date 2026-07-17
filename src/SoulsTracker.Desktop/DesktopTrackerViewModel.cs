@@ -48,6 +48,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private string pendingDecrementHotkey = GlobalHotkeyBinding.DecrementDefault.DisplayText;
     private GlobalHotkeyBinding pendingIncrementBinding = GlobalHotkeyBinding.IncrementDefault;
     private GlobalHotkeyBinding pendingDecrementBinding = GlobalHotkeyBinding.DecrementDefault;
+    private bool isHotkeyRecording;
+    private bool recordingIncrementHotkey;
+    private GlobalHotkeyBinding? hotkeyBindingBeforeRecording;
     private Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>>? applyHotkeysAsync;
     private IDeathSoundPlayer? deathSoundPlayer;
     private string? deathSoundStatus;
@@ -232,6 +235,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? GlobalHotkeyStatus { get => globalHotkeyStatus; private set => SetField(ref globalHotkeyStatus, value); }
     public string PendingIncrementHotkey { get => pendingIncrementHotkey; set => SetField(ref pendingIncrementHotkey, value); }
     public string PendingDecrementHotkey { get => pendingDecrementHotkey; set => SetField(ref pendingDecrementHotkey, value); }
+    /// <summary>True while the in-app manual-hotkey capture surface owns keyboard input.</summary>
+    public bool IsHotkeyRecording { get => isHotkeyRecording; private set => SetField(ref isHotkeyRecording, value); }
     public string ActiveIncrementHotkey => hotkeySettings.Increment.DisplayText;
     public string ActiveDecrementHotkey => hotkeySettings.Decrement.DisplayText;
     public string? LocalTrackerStateStatus { get => localTrackerStateStatus; private set => SetField(ref localTrackerStateStatus, value); }
@@ -415,6 +420,62 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         GlobalHotkeyBinding captured = binding!;
         if (increment) { pendingIncrementBinding = captured; PendingIncrementHotkey = captured.DisplayText; } else { pendingDecrementBinding = captured; PendingDecrementHotkey = captured.DisplayText; }
         SetGlobalHotkeyStatus("Choose the other binding or apply the change.");
+    }
+
+    /// <summary>Starts an in-app recording session without changing an active global binding.</summary>
+    public void BeginHotkeyRecording(bool increment)
+    {
+        if (!IsManualGameSelected || !ControlsEnabled) return;
+
+        recordingIncrementHotkey = increment;
+        hotkeyBindingBeforeRecording = increment ? pendingIncrementBinding : pendingDecrementBinding;
+        IsHotkeyRecording = true;
+    }
+
+    /// <summary>Captures the next valid binding for the active recording session.</summary>
+    public void CaptureRecordedHotkey(System.Windows.Input.Key key, System.Windows.Input.ModifierKeys modifiers)
+    {
+        if (!IsHotkeyRecording) return;
+        CapturePendingHotkey(recordingIncrementHotkey, key, modifiers);
+    }
+
+    /// <summary>Cancels a recording session and restores the pending value it started with.</summary>
+    public void CancelHotkeyRecording()
+    {
+        if (!IsHotkeyRecording) return;
+
+        if (hotkeyBindingBeforeRecording is GlobalHotkeyBinding original)
+        {
+            if (recordingIncrementHotkey)
+            {
+                pendingIncrementBinding = original;
+                PendingIncrementHotkey = original.DisplayText;
+            }
+            else
+            {
+                pendingDecrementBinding = original;
+                PendingDecrementHotkey = original.DisplayText;
+            }
+        }
+
+        hotkeyBindingBeforeRecording = null;
+        IsHotkeyRecording = false;
+    }
+
+    /// <summary>Applies a recording session's captured binding and always releases the capture surface.</summary>
+    public async Task SaveRecordedHotkeyAsync()
+    {
+        if (!IsHotkeyRecording) return;
+
+        try
+        {
+            await ApplyGlobalHotkeysAsync();
+        }
+        finally
+        {
+            hotkeyBindingBeforeRecording = null;
+            IsHotkeyRecording = false;
+        }
     }
 
     public async Task ApplyGlobalHotkeysAsync()

@@ -119,7 +119,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                 try
                 {
                     PersistentTrackerState current = committedState!;
-                    PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, deathSoundRequest.Configuration, current.TextExports);
+                    PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, deathSoundRequest.Configuration, current.TextExports, current.ManualDemonsSoulsDeathCounter);
                     await repository.SaveAsync(updated, deathSoundRequest.CancellationToken).ConfigureAwait(false);
                     committedState = updated;
                     deathSoundRequest.Completion.TrySetResult(updated);
@@ -129,7 +129,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
             }
             if (request is TextExportRequest exportRequest)
             {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, exportRequest.Configuration); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
                 catch { exportRequest.Completion.TrySetException(new InvalidOperationException("The text export settings could not be saved.")); }
                 continue;
             }

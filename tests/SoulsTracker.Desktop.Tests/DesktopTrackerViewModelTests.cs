@@ -8,6 +8,34 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class DesktopTrackerViewModelTests
 {
     [Fact]
+    public async Task HotkeyRecordingCapturesAppliesAndCanCancelWithoutLeavingPendingChanges()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
+        harness.ViewModel.ConfigureGlobalHotkeys(GlobalHotkeySettings.Default, _ => Task.FromResult(GlobalHotkeyRegistrationResult.Registered));
+
+        harness.ViewModel.BeginHotkeyRecording(increment: true);
+        harness.ViewModel.CaptureRecordedHotkey(System.Windows.Input.Key.A, System.Windows.Input.ModifierKeys.Control);
+
+        Assert.True(harness.ViewModel.IsHotkeyRecording);
+        Assert.Equal("Ctrl+A", harness.ViewModel.PendingIncrementHotkey);
+
+        harness.ViewModel.CancelHotkeyRecording();
+
+        Assert.False(harness.ViewModel.IsHotkeyRecording);
+        Assert.Equal(GlobalHotkeyBinding.IncrementDefault.DisplayText, harness.ViewModel.PendingIncrementHotkey);
+
+        harness.ViewModel.BeginHotkeyRecording(increment: false);
+        harness.ViewModel.CaptureRecordedHotkey(System.Windows.Input.Key.B, System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Alt);
+        await harness.ViewModel.SaveRecordedHotkeyAsync();
+
+        Assert.False(harness.ViewModel.IsHotkeyRecording);
+        Assert.Equal("Ctrl+Alt+B", harness.ViewModel.ActiveDecrementHotkey);
+        Assert.Equal("Ctrl+Alt+B", harness.ViewModel.PendingDecrementHotkey);
+    }
+
+    [Fact]
     public async Task CenterAlignmentClearsAndHidesBossMarkersWithoutApply()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);

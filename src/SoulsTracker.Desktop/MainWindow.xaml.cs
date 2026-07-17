@@ -81,21 +81,50 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.DecrementManualDeathsAsync();
     }
 
-    private void IncrementHotkeyTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void IncrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: true);
+
+    private void DecrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: false);
+
+    private void BeginHotkeyRecording(bool increment)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.CapturePendingHotkey(increment: true, e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers);
+        if (DataContext is not DesktopTrackerViewModel viewModel) return;
+
+        viewModel.BeginHotkeyRecording(increment);
+        if (viewModel.IsHotkeyRecording)
+        {
+            Dispatcher.BeginInvoke(() => Keyboard.Focus(HotkeyRecordingOverlay));
+        }
+    }
+
+    private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel { IsHotkeyRecording: true } viewModel) return;
+
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key == Key.Escape)
+        {
+            viewModel.CancelHotkeyRecording();
+            e.Handled = true;
+            ReturnToMainAfterHotkeyRecording();
+            return;
+        }
+
+        if (key == Key.Enter)
+        {
+            e.Handled = true;
+            await viewModel.SaveRecordedHotkeyAsync();
+            ReturnToMainAfterHotkeyRecording();
+            return;
+        }
+
+        viewModel.CaptureRecordedHotkey(key, Keyboard.Modifiers);
         e.Handled = true;
     }
 
-    private void HotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    private void ReturnToMainAfterHotkeyRecording()
     {
-        MessageBox.Show(this, "Recording input\n\nPress Enter to save and go back to main menu.\nPress Esc to exit without saving.", "Recording input", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private void DecrementHotkeyTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.CapturePendingHotkey(increment: false, e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers);
-        e.Handled = true;
+        WorkspaceTabs.SelectedItem = MainWorkspaceTab;
+        Keyboard.Focus(WorkspaceTabs);
     }
 
     private async void ApplyHotkeysButton_Click(object sender, RoutedEventArgs e)

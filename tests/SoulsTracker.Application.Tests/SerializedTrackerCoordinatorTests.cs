@@ -66,6 +66,30 @@ public sealed class SerializedTrackerCoordinatorTests
     }
 
     [Fact]
+    public async Task TextExportConfigurationChangesPreserveTheIndependentDemonsSoulsCounter()
+    {
+        PersistentTrackerState initial = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.DemonsSouls,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 3),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 11));
+        var repository = new MemoryRepository(initial);
+        var publisher = new RecordingPublisher();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
+        Assert.True((await coordinator.InitializeAsync()).IsSuccess);
+
+        PersistentTrackerState updated = await coordinator.SetTextExportConfigurationAsync(
+            new TextExportConfiguration("C:\\exports\\deaths.txt", true, null, false));
+
+        Assert.Equal(GameId.DemonsSouls, updated.SelectedGameId);
+        Assert.Equal(3, updated.ManualBloodborneDeathCounter.Value);
+        Assert.Equal(11, updated.ManualDemonsSoulsDeathCounter.Value);
+        Assert.Equal(1, publisher.Published);
+    }
+
+    [Fact]
     public async Task ReviewedImportUsesLatestQueuedStateAndRefusesWithoutCommitWhenDestinationChanged()
     {
         var repository = new MemoryRepository(PersistentTrackerState.Default);
