@@ -102,7 +102,7 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[0.1.0-alpha.0, )"
+          "SoulsTracker.Domain": "[1.0.0, )"
         }
       },
       "soulstracker.domain": {
