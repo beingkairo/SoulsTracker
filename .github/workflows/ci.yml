@@ -33,6 +33,9 @@ jobs:
         shell: pwsh
         run: ./scripts/Verify-Version.ps1
 
+      - name: Restore locked overlay dependencies
+        run: npm ci --prefix web_overlay
+
       - name: Restore locked .NET dependencies
         run: dotnet restore SoulsTracker.sln --locked-mode
 
@@ -44,9 +47,6 @@ jobs:
 
       - name: Run .NET tests
         run: dotnet test SoulsTracker.sln --configuration Release --no-build
-
-      - name: Restore locked overlay dependencies
-        run: npm ci --prefix web_overlay
 
       - name: Type-check overlay workspace
         run: npm run check --prefix web_overlay

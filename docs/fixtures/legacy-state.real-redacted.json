@@ -1,0 +1,163 @@
+{
+    "boss_defeats_by_game":  {
+                                 "ds1":  {
+                                             "artorias":  false,
+                                             "asylum_demon":  true,
+                                             "bed_of_chaos":  false,
+                                             "bell_gargoyles":  false,
+                                             "black_dragon_kalameet":  false,
+                                             "capra_demon":  false,
+                                             "ceaseless_discharge":  false,
+                                             "centipede_demon":  false,
+                                             "chaos_witch_quelaag":  false,
+                                             "dark_sun_gwyndolin":  false,
+                                             "demon_firesage":  false,
+                                             "gravelord_nito":  false,
+                                             "great_grey_wolf_sif":  false,
+                                             "gwyn":  false,
+                                             "iron_golem":  false,
+                                             "manus":  false,
+                                             "moonlight_butterfly":  false,
+                                             "ornstein_smough":  false,
+                                             "pinwheel":  false,
+                                             "sanctuary_guardian":  false,
+                                             "seath":  false,
+                                             "stray_demon":  false,
+                                             "taurus_demon":  false
+                                         },
+                                 "ds2":  {
+                                             "aava":  false,
+                                             "aldia":  false,
+                                             "ancient_dragon":  false,
+                                             "area-0-0-0:2576":  false,
+                                             "belfry_gargoyles":  false,
+                                             "blue_smelter":  false,
+                                             "blue_smelter_demon":  false,
+                                             "burnt_ivory_king":  false,
+                                             "cave_of_the_dead":  false,
+                                             "covetous_demon":  false,
+                                             "darklurker":  false,
+                                             "demon_of_song":  false,
+                                             "dragonrider":  false,
+                                             "dukes_dear_freja":  false,
+                                             "elana":  false,
+                                             "executioners_chariot":  false,
+                                             "flexile_sentry":  false,
+                                             "fume_knight":  false,
+                                             "giant_lord":  false,
+                                             "graverobber_varg_cerah":  false,
+                                             "guardian_dragon":  false,
+                                             "ivory_king":  false,
+                                             "last_giant":  true,
+                                             "looking_glass_knight":  false,
+                                             "lost_sinner":  false,
+                                             "lud_zallen":  false,
+                                             "mytha":  false,
+                                             "nashandra":  false,
+                                             "old_dragonslayer":  false,
+                                             "old_iron_king":  false,
+                                             "prowling_magus":  false,
+                                             "pursuer":  false,
+                                             "royal_rat_authority":  false,
+                                             "royal_rat_vanguard":  false,
+                                             "ruin_sentinels":  false,
+                                             "scorpioness_najka":  false,
+                                             "sinh":  false,
+                                             "sir_alonne":  false,
+                                             "skeleton_lords":  false,
+                                             "smelter_demon":  false,
+                                             "the_rotten":  false,
+                                             "throne_duo":  false,
+                                             "twin_dragonriders":  false,
+                                             "velstadt":  false,
+                                             "vendrick":  false
+                                         },
+                                 "ds3":  {
+                                             "abyss_watchers":  false,
+                                             "aldrich":  false,
+                                             "ancient_wyvern":  false,
+                                             "champion_gundyr":  false,
+                                             "champions_gravetender":  false,
+                                             "crystal_sage":  false,
+                                             "curse_rotted_greatwood":  false,
+                                             "dancer":  false,
+                                             "darkeater_midir":  false,
+                                             "deacons_of_the_deep":  false,
+                                             "demon_prince":  false,
+                                             "dragonslayer_armour":  false,
+                                             "halflight":  false,
+                                             "high_lord_wolnir":  false,
+                                             "iudex_gundyr":  true,
+                                             "nameless_king":  false,
+                                             "oceiros":  false,
+                                             "old_demon_king":  false,
+                                             "pontiff_sulyvahn":  false,
+                                             "sister_friede":  false,
+                                             "slave_knight_gael":  false,
+                                             "soul_of_cinder":  false,
+                                             "twin_princes":  false,
+                                             "vordt":  false,
+                                             "yhorm":  false
+                                         },
+                                 "sekiro":  {
+                                                "corrupted_monk":  false,
+                                                "demon_of_hatred":  false,
+                                                "divine_dragon":  false,
+                                                "folding_screen_monkeys":  false,
+                                                "genichiro_ashina":  false,
+                                                "genichiro_way_of_tomoe":  false,
+                                                "great_shinobi_owl":  false,
+                                                "guardian_ape":  false,
+                                                "gyoubu_oniwa":  true,
+                                                "headless_ape":  false,
+                                                "isshin_sword_saint":  false,
+                                                "lady_butterfly":  false,
+                                                "owl_father":  false,
+                                                "true_monk":  false
+                                            }
+                             },
+    "death_count":  42,
+    "layout_state":  {
+                         "config":  {
+                                        "bossOverlay":  {
+                                                            "bossList":  {
+                                                                             "alignment":  "left",
+                                                                             "backgroundEnabled":  false,
+                                                                             "backgroundOpacity":  0.5,
+                                                                             "checkmarkColor":  "#FFFFFF",
+                                                                             "defeatedStyles":  {
+
+                                                                                                },
+                                                                             "fontFamily":  "Arial",
+                                                                             "fontPreset":  "default",
+                                                                             "fontSize":  32,
+                                                                             "lineSpacing":  4,
+                                                                             "outline":  false,
+                                                                             "shadow":  false,
+                                                                             "skullColor":  "#FFFFFF",
+                                                                             "textColor":  "#FFFFFF",
+                                                                             "undefeatedStyles":  {
+
+                                                                                                  },
+                                                                             "visibilityMode":  "all"
+                                                                         }
+                                                        },
+                                        "deathOverlay":  {
+                                                             "counter":  {
+                                                                             "contentMode":  "skull_text",
+                                                                             "fontFamily":  "Arial",
+                                                                             "fontPreset":  "default",
+                                                                             "fontSize":  32,
+                                                                             "outline":  false,
+                                                                             "shadow":  false,
+                                                                             "skullColor":  "#FFFFFF",
+                                                                             "textColor":  "#FFFFFF"
+                                                                         }
+                                                         }
+                                    }
+                     },
+    "settings":  {
+                     "death_sfx_path":  "",
+                     "selected_game":  "ds3"
+                 }
+}
