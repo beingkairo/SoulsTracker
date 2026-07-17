@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SoulsTracker.Desktop;
 
 namespace SoulsTracker.Desktop.Tests;
@@ -209,6 +210,56 @@ public sealed class SingleInstanceStartupTests
             () => shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown")));
 
         Assert.Equal(["coordinator-disposed", "lease-released", "application-shutdown"], events);
+    }
+
+    [Fact]
+    public async Task StalledComponentsShareOneShutdownDeadlineInsteadOfPayingAFullTimeoutEach()
+    {
+        var events = new List<string>();
+        var lease = new RecordingLease(() => events.Add("lease-released"));
+        var neverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shutdown = new DesktopShutdownCoordinator(
+            () => DisposeStalledAsync("hotkeys"),
+            () => DisposeStalledAsync("overlay"),
+            () => DisposeStalledAsync("coordinator"),
+            lease,
+            TimeSpan.FromMilliseconds(40));
+        var stopwatch = Stopwatch.StartNew();
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown")));
+
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(250), $"Shutdown took {stopwatch.Elapsed}.");
+        Assert.Equal(
+            ["hotkeys-dispose-started", "overlay-dispose-started", "coordinator-dispose-started", "lease-released", "application-shutdown"],
+            events);
+
+        async ValueTask DisposeStalledAsync(string component)
+        {
+            events.Add($"{component}-dispose-started");
+            await neverCompletes.Task;
+        }
+    }
+
+    [Fact]
+    public async Task CooperativeComponentsCompleteImmediatelyWithinTheSharedShutdownDeadline()
+    {
+        var lease = new RecordingLease();
+        var shutdown = new DesktopShutdownCoordinator(
+            () => ValueTask.CompletedTask,
+            () => ValueTask.CompletedTask,
+            () => ValueTask.CompletedTask,
+            lease,
+            TimeSpan.FromSeconds(1));
+
+        Task closeTask = shutdown.RequestApplicationShutdownAsync(() => { });
+        Task completed = await Task.WhenAny(closeTask, Task.Delay(TimeSpan.FromMilliseconds(100)));
+
+        Assert.Same(closeTask, completed);
+        await closeTask;
+        Assert.Equal(1, lease.DisposeCount);
     }
 
     [Fact]

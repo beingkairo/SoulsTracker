@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading;
 
 namespace SoulsTracker.Desktop;
@@ -196,19 +197,18 @@ internal sealed class DesktopShutdownCoordinator(
     Func<ValueTask> disposeOverlayAsync,
     Func<ValueTask> disposeCoordinatorAsync,
     IDisposable singleInstanceLease,
-    TimeSpan? componentShutdownTimeout = null) : IDisposable
+    TimeSpan? totalShutdownTimeout = null) : IDisposable
 {
     private readonly Func<ValueTask> disposeGlobalHotkeysAsync = disposeGlobalHotkeysAsync ?? throw new ArgumentNullException(nameof(disposeGlobalHotkeysAsync));
     private readonly Func<ValueTask> disposeOverlayAsync = disposeOverlayAsync ?? throw new ArgumentNullException(nameof(disposeOverlayAsync));
     private readonly Func<ValueTask> disposeCoordinatorAsync = disposeCoordinatorAsync ?? throw new ArgumentNullException(nameof(disposeCoordinatorAsync));
     private readonly IDisposable singleInstanceLease = singleInstanceLease ?? throw new ArgumentNullException(nameof(singleInstanceLease));
-    private readonly TimeSpan componentShutdownTimeout = componentShutdownTimeout is { } configured && configured > TimeSpan.Zero
+    private readonly TimeSpan totalShutdownTimeout = totalShutdownTimeout is { } configured && configured > TimeSpan.Zero
         ? configured
         // The title-bar close path disposes three independent components in sequence.
-        // Five seconds per component can leave a visibly closed process alive for fifteen
-        // seconds when a hosted browser/server teardown stalls. Keep each cleanup orderly,
-        // but bound the complete UI shutdown inside the release ten-second requirement.
-        : TimeSpan.FromSeconds(2);
+        // Use one deadline for the entire operation rather than waiting a full timeout for
+        // every component: a stalled browser/server teardown must not keep the process alive.
+        : TimeSpan.FromSeconds(1);
     private readonly object sync = new();
     private Task? shutdownTask;
     private Task? applicationShutdownTask;
@@ -253,21 +253,22 @@ internal sealed class DesktopShutdownCoordinator(
 
     private async Task ShutdownCoreAsync()
     {
+        var shutdownStopwatch = Stopwatch.StartNew();
         try
         {
-            await DisposeComponentAsync(disposeGlobalHotkeysAsync).ConfigureAwait(false);
+            await DisposeComponentAsync(disposeGlobalHotkeysAsync, shutdownStopwatch).ConfigureAwait(false);
         }
         finally
         {
             try
             {
-                await DisposeComponentAsync(disposeOverlayAsync).ConfigureAwait(false);
+                await DisposeComponentAsync(disposeOverlayAsync, shutdownStopwatch).ConfigureAwait(false);
             }
             finally
             {
                 try
                 {
-                    await DisposeComponentAsync(disposeCoordinatorAsync).ConfigureAwait(false);
+                    await DisposeComponentAsync(disposeCoordinatorAsync, shutdownStopwatch).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -277,8 +278,10 @@ internal sealed class DesktopShutdownCoordinator(
         }
     }
 
-    private async Task DisposeComponentAsync(Func<ValueTask> disposeComponentAsync)
+    private async Task DisposeComponentAsync(Func<ValueTask> disposeComponentAsync, Stopwatch shutdownStopwatch)
     {
-        await disposeComponentAsync().AsTask().WaitAsync(componentShutdownTimeout).ConfigureAwait(false);
+        Task disposal = disposeComponentAsync().AsTask();
+        TimeSpan remaining = totalShutdownTimeout - shutdownStopwatch.Elapsed;
+        await disposal.WaitAsync(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero).ConfigureAwait(false);
     }
 }
