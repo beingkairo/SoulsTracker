@@ -97,6 +97,7 @@ function Promote-VerifiedDesktopArtifact {
 Initialize-CleanStagingDirectory -Path $publishPath -AllowedRoot $stagingRoot
 Invoke-External dotnet @("restore", $solution, "--locked-mode")
 Invoke-External npm @("ci", "--prefix", $overlayPath)
+Invoke-External npm @("exec", "--prefix", $overlayPath, "playwright", "install", "chromium")
 Invoke-External npm @("run", "build", "--prefix", $overlayPath)
 Invoke-External npm @("run", "check", "--prefix", $overlayPath)
 Invoke-External npm @("test", "--prefix", $overlayPath)
@@ -139,7 +140,7 @@ if (-not $SkipInstaller) {
 
     Invoke-External $isccPath @(
         "/DAppVersion=$version",
-        "/DBuildOutput=$publishPath",
+        "/DBuildOutput=$releasePath",
         (Join-Path $root "installer\SoulsTracker.iss")
     )
 }
