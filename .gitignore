@@ -1,0 +1,57 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+[Tt]est[Rr]esult*/
+artifacts/
+*.nupkg
+*.snupkg
+
+# IDE and user state
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Node and browser-test output
+web_overlay/node_modules/
+web_overlay/dist/
+web_overlay/playwright-report/
+web_overlay/test-results/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+*.cer
+*.crt
+*.publishsettings
+
+# Local application state, user data, and diagnostics
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.bak
+*.backup
+*.log
+logs/
+data/
+state/
+exports/
+*.wav
+*.mp3
+WebView2/
+
+# Installer and release output
+installer/Output/
+installer/Build/

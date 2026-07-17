@@ -1,0 +1,15 @@
+{
+  "name": "soulstracker-overlay",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project tsconfig.json && node scripts/build-assets.mjs",
+    "check": "tsc --project tsconfig.json --noEmit",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "typescript": "7.0.2"
+  }
+}

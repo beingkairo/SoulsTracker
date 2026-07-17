@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SoulsTracker.Application\SoulsTracker.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\web_overlay\dist\assets\overlay-bootstrap.js" LogicalName="SoulsTracker.Overlay.Assets.overlay-bootstrap.js" />
+    <EmbeddedResource Include="..\..\web_overlay\dist\assets\overlay-bootstrap.css" LogicalName="SoulsTracker.Overlay.Assets.overlay-bootstrap.css" />
+    <EmbeddedResource Include="..\..\assets\branding\souls-tracker-skull.png" LogicalName="SoulsTracker.Overlay.Assets.souls-tracker-skull.png" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoDefaultLaunchSettingsFile>True</NoDefaultLaunchSettingsFile>
+  </PropertyGroup>
+
+  <Target Name="BuildOverlayAssets" BeforeTargets="PrepareResources">
+    <Exec Command="npm run build --prefix &quot;$(MSBuildThisFileDirectory)..\..\web_overlay&quot;" />
+  </Target>
+
+</Project>

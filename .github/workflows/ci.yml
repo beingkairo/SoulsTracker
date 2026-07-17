@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    env:
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web_overlay/.nvmrc
+          cache: npm
+          cache-dependency-path: web_overlay/package-lock.json
+
+      - name: Verify version source
+        shell: pwsh
+        run: ./scripts/Verify-Version.ps1
+
+      - name: Restore locked .NET dependencies
+        run: dotnet restore SoulsTracker.sln --locked-mode
+
+      - name: Verify .NET formatting
+        run: dotnet format SoulsTracker.sln --no-restore --verify-no-changes
+
+      - name: Build .NET solution
+        run: dotnet build SoulsTracker.sln --configuration Release --no-restore
+
+      - name: Run .NET tests
+        run: dotnet test SoulsTracker.sln --configuration Release --no-build
+
+      - name: Restore locked overlay dependencies
+        run: npm ci --prefix web_overlay
+
+      - name: Type-check overlay workspace
+        run: npm run check --prefix web_overlay
+
+      - name: Run overlay foundation tests
+        run: npm test --prefix web_overlay
+
+      - name: Publish desktop smoke artifact
+        run: dotnet publish src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj --configuration Release --no-restore --output artifacts/desktop

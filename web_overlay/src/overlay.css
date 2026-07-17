@@ -1,0 +1,155 @@
+html,
+body {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  color: #fff;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.souls-tracker-overlay-panel {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 16rem;
+  padding: 1rem;
+  background: rgb(12 12 16 / 88%);
+}
+
+.overlay-heading,
+.overlay-game-name,
+.overlay-total-deaths,
+.overlay-empty-state,
+.overlay-connection-state {
+  margin: 0;
+}
+
+.overlay-heading {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin-bottom: 0.25em;
+}
+
+.overlay-title-skull,
+.overlay-defeated-skull {
+  display: inline-block;
+  object-fit: contain;
+}
+
+.overlay-title-skull {
+  /* The counter skull is deliberately more prominent than the inline number. */
+  width: 2em;
+  height: 2em;
+  vertical-align: -0.62em;
+}
+
+.overlay-defeated-skull {
+  /* Slightly larger than the boss text, but contained within its own row. */
+  width: 1.35em;
+  height: 1.35em;
+  flex: 0 0 1.35em;
+}
+
+.overlay-checkmark {
+  font-size: 1.5em;
+  line-height: 1;
+  flex: 0 0 1.5em;
+}
+
+.overlay-game-name,
+.overlay-boss-dlc,
+.overlay-boss-status,
+.overlay-connection-state,
+.overlay-empty-state {
+  color: #c7c7d0;
+  font-size: 0.85rem;
+}
+
+.overlay-total-deaths {
+  font-size: 2.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.overlay-boss-list {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.overlay-boss-list li {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* A marker always shares its boss-name row.  This avoids grid-track drift
+   when a list has mixed marker states, long names, or DLC captions. */
+.overlay-boss-list-left li { justify-content: flex-start; }
+.overlay-boss-list-right li { justify-content: flex-end; }
+.overlay-boss-list-center li { justify-content: center; }
+
+.overlay-boss-copy {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Keep a marker vertically centered to the boss-name line, independently of
+   an optional DLC label below the name. */
+.overlay-boss-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.overlay-boss-list li[data-marker] .overlay-defeated-skull,
+.overlay-boss-list li[data-marker] .overlay-checkmark {
+  align-self: center;
+}
+
+.overlay-boss-name {
+  font-weight: 600;
+  opacity: var(--text-opacity, 1);
+}
+
+.overlay-heading,
+.overlay-total-deaths,
+.overlay-empty-state,
+.overlay-game-name,
+.overlay-boss-dlc,
+.overlay-checkmark,
+.overlay-defeated-skull {
+  opacity: var(--text-opacity, 1);
+}
+
+.overlay-boss-dlc { display: block; }
+
+.overlay-boss-list .is-defeated[data-defeated-treatment="Nothing"] .overlay-boss-name {
+  color: inherit;
+  opacity: var(--text-opacity, 1);
+  text-decoration: none;
+}
+
+.overlay-boss-list .is-defeated[data-defeated-treatment="Dimmed"] .overlay-boss-name {
+  color: var(--defeated-color);
+  opacity: calc(var(--text-opacity, 1) * 0.62);
+  text-decoration: none;
+}
+
+.overlay-boss-list .is-defeated[data-defeated-treatment="Strikethrough"] .overlay-boss-name {
+  color: var(--defeated-color);
+  opacity: var(--text-opacity, 1);
+  text-decoration: line-through;
+}
+
+.overlay-boss-list .is-defeated[data-defeated-treatment="Both"] .overlay-boss-name {
+  color: var(--defeated-color);
+  opacity: calc(var(--text-opacity, 1) * 0.62);
+  text-decoration: line-through;
+}
