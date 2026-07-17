@@ -36,6 +36,9 @@ jobs:
       - name: Restore locked overlay dependencies
         run: npm ci --prefix web_overlay
 
+      - name: Install Playwright Chromium
+        run: npm exec --prefix web_overlay playwright install chromium
+
       - name: Restore locked .NET dependencies
         run: dotnet restore SoulsTracker.sln --locked-mode
 
