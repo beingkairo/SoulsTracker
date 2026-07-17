@@ -480,16 +480,16 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void DesktopAndInstallerUseTheOriginalSkullIconResource()
+    public void DesktopAndInstallerUseTheCompactSkullIconResource()
     {
         string root = FindRepositoryRoot();
         string desktopProject = File.ReadAllText(Path.Combine(root, "src", "SoulsTracker.Desktop", "SoulsTracker.Desktop.csproj"));
         string installer = File.ReadAllText(Path.Combine(root, "installer", "SoulsTracker.iss"));
 
-        Assert.Contains("<ApplicationIcon>../../assets/branding/souls-tracker-skull.ico</ApplicationIcon>", desktopProject, StringComparison.Ordinal);
-        Assert.Contains("SetupIconFile=..\\assets\\branding\\souls-tracker-skull.ico", installer, StringComparison.Ordinal);
-        Assert.True(File.Exists(Path.Combine(root, "assets", "branding", "souls-tracker-skull.ico")));
-        Assert.True(File.Exists(Path.Combine(root, "assets", "branding", "souls-tracker-skull.png")));
+        Assert.Contains("<ApplicationIcon>../../assets/branding/souls-tracker-skull-compact.ico</ApplicationIcon>", desktopProject, StringComparison.Ordinal);
+        Assert.Contains("SetupIconFile=..\\assets\\branding\\souls-tracker-skull-compact.ico", installer, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(root, "assets", "branding", "souls-tracker-skull-compact.ico")));
+        Assert.True(File.Exists(Path.Combine(root, "assets", "branding", "souls-tracker-skull-compact.png")));
     }
 
     [Fact]
