@@ -846,7 +846,7 @@ public sealed class GameChoice(GameDefinition definition)
     public string DisplayName => GameId == GameId.Bloodborne
         ? "Bloodborne [Manual]"
         : GameId == GameId.DemonsSouls
-            ? "Demon's Souls [Manual]"
+            ? "Demon Souls [Manual]"
             : definition.DisplayName;
     public bool IsSelectable => definition.IsSelectable;
     public string AvailabilityLabel => IsSelectable ? string.Empty : "SOON";

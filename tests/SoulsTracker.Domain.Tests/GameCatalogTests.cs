@@ -53,7 +53,7 @@ public sealed class GameCatalogTests
                 0),
             new(
                 GameId.DemonsSouls,
-                "Demon's Souls",
+                "Demon Souls",
                 GameUiAvailability.Selectable,
                 GameTrackingMode.ManualOnly,
                 ReaderBindingState.IntentionallyUnavailable,

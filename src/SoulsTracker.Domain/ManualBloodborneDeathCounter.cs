@@ -28,7 +28,7 @@ public sealed class ManualBloodborneDeathCounter
 
         if (gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls)
         {
-            throw new InvalidOperationException("A manual death counter is available only for Bloodborne and Demon's Souls.");
+            throw new InvalidOperationException("A manual death counter is available only for Bloodborne and Demon Souls.");
         }
 
         if (initialValue < 0)

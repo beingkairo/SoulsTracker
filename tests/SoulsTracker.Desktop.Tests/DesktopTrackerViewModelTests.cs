@@ -396,7 +396,7 @@ public sealed class DesktopTrackerViewModelTests
         GameChoice demonsSouls = harness.Game(GameId.DemonsSouls);
 
         Assert.Equal("Bloodborne [Manual]", bloodborne.DisplayName);
-        Assert.Equal("Demon's Souls [Manual]", demonsSouls.DisplayName);
+        Assert.Equal("Demon Souls [Manual]", demonsSouls.DisplayName);
         await harness.ViewModel.SelectGameAsync(bloodborne);
         await harness.ViewModel.IncrementManualDeathsAsync();
         await harness.ViewModel.SelectGameAsync(demonsSouls);

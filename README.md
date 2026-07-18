@@ -5,7 +5,7 @@ SoulsTracker is a Windows desktop companion for Soulsborne streamers. It tracks 
 ## Features
 
 - Read-only game Total Deaths readers for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
-- Independent manual death counters for Bloodborne and Demon's Souls.
+- Independent manual death counters for Bloodborne and Demon Souls.
 - Game-specific boss checklists with local persistence.
 - Total Deaths and Boss List OBS browser overlays, hosted only on the local machine.
 - Custom overlay typography, colors, effects, markers, and text-file exports.

@@ -202,7 +202,7 @@ public static class TrackerStateTransitionService
     {
         if (state.SelectedGameId != GameId.Bloodborne && state.SelectedGameId != GameId.DemonsSouls)
         {
-            throw new ArgumentException("Manual death commands require Bloodborne or Demon's Souls to be selected.", nameof(state));
+            throw new ArgumentException("Manual death commands require Bloodborne or Demon Souls to be selected.", nameof(state));
         }
     }
 

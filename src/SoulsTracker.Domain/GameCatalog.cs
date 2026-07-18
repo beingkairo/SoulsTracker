@@ -195,7 +195,7 @@ public static class GameCatalog
             ReaderBindingState.IntentionallyUnavailable),
         new GameDefinition(
             GameId.DemonsSouls,
-            "Demon's Souls",
+            "Demon Souls",
             GameUiAvailability.Selectable,
             GameTrackingMode.ManualOnly,
             ReaderBindingState.IntentionallyUnavailable,
