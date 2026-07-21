@@ -52,6 +52,10 @@ public sealed class MainWindowBindingTests
         Assert.Contains("AutomationProperties.Name=\"Boss List alignment\"", xaml, StringComparison.Ordinal);
         Assert.Contains("DisplayMemberPath=\"Label\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Boss List background opacity\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Enable Total Deaths background\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Enable Boss List background\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding TotalDeathsAppearanceDraft.BackgroundEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding BossListAppearanceDraft.BackgroundEnabled", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("AutomationProperties.Name=\"Boss List padding\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("AutomationProperties.Name=\"Boss List corner radius\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Content=\"Show selected game name\"", xaml, StringComparison.Ordinal);
@@ -82,8 +86,8 @@ public sealed class MainWindowBindingTests
         string totalDeaths = Between(xaml, "<TabItem Header=\"Total Deaths\">", "<TabItem Header=\"Boss List\">");
         string bossList = Between(xaml, "<TabItem Header=\"Boss List\">", "</TabControl>");
 
-        AssertOrder(totalDeaths, "Text=\"Title\"", "Text=\"Title icon\"", "Text=\"Skull color\"", "Text=\"Font\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Background\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"");
-        AssertOrder(bossList, "Text=\"Mode\"", "Text=\"Treatment\"", "Text=\"Marker\"", "Text=\"Title\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Background\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"", "Text=\"Alignment\"");
+        AssertOrder(totalDeaths, "Text=\"Title\"", "Text=\"Title icon\"", "Text=\"Skull color\"", "Text=\"Font\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Background\"", "Text=\"Background color\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"");
+        AssertOrder(bossList, "Text=\"Mode\"", "Text=\"Treatment\"", "Text=\"Marker\"", "Text=\"Title\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Boss row spacing\"", "Text=\"Background\"", "Text=\"Background color\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"", "Text=\"Alignment\"");
         Assert.True(bossList.IndexOf("Text=\"Marker color\"", StringComparison.Ordinal) > bossList.IndexOf("Text=\"Marker\"", StringComparison.Ordinal));
         Assert.Contains("Visibility=\"{Binding ShowBossMarkerColor", bossList, StringComparison.Ordinal);
         Assert.DoesNotContain("Maximum visible", bossList, StringComparison.Ordinal);
@@ -123,6 +127,48 @@ public sealed class MainWindowBindingTests
                 AssertVisibilityBinding(window, "TotalDeathsShadowDetails", "TotalDeathsAppearanceDraft.ShadowEnabled");
                 AssertVisibilityBinding(window, "BossListOutlineDetails", "BossListAppearanceDraft.OutlineEnabled");
                 AssertVisibilityBinding(window, "BossListShadowDetails", "BossListAppearanceDraft.ShadowEnabled");
+                AssertVisibilityBinding(window, "TotalDeathsBackgroundDetails", "TotalDeathsAppearanceDraft.BackgroundEnabled");
+                AssertVisibilityBinding(window, "BossListBackgroundDetails", "BossListAppearanceDraft.BackgroundEnabled");
+            }
+            finally
+            {
+                window?.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MainAndSettingsUseContainedScrollRegionsInsteadOfExpandingForContent()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            try
+            {
+                window = new MainWindow { Width = 1060, Height = 760 };
+                window.Show();
+                window.UpdateLayout();
+
+                ScrollViewer mainColumn = Assert.IsType<ScrollViewer>(window.FindName("MainContentScrollViewer"));
+                Border bossPanel = Assert.IsType<Border>(window.FindName("BossProgressPanel"));
+                ScrollViewer bosses = Assert.IsType<ScrollViewer>(window.FindName("BossesScrollViewer"));
+                Assert.Equal(ScrollBarVisibility.Auto, mainColumn.VerticalScrollBarVisibility);
+                Assert.Equal(ScrollBarVisibility.Auto, bosses.VerticalScrollBarVisibility);
+                Assert.True(bossPanel.ActualHeight > 0);
+                Assert.True(bosses.ActualHeight > 0);
+                Assert.True(Math.Abs(bossPanel.ActualHeight - mainColumn.ActualHeight) <= 1);
+
+                Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 2;
+                window.UpdateLayout();
+                ScrollViewer settings = Assert.IsType<ScrollViewer>(window.FindName("SettingsContentScrollViewer"));
+                Assert.Equal(ScrollBarVisibility.Auto, settings.VerticalScrollBarVisibility);
+                Assert.Equal(ScrollBarVisibility.Disabled, settings.HorizontalScrollBarVisibility);
+
+                Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 1;
+                window.UpdateLayout();
+                ScrollViewer overlay = Assert.IsType<ScrollViewer>(window.FindName("OverlayConfigurationScrollViewer"));
+                Assert.Equal(ScrollBarVisibility.Auto, overlay.VerticalScrollBarVisibility);
+                Assert.Equal(ScrollBarVisibility.Disabled, overlay.HorizontalScrollBarVisibility);
             }
             finally
             {

@@ -314,15 +314,15 @@
 
         <TabControl x:Name="WorkspaceTabs" Grid.Row="1" Background="{StaticResource BackgroundBrush}" BorderThickness="0" AutomationProperties.Name="SoulsTracker workspace tabs">
             <TabItem x:Name="MainWorkspaceTab" Header="Main" AutomationProperties.Name="Main workspace">
-        <ScrollViewer x:Name="MainContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,18" AutomationProperties.Name="Tracker workspace">
-            <Grid>
+        <Grid Margin="24,18">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" MinWidth="0" />
                     <ColumnDefinition Width="16" />
                     <ColumnDefinition Width="2*" MinWidth="220" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0">
+                <ScrollViewer x:Name="MainContentScrollViewer" Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,16,0" AutomationProperties.Name="Tracker workspace">
+                <StackPanel>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Game session panel">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="GAME SESSION" />
@@ -397,8 +397,9 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+                </ScrollViewer>
 
-                <Border Grid.Column="2" Style="{StaticResource Panel}" AutomationProperties.Name="Boss progress panel">
+                <Border x:Name="BossProgressPanel" Grid.Column="2" Style="{StaticResource Panel}" AutomationProperties.Name="Boss progress panel">
                     <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Top"><TextBlock Style="{StaticResource PanelTitle}" Text="BOSSES" /><TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12" Text="Manual progress for the selected game." /></StackPanel>
                         <ScrollViewer x:Name="BossesScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Boss checklist">
@@ -406,13 +407,12 @@
                         </ScrollViewer>
                     </DockPanel>
                 </Border>
-            </Grid>
-        </ScrollViewer>
+        </Grid>
             </TabItem>
             <TabItem x:Name="OverlayWorkspaceTab" Header="Overlay" AutomationProperties.Name="Overlay workspace">
                 <Grid Margin="24,18">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
-                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,16,0">
+                <ScrollViewer x:Name="OverlayConfigurationScrollViewer" Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,16,0" AutomationProperties.Name="Overlay configuration workspace">
                     <StackPanel>
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
@@ -442,8 +442,11 @@
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Size"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding TotalDeathsAppearanceDraft.FontSize}"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Text color"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.TextColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths text color"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Text opacity"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding TotalDeathsAppearanceDraft.TextOpacity}" AutomationProperties.Name="Total Deaths text opacity"/></Grid>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.BackgroundColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths background color"/></Grid>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background opacity"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding TotalDeathsAppearanceDraft.BackgroundOpacity}" AutomationProperties.Name="Total Deaths background opacity"/></Grid>
+                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background"/><CheckBox Grid.Column="1" IsChecked="{Binding TotalDeathsAppearanceDraft.BackgroundEnabled}" AutomationProperties.Name="Enable Total Deaths background"/></Grid>
+                                            <StackPanel x:Name="TotalDeathsBackgroundDetails" Visibility="{Binding TotalDeathsAppearanceDraft.BackgroundEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background color"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.BackgroundColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths background color"/></Grid>
+                                                <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background opacity"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding TotalDeathsAppearanceDraft.BackgroundOpacity}" AutomationProperties.Name="Total Deaths background opacity"/></Grid>
+                                            </StackPanel>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}" Margin="0,6,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Outline"/><CheckBox Grid.Column="1" IsChecked="{Binding TotalDeathsAppearanceDraft.OutlineEnabled}" AutomationProperties.Name="Enable Total Deaths outline"/></Grid>
                                             <StackPanel x:Name="TotalDeathsOutlineDetails" Visibility="{Binding TotalDeathsAppearanceDraft.OutlineEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Outline color"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.OutlineColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths outline color"/></Grid>
@@ -476,9 +479,12 @@
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Size"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.FontSize}"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Text color"/><local:ColorField Grid.Column="1" Value="{Binding BossListAppearanceDraft.TextColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Boss List text color"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Text opacity"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.TextOpacity}" AutomationProperties.Name="Boss List text opacity"/></Grid>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background"/><local:ColorField Grid.Column="1" Value="{Binding BossListAppearanceDraft.BackgroundColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Boss List background color"/></Grid>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background opacity"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.BackgroundOpacity}" AutomationProperties.Name="Boss List background opacity"/></Grid>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}" Margin="0,6,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Boss row spacing"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.Padding}" AutomationProperties.Name="Boss row spacing"/></Grid>
+                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Boss row spacing"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.Padding}" AutomationProperties.Name="Boss row spacing"/></Grid>
+                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background"/><CheckBox Grid.Column="1" IsChecked="{Binding BossListAppearanceDraft.BackgroundEnabled}" AutomationProperties.Name="Enable Boss List background"/></Grid>
+                                            <StackPanel x:Name="BossListBackgroundDetails" Visibility="{Binding BossListAppearanceDraft.BackgroundEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background color"/><local:ColorField Grid.Column="1" Value="{Binding BossListAppearanceDraft.BackgroundColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Boss List background color"/></Grid>
+                                                <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Background opacity"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.BackgroundOpacity}" AutomationProperties.Name="Boss List background opacity"/></Grid>
+                                            </StackPanel>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Outline"/><CheckBox Grid.Column="1" IsChecked="{Binding BossListAppearanceDraft.OutlineEnabled}" AutomationProperties.Name="Enable Boss List outline"/></Grid>
                                             <StackPanel x:Name="BossListOutlineDetails" Visibility="{Binding BossListAppearanceDraft.OutlineEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Outline color"/><local:ColorField Grid.Column="1" Value="{Binding BossListAppearanceDraft.OutlineColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Boss List outline color"/></Grid>
@@ -513,7 +519,8 @@
                 </Grid>
             </TabItem>
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
-                <StackPanel Margin="24">
+                <ScrollViewer x:Name="SettingsContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24" AutomationProperties.Name="Settings workspace content">
+                <StackPanel>
                     <TextBlock Style="{StaticResource PanelTitle}" Text="SETTINGS" />
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
@@ -557,6 +564,7 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
 

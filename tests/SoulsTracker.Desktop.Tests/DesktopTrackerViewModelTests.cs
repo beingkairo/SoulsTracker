@@ -8,6 +8,30 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class DesktopTrackerViewModelTests
 {
     [Fact]
+    public void BackgroundToggleUsesExistingZeroOpacityOutputWithoutDiscardingTheDraftValue()
+    {
+        OverlayAppearanceDraft draft = new()
+        {
+            BackgroundColor = "#123456",
+            BackgroundEnabled = true,
+            BackgroundOpacity = "37"
+        };
+
+        draft.BackgroundEnabled = false;
+        OverlayAppearance hidden = draft.ToDomain(OverlayTextAlignment.Left);
+
+        Assert.Equal("#123456", hidden.BackgroundColor);
+        Assert.Equal(0, hidden.BackgroundOpacity);
+
+        draft.BackgroundEnabled = true;
+        OverlayAppearance restored = draft.ToDomain(OverlayTextAlignment.Left);
+
+        Assert.Equal(37, restored.BackgroundOpacity);
+        draft.Load(hidden);
+        Assert.False(draft.BackgroundEnabled);
+    }
+
+    [Fact]
     public async Task HotkeyRecordingCapturesAppliesAndCanCancelWithoutLeavingPendingChanges()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
@@ -85,6 +109,7 @@ public sealed class DesktopTrackerViewModelTests
         harness.ViewModel.BossListAppearanceDraft.TextColor = "#112233";
         harness.ViewModel.BossListAppearanceDraft.AccentColor = "#445566";
         harness.ViewModel.BossListAppearanceDraft.BackgroundColor = "#778899";
+        harness.ViewModel.BossListAppearanceDraft.BackgroundEnabled = true;
         harness.ViewModel.BossListAppearanceDraft.BackgroundOpacity = "44";
         harness.ViewModel.BossListAppearanceDraft.Padding = "12";
         harness.ViewModel.BossListAppearanceDraft.CornerRadius = "5";
@@ -142,6 +167,7 @@ public sealed class DesktopTrackerViewModelTests
         harness.ViewModel.TotalDeathsAppearanceDraft.TextColor = "#010203";
         harness.ViewModel.TotalDeathsAppearanceDraft.AccentColor = "#040506";
         harness.ViewModel.TotalDeathsAppearanceDraft.BackgroundColor = "#070809";
+        harness.ViewModel.TotalDeathsAppearanceDraft.BackgroundEnabled = true;
         harness.ViewModel.TotalDeathsAppearanceDraft.BackgroundOpacity = "20";
         harness.ViewModel.TotalDeathsAppearanceDraft.Padding = "6";
         harness.ViewModel.TotalDeathsAppearanceDraft.CornerRadius = "3";
