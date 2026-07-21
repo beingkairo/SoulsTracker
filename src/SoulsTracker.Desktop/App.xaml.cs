@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application, IDisposable
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private CancellationTokenSource? runtimeReaderCancellation;
     private AutomatedDeathSoundNotifier? automatedDeathSoundNotifier;
+    private DesktopDataRootSelection? dataRootSelection;
 
     public App()
     {
@@ -39,6 +40,9 @@ public partial class App : System.Windows.Application, IDisposable
 
         try
         {
+            dataRootSelection = DesktopDataRootResolver.Resolve(
+                e.Args,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
             DesktopStartupDecision decision = await singleInstanceStartup.StartAsync(StartTrackerAsync);
             if (decision.CanStart)
             {
@@ -46,6 +50,15 @@ public partial class App : System.Windows.Application, IDisposable
             }
 
             System.Windows.MessageBox.Show(decision.UserMessage!, "SoulsTracker", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
+        catch (ArgumentException)
+        {
+            System.Windows.MessageBox.Show(
+                "SoulsTracker could not start with the requested development data folder.",
+                "SoulsTracker",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
             Shutdown();
         }
         catch
@@ -57,26 +70,27 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async Task StartTrackerAsync()
     {
-        string applicationDataRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SoulsTracker");
+        DesktopDataRootSelection stateSelection = dataRootSelection ?? throw new InvalidOperationException("The desktop data root was not initialized.");
         overlayPublisher = new OverlayStateChangePublisher();
         textExportPublisher = new TextExportStatePublisher();
-        var repository = new SqliteTrackerStateRepository(applicationDataRoot, "tracker.db");
+        var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
         coordinator = new SerializedTrackerCoordinator(repository, new CompositeTrackerStateChangePublisher(overlayPublisher, textExportPublisher), new SqliteConfirmedLegacyImportCommitter(repository));
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
         textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() => viewModel.SetTextExportStatus(succeeded));
         viewModel.ConfigureDeathSoundPlayback(new WpfDeathSoundPlayer());
         automatedDeathSoundNotifier = new AutomatedDeathSoundNotifier(new WpfDeathSoundPlayer());
-        var locator = new ApprovedLegacyImportLocationLocator();
-        viewModel.ConfigureLegacyImport(new LegacyImportViewModel(new LegacyImportWorkflow(locator, new ApprovedLegacyImportPreflight(locator), coordinator), viewModel.ApplyImportedCommittedState));
+        if (!stateSelection.IsDevelopmentOverride)
+        {
+            var locator = new ApprovedLegacyImportLocationLocator();
+            viewModel.ConfigureLegacyImport(new LegacyImportViewModel(new LegacyImportWorkflow(locator, new ApprovedLegacyImportPreflight(locator), coordinator), viewModel.ApplyImportedCommittedState));
+        }
         var window = new MainWindow { DataContext = viewModel };
         window.Closing += MainWindow_Closing;
         MainWindow = window;
         window.Show();
         await viewModel.InitializeAsync();
-        if (!mainWindowCloseRequested && viewModel.CurrentState is not null)
+        if (!mainWindowCloseRequested && viewModel.CurrentState is not null && viewModel.LegacyImport is not null)
         {
             viewModel.LegacyImport!.OfferIfEligible(viewModel.CurrentState);
         }

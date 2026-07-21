@@ -468,6 +468,9 @@ public sealed class MainWindowBindingTests
                 Assert.NotNull(Assert.IsType<Style>(window.Resources[typeof(ScrollBar)]).Setters.OfType<Setter>().Single(setter => setter.Property == Control.TemplateProperty).Value);
                 AssertExplicitDarkComboBoxTemplate(Assert.IsType<ComboBox>(window.FindName("GameSelector")));
                 AssertExplicitDarkComboBoxTemplate(bossMode);
+                AssertNoPersistentFocusVisual(Assert.IsType<TextBox>(window.FindName("TotalDeathsOverlayUrlTextBox")));
+                AssertNoPersistentFocusVisual(bossMode);
+                AssertComboBoxAccentIsLimitedToTheOpenDropDown(bossMode);
 
                 Border legacyPanel = Assert.IsType<Border>(window.FindName("LegacyImportPanel"));
                 Binding legacyVisibility = Assert.IsType<Binding>(BindingOperations.GetBinding(legacyPanel, UIElement.VisibilityProperty));
@@ -592,6 +595,21 @@ public sealed class MainWindowBindingTests
         Assert.True(selectionText.IsHitTestVisible == false);
         Assert.True(Panel.GetZIndex(selectionText) > Panel.GetZIndex(toggle));
         Assert.IsType<Popup>(comboBox.Template.FindName("PART_Popup", comboBox));
+    }
+
+    private static void AssertNoPersistentFocusVisual(Control control)
+    {
+        Assert.Null(control.FocusVisualStyle);
+        Assert.True(control.OverridesDefaultStyle);
+    }
+
+    private static void AssertComboBoxAccentIsLimitedToTheOpenDropDown(ComboBox comboBox)
+    {
+        Trigger[] triggers = comboBox.Template.Triggers.OfType<Trigger>().ToArray();
+
+        Assert.Contains(triggers, trigger => trigger.Property == ComboBox.IsDropDownOpenProperty && Equals(trigger.Value, true));
+        Assert.DoesNotContain(triggers, trigger => trigger.Property == Control.IsKeyboardFocusedProperty);
+        Assert.DoesNotContain(triggers, trigger => trigger.Property == Control.IsKeyboardFocusWithinProperty);
     }
 
     private static void AssertOneWayCheckBoxBinding(

@@ -72,12 +72,26 @@
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
             <Setter Property="MinHeight" Value="30" />
             <Setter Property="Padding" Value="8,5" />
             <Setter Property="Background" Value="#191D23" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="TextBoxSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TextBoxSurface" Property="Background" Value="#20242B" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="TextBoxSurface" Property="Opacity" Value="0.45" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="OverlayAppearanceTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Margin" Value="0,0,0,6" />
@@ -160,6 +174,7 @@
         </Style>
         <Style TargetType="ComboBox">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="8,4" />
             <Setter Property="Background" Value="{StaticResource ElevatedSurfaceBrush}" />
