@@ -29,13 +29,13 @@ public sealed record GameId
 
     private static readonly ReadOnlyCollection<GameId> AllGameIds = Array.AsReadOnly(
     [
+        DemonsSouls,
         Ds1,
         Ds2,
+        Bloodborne,
         Ds3,
         Sekiro,
-        Bloodborne,
         EldenRing,
-        DemonsSouls,
     ]);
 
     private static readonly ReadOnlyDictionary<string, GameId> KnownGameIds =

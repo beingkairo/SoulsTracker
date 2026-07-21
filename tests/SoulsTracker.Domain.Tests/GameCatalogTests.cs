@@ -10,6 +10,13 @@ public sealed class GameCatalogTests
         ExpectedGameDefinition[] expected =
         [
             new(
+                GameId.DemonsSouls,
+                "Demon Souls",
+                GameUiAvailability.Selectable,
+                GameTrackingMode.ManualOnly,
+                ReaderBindingState.IntentionallyUnavailable,
+                16),
+            new(
                 GameId.Ds1,
                 "Dark Souls: Remastered",
                 GameUiAvailability.Selectable,
@@ -23,6 +30,13 @@ public sealed class GameCatalogTests
                 GameTrackingMode.GameLifetimeReadOnly,
                 ReaderBindingState.PendingVerification,
                 41),
+            new(
+                GameId.Bloodborne,
+                "Bloodborne",
+                GameUiAvailability.Selectable,
+                GameTrackingMode.ManualOnly,
+                ReaderBindingState.IntentionallyUnavailable,
+                22),
             new(
                 GameId.Ds3,
                 "Dark Souls III",
@@ -38,26 +52,12 @@ public sealed class GameCatalogTests
                 ReaderBindingState.PendingVerification,
                 16),
             new(
-                GameId.Bloodborne,
-                "Bloodborne",
-                GameUiAvailability.Selectable,
-                GameTrackingMode.ManualOnly,
-                ReaderBindingState.IntentionallyUnavailable,
-                22),
-            new(
                 GameId.EldenRing,
                 "Elden Ring",
                 GameUiAvailability.DisabledSoon,
                 GameTrackingMode.Unavailable,
                 ReaderBindingState.IntentionallyUnavailable,
                 0),
-            new(
-                GameId.DemonsSouls,
-                "Demon Souls",
-                GameUiAvailability.Selectable,
-                GameTrackingMode.ManualOnly,
-                ReaderBindingState.IntentionallyUnavailable,
-                16),
         ];
 
         ExpectedGameDefinition[] actual = GameCatalog.All
