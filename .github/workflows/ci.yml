@@ -33,6 +33,10 @@ jobs:
         shell: pwsh
         run: ./scripts/Verify-Version.ps1
 
+      - name: Verify release guide
+        shell: pwsh
+        run: ./scripts/Verify-ReleaseGuide.ps1
+
       - name: Restore locked overlay dependencies
         run: npm ci --prefix web_overlay
 

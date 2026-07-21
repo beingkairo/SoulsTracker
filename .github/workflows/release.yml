@@ -70,3 +70,14 @@ jobs:
             artifacts/SoulsTrackerV1.0-portable.zip
             artifacts/SHA256SUMS.txt
             artifacts/SoulsTrackerV1.0.sbom.spdx.json
+
+      - name: Append setup guide to release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          $guide = Get-Content -Raw -Encoding utf8 'docs/RELEASE-GETTING-STARTED.md'
+          $existingNotes = if ($null -eq $release.body) { "" } else { $release.body.TrimEnd() }
+          $notes = "$existingNotes`n`n$($guide.Trim())"
+          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)" -f "body=$notes"
