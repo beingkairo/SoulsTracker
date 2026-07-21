@@ -104,6 +104,8 @@ public sealed class MainWindowBindingTests
         Assert.Contains("AllowFullOpen = true", colorField, StringComparison.Ordinal);
         Assert.Contains("FullOpen = true", colorField, StringComparison.Ordinal);
         Assert.Contains("SolidColorOnly = true", colorField, StringComparison.Ordinal);
+        Assert.Contains("WindowInteropHelper(owner).Handle", colorField, StringComparison.Ordinal);
+        Assert.Contains("dialog.ShowDialog(new NativeWindowOwner(ownerHandle))", colorField, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateWheel", colorField, StringComparison.Ordinal);
         Assert.DoesNotContain("Popup picker", colorField, StringComparison.Ordinal);
     }

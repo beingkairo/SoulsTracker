@@ -1,8 +1,8 @@
-using System.Drawing;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Interop;
 using System.Windows.Media;
 using Forms = System.Windows.Forms;
 
@@ -85,7 +85,13 @@ public sealed class ColorField : Grid
             Color = ToDrawingColor(Parse(Value) ?? Colors.White)
         };
 
-        if (dialog.ShowDialog() == Forms.DialogResult.OK)
+        Window? owner = Window.GetWindow(this);
+        IntPtr ownerHandle = owner is null ? IntPtr.Zero : new WindowInteropHelper(owner).Handle;
+        Forms.DialogResult result = ownerHandle == IntPtr.Zero
+            ? dialog.ShowDialog()
+            : dialog.ShowDialog(new NativeWindowOwner(ownerHandle));
+
+        if (result == Forms.DialogResult.OK)
         {
             Value = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
         }
@@ -105,4 +111,9 @@ public sealed class ColorField : Grid
 
     private static System.Drawing.Color ToDrawingColor(System.Windows.Media.Color color) =>
         System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+
+    private sealed class NativeWindowOwner(IntPtr handle) : Forms.IWin32Window
+    {
+        public IntPtr Handle { get; } = handle;
+    }
 }
