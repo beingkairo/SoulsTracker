@@ -71,6 +71,7 @@
             </Setter>
         </Style>
         <Style TargetType="TextBox">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="MinHeight" Value="30" />
             <Setter Property="Padding" Value="8,5" />
             <Setter Property="Background" Value="#191D23" />
@@ -158,6 +159,7 @@
             </Setter>
         </Style>
         <Style TargetType="ComboBox">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="8,4" />
             <Setter Property="Background" Value="{StaticResource ElevatedSurfaceBrush}" />
