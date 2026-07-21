@@ -32,8 +32,8 @@ public sealed record GameId
         DemonsSouls,
         Ds1,
         Ds2,
-        Bloodborne,
         Ds3,
+        Bloodborne,
         Sekiro,
         EldenRing,
     ]);

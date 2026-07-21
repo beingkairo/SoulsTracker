@@ -31,19 +31,19 @@ public sealed class GameCatalogTests
                 ReaderBindingState.PendingVerification,
                 41),
             new(
-                GameId.Bloodborne,
-                "Bloodborne",
-                GameUiAvailability.Selectable,
-                GameTrackingMode.ManualOnly,
-                ReaderBindingState.IntentionallyUnavailable,
-                22),
-            new(
                 GameId.Ds3,
                 "Dark Souls III",
                 GameUiAvailability.Selectable,
                 GameTrackingMode.GameLifetimeReadOnly,
                 ReaderBindingState.PendingVerification,
                 25),
+            new(
+                GameId.Bloodborne,
+                "Bloodborne",
+                GameUiAvailability.Selectable,
+                GameTrackingMode.ManualOnly,
+                ReaderBindingState.IntentionallyUnavailable,
+                22),
             new(
                 GameId.Sekiro,
                 "Sekiro: Shadows Die Twice",
