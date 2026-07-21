@@ -58,13 +58,75 @@ public sealed class MainWindowBindingTests
         Assert.DoesNotContain("Text=\"Inline\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("PickColor_Click", xaml, StringComparison.Ordinal);
         Assert.Contains("local:ColorField", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"Text effects\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"Text effects\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Maximum visible", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Elden Ring is labeled SOON and cannot be selected.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Outline size\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding TotalDeathsAppearanceDraft.OutlineEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding TotalDeathsAppearanceDraft.ShadowEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding BossListAppearanceDraft.OutlineEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding BossListAppearanceDraft.ShadowEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("OverlayAppearanceNumberBox", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Enable Total Deaths outline\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Enable Total Deaths shadow\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Enable Boss List outline\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Enable Boss List shadow\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Choose an overlay type", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("border-left", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "web_overlay", "src", "overlay.css")), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void OverlayEditorKeepsConditionalControlsAndNaturalFieldGroupsInTheRequiredOrder()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+        string totalDeaths = Between(xaml, "<TabItem Header=\"Total Deaths\">", "<TabItem Header=\"Boss List\">");
+        string bossList = Between(xaml, "<TabItem Header=\"Boss List\">", "</TabControl>");
+
+        AssertOrder(totalDeaths, "Text=\"Title\"", "Text=\"Title icon\"", "Text=\"Skull color\"", "Text=\"Font\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Background\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"");
+        AssertOrder(bossList, "Text=\"Mode\"", "Text=\"Treatment\"", "Text=\"Marker\"", "Text=\"Title\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Background\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"", "Text=\"Alignment\"");
+        Assert.True(bossList.IndexOf("Text=\"Marker color\"", StringComparison.Ordinal) > bossList.IndexOf("Text=\"Marker\"", StringComparison.Ordinal));
+        Assert.Contains("Visibility=\"{Binding ShowBossMarkerColor", bossList, StringComparison.Ordinal);
+        Assert.DoesNotContain("Maximum visible", bossList, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TabsAndColorFieldUseNeutralFocusAndTheNativeWindowsPalette()
+    {
+        string root = FindRepositoryRoot();
+        string xaml = File.ReadAllText(Path.Combine(root, "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+        string tabStyle = Between(xaml, "<Style x:Key=\"DarkTabItem\"", "</Style>");
+        string colorField = File.ReadAllText(Path.Combine(root, "src", "SoulsTracker.Desktop", "ColorField.cs"));
+
+        Assert.DoesNotContain("AccentBrush", tabStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsKeyboardFocused", tabStyle, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Margin\" Value=\"0\"", tabStyle, StringComparison.Ordinal);
+        Assert.Contains("Forms.ColorDialog", colorField, StringComparison.Ordinal);
+        Assert.Contains("AllowFullOpen = true", colorField, StringComparison.Ordinal);
+        Assert.Contains("FullOpen = true", colorField, StringComparison.Ordinal);
+        Assert.Contains("SolidColorOnly = true", colorField, StringComparison.Ordinal);
+        Assert.DoesNotContain("CreateWheel", colorField, StringComparison.Ordinal);
+        Assert.DoesNotContain("Popup picker", colorField, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OutlineAndShadowDetailsAreBoundToTheirOwnEnableToggles()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            try
+            {
+                window = new MainWindow();
+                AssertVisibilityBinding(window, "TotalDeathsOutlineDetails", "TotalDeathsAppearanceDraft.OutlineEnabled");
+                AssertVisibilityBinding(window, "TotalDeathsShadowDetails", "TotalDeathsAppearanceDraft.ShadowEnabled");
+                AssertVisibilityBinding(window, "BossListOutlineDetails", "BossListAppearanceDraft.OutlineEnabled");
+                AssertVisibilityBinding(window, "BossListShadowDetails", "BossListAppearanceDraft.ShadowEnabled");
+            }
+            finally
+            {
+                window?.Close();
+            }
+        });
     }
 
     [Fact]
@@ -441,9 +503,7 @@ public sealed class MainWindowBindingTests
                 Image icon = Assert.IsType<Image>(window.FindName("SoulsTrackerSkullIcon"));
                 Assert.Equal("SoulsTracker skull application icon", AutomationProperties.GetName(icon));
                 Assert.Equal("Game selection", AutomationProperties.GetName(Assert.IsType<ComboBox>(window.FindName("GameSelector"))));
-                Assert.Equal(
-                    "Elden Ring is labeled SOON and cannot be selected.",
-                    Assert.IsType<TextBlock>(window.FindName("GameAvailabilityHintTextBlock")).Text);
+                Assert.Null(window.FindName("GameAvailabilityHintTextBlock"));
                 Assert.Equal("Current total deaths", AutomationProperties.GetName(Assert.IsType<TextBlock>(window.FindName("TotalDeathsTextBlock"))));
                 Assert.Equal("Death Tracker and Boss List", Assert.IsType<TextBlock>(window.FindName("HeaderSubtitleTextBlock")).Text);
 
@@ -582,6 +642,33 @@ public sealed class MainWindowBindingTests
         Binding binding = Assert.IsType<Binding>(BindingOperations.GetBinding(textBlock, TextBlock.TextProperty));
         Assert.Equal(expectedBindingPath, binding.Path?.Path);
         Assert.Equal(BindingMode.OneWay, binding.Mode);
+    }
+
+    private static void AssertVisibilityBinding(MainWindow window, string controlName, string expectedBindingPath)
+    {
+        StackPanel panel = Assert.IsType<StackPanel>(window.FindName(controlName));
+        Binding binding = Assert.IsType<Binding>(BindingOperations.GetBinding(panel, UIElement.VisibilityProperty));
+        Assert.Equal(expectedBindingPath, binding.Path?.Path);
+    }
+
+    private static string Between(string text, string startMarker, string endMarker)
+    {
+        int start = text.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Could not find start marker: {startMarker}");
+        int end = text.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(end >= 0, $"Could not find end marker: {endMarker}");
+        return text[start..end];
+    }
+
+    private static void AssertOrder(string text, params string[] markers)
+    {
+        int previous = -1;
+        foreach (string marker in markers)
+        {
+            int index = text.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(index > previous, $"Expected '{marker}' after the previous field.");
+            previous = index;
+        }
     }
 
     private static void AssertExplicitDarkComboBoxTemplate(ComboBox comboBox)

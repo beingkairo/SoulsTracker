@@ -96,7 +96,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    private async void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (DataContext is not DesktopTrackerViewModel { IsHotkeyRecording: true } viewModel) return;
 
@@ -228,7 +228,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel viewModel && viewModel.IsDeathSoundEnabled) await viewModel.SetDeathSoundEnabledAsync(false);
     }
-    private async void DeathSoundVolume_KeyDown(object sender, KeyEventArgs e)
+    private async void DeathSoundVolume_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key != Key.Return || sender is not System.Windows.Controls.TextBox textBox || DataContext is not DesktopTrackerViewModel viewModel)
         {
