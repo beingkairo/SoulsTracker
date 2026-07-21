@@ -110,7 +110,8 @@ public sealed record ProcessModuleFileIdentity(
     string ExecutableFileName,
     string FileVersion,
     string ProductVersion,
-    string Sha256);
+    string Sha256,
+    string ProductName = "");
 
 /// <summary>
 /// Uses a safe fixed result for unavailable, inaccessible, or cancelled identity queries.
@@ -340,7 +341,7 @@ public sealed class WindowsReadOnlyProcessAttachmentFactory : IReadOnlyProcessAt
                 }
 
                 return ValueTask.FromResult(ReadOnlyModuleIdentityResult.Available(
-                    new ProcessModuleFileIdentity(fileName, fileVersion, productVersion, sha256)));
+                    new ProcessModuleFileIdentity(fileName, fileVersion, productVersion, sha256, versionInfo.ProductName ?? string.Empty)));
             }
             catch (System.ComponentModel.Win32Exception)
             {
