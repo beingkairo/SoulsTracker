@@ -644,6 +644,7 @@ public sealed class MainWindowBindingTests
                 Assert.IsType<TextBox>(window.FindName("TotalDeathsOverlayUrlTextBox"));
                 Assert.IsType<CheckBox>(window.FindName("BossListOverlayEnabledCheckBox"));
                 Assert.IsType<TextBox>(window.FindName("BossListOverlayUrlTextBox"));
+                Assert.Contains("Add these links to your streaming software as Browser Sources to show the overlays.", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
             }
             finally
             {
