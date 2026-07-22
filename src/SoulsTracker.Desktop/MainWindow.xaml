@@ -561,16 +561,19 @@
                             <TextBlock Style="{StaticResource PanelTitle}" Text="OBS TEXT EXPORT" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Optional local TXT files for OBS Text sources." />
                             <StackPanel x:Name="DeathsExportToggleRow" Orientation="Horizontal">
-                                <CheckBox x:Name="DeathsExportEnabledCheckBox" Height="16" Content="Enable writing deaths to txt file" IsChecked="{Binding IsDeathsExportEnabled, Mode=OneWay}" Checked="DeathsExportEnabled_Checked" Unchecked="DeathsExportEnabled_Unchecked" />
+                                <CheckBox x:Name="DeathsExportEnabledCheckBox" Height="16" IsChecked="{Binding IsDeathsExportEnabled, Mode=OneWay}" Checked="DeathsExportEnabled_Checked" Unchecked="DeathsExportEnabled_Unchecked" AutomationProperties.Name="Enable writing Deaths to txt file">
+                                    <TextBlock><Run Text="Enable writing " /><Run FontWeight="Bold" Text="Deaths" /><Run Text=" to txt file" /></TextBlock>
+                                </CheckBox>
                             </StackPanel>
                             <TextBlock x:Name="DeathsExportFileNameTextBlock" Text="{Binding DeathsExportFileName, Mode=OneWay, TargetNullValue=No file selected.}" AutomationProperties.Name="Deaths export file name" />
-                            <StackPanel Orientation="Horizontal"><Button Content="Choose…" Click="ChooseDeathsExport_Click" AutomationProperties.Name="Choose deaths text file" /><Button Margin="8,0,0,0" Content="Clear" Click="ClearDeathsExport_Click" AutomationProperties.Name="Clear deaths text file" /></StackPanel>
-                            <StackPanel x:Name="BossExportToggleRow" Margin="0,10,0,0" Orientation="Horizontal">
-                                <CheckBox x:Name="BossExportEnabledCheckBox" Height="16" Content="Enable writing Boss list to txt file" IsChecked="{Binding IsBossExportEnabled, Mode=OneWay}" Checked="BossExportEnabled_Checked" Unchecked="BossExportEnabled_Unchecked" />
+                            <StackPanel Orientation="Horizontal"><Button x:Name="ChooseDeathsExportButton" Content="Choose…" Click="ChooseDeathsExport_Click" IsEnabled="{Binding CanChooseDeathsExport}" AutomationProperties.Name="Choose deaths text file" /><Button x:Name="ClearDeathsExportButton" Margin="8,0,0,0" Content="Clear" Click="ClearDeathsExport_Click" IsEnabled="{Binding CanClearDeathsExport}" AutomationProperties.Name="Clear deaths text file" /></StackPanel>
+                            <StackPanel x:Name="BossExportToggleRow" Margin="0,20,0,0" Orientation="Horizontal">
+                                <CheckBox x:Name="BossExportEnabledCheckBox" Height="16" IsChecked="{Binding IsBossExportEnabled, Mode=OneWay}" Checked="BossExportEnabled_Checked" Unchecked="BossExportEnabled_Unchecked" AutomationProperties.Name="Enable writing Boss list to txt file">
+                                    <TextBlock><Run Text="Enable writing " /><Run FontWeight="Bold" Text="Boss list" /><Run Text=" to txt file" /></TextBlock>
+                                </CheckBox>
                             </StackPanel>
                             <TextBlock x:Name="BossExportFileNameTextBlock" Text="{Binding BossExportFileName, Mode=OneWay, TargetNullValue=No file selected.}" AutomationProperties.Name="Boss export file name" />
-                            <StackPanel Orientation="Horizontal"><Button Content="Choose…" Click="ChooseBossExport_Click" AutomationProperties.Name="Choose boss text file" /><Button Margin="8,0,0,0" Content="Clear" Click="ClearBossExport_Click" AutomationProperties.Name="Clear boss text file" /></StackPanel>
-                            <TextBlock x:Name="TextExportStatusTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,0" Text="{Binding TextExportStatus, Mode=OneWay}" />
+                            <StackPanel Orientation="Horizontal"><Button x:Name="ChooseBossExportButton" Content="Choose…" Click="ChooseBossExport_Click" IsEnabled="{Binding CanChooseBossExport}" AutomationProperties.Name="Choose boss text file" /><Button x:Name="ClearBossExportButton" Margin="8,0,0,0" Content="Clear" Click="ClearBossExport_Click" IsEnabled="{Binding CanClearBossExport}" AutomationProperties.Name="Clear boss text file" /></StackPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>

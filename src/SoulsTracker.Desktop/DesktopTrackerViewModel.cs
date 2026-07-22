@@ -159,7 +159,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsLoading
     {
         get => isLoading;
-        private set => SetField(ref isLoading, value);
+        private set
+        {
+            if (SetField(ref isLoading, value)) NotifyTextExportControlAvailability();
+        }
     }
 
     public bool IsBusy
@@ -172,6 +175,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
+                NotifyTextExportControlAvailability();
             }
         }
     }
@@ -275,6 +279,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? BossExportFileName => state?.TextExports.BossListPath is { } path ? Path.GetFileName(path) : null;
     public bool IsDeathsExportEnabled => state?.TextExports.DeathsEnabled ?? false;
     public bool IsBossExportEnabled => state?.TextExports.BossListEnabled ?? false;
+    public bool CanChooseDeathsExport => ControlsEnabled && IsDeathsExportEnabled;
+    public bool CanClearDeathsExport => CanChooseDeathsExport && state?.TextExports.DeathsPath is not null;
+    public bool CanChooseBossExport => ControlsEnabled && IsBossExportEnabled;
+    public bool CanClearBossExport => CanChooseBossExport && state?.TextExports.BossListPath is not null;
     internal PersistentTrackerState? CurrentState => state;
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
@@ -786,6 +794,15 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsDeathSoundEnabled));
         OnPropertyChanged(nameof(DeathSoundVolume));
         OnPropertyChanged(nameof(DeathsExportFileName)); OnPropertyChanged(nameof(BossExportFileName)); OnPropertyChanged(nameof(IsDeathsExportEnabled)); OnPropertyChanged(nameof(IsBossExportEnabled));
+        NotifyTextExportControlAvailability();
+    }
+
+    private void NotifyTextExportControlAvailability()
+    {
+        OnPropertyChanged(nameof(CanChooseDeathsExport));
+        OnPropertyChanged(nameof(CanClearDeathsExport));
+        OnPropertyChanged(nameof(CanChooseBossExport));
+        OnPropertyChanged(nameof(CanClearBossExport));
     }
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;

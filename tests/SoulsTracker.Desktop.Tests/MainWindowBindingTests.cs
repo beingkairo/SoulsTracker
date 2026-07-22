@@ -355,7 +355,7 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void TextExportSettingsExposeOnlyFileNamesAndGenericStatus()
+    public void TextExportSettingsUseExplicitEnablementControls()
     {
         RunOnStaThread(() =>
         {
@@ -365,14 +365,22 @@ public sealed class MainWindowBindingTests
                 window = new MainWindow();
                 AssertOneWayTextBlockBinding(window, "DeathsExportFileNameTextBlock", nameof(DesktopTrackerViewModel.DeathsExportFileName));
                 AssertOneWayTextBlockBinding(window, "BossExportFileNameTextBlock", nameof(DesktopTrackerViewModel.BossExportFileName));
-                AssertOneWayTextBlockBinding(window, "TextExportStatusTextBlock", nameof(DesktopTrackerViewModel.TextExportStatus));
-
                 CheckBox deathsToggle = Assert.IsType<CheckBox>(window.FindName("DeathsExportEnabledCheckBox"));
                 CheckBox bossToggle = Assert.IsType<CheckBox>(window.FindName("BossExportEnabledCheckBox"));
-                Assert.Equal("Enable writing deaths to txt file", deathsToggle.Content);
-                Assert.Equal("Enable writing Boss list to txt file", bossToggle.Content);
+                Assert.Equal("Enable writing Deaths to txt file", AutomationProperties.GetName(deathsToggle));
+                Assert.Equal("Enable writing Boss list to txt file", AutomationProperties.GetName(bossToggle));
+                Assert.Equal("Enable writing Deaths to txt file", GetInlineText((TextBlock)deathsToggle.Content));
+                Assert.Equal("Enable writing Boss list to txt file", GetInlineText((TextBlock)bossToggle.Content));
+                Assert.Equal(FontWeights.Bold, ((Run)((TextBlock)deathsToggle.Content).Inlines.ElementAt(1)).FontWeight);
+                Assert.Equal(FontWeights.Bold, ((Run)((TextBlock)bossToggle.Content).Inlines.ElementAt(1)).FontWeight);
                 Assert.IsType<CheckBox>(LogicalTreeHelper.GetChildren(Assert.IsType<StackPanel>(window.FindName("DeathsExportToggleRow"))).Cast<object>().Single());
                 Assert.IsType<CheckBox>(LogicalTreeHelper.GetChildren(Assert.IsType<StackPanel>(window.FindName("BossExportToggleRow"))).Cast<object>().Single());
+                Assert.Null(window.FindName("TextExportStatusTextBlock"));
+
+                AssertPropertyBinding(window, "ChooseDeathsExportButton", nameof(DesktopTrackerViewModel.CanChooseDeathsExport), Button.IsEnabledProperty);
+                AssertPropertyBinding(window, "ClearDeathsExportButton", nameof(DesktopTrackerViewModel.CanClearDeathsExport), Button.IsEnabledProperty);
+                AssertPropertyBinding(window, "ChooseBossExportButton", nameof(DesktopTrackerViewModel.CanChooseBossExport), Button.IsEnabledProperty);
+                AssertPropertyBinding(window, "ClearBossExportButton", nameof(DesktopTrackerViewModel.CanClearBossExport), Button.IsEnabledProperty);
             }
             finally { window?.Close(); }
         });
@@ -827,6 +835,17 @@ public sealed class MainWindowBindingTests
         Assert.Equal(expectedBindingPath, helpTextBinding.Path?.Path);
         Assert.Equal(BindingMode.OneWay, helpTextBinding.Mode);
     }
+
+    private static void AssertPropertyBinding(MainWindow window, string controlName, string expectedBindingPath, DependencyProperty property)
+    {
+        Control control = Assert.IsAssignableFrom<Control>(window.FindName(controlName));
+        Binding binding = Assert.IsType<Binding>(BindingOperations.GetBinding(control, property));
+
+        Assert.Equal(expectedBindingPath, binding.Path?.Path);
+        Assert.Equal(BindingMode.Default, binding.Mode);
+    }
+
+    private static string GetInlineText(TextBlock textBlock) => string.Concat(textBlock.Inlines.OfType<Run>().Select(static run => run.Text));
 
     private static IEnumerable<T> FindVisualDescendants<T>(DependencyObject root)
         where T : DependencyObject
