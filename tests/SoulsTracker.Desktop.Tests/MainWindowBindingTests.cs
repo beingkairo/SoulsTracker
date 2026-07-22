@@ -366,6 +366,13 @@ public sealed class MainWindowBindingTests
                 AssertOneWayTextBlockBinding(window, "DeathsExportFileNameTextBlock", nameof(DesktopTrackerViewModel.DeathsExportFileName));
                 AssertOneWayTextBlockBinding(window, "BossExportFileNameTextBlock", nameof(DesktopTrackerViewModel.BossExportFileName));
                 AssertOneWayTextBlockBinding(window, "TextExportStatusTextBlock", nameof(DesktopTrackerViewModel.TextExportStatus));
+
+                CheckBox deathsToggle = Assert.IsType<CheckBox>(window.FindName("DeathsExportEnabledCheckBox"));
+                CheckBox bossToggle = Assert.IsType<CheckBox>(window.FindName("BossExportEnabledCheckBox"));
+                Assert.Equal("Enable writing deaths to txt file", deathsToggle.Content);
+                Assert.Equal("Enable writing Boss list to txt file", bossToggle.Content);
+                Assert.IsType<CheckBox>(LogicalTreeHelper.GetChildren(Assert.IsType<StackPanel>(window.FindName("DeathsExportToggleRow"))).Cast<object>().Single());
+                Assert.IsType<CheckBox>(LogicalTreeHelper.GetChildren(Assert.IsType<StackPanel>(window.FindName("BossExportToggleRow"))).Cast<object>().Single());
             }
             finally { window?.Close(); }
         });
