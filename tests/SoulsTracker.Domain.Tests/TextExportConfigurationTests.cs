@@ -14,11 +14,13 @@ public sealed class TextExportConfigurationTests
     }
 
     [Fact]
-    public void EnabledExportsRequireAnExplicitTxtTarget()
+    public void EnablementIntentIsPreservedBeforeATxtTargetIsSelected()
     {
         TextExportConfiguration configuration = new(null, true, null, true);
 
-        Assert.False(configuration.DeathsEnabled);
-        Assert.False(configuration.BossListEnabled);
+        Assert.True(configuration.DeathsEnabled);
+        Assert.True(configuration.BossListEnabled);
+        Assert.Null(configuration.DeathsPath);
+        Assert.Null(configuration.BossListPath);
     }
 }

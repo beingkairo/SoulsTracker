@@ -293,10 +293,15 @@ public partial class MainWindow : Window
     private async void ChooseBossExport_Click(object sender, RoutedEventArgs e) { var dialog = CreateTextExportDialog(); if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetBossExportPathAsync(dialog.FileName); }
     private async void ClearDeathsExport_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearDeathsExportAsync(); }
     private async void ClearBossExport_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearBossExportAsync(); }
-    private async void DeathsExportEnabled_Checked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm && !vm.IsDeathsExportEnabled) await vm.SetDeathsExportEnabledAsync(true); }
-    private async void DeathsExportEnabled_Unchecked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm && vm.IsDeathsExportEnabled) await vm.SetDeathsExportEnabledAsync(false); }
-    private async void BossExportEnabled_Checked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm && !vm.IsBossExportEnabled) await vm.SetBossExportEnabledAsync(true); }
-    private async void BossExportEnabled_Unchecked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm && vm.IsBossExportEnabled) await vm.SetBossExportEnabledAsync(false); }
+    // These controls intentionally use one-way bindings: committed state remains
+    // the source of truth after asynchronous persistence completes. Do not gate a
+    // routed toggle event on the currently committed value, though. A second user
+    // interaction can arrive before the first save returns, and stale state would
+    // otherwise drop that interaction (and make the checkbox visibly flicker).
+    private async void DeathsExportEnabled_Checked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetDeathsExportEnabledAsync(true); }
+    private async void DeathsExportEnabled_Unchecked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetDeathsExportEnabledAsync(false); }
+    private async void BossExportEnabled_Checked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetBossExportEnabledAsync(true); }
+    private async void BossExportEnabled_Unchecked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetBossExportEnabledAsync(false); }
 
     private async void ReviewLegacyImport_Click(object sender, RoutedEventArgs e)
     {

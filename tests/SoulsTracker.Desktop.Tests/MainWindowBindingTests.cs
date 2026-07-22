@@ -387,6 +387,88 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void TextExportEnablementTogglesPersistRoutedCheckboxInteractions()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var repository = new TextExportPersistenceRepository();
+            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                CheckBox deathsToggle = Assert.IsType<CheckBox>(window.FindName("DeathsExportEnabledCheckBox"));
+                CheckBox bossToggle = Assert.IsType<CheckBox>(window.FindName("BossExportEnabledCheckBox"));
+                Button chooseDeaths = Assert.IsType<Button>(window.FindName("ChooseDeathsExportButton"));
+                Button clearDeaths = Assert.IsType<Button>(window.FindName("ClearDeathsExportButton"));
+                Button chooseBoss = Assert.IsType<Button>(window.FindName("ChooseBossExportButton"));
+                Button clearBoss = Assert.IsType<Button>(window.FindName("ClearBossExportButton"));
+
+                Assert.False(deathsToggle.IsChecked);
+                Assert.False(bossToggle.IsChecked);
+                Assert.False(chooseDeaths.IsEnabled);
+                Assert.False(chooseBoss.IsEnabled);
+
+                // Setting IsChecked raises the real routed Checked event handled by
+                // MainWindow. This catches the original state/binding race instead
+                // of only asserting XAML binding shape.
+                deathsToggle.IsChecked = true;
+                WaitForDispatcher(() => viewModel.IsDeathsExportEnabled && deathsToggle.IsChecked == true && repository.SaveCount >= 1);
+                Assert.True(viewModel.CanChooseDeathsExport);
+                chooseDeaths.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.True(chooseDeaths.IsEnabled);
+                Assert.False(clearDeaths.IsEnabled);
+
+                bossToggle.IsChecked = true;
+                WaitForDispatcher(() => viewModel.IsBossExportEnabled && bossToggle.IsChecked == true && repository.SaveCount >= 2);
+                Assert.True(viewModel.CanChooseBossExport);
+                chooseBoss.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.True(chooseBoss.IsEnabled);
+                Assert.False(clearBoss.IsEnabled);
+                Assert.True(repository.State.TextExports.DeathsEnabled);
+                Assert.True(repository.State.TextExports.BossListEnabled);
+
+                deathsToggle.IsChecked = false;
+                WaitForDispatcher(() => !viewModel.IsDeathsExportEnabled && deathsToggle.IsChecked == false && repository.SaveCount >= 3);
+                Assert.False(viewModel.CanChooseDeathsExport);
+                chooseDeaths.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.False(chooseDeaths.IsEnabled);
+
+                bossToggle.IsChecked = false;
+                WaitForDispatcher(() => !viewModel.IsBossExportEnabled && bossToggle.IsChecked == false && repository.SaveCount >= 4);
+                Assert.False(viewModel.CanChooseBossExport);
+                chooseBoss.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.False(chooseBoss.IsEnabled);
+
+                window.Close();
+                window = null;
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+                var restartedCoordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+                try
+                {
+                    var restarted = new DesktopTrackerViewModel(restartedCoordinator);
+                    restarted.InitializeAsync().GetAwaiter().GetResult();
+                    Assert.False(restarted.IsDeathsExportEnabled);
+                    Assert.False(restarted.IsBossExportEnabled);
+                }
+                finally { restartedCoordinator.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
     public void OverlayUrlTextBindingsAreExplicitlyOneWay()
     {
         RunOnStaThread(() =>
@@ -909,6 +991,24 @@ public sealed class MainWindowBindingTests
 
         public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
         {
+            SaveCount++;
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TextExportPersistenceRepository : ITrackerStateRepository
+    {
+        public PersistentTrackerState State { get; private set; } = PersistentTrackerState.Default;
+        public int SaveCount { get; private set; }
+
+        public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(TrackerStateLoadResult.Loaded(State));
+
+        public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
+        {
+            State = state;
             SaveCount++;
             return Task.CompletedTask;
         }

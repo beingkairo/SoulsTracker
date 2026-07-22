@@ -9,8 +9,13 @@ public sealed record TextExportConfiguration
     {
         DeathsPath = Validate(deathsPath, nameof(deathsPath));
         BossListPath = Validate(bossListPath, nameof(bossListPath));
-        DeathsEnabled = deathsEnabled && DeathsPath is not null;
-        BossListEnabled = bossListEnabled && BossListPath is not null;
+        // Enablement represents the user's intent, independently of whether they
+        // have selected a destination yet. The desktop flow deliberately enables
+        // the Choose button only after this intent is selected, so collapsing an
+        // enabled/no-path draft back to false makes that flow impossible. Writers
+        // still require a non-null path before performing I/O.
+        DeathsEnabled = deathsEnabled;
+        BossListEnabled = bossListEnabled;
     }
     public string? DeathsPath { get; }
     public bool DeathsEnabled { get; }
