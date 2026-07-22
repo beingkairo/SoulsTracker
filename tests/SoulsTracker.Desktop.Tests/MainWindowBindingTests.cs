@@ -277,6 +277,8 @@ public sealed class MainWindowBindingTests
                 window = new MainWindow();
                 Assert.IsType<Button>(window.FindName("BrowseDeathSoundButton"));
                 Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
+                AssertPropertyBinding(window, "BrowseDeathSoundButton", nameof(DesktopTrackerViewModel.CanBrowseDeathSound), Button.IsEnabledProperty);
+                AssertPropertyBinding(window, "ClearDeathSoundButton", nameof(DesktopTrackerViewModel.CanClearDeathSound), Button.IsEnabledProperty);
                 CheckBox enabled = Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox"));
                 Assert.Equal("Enable death sound", AutomationProperties.GetName(enabled));
                 TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
@@ -464,6 +466,85 @@ public sealed class MainWindowBindingTests
             {
                 window?.Close();
                 coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
+    public void DeathSoundEnablementTogglesPersistAndControlFileActions()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            string soundPath = Path.Combine(Path.GetTempPath(), $"souls-tracker-test-{Guid.NewGuid():N}.wav");
+            var repository = new TextExportPersistenceRepository();
+            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                CheckBox enabled = Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox"));
+                Button browse = Assert.IsType<Button>(window.FindName("BrowseDeathSoundButton"));
+                Button clear = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
+
+                Assert.False(enabled.IsChecked);
+                Assert.False(browse.IsEnabled);
+                Assert.False(clear.IsEnabled);
+
+                enabled.IsChecked = true;
+                WaitForDispatcher(() => viewModel.IsDeathSoundEnabled && enabled.IsChecked == true && repository.SaveCount >= 1);
+                browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.True(viewModel.CanBrowseDeathSound);
+                Assert.False(viewModel.CanClearDeathSound);
+                Assert.True(browse.IsEnabled);
+                Assert.False(clear.IsEnabled);
+                Assert.True(repository.State.DeathSound.IsEnabled);
+
+                File.WriteAllBytes(soundPath, []);
+                viewModel.SetDeathSoundFileAsync(soundPath).GetAwaiter().GetResult();
+                WaitForDispatcher(() => viewModel.DeathSoundFileName is not null && repository.SaveCount >= 2);
+                browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.True(viewModel.CanBrowseDeathSound);
+                Assert.True(viewModel.CanClearDeathSound);
+                Assert.True(browse.IsEnabled);
+                Assert.True(clear.IsEnabled);
+
+                enabled.IsChecked = false;
+                WaitForDispatcher(() => !viewModel.IsDeathSoundEnabled && enabled.IsChecked == false && repository.SaveCount >= 3);
+                browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                Assert.False(viewModel.CanBrowseDeathSound);
+                Assert.False(viewModel.CanClearDeathSound);
+                Assert.False(browse.IsEnabled);
+                Assert.False(clear.IsEnabled);
+                Assert.False(repository.State.DeathSound.IsEnabled);
+
+                window.Close();
+                window = null;
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+                var restartedCoordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+                try
+                {
+                    var restarted = new DesktopTrackerViewModel(restartedCoordinator);
+                    restarted.InitializeAsync().GetAwaiter().GetResult();
+                    Assert.False(restarted.IsDeathSoundEnabled);
+                    Assert.False(restarted.CanBrowseDeathSound);
+                    Assert.False(restarted.CanClearDeathSound);
+                }
+                finally { restartedCoordinator.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                File.Delete(soundPath);
             }
         });
     }

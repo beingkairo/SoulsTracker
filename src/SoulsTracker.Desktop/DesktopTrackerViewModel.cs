@@ -161,7 +161,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         get => isLoading;
         private set
         {
-            if (SetField(ref isLoading, value)) NotifyTextExportControlAvailability();
+            if (SetField(ref isLoading, value))
+            {
+                NotifyDeathSoundControlAvailability();
+                NotifyTextExportControlAvailability();
+            }
         }
     }
 
@@ -175,6 +179,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
+                NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
             }
         }
@@ -253,6 +258,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
     public string? DeathSoundFileName => state?.DeathSound.LocalPath is { } path ? Path.GetFileName(path) : null;
     public bool IsDeathSoundEnabled => state?.DeathSound.IsEnabled ?? false;
+    /// <summary>True when the user may choose a death-sound file for the enabled feature.</summary>
+    public bool CanBrowseDeathSound => ControlsEnabled && IsDeathSoundEnabled;
+    /// <summary>True when the enabled feature has a configured file that may be cleared.</summary>
+    public bool CanClearDeathSound => CanBrowseDeathSound && state?.DeathSound.LocalPath is not null;
     public int DeathSoundVolume => state?.DeathSound.Volume ?? 100;
     public string? DeathSoundStatus
     {
@@ -792,6 +801,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
         OnPropertyChanged(nameof(DeathSoundFileName));
         OnPropertyChanged(nameof(IsDeathSoundEnabled));
+        NotifyDeathSoundControlAvailability();
         OnPropertyChanged(nameof(DeathSoundVolume));
         OnPropertyChanged(nameof(DeathsExportFileName)); OnPropertyChanged(nameof(BossExportFileName)); OnPropertyChanged(nameof(IsDeathsExportEnabled)); OnPropertyChanged(nameof(IsBossExportEnabled));
         NotifyTextExportControlAvailability();
@@ -803,6 +813,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanClearDeathsExport));
         OnPropertyChanged(nameof(CanChooseBossExport));
         OnPropertyChanged(nameof(CanClearBossExport));
+    }
+
+    private void NotifyDeathSoundControlAvailability()
+    {
+        OnPropertyChanged(nameof(CanBrowseDeathSound));
+        OnPropertyChanged(nameof(CanClearDeathSound));
     }
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
