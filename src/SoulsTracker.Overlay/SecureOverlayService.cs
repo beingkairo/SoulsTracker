@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
@@ -15,6 +16,12 @@ namespace SoulsTracker.Overlay;
 /// <summary>Owns the loopback-only, read-only OBS transport. It deliberately has no browser mutation API.</summary>
 public sealed class SecureOverlayService : IAsyncDisposable
 {
+    // OBS and the desktop preview hold WebSocket connections open by design.  The
+    // generic host defaults to a multi-second graceful shutdown window for those
+    // clients, which made closing the desktop feel stalled.  Give local clients a
+    // short chance to observe the close, then let Kestrel cancel/abort them so all
+    // owned server resources can still be disposed deterministically.
+    private static readonly TimeSpan LocalOverlayShutdownTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
     {
         Converters = { new JsonStringEnumConverter() },
@@ -101,6 +108,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
     {
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = LocalOverlayShutdownTimeout);
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, port));
         WebApplication app = builder.Build();
         app.UseWebSockets();
@@ -173,6 +181,26 @@ public sealed class SecureOverlayService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (application is not null) { await application.StopAsync().ConfigureAwait(false); await application.DisposeAsync().ConfigureAwait(false); application = null; }
+        WebApplication? runningApplication = Interlocked.Exchange(ref application, null);
+        if (runningApplication is null)
+        {
+            return;
+        }
+
+        using var shutdownCancellation = new CancellationTokenSource(LocalOverlayShutdownTimeout);
+        try
+        {
+            await runningApplication.StopAsync(shutdownCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (shutdownCancellation.IsCancellationRequested)
+        {
+            // The bounded local grace window elapsed. Kestrel has been asked to
+            // cancel outstanding requests; DisposeAsync below releases the host
+            // and its sockets rather than leaving a server task behind.
+        }
+        finally
+        {
+            await runningApplication.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

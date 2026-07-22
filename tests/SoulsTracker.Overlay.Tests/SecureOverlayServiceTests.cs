@@ -5,6 +5,7 @@ using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Overlay;
@@ -13,6 +14,28 @@ namespace SoulsTracker.Overlay.Tests;
 
 public sealed class SecureOverlayServiceTests
 {
+    [Fact]
+    public async Task DisposeWithAnOpenWebSocketCompletesPromptlyAfterTheLocalGracePeriod()
+    {
+        var repository = new MemoryRepository(PersistentTrackerState.Default);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
+        await service.StartAsync();
+
+        Uri socketUrl = new UriBuilder(service.TotalDeathsUrl) { Scheme = "ws", Path = "/overlay/ws" }.Uri;
+        using var socket = new ClientWebSocket();
+        await socket.ConnectAsync(socketUrl, CancellationToken.None);
+        await socket.ReceiveAsync(new byte[16_384], CancellationToken.None);
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        await service.DisposeAsync();
+        stopwatch.Stop();
+
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(2),
+            $"Local overlay shutdown took {stopwatch.Elapsed}; an open browser socket must not make desktop close feel stalled.");
+    }
+
     [Fact]
     public async Task FirstStartPersistsStableEndpointAndProtectsAllOverlayAliases()
     {

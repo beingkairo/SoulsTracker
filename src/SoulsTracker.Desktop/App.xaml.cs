@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -21,6 +22,7 @@ public partial class App : System.Windows.Application, IDisposable
     private TextExportStatePublisher? textExportPublisher;
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private CancellationTokenSource? runtimeReaderCancellation;
+    private Task? runtimeReaderPollingTask;
     private AutomatedDeathSoundNotifier? automatedDeathSoundNotifier;
     private DesktopDataRootSelection? dataRootSelection;
 
@@ -31,7 +33,7 @@ public partial class App : System.Windows.Application, IDisposable
             DisposeGlobalHotkeysAsync,
             DisposeOverlayServiceAsync,
             DisposeCoordinatorAsync,
-            singleInstanceStartup);
+            new DispatcherBoundDisposable(Dispatcher, singleInstanceStartup));
     }
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -144,7 +146,7 @@ public partial class App : System.Windows.Application, IDisposable
                         "637ACA527538C0EC6E1F136C8ED66046E95DFBDBB1F51926E134D9916398B856"))),
             ]);
             runtimeReaderCancellation = new CancellationTokenSource();
-            _ = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
+            runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
         }
     }
 
@@ -266,12 +268,29 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async ValueTask DisposeCoordinatorAsync()
     {
+        CancellationTokenSource? readerCancellation = runtimeReaderCancellation;
+        Task? pollingTask = runtimeReaderPollingTask;
         try
         {
-            runtimeReaderCancellation?.Cancel();
-            runtimeReaderCancellation?.Dispose();
-            runtimeReaderCancellation = null;
-            runtimeReaders = null;
+            // Polling observes this token both while reading and during its normal
+            // interval delay. Awaiting the owned task prevents a read from racing
+            // the coordinator/repository disposal that follows.
+            readerCancellation?.Cancel();
+            try
+            {
+                if (pollingTask is not null)
+                {
+                    await pollingTask.ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                readerCancellation?.Dispose();
+                runtimeReaderCancellation = null;
+                runtimeReaderPollingTask = null;
+                runtimeReaders = null;
+            }
+
             automatedDeathSoundNotifier = null;
             if (coordinator is not null)
             {
@@ -309,6 +328,29 @@ public partial class App : System.Windows.Application, IDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+    }
+
+    /// <summary>
+    /// A named mutex may only be released by the thread that acquired it. Startup
+    /// acquires the single-instance lease on the WPF dispatcher, while awaited
+    /// shutdown work resumes on worker threads. Marshal just the final lease
+    /// release back to that owning dispatcher after all components have stopped.
+    /// </summary>
+    private sealed class DispatcherBoundDisposable(Dispatcher dispatcher, IDisposable inner) : IDisposable
+    {
+        private readonly Dispatcher dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        private readonly IDisposable inner = inner ?? throw new ArgumentNullException(nameof(inner));
+
+        public void Dispose()
+        {
+            if (dispatcher.CheckAccess())
+            {
+                inner.Dispose();
+                return;
+            }
+
+            dispatcher.Invoke(inner.Dispose);
         }
     }
 }
