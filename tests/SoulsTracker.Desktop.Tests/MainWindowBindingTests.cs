@@ -286,6 +286,7 @@ public sealed class MainWindowBindingTests
                 TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
                 AssertPropertyBinding(window, "DeathSoundVolumeTextBox", nameof(DesktopTrackerViewModel.CanEditDeathSoundVolume), TextBox.IsEnabledProperty);
                 Assert.Equal("Death sound volume percentage", AutomationProperties.GetName(volume));
+                Assert.Equal(110d, volume.Width);
                 Assert.True(volume.Focusable);
                 Assert.DoesNotContain("Slider", volume.Name, StringComparison.OrdinalIgnoreCase);
                 Assert.Contains("DeathSoundVolume_KeyDown", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
@@ -569,6 +570,77 @@ public sealed class MainWindowBindingTests
                 window?.Close();
                 coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 File.Delete(soundPath);
+            }
+        });
+    }
+
+    [Fact]
+    public void RoutedClearActionsPreserveEnabledSoundAndTextExportTogglesAfterReload()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            PersistentTrackerState configuredState = new(
+                PersistentTrackerState.CurrentSchemaVersion,
+                selectedGameId: null,
+                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+                BossProgress.Empty,
+                OverlayConfiguration.Default,
+                deathSound: new DeathSoundConfiguration("C:\\temp\\sound.wav", isEnabled: true, volume: 100),
+                textExports: new TextExportConfiguration("C:\\temp\\deaths.txt", deathsEnabled: true, "C:\\temp\\bosses.txt", bossListEnabled: true));
+            var repository = new TextExportPersistenceRepository(configuredState);
+            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                Button clearSound = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
+                Button clearDeaths = Assert.IsType<Button>(window.FindName("ClearDeathsExportButton"));
+                Button clearBoss = Assert.IsType<Button>(window.FindName("ClearBossExportButton"));
+                Assert.True(clearSound.IsEnabled);
+                Assert.True(clearDeaths.IsEnabled);
+                Assert.True(clearBoss.IsEnabled);
+
+                clearSound.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                WaitForDispatcher(() => repository.SaveCount >= 1 && viewModel.DeathSoundFileName is null);
+                clearDeaths.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                WaitForDispatcher(() => repository.SaveCount >= 2 && viewModel.DeathsExportFileName is null);
+                clearBoss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                WaitForDispatcher(() => repository.SaveCount >= 3 && viewModel.BossExportFileName is null);
+
+                Assert.True(viewModel.IsDeathSoundEnabled);
+                Assert.True(viewModel.IsDeathsExportEnabled);
+                Assert.True(viewModel.IsBossExportEnabled);
+                Assert.True(repository.State.DeathSound.IsEnabled);
+                Assert.True(repository.State.TextExports.DeathsEnabled);
+                Assert.True(repository.State.TextExports.BossListEnabled);
+
+                window.Close();
+                window = null;
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+                var restartedCoordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+                try
+                {
+                    var restarted = new DesktopTrackerViewModel(restartedCoordinator);
+                    restarted.InitializeAsync().GetAwaiter().GetResult();
+                    Assert.True(restarted.IsDeathSoundEnabled);
+                    Assert.True(restarted.IsDeathsExportEnabled);
+                    Assert.True(restarted.IsBossExportEnabled);
+                    Assert.Null(restarted.DeathSoundFileName);
+                    Assert.Null(restarted.DeathsExportFileName);
+                    Assert.Null(restarted.BossExportFileName);
+                }
+                finally { restartedCoordinator.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
         });
     }
@@ -1104,9 +1176,9 @@ public sealed class MainWindowBindingTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class TextExportPersistenceRepository : ITrackerStateRepository
+    private sealed class TextExportPersistenceRepository(PersistentTrackerState? initialState = null) : ITrackerStateRepository
     {
-        public PersistentTrackerState State { get; private set; } = PersistentTrackerState.Default;
+        public PersistentTrackerState State { get; private set; } = initialState ?? PersistentTrackerState.Default;
         public int SaveCount { get; private set; }
 
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) =>

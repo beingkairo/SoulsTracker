@@ -7,6 +7,7 @@ namespace SoulsTracker.Desktop;
 /// <summary>Desktop-only, best-effort local audio playback. It never affects tracking state.</summary>
 public interface IDeathSoundPlayer
 {
+    event EventHandler? PlaybackEnded;
     event EventHandler? PlaybackFailed;
     void Play(DeathSoundConfiguration configuration);
 }
@@ -54,6 +55,7 @@ public sealed class WpfDeathSoundPlayer : IDeathSoundPlayer
     public WpfDeathSoundPlayer() : this(new WpfDeathSoundMediaFactory()) { }
     internal WpfDeathSoundPlayer(ILocalDeathSoundMediaFactory factory) => this.factory = factory ?? throw new ArgumentNullException(nameof(factory));
     internal bool IsPlaying { get { lock (gate) return activePlayer is not null; } }
+    public event EventHandler? PlaybackEnded;
     public event EventHandler? PlaybackFailed;
 
     public void Play(DeathSoundConfiguration configuration)
@@ -68,7 +70,11 @@ public sealed class WpfDeathSoundPlayer : IDeathSoundPlayer
         }
         EventHandler? cleanup = null;
         EventHandler? failed = null;
-        cleanup = (_, _) => Cleanup(media, cleanup!, failed!);
+        cleanup = (_, _) =>
+        {
+            Cleanup(media, cleanup!, failed!);
+            PlaybackEnded?.Invoke(this, EventArgs.Empty);
+        };
         failed = (_, _) =>
         {
             Cleanup(media, cleanup!, failed!);

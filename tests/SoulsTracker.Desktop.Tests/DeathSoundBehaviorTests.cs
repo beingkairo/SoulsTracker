@@ -108,6 +108,9 @@ public sealed class DeathSoundBehaviorTests
             Assert.Equal(37, player.LastConfiguration!.Volume);
             Assert.Equal("Playing death sound.", viewModel.DeathSoundStatus);
             Assert.Equal(0, repository.SaveCount);
+            player.RaiseEnded();
+            Assert.Equal("Death sound ready.", viewModel.DeathSoundStatus);
+            viewModel.PreviewDeathSound();
             player.RaiseFailed();
             Assert.Equal("Unable to play death sound.", viewModel.DeathSoundStatus);
         }
@@ -116,10 +119,12 @@ public sealed class DeathSoundBehaviorTests
 
     private sealed class RecordingPlayer : IDeathSoundPlayer
     {
+        public event EventHandler? PlaybackEnded;
         public event EventHandler? PlaybackFailed;
         public int Count { get; private set; }
         public DeathSoundConfiguration? LastConfiguration { get; private set; }
         public void Play(DeathSoundConfiguration configuration) { Count++; LastConfiguration = configuration; }
+        public void RaiseEnded() => PlaybackEnded?.Invoke(this, EventArgs.Empty);
         public void RaiseFailed() => PlaybackFailed?.Invoke(this, EventArgs.Empty);
     }
     private sealed class RecordingMediaFactory : ILocalDeathSoundMediaFactory { public List<RecordingMedia> Created { get; } = []; public ILocalDeathSoundMedia Create() { var media = new RecordingMedia(); Created.Add(media); return media; } }

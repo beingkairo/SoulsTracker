@@ -341,9 +341,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (deathSoundPlayer is not null)
         {
+            deathSoundPlayer.PlaybackEnded -= DeathSoundPlayer_PlaybackEnded;
             deathSoundPlayer.PlaybackFailed -= DeathSoundPlayer_PlaybackFailed;
         }
         deathSoundPlayer = player ?? throw new ArgumentNullException(nameof(player));
+        deathSoundPlayer.PlaybackEnded += DeathSoundPlayer_PlaybackEnded;
         deathSoundPlayer.PlaybackFailed += DeathSoundPlayer_PlaybackFailed;
         RefreshDeathSoundStatus();
     }
@@ -373,7 +375,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         try { return SaveDeathSoundAsync(new DeathSoundConfiguration(selectedLocalPath, IsDeathSoundEnabled, DeathSoundVolume), cancellationToken); }
         catch (ArgumentException) { DeathSoundStatus = "Death sound must be a WAV or MP3 file."; return Task.CompletedTask; }
     }
-    public Task ClearDeathSoundAsync(CancellationToken cancellationToken = default) => SaveDeathSoundAsync(new DeathSoundConfiguration(null, false, DeathSoundVolume), cancellationToken);
+    public Task ClearDeathSoundAsync(CancellationToken cancellationToken = default) => SaveDeathSoundAsync(new DeathSoundConfiguration(null, IsDeathSoundEnabled, DeathSoundVolume), cancellationToken);
     public Task SetDeathSoundEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveDeathSoundAsync(new DeathSoundConfiguration(state?.DeathSound.LocalPath, enabled, DeathSoundVolume), cancellationToken);
     public Task SetDeathSoundVolumeAsync(int volume, CancellationToken cancellationToken = default)
     {
@@ -400,8 +402,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public Task SetBossExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, path, IsBossExportEnabled), cancellationToken);
     public Task SetDeathsExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, enabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
     public Task SetBossExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, state?.TextExports.BossListPath, enabled), cancellationToken);
-    public Task ClearDeathsExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(null, false, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
-    public Task ClearBossExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, null, false), cancellationToken);
+    public Task ClearDeathsExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(null, IsDeathsExportEnabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
+    public Task ClearBossExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, null, IsBossExportEnabled), cancellationToken);
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -847,6 +849,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private void DeathSoundPlayer_PlaybackFailed(object? sender, EventArgs e) =>
         DeathSoundStatus = "Unable to play death sound.";
+
+    private void DeathSoundPlayer_PlaybackEnded(object? sender, EventArgs e)
+    {
+        if (DeathSoundStatus == "Playing death sound.")
+        {
+            RefreshDeathSoundStatus();
+        }
+    }
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
 
