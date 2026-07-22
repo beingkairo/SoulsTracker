@@ -71,6 +71,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private void GameSelector_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (ShouldSuppressClosedGameSelectorWheel(GameSelector.IsDropDownOpen)) e.Handled = true;
+    }
+
+    internal static bool ShouldSuppressClosedGameSelectorWheel(bool isDropDownOpen) => !isDropDownOpen;
+
     private async void IncrementDeaths_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.IncrementManualDeathsAsync();

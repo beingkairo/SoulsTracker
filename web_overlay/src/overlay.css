@@ -131,7 +131,7 @@ body {
 .overlay-boss-dlc { display: block; }
 
 .overlay-boss-list .is-defeated[data-defeated-treatment="Nothing"] .overlay-boss-name {
-  color: inherit;
+  color: var(--defeated-color);
   opacity: var(--text-opacity, 1);
   text-decoration: none;
 }

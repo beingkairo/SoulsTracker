@@ -299,6 +299,7 @@ test("boss treatment modes are exclusive and boss row spacing changes only row s
   const snapshot = { SchemaVersion: 1, SelectedGame: { DisplayName: "Sekiro" }, TotalDeaths: { Source: "GameLifetimeReader", Value: 9 }, Bosses: [{ DisplayName: "Defeated", DlcLabel: null, IsDefeated: true }, { DisplayName: "Remaining", DlcLabel: null, IsDefeated: false }] };
   await emit(page, { ...snapshot, SequenceNumber: 1, Presentation: { ...presentation, BossListDefeatedTreatment: "Nothing" } });
   const name = page.getByTestId("boss-entry").first().locator(".overlay-boss-name");
+  await expect(name).toHaveCSS("color", "rgb(18, 52, 86)");
   await expect(name).toHaveCSS("text-decoration-line", "none");
   await expect(name).toHaveCSS("opacity", "1");
   await emit(page, { ...snapshot, SequenceNumber: 2, Presentation: { ...presentation, BossListDefeatedTreatment: "Dimmed" } });

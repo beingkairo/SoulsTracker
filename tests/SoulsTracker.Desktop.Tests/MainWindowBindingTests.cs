@@ -64,6 +64,7 @@ public sealed class MainWindowBindingTests
         Assert.Contains("local:ColorField", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"Text effects\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Maximum visible", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"SETTINGS\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Elden Ring is labeled SOON and cannot be selected.", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"Outline size\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{Binding TotalDeathsAppearanceDraft.OutlineEnabled", xaml, StringComparison.Ordinal);
@@ -87,7 +88,7 @@ public sealed class MainWindowBindingTests
         string bossList = Between(xaml, "<TabItem Header=\"Boss List\">", "</TabControl>");
 
         AssertOrder(totalDeaths, "Text=\"Title\"", "Text=\"Title icon\"", "Text=\"Skull color\"", "Text=\"Font\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Background\"", "Text=\"Background color\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"");
-        AssertOrder(bossList, "Text=\"Mode\"", "Text=\"Treatment\"", "Text=\"Marker\"", "Text=\"Title\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Boss row spacing\"", "Text=\"Background\"", "Text=\"Background color\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"", "Text=\"Alignment\"");
+        AssertOrder(bossList, "Text=\"Mode\"", "Text=\"Treatment\"", "Text=\"Defeated color\"", "Text=\"Alignment\"", "Text=\"Marker\"", "Text=\"Title\"", "Text=\"Text color\"", "Text=\"Text opacity\"", "Text=\"Boss row spacing\"", "Text=\"Background\"", "Text=\"Background color\"", "Text=\"Background opacity\"", "Text=\"Outline\"", "Text=\"Shadow\"");
         Assert.True(bossList.IndexOf("Text=\"Marker color\"", StringComparison.Ordinal) > bossList.IndexOf("Text=\"Marker\"", StringComparison.Ordinal));
         Assert.Contains("Visibility=\"{Binding ShowBossMarkerColor", bossList, StringComparison.Ordinal);
         Assert.DoesNotContain("Maximum visible", bossList, StringComparison.Ordinal);
@@ -163,12 +164,50 @@ public sealed class MainWindowBindingTests
                 ScrollViewer settings = Assert.IsType<ScrollViewer>(window.FindName("SettingsContentScrollViewer"));
                 Assert.Equal(ScrollBarVisibility.Auto, settings.VerticalScrollBarVisibility);
                 Assert.Equal(ScrollBarVisibility.Disabled, settings.HorizontalScrollBarVisibility);
+                Assert.Equal(0, settings.ScrollableHeight);
+                Assert.IsType<Grid>(window.FindName("SettingsWorkspaceLayout"));
 
                 Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 1;
                 window.UpdateLayout();
                 ScrollViewer overlay = Assert.IsType<ScrollViewer>(window.FindName("OverlayConfigurationScrollViewer"));
                 Assert.Equal(ScrollBarVisibility.Auto, overlay.VerticalScrollBarVisibility);
                 Assert.Equal(ScrollBarVisibility.Disabled, overlay.HorizontalScrollBarVisibility);
+                Grid overlayLayout = Assert.IsType<Grid>(window.FindName("OverlayWorkspaceLayout"));
+                Assert.Equal(3d, overlayLayout.ColumnDefinitions[0].Width.Value);
+                Assert.Equal(GridUnitType.Star, overlayLayout.ColumnDefinitions[0].Width.GridUnitType);
+                Assert.Equal(2d, overlayLayout.ColumnDefinitions[2].Width.Value);
+                Assert.Equal(GridUnitType.Star, overlayLayout.ColumnDefinitions[2].Width.GridUnitType);
+            }
+            finally
+            {
+                window?.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ClosedGameSelectorWheelInputIsSuppressedWithoutChangingNormalDropDownBehavior()
+    {
+        Assert.True(MainWindow.ShouldSuppressClosedGameSelectorWheel(isDropDownOpen: false));
+        Assert.False(MainWindow.ShouldSuppressClosedGameSelectorWheel(isDropDownOpen: true));
+    }
+
+    [Fact]
+    public void SettingsRemainScrollableAtTheMinimumSupportedWindowHeight()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            try
+            {
+                window = new MainWindow { Width = 560, Height = 400 };
+                window.Show();
+                Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 2;
+                window.UpdateLayout();
+
+                ScrollViewer settings = Assert.IsType<ScrollViewer>(window.FindName("SettingsContentScrollViewer"));
+                Assert.Equal(ScrollBarVisibility.Auto, settings.VerticalScrollBarVisibility);
+                Assert.True(settings.ScrollableHeight > 0);
             }
             finally
             {

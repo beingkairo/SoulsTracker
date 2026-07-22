@@ -331,6 +331,7 @@
                                       ItemsSource="{Binding GameChoices}"
                                       SelectedItem="{Binding SelectedGame, Mode=OneWay}"
                                       SelectionChanged="GameSelector_SelectionChanged"
+                                      PreviewMouseWheel="GameSelector_PreviewMouseWheel"
                                       IsEnabled="{Binding ControlsEnabled}"
                                       AutomationProperties.Name="Game selection">
                                 <ComboBox.ItemContainerStyle>
@@ -410,8 +411,12 @@
         </Grid>
             </TabItem>
             <TabItem x:Name="OverlayWorkspaceTab" Header="Overlay" AutomationProperties.Name="Overlay workspace">
-                <Grid Margin="24,18">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
+                <Grid x:Name="OverlayWorkspaceLayout" Margin="24,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" MinWidth="0" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="2*" MinWidth="220" />
+                    </Grid.ColumnDefinitions>
                 <ScrollViewer x:Name="OverlayConfigurationScrollViewer" Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,16,0" AutomationProperties.Name="Overlay configuration workspace">
                     <StackPanel>
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
@@ -472,6 +477,7 @@
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="Mode"/><ComboBox x:Name="BossListVisibilityModeSelector" Grid.Column="1" ItemsSource="{Binding BossListVisibilityModes}" SelectedItem="{Binding DraftBossListMode}" AutomationProperties.Name="Boss List mode"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Treatment"/><ComboBox Grid.Column="1" ItemsSource="{Binding DefeatedBossTreatments}" SelectedItem="{Binding DraftDefeatedTreatment}" AutomationProperties.Name="Defeated boss treatment"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Defeated color"/><local:ColorField Grid.Column="1" Value="{Binding DraftDefeatedColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Defeated boss color"/></Grid>
+                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Alignment"/><ComboBox Grid.Column="1" Width="100" HorizontalAlignment="Left" ItemsSource="{Binding OverlayAlignments}" SelectedItem="{Binding BossListAppearanceDraft.Alignment}" AutomationProperties.Name="Boss List alignment"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}" Visibility="{Binding AreBossMarkerControlsVisible, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Marker"/><ComboBox Grid.Column="1" ItemsSource="{Binding BossMarkers}" DisplayMemberPath="Label" SelectedItem="{Binding DraftBossMarker}" AutomationProperties.Name="Defeated boss marker"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}" Visibility="{Binding ShowBossMarkerColor, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Marker color"/><local:ColorField Grid.Column="1" Value="{Binding BossListAppearanceDraft.IconColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Boss List marker color"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}" Margin="0,6,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Title"/><TextBox Grid.Column="1" Text="{Binding BossListAppearanceDraft.Title}"/></Grid>
@@ -496,7 +502,6 @@
                                                 <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Shadow X / Y"/><StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.ShadowOffsetX}" AutomationProperties.Name="Boss List shadow X offset"/><TextBox Margin="6,0,0,0" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.ShadowOffsetY}" AutomationProperties.Name="Boss List shadow Y offset"/></StackPanel></Grid>
                                                 <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Shadow blur"/><TextBox Grid.Column="1" Style="{StaticResource OverlayAppearanceNumberBox}" Text="{Binding BossListAppearanceDraft.ShadowBlur}" AutomationProperties.Name="Boss List shadow blur"/></Grid>
                                             </StackPanel>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Alignment"/><ComboBox Grid.Column="1" Width="100" HorizontalAlignment="Left" ItemsSource="{Binding OverlayAlignments}" SelectedItem="{Binding BossListAppearanceDraft.Alignment}" AutomationProperties.Name="Boss List alignment"/></Grid>
                                             <Button Margin="120,2,0,0" HorizontalAlignment="Left" Click="ApplyBossListAppearance_Click" Content="Apply Boss List appearance"/>
                                             <TextBlock Margin="120,6,0,0" Foreground="#E06C75" Text="{Binding BossListAppearanceStatus}" AutomationProperties.Name="Boss List appearance apply status" />
                                         </StackPanel>
@@ -507,7 +512,7 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-                    <Border Grid.Column="1" Style="{StaticResource Panel}" Background="#15171B" AutomationProperties.Name="Live overlay preview panel">
+                    <Border Grid.Column="2" Style="{StaticResource Panel}" Background="#15171B" AutomationProperties.Name="Live overlay preview panel">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Style="{StaticResource PanelTitle}" Text="LIVE PREVIEW" />
                             <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" Margin="0,6,0,10" Text="Applied renderer-backed scene" />
@@ -520,9 +525,13 @@
             </TabItem>
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24" AutomationProperties.Name="Settings workspace content">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource PanelTitle}" Text="SETTINGS" />
-                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death sound settings">
+                <Grid x:Name="SettingsWorkspaceLayout">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="DEATH SOUND" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Play one local WAV or MP3 after a confirmed death increment." />
@@ -552,7 +561,7 @@
                             </TextBlock>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="OBS text export settings">
+                    <Border Grid.Column="2" Style="{StaticResource Panel}" AutomationProperties.Name="OBS text export settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="OBS TEXT EXPORT" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Optional local TXT files for OBS Text sources." />
@@ -563,7 +572,7 @@
                             <TextBlock x:Name="TextExportStatusTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,0" Text="{Binding TextExportStatus, Mode=OneWay}" />
                         </StackPanel>
                     </Border>
-                </StackPanel>
+                </Grid>
                 </ScrollViewer>
             </TabItem>
         </TabControl>
