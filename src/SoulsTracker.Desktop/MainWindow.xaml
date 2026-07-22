@@ -525,13 +525,8 @@
             </TabItem>
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24" AutomationProperties.Name="Settings workspace content">
-                <Grid x:Name="SettingsWorkspaceLayout">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
+                <StackPanel x:Name="SettingsContentStack">
+                    <Border Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="DEATH SOUND" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Play one local WAV or MP3 after a confirmed death increment." />
@@ -561,7 +556,7 @@
                             </TextBlock>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="2" Style="{StaticResource Panel}" AutomationProperties.Name="OBS text export settings">
+                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="OBS text export settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="OBS TEXT EXPORT" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Optional local TXT files for OBS Text sources." />
@@ -572,7 +567,7 @@
                             <TextBlock x:Name="TextExportStatusTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,0" Text="{Binding TextExportStatus, Mode=OneWay}" />
                         </StackPanel>
                     </Border>
-                </Grid>
+                </StackPanel>
                 </ScrollViewer>
             </TabItem>
         </TabControl>
