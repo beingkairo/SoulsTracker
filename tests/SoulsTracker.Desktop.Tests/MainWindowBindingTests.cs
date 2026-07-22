@@ -277,16 +277,20 @@ public sealed class MainWindowBindingTests
                 window = new MainWindow();
                 Assert.IsType<Button>(window.FindName("BrowseDeathSoundButton"));
                 Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
+                Assert.IsType<Button>(window.FindName("PlayDeathSoundButton"));
                 AssertPropertyBinding(window, "BrowseDeathSoundButton", nameof(DesktopTrackerViewModel.CanBrowseDeathSound), Button.IsEnabledProperty);
                 AssertPropertyBinding(window, "ClearDeathSoundButton", nameof(DesktopTrackerViewModel.CanClearDeathSound), Button.IsEnabledProperty);
+                AssertPropertyBinding(window, "PlayDeathSoundButton", nameof(DesktopTrackerViewModel.CanPreviewDeathSound), Button.IsEnabledProperty);
                 CheckBox enabled = Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox"));
                 Assert.Equal("Enable death sound", AutomationProperties.GetName(enabled));
                 TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
+                AssertPropertyBinding(window, "DeathSoundVolumeTextBox", nameof(DesktopTrackerViewModel.CanEditDeathSoundVolume), TextBox.IsEnabledProperty);
                 Assert.Equal("Death sound volume percentage", AutomationProperties.GetName(volume));
                 Assert.True(volume.Focusable);
                 Assert.DoesNotContain("Slider", volume.Name, StringComparison.OrdinalIgnoreCase);
                 Assert.Contains("DeathSoundVolume_KeyDown", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
                 Assert.IsType<Button>(window.FindName("SaveDeathSoundVolumeButton"));
+                AssertPropertyBinding(window, "SaveDeathSoundVolumeButton", nameof(DesktopTrackerViewModel.CanEditDeathSoundVolume), Button.IsEnabledProperty);
                 Assert.Contains("Text=\"%\"", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
                 TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
                 Assert.Equal(System.Windows.Automation.AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(status));
@@ -490,19 +494,31 @@ public sealed class MainWindowBindingTests
                 CheckBox enabled = Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox"));
                 Button browse = Assert.IsType<Button>(window.FindName("BrowseDeathSoundButton"));
                 Button clear = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
+                Button play = Assert.IsType<Button>(window.FindName("PlayDeathSoundButton"));
+                TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
+                Button saveVolume = Assert.IsType<Button>(window.FindName("SaveDeathSoundVolumeButton"));
 
                 Assert.False(enabled.IsChecked);
                 Assert.False(browse.IsEnabled);
                 Assert.False(clear.IsEnabled);
+                Assert.False(play.IsEnabled);
+                Assert.False(volume.IsEnabled);
+                Assert.False(saveVolume.IsEnabled);
 
                 enabled.IsChecked = true;
                 WaitForDispatcher(() => viewModel.IsDeathSoundEnabled && enabled.IsChecked == true && repository.SaveCount >= 1);
                 browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                volume.GetBindingExpression(TextBox.IsEnabledProperty)?.UpdateTarget();
+                saveVolume.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 Assert.True(viewModel.CanBrowseDeathSound);
                 Assert.False(viewModel.CanClearDeathSound);
                 Assert.True(browse.IsEnabled);
                 Assert.False(clear.IsEnabled);
+                Assert.False(play.IsEnabled);
+                Assert.True(volume.IsEnabled);
+                Assert.True(saveVolume.IsEnabled);
                 Assert.True(repository.State.DeathSound.IsEnabled);
 
                 File.WriteAllBytes(soundPath, []);
@@ -510,19 +526,27 @@ public sealed class MainWindowBindingTests
                 WaitForDispatcher(() => viewModel.DeathSoundFileName is not null && repository.SaveCount >= 2);
                 browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 Assert.True(viewModel.CanBrowseDeathSound);
                 Assert.True(viewModel.CanClearDeathSound);
                 Assert.True(browse.IsEnabled);
                 Assert.True(clear.IsEnabled);
+                Assert.True(play.IsEnabled);
 
                 enabled.IsChecked = false;
                 WaitForDispatcher(() => !viewModel.IsDeathSoundEnabled && enabled.IsChecked == false && repository.SaveCount >= 3);
                 browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
+                volume.GetBindingExpression(TextBox.IsEnabledProperty)?.UpdateTarget();
+                saveVolume.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 Assert.False(viewModel.CanBrowseDeathSound);
                 Assert.False(viewModel.CanClearDeathSound);
                 Assert.False(browse.IsEnabled);
                 Assert.False(clear.IsEnabled);
+                Assert.False(play.IsEnabled);
+                Assert.False(volume.IsEnabled);
+                Assert.False(saveVolume.IsEnabled);
                 Assert.False(repository.State.DeathSound.IsEnabled);
 
                 window.Close();

@@ -88,7 +88,40 @@ public sealed class DeathSoundBehaviorTests
         Assert.DoesNotContain("missing-death", viewModel.DeathSoundStatus!, StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed class RecordingPlayer : IDeathSoundPlayer { public int Count { get; private set; } public void Play(DeathSoundConfiguration configuration) => Count++; }
+    [Fact]
+    public async Task PreviewUsesSavedConfigurationWithoutPersistingAndReportsPlaybackFailure()
+    {
+        string sound = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        await File.WriteAllBytesAsync(sound, []);
+        try
+        {
+            var repository = new MemoryRepository(new PersistentTrackerState(1, null, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default, deathSound: new DeathSoundConfiguration(sound, true, 37)));
+            await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            var viewModel = new DesktopTrackerViewModel(coordinator);
+            var player = new RecordingPlayer();
+            viewModel.ConfigureDeathSoundPlayback(player);
+            await viewModel.InitializeAsync();
+
+            viewModel.PreviewDeathSound();
+
+            Assert.Equal(1, player.Count);
+            Assert.Equal(37, player.LastConfiguration!.Volume);
+            Assert.Equal("Playing death sound.", viewModel.DeathSoundStatus);
+            Assert.Equal(0, repository.SaveCount);
+            player.RaiseFailed();
+            Assert.Equal("Unable to play death sound.", viewModel.DeathSoundStatus);
+        }
+        finally { File.Delete(sound); }
+    }
+
+    private sealed class RecordingPlayer : IDeathSoundPlayer
+    {
+        public event EventHandler? PlaybackFailed;
+        public int Count { get; private set; }
+        public DeathSoundConfiguration? LastConfiguration { get; private set; }
+        public void Play(DeathSoundConfiguration configuration) { Count++; LastConfiguration = configuration; }
+        public void RaiseFailed() => PlaybackFailed?.Invoke(this, EventArgs.Empty);
+    }
     private sealed class RecordingMediaFactory : ILocalDeathSoundMediaFactory { public List<RecordingMedia> Created { get; } = []; public ILocalDeathSoundMedia Create() { var media = new RecordingMedia(); Created.Add(media); return media; } }
     private sealed class RecordingMedia : ILocalDeathSoundMedia
     {
@@ -105,8 +138,9 @@ public sealed class DeathSoundBehaviorTests
     private sealed class MemoryRepository(PersistentTrackerState state) : ITrackerStateRepository
     {
         public bool FailSaves { get; set; }
+        public int SaveCount { get; private set; }
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(TrackerStateLoadResult.Loaded(state));
-        public Task SaveAsync(PersistentTrackerState value, CancellationToken cancellationToken = default) { if (FailSaves) throw new IOException(); state = value; return Task.CompletedTask; }
+        public Task SaveAsync(PersistentTrackerState value, CancellationToken cancellationToken = default) { if (FailSaves) throw new IOException(); SaveCount++; state = value; return Task.CompletedTask; }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

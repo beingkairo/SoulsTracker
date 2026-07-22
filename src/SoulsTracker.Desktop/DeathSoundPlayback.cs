@@ -5,7 +5,11 @@ using SoulsTracker.Domain;
 namespace SoulsTracker.Desktop;
 
 /// <summary>Desktop-only, best-effort local audio playback. It never affects tracking state.</summary>
-public interface IDeathSoundPlayer { void Play(DeathSoundConfiguration configuration); }
+public interface IDeathSoundPlayer
+{
+    event EventHandler? PlaybackFailed;
+    void Play(DeathSoundConfiguration configuration);
+}
 
 /// <summary>Small seam so the active WPF player lifetime is verifiable without audio hardware.</summary>
 internal interface ILocalDeathSoundMedia
@@ -50,6 +54,7 @@ public sealed class WpfDeathSoundPlayer : IDeathSoundPlayer
     public WpfDeathSoundPlayer() : this(new WpfDeathSoundMediaFactory()) { }
     internal WpfDeathSoundPlayer(ILocalDeathSoundMediaFactory factory) => this.factory = factory ?? throw new ArgumentNullException(nameof(factory));
     internal bool IsPlaying { get { lock (gate) return activePlayer is not null; } }
+    public event EventHandler? PlaybackFailed;
 
     public void Play(DeathSoundConfiguration configuration)
     {
@@ -62,22 +67,32 @@ public sealed class WpfDeathSoundPlayer : IDeathSoundPlayer
             activePlayer = media;
         }
         EventHandler? cleanup = null;
-        cleanup = (_, _) => Cleanup(media, cleanup!);
+        EventHandler? failed = null;
+        cleanup = (_, _) => Cleanup(media, cleanup!, failed!);
+        failed = (_, _) =>
+        {
+            Cleanup(media, cleanup!, failed!);
+            PlaybackFailed?.Invoke(this, EventArgs.Empty);
+        };
         try
         {
             media.Ended += cleanup;
-            media.Failed += cleanup;
+            media.Failed += failed;
             media.SetVolume(configuration.Volume / 100d);
             media.Open(new Uri(configuration.LocalPath, UriKind.Absolute));
             media.Play();
         }
-        catch { Cleanup(media, cleanup); }
+        catch
+        {
+            Cleanup(media, cleanup, failed);
+            PlaybackFailed?.Invoke(this, EventArgs.Empty);
+        }
     }
 
-    private void Cleanup(ILocalDeathSoundMedia media, EventHandler cleanup)
+    private void Cleanup(ILocalDeathSoundMedia media, EventHandler cleanup, EventHandler failed)
     {
         media.Ended -= cleanup;
-        media.Failed -= cleanup;
+        media.Failed -= failed;
         try { media.Close(); }
         catch { }
         lock (gate)

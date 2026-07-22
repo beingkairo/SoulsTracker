@@ -262,6 +262,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool CanBrowseDeathSound => ControlsEnabled && IsDeathSoundEnabled;
     /// <summary>True when the enabled feature has a configured file that may be cleared.</summary>
     public bool CanClearDeathSound => CanBrowseDeathSound && state?.DeathSound.LocalPath is not null;
+    /// <summary>True when the enabled feature has a local file that can be previewed safely.</summary>
+    public bool CanPreviewDeathSound => CanBrowseDeathSound && state?.DeathSound.LocalPath is { } path && File.Exists(path);
+    /// <summary>Volume controls are available only while the optional sound feature is enabled.</summary>
+    public bool CanEditDeathSoundVolume => ControlsEnabled && IsDeathSoundEnabled;
     public int DeathSoundVolume => state?.DeathSound.Volume ?? 100;
     public string? DeathSoundStatus
     {
@@ -335,8 +339,26 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         : status;
     internal void ConfigureDeathSoundPlayback(IDeathSoundPlayer player)
     {
+        if (deathSoundPlayer is not null)
+        {
+            deathSoundPlayer.PlaybackFailed -= DeathSoundPlayer_PlaybackFailed;
+        }
         deathSoundPlayer = player ?? throw new ArgumentNullException(nameof(player));
+        deathSoundPlayer.PlaybackFailed += DeathSoundPlayer_PlaybackFailed;
         RefreshDeathSoundStatus();
+    }
+
+    /// <summary>Starts a local preview using the already-saved configuration; it never persists or changes tracking state.</summary>
+    public void PreviewDeathSound()
+    {
+        if (!CanPreviewDeathSound || deathSoundPlayer is null)
+        {
+            DeathSoundStatus = "Death sound is unavailable.";
+            return;
+        }
+
+        DeathSoundStatus = "Playing death sound.";
+        deathSoundPlayer.Play(state!.DeathSound);
     }
 
     internal void SetTextExportStatus(bool succeeded) => TextExportStatus = succeeded ? "Text exports ready." : "Text export is unavailable.";
@@ -819,7 +841,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(CanBrowseDeathSound));
         OnPropertyChanged(nameof(CanClearDeathSound));
+        OnPropertyChanged(nameof(CanPreviewDeathSound));
+        OnPropertyChanged(nameof(CanEditDeathSoundVolume));
     }
+
+    private void DeathSoundPlayer_PlaybackFailed(object? sender, EventArgs e) =>
+        DeathSoundStatus = "Unable to play death sound.";
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
 

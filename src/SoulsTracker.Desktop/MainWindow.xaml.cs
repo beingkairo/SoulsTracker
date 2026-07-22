@@ -227,6 +227,10 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearDeathSoundAsync();
     }
+    private void PlayDeathSound_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.PreviewDeathSound();
+    }
     private async void DeathSoundEnabled_Checked(object sender, RoutedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel && !viewModel.IsDeathSoundEnabled) await viewModel.SetDeathSoundEnabledAsync(true);
