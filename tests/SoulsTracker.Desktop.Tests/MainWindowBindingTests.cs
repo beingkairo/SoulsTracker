@@ -89,6 +89,36 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void SharedCheckboxStyleLimitsEveryCheckboxToItsVisibleContent()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            try
+            {
+                window = new MainWindow();
+                Style checkboxStyle = Assert.IsType<Style>(window.Resources[typeof(CheckBox)]);
+                Assert.Contains(
+                    checkboxStyle.Setters.OfType<Setter>(),
+                    setter => setter.Property == FrameworkElement.HorizontalAlignmentProperty && Equals(setter.Value, HorizontalAlignment.Left));
+                Assert.Contains(
+                    checkboxStyle.Setters.OfType<Setter>(),
+                    setter => setter.Property == Control.HorizontalContentAlignmentProperty && Equals(setter.Value, HorizontalAlignment.Left));
+
+                Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("TotalDeathsOverlayEnabledCheckBox")).HorizontalAlignment);
+                Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("BossListOverlayEnabledCheckBox")).HorizontalAlignment);
+                Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox")).HorizontalAlignment);
+                Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("DeathsExportEnabledCheckBox")).HorizontalAlignment);
+                Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("BossExportEnabledCheckBox")).HorizontalAlignment);
+            }
+            finally
+            {
+                window?.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void OverlayAppearanceEditorUsesScopedControlsWithoutPresetsOrTotalAlignment()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
