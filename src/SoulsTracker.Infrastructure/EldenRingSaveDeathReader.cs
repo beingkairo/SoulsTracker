@@ -189,7 +189,10 @@ internal static class EldenRingSaveParser
             }
         }
 
-        if (!TryAdvance(ref position, 0x1B0 + 13 * 16 + 88 + 28 + 88, slot.Length) ||
+        // Player game data, effects, equipped item IDs, weapon slots, equipped item
+        // IDs, and equipped gaitem handles. The last fixed 88-byte block is present
+        // in current (including v252) character records.
+        if (!TryAdvance(ref position, 0x1B0 + 13 * 16 + 88 + 28 + 88 + 88, slot.Length) ||
             !TryAdvance(ref position, 4 + 0xA80 * 12 + 4 + 0x180 * 12 + 4 + 4, slot.Length) ||
             !TryAdvance(ref position, 14 * 8 + 4 + 10 * 8 + 4 + 6 * 8 + 4 + 4 + 6 * 4, slot.Length)) return EldenRingSaveParseOutcome.Invalid;
 

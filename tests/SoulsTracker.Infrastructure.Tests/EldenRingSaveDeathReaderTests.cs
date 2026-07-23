@@ -9,7 +9,7 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
     private readonly string root = Path.Combine(Path.GetTempPath(), "SoulsTrackerTests", Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void ParserReadsOnlyTheRequestedSlotFromAFixtureCopy()
+    public void ParserReadsOnlyTheRequestedSlotFromCurrentV252Fixture()
     {
         byte[] fixture = EldenRingSaveFixture.Create((0, 37), (1, 104));
 
@@ -117,7 +117,9 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
                 BinaryPrimitives.WriteUInt64LittleEndian(file.AsSpan(entryOffset + 0x08), (ulong)(SlotDataLength + 0x10));
                 BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(entryOffset + 0x10), (uint)dataOffset);
                 Span<byte> slotData = file.AsSpan(dataOffset + 0x10, SlotDataLength);
-                BinaryPrimitives.WriteUInt32LittleEndian(slotData, 82);
+                // Version 252 is the current observed PC layout. The fixture contains
+                // no user data and verifies the fixed sections before Total Deaths.
+                BinaryPrimitives.WriteUInt32LittleEndian(slotData, 252);
                 int deathOffset = CalculateDeathOffset(slotData);
                 BinaryPrimitives.WriteUInt32LittleEndian(slotData[deathOffset..], deaths);
             }
@@ -128,7 +130,7 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
         {
             int position = 32;
             position += 0x1400 * 8;
-            position += 0x1B0 + 13 * 16 + 88 + 28 + 88;
+            position += 0x1B0 + 13 * 16 + 88 + 28 + 88 + 88;
             position += 4 + 0xA80 * 12 + 4 + 0x180 * 12 + 4 + 4;
             position += 14 * 8 + 4 + 10 * 8 + 4 + 6 * 8 + 4 + 4 + 6 * 4;
             BinaryPrimitives.WriteUInt32LittleEndian(slot[position..], 0); position += 4;
