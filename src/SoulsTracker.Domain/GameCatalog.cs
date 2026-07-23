@@ -176,7 +176,7 @@ public static class GameCatalog
         new GameDefinition(
             GameId.EldenRing,
             "Elden Ring",
-            GameUiAvailability.DisabledSoon,
+            GameUiAvailability.Selectable,
             GameTrackingMode.Unavailable,
             ReaderBindingState.IntentionallyUnavailable),
     ]);

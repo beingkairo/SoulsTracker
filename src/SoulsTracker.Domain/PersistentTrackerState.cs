@@ -23,7 +23,8 @@ public sealed class PersistentTrackerState
         ManualBloodborneHotkeyConfiguration.Default,
         DeathSoundConfiguration.Default,
         TextExportConfiguration.Default,
-        ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls));
+        ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
+        eldenRingNoticeAcknowledged: false);
 
     /// <summary>
     /// Initializes validated persisted tracker state.
@@ -39,7 +40,8 @@ public sealed class PersistentTrackerState
         ManualBloodborneHotkeyConfiguration? manualBloodborneHotkeys = null,
         DeathSoundConfiguration? deathSound = null,
         TextExportConfiguration? textExports = null,
-        ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null)
+        ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
+        bool eldenRingNoticeAcknowledged = false)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -49,7 +51,7 @@ public sealed class PersistentTrackerState
                 "The persistent tracker state schema version is unsupported.");
         }
 
-        ValidateSelectedGame(selectedGameId);
+        ValidateSelectedGame(selectedGameId, eldenRingNoticeAcknowledged);
         ArgumentNullException.ThrowIfNull(manualBloodborneDeathCounter);
         ArgumentNullException.ThrowIfNull(bossProgress);
         ArgumentNullException.ThrowIfNull(overlayConfiguration);
@@ -65,6 +67,7 @@ public sealed class PersistentTrackerState
             : ManualBloodborneHotkeyConfiguration.Default;
         DeathSound = deathSound ?? DeathSoundConfiguration.Default;
         TextExports = textExports ?? TextExportConfiguration.Default;
+        EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
     }
 
     /// <summary>
@@ -108,7 +111,10 @@ public sealed class PersistentTrackerState
     public DeathSoundConfiguration DeathSound { get; }
     public TextExportConfiguration TextExports { get; }
 
-    private static void ValidateSelectedGame(GameId? selectedGameId)
+    /// <summary>Gets whether this local installation accepted the Elden Ring notice.</summary>
+    public bool EldenRingNoticeAcknowledged { get; }
+
+    private static void ValidateSelectedGame(GameId? selectedGameId, bool eldenRingNoticeAcknowledged)
     {
         if (selectedGameId is null)
         {
@@ -119,6 +125,11 @@ public sealed class PersistentTrackerState
         if (!definition.IsSelectable)
         {
             throw new ArgumentException("A disabled SOON game cannot be selected.", nameof(selectedGameId));
+        }
+
+        if (selectedGameId == GameId.EldenRing && !eldenRingNoticeAcknowledged)
+        {
+            throw new ArgumentException("Elden Ring requires local acknowledgement before selection.", nameof(selectedGameId));
         }
     }
 }

@@ -49,6 +49,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private GlobalHotkeyBinding pendingIncrementBinding = GlobalHotkeyBinding.IncrementDefault;
     private GlobalHotkeyBinding pendingDecrementBinding = GlobalHotkeyBinding.DecrementDefault;
     private bool isHotkeyRecording;
+    private bool isEldenRingNoticeVisible;
+    private GameChoice? pendingEldenRingChoice;
     private bool recordingIncrementHotkey;
     private GlobalHotkeyBinding? hotkeyBindingBeforeRecording;
     private Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>>? applyHotkeysAsync;
@@ -246,6 +248,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string PendingDecrementHotkey { get => pendingDecrementHotkey; set => SetField(ref pendingDecrementHotkey, value); }
     /// <summary>True while the in-app manual-hotkey capture surface owns keyboard input.</summary>
     public bool IsHotkeyRecording { get => isHotkeyRecording; private set => SetField(ref isHotkeyRecording, value); }
+    /// <summary>True while the Elden Ring acknowledgement gate is visible.</summary>
+    public bool IsEldenRingNoticeVisible { get => isEldenRingNoticeVisible; private set => SetField(ref isEldenRingNoticeVisible, value); }
     public string ActiveIncrementHotkey => hotkeySettings.Increment.DisplayText;
     public string ActiveDecrementHotkey => hotkeySettings.Decrement.DisplayText;
     public string? LocalTrackerStateStatus { get => localTrackerStateStatus; private set => SetField(ref localTrackerStateStatus, value); }
@@ -544,6 +548,48 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         return SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
+    }
+
+    /// <summary>Starts a game selection, showing the local Elden Ring notice when needed.</summary>
+    public bool RequestGameSelection(GameChoice? choice)
+    {
+        if (choice is null || !choice.IsSelectable || !ControlsEnabled)
+        {
+            return false;
+        }
+
+        if (choice.GameId == GameId.EldenRing && state?.EldenRingNoticeAcknowledged != true)
+        {
+            pendingEldenRingChoice = choice;
+            IsEldenRingNoticeVisible = true;
+            return false;
+        }
+
+        return true;
+    }
+
+    public async Task ConfirmEldenRingNoticeAsync(CancellationToken cancellationToken = default)
+    {
+        GameChoice? choice = pendingEldenRingChoice;
+        if (choice is null || !IsEldenRingNoticeVisible)
+        {
+            return;
+        }
+
+        await SubmitAsync(new AcknowledgeEldenRingNoticeCommand(), cancellationToken);
+        if (state?.EldenRingNoticeAcknowledged == true)
+        {
+            await SelectGameAsync(choice, cancellationToken);
+        }
+
+        pendingEldenRingChoice = null;
+        IsEldenRingNoticeVisible = false;
+    }
+
+    public void CancelEldenRingNotice()
+    {
+        pendingEldenRingChoice = null;
+        IsEldenRingNoticeVisible = false;
     }
 
     public Task IncrementManualDeathsAsync(CancellationToken cancellationToken = default) =>

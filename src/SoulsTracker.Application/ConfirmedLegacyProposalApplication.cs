@@ -105,7 +105,7 @@ public static class ConfirmedLegacyProposalApplication
             progress,
             overlay,
             destination.ManualBloodborneHotkeys,
-            destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls));
+            destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged);
         return true;
     }
 
@@ -116,7 +116,8 @@ public static class ConfirmedLegacyProposalApplication
             return true;
         }
 
-        return GameCatalog.TryGet(selectedGameId.Value, out GameDefinition? game) && game.IsSelectable;
+        return selectedGameId != GameId.EldenRing &&
+            GameCatalog.TryGet(selectedGameId.Value, out GameDefinition? game) && game.IsSelectable;
     }
 
     private static bool TryValidateBosses(IReadOnlyDictionary<GameId, IReadOnlyList<BossId>> defeatedBossesByGame)

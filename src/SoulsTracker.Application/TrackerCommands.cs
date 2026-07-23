@@ -58,6 +58,9 @@ public sealed record UpdateOverlayAppearanceCommand(
 /// <summary>Replaces the validated local-only death sound configuration.</summary>
 public sealed record UpdateDeathSoundConfigurationCommand(DeathSoundConfiguration Configuration) : ITrackerCommand;
 
+/// <summary>Stores the local acknowledgement required before selecting Elden Ring.</summary>
+public sealed record AcknowledgeEldenRingNoticeCommand : ITrackerCommand;
+
 /// <summary>
 /// Identifies the command whose transition was evaluated without carrying state or secrets.
 /// </summary>
@@ -71,6 +74,7 @@ public enum TrackerCommandType
     ResetOverlayAppearance,
     UpdateOverlayAppearance,
     UpdateDeathSoundConfiguration,
+    AcknowledgeEldenRingNotice,
     UpdateTextExports,
     LegacyImport,
 }

@@ -54,7 +54,7 @@ public sealed class GameCatalogTests
             new(
                 GameId.EldenRing,
                 "Elden Ring",
-                GameUiAvailability.DisabledSoon,
+                GameUiAvailability.Selectable,
                 GameTrackingMode.Unavailable,
                 ReaderBindingState.IntentionallyUnavailable,
                 0),
@@ -102,14 +102,14 @@ public sealed class GameCatalogTests
 
     [Theory]
     [InlineData("elden_ring")]
-    public void SoonDefinitionsAreVisibleButNotSelectableAndHaveNoBossCatalogFallback(string gameId)
+    public void EldenRingIsSelectableButItsReaderAndBossCatalogRemainUnavailable(string gameId)
     {
         GameDefinition definition = GameCatalog.GetRequired(gameId);
 
-        Assert.Equal(GameUiAvailability.DisabledSoon, definition.UiAvailability);
+        Assert.Equal(GameUiAvailability.Selectable, definition.UiAvailability);
         Assert.Equal(GameTrackingMode.Unavailable, definition.TrackingMode);
         Assert.Equal(ReaderBindingState.IntentionallyUnavailable, definition.ReaderBindingState);
-        Assert.False(definition.IsSelectable);
+        Assert.True(definition.IsSelectable);
         Assert.Empty(definition.BossCatalog);
         Assert.Throws<ArgumentException>(() =>
             GameCatalog.GetRequiredBoss(definition.Id, BossId.Parse("not_a_v1_boss")));

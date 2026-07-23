@@ -51,7 +51,7 @@ public sealed class PersistentTrackerStateTests
     [Fact]
     public void SelectedGameValidationAllowsOnlyKnownSelectableGamesWithoutAFallback()
     {
-        foreach (GameDefinition definition in GameCatalog.All.Where(static definition => definition.IsSelectable))
+        foreach (GameDefinition definition in GameCatalog.All.Where(static definition => definition.IsSelectable && definition.Id != GameId.EldenRing))
         {
             PersistentTrackerState state = CreateState(definition.Id);
 
@@ -59,6 +59,13 @@ public sealed class PersistentTrackerStateTests
         }
 
         Assert.Throws<ArgumentException>(() => CreateState(GameId.EldenRing));
+        Assert.Equal(GameId.EldenRing, new PersistentTrackerState(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true).SelectedGameId);
         Assert.Throws<ArgumentException>(() => CreateState(CreateUnknownGameId()));
         Assert.Null(PersistentTrackerState.Default.SelectedGameId);
     }

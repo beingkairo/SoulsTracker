@@ -608,5 +608,24 @@
                 </StackPanel>
             </Border>
         </Grid>
+        <Grid x:Name="EldenRingNoticeOverlay"
+              Grid.RowSpan="3"
+              Panel.ZIndex="21"
+              Background="#A8000000"
+              Visibility="{Binding IsEldenRingNoticeVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Focusable="True"
+              AutomationProperties.Name="Elden Ring notice">
+            <Border Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Elden Ring notice" />
+                    <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="SoulsTracker reads Elden Ring’s death count and boss progress from the running game. It never changes the game, but Elden Ring uses anti-cheat and we cannot guarantee this is safe for every account." />
+                    <TextBlock Margin="0,12,0,0" Style="{StaticResource MutedText}" Text="We have not found reports of bans caused by a read-only tracker like SoulsTracker, but use it at your own risk." />
+                    <StackPanel Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Margin="0,0,8,0" Content="Never mind" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Cancel Elden Ring notice" />
+                        <Button Content="I understand, proceed" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Confirm Elden Ring notice" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

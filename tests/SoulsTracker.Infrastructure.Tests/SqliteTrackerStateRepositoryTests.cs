@@ -61,6 +61,29 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EldenRingNoticeAcknowledgementRoundTripsLocally()
+    {
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true);
+
+        await using (var repository = new SqliteTrackerStateRepository(root, "elden-notice.db", new ReversingProtector()))
+        {
+            await repository.LoadAsync();
+            await repository.SaveAsync(configured);
+        }
+
+        await using var reopened = new SqliteTrackerStateRepository(root, "elden-notice.db", new ReversingProtector());
+        PersistentTrackerState restored = (await reopened.LoadAsync()).State!;
+        Assert.True(restored.EldenRingNoticeAcknowledged);
+        Assert.Equal(GameId.EldenRing, restored.SelectedGameId);
+    }
+
+    [Fact]
     public async Task DeathSoundConfigurationRoundTripsAndMalformedPersistedPathFallsBackSafely()
     {
         const string path = "C:\\local-only\\death.wav";

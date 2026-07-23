@@ -60,6 +60,58 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
+    public async Task EldenRingFirstSelectionRequiresAcknowledgementAndProceedPersistsIt()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
+        int savesBeforeNotice = harness.Repository.SaveCount;
+
+        Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+        Assert.True(harness.ViewModel.IsEldenRingNoticeVisible);
+        Assert.Equal(GameId.Ds1, harness.ViewModel.CurrentState!.SelectedGameId);
+        Assert.Equal(savesBeforeNotice, harness.Repository.SaveCount);
+
+        await harness.ViewModel.ConfirmEldenRingNoticeAsync();
+
+        Assert.False(harness.ViewModel.IsEldenRingNoticeVisible);
+        Assert.True(harness.Repository.State.EldenRingNoticeAcknowledged);
+        Assert.Equal(GameId.EldenRing, harness.Repository.State.SelectedGameId);
+    }
+
+    [Fact]
+    public async Task EldenRingNoticeCancelLeavesCurrentGameAndAcknowledgementUnchanged()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds3));
+
+        Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+        harness.ViewModel.CancelEldenRingNotice();
+
+        Assert.False(harness.ViewModel.IsEldenRingNoticeVisible);
+        Assert.False(harness.Repository.State.EldenRingNoticeAcknowledged);
+        Assert.Equal(GameId.Ds3, harness.Repository.State.SelectedGameId);
+    }
+
+    [Fact]
+    public async Task EldenRingAcknowledgementSkipsFutureNoticeAndOtherGamesDoNotShowIt()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+
+        Assert.True(harness.ViewModel.RequestGameSelection(harness.Game(GameId.Sekiro)));
+        Assert.False(harness.ViewModel.IsEldenRingNoticeVisible);
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Sekiro));
+
+        Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+        await harness.ViewModel.ConfirmEldenRingNoticeAsync();
+        Assert.True(harness.ViewModel.RequestGameSelection(harness.Game(GameId.Ds2)));
+        Assert.True(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+        Assert.False(harness.ViewModel.IsEldenRingNoticeVisible);
+    }
+
+    [Fact]
     public async Task CenterAlignmentClearsAndHidesBossMarkersWithoutApply()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
@@ -451,21 +503,22 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task SoonGamesAreVisibleButDisabledAndCannotChangeSelection()
+    public async Task EldenRingIsSelectableOnlyThroughItsAcknowledgementGate()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
         GameChoice eldenRing = harness.Game(GameId.EldenRing);
         GameChoice demonsSouls = harness.Game(GameId.DemonsSouls);
 
-        Assert.False(eldenRing.IsSelectable);
-        Assert.Equal("SOON", eldenRing.AvailabilityLabel);
+        Assert.True(eldenRing.IsSelectable);
+        Assert.Equal(string.Empty, eldenRing.AvailabilityLabel);
         Assert.True(demonsSouls.IsSelectable);
         Assert.Equal(string.Empty, demonsSouls.AvailabilityLabel);
-        await harness.ViewModel.SelectGameAsync(eldenRing);
+        Assert.False(harness.ViewModel.RequestGameSelection(eldenRing));
 
         Assert.Null(harness.ViewModel.SelectedGame);
         Assert.Equal(0, harness.Repository.SaveCount);
+        Assert.True(harness.ViewModel.IsEldenRingNoticeVisible);
     }
 
     [Fact]

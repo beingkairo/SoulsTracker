@@ -160,6 +160,17 @@ public sealed class GameDefinition
             return;
         }
 
+        // Elden Ring is selectable only after the user acknowledges its local
+        // notice. Its reader remains intentionally unavailable until separate
+        // live validation authorizes one.
+        if (id == GameId.EldenRing &&
+            trackingMode == GameTrackingMode.Unavailable &&
+            readerBindingState == ReaderBindingState.IntentionallyUnavailable &&
+            bossCatalog.Length == 0)
+        {
+            return;
+        }
+
         if (trackingMode != GameTrackingMode.GameLifetimeReadOnly ||
             readerBindingState != ReaderBindingState.PendingVerification)
         {

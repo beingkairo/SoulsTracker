@@ -67,7 +67,32 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel viewModel && GameSelector.SelectedItem is GameChoice choice)
         {
-            await viewModel.SelectGameAsync(choice);
+            if (viewModel.RequestGameSelection(choice))
+            {
+                await viewModel.SelectGameAsync(choice);
+            }
+            else
+            {
+                GameSelector.SelectedItem = viewModel.SelectedGame;
+            }
+        }
+    }
+
+    private async void ConfirmEldenRingNotice_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.ConfirmEldenRingNoticeAsync();
+            GameSelector.SelectedItem = viewModel.SelectedGame;
+        }
+    }
+
+    private void CancelEldenRingNotice_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel)
+        {
+            viewModel.CancelEldenRingNotice();
+            GameSelector.SelectedItem = viewModel.SelectedGame;
         }
     }
 
