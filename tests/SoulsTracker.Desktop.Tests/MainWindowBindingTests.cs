@@ -41,25 +41,29 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void EldenRingNoticeUsesTheApprovedCopyAndOnlyTheTwoApprovedActions()
+    public void EldenRingSetupUsesTheFriendlySaveGuidanceAndTwoAcknowledgementActions()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
-        Assert.Contains("Elden Ring notice", xaml, StringComparison.Ordinal);
-        Assert.Contains("SoulsTracker reads Total Deaths from the ER0000.sl2 save file you choose.", xaml, StringComparison.Ordinal);
-        Assert.Contains("It does not access the running game or change the save file, but we cannot guarantee this is safe for every account.", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("We have not found reports of bans", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"I understand, proceed\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Never mind\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Set up Elden Ring\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Elden Ring keeps all of your characters in one ER0000.sl2 save file.", xaml, StringComparison.Ordinal);
+        Assert.Contains("SoulsTracker normally looks for it automatically. If it can't find it, choose the file yourself, then pick the character you want to track.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Usual location: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("cannot guarantee this is safe", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("risk", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Content=\"Got it\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Not now\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EldenRingSavePickerUsesTheConciseDescription()
+    public void EldenRingSavePickerRetainsSetupHelpAfterTheModalIsDismissed()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
-        Assert.Contains("Choose your ER0000.sl2 save file and the character slot to read.", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("SoulsTracker only reads this file when it changes.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Choose your ER0000.sl2 save file, then choose the character you want to track. Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Can't find it? Most saves are here: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataTrigger Binding=\"{Binding EldenRingSaveFileName}\" Value=\"{x:Null}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

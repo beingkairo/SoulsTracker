@@ -350,11 +350,23 @@
                             </ComboBox>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="ELDEN RING SAVE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose your ER0000.sl2 save file and the character slot to read." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose your ER0000.sl2 save file, then choose the character you want to track. Death totals update after Elden Ring saves." />
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Choose save..." Click="BrowseEldenRingSave_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Elden Ring save file" />
                                     <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Text="{Binding EldenRingSaveFileName, TargetNullValue=No save file selected.}" AutomationProperties.Name="Selected Elden Ring save file" />
                                 </StackPanel>
+                                <TextBlock Margin="0,6,0,0" Text="Can't find it? Most saves are here: %APPDATA%\EldenRing\&lt;your Steam ID&gt;\ER0000.sl2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding EldenRingSaveFileName}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                                     <TextBlock Width="90" VerticalAlignment="Center" Text="Character" />
                                     <ComboBox Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding CanSelectEldenRingProfile}" AutomationProperties.Name="Elden Ring character slot" />
@@ -650,14 +662,17 @@
               Background="#A8000000"
               Visibility="{Binding IsEldenRingNoticeVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
               Focusable="True"
-              AutomationProperties.Name="Elden Ring notice">
+              AutomationProperties.Name="Set up Elden Ring">
             <Border Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                 <StackPanel>
-                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Elden Ring notice" />
-                    <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="SoulsTracker reads Total Deaths from the ER0000.sl2 save file you choose. It does not access the running game or change the save file, but we cannot guarantee this is safe for every account." />
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Set up Elden Ring" />
+                    <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="Elden Ring keeps all of your characters in one ER0000.sl2 save file." />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="SoulsTracker normally looks for it automatically. If it can't find it, choose the file yourself, then pick the character you want to track." />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Death totals update after Elden Ring saves." />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Usual location: %APPDATA%\EldenRing\&lt;your Steam ID&gt;\ER0000.sl2" />
                     <StackPanel Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Margin="0,0,8,0" Content="Never mind" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Cancel Elden Ring notice" />
-                        <Button Content="I understand, proceed" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Confirm Elden Ring notice" />
+                        <Button Margin="0,0,8,0" Content="Not now" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Not now" />
+                        <Button Content="Got it" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Got it" />
                     </StackPanel>
                 </StackPanel>
             </Border>
