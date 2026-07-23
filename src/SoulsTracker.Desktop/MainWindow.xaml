@@ -348,7 +348,7 @@
                             </ComboBox>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="ELDEN RING SAVE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose your ER0000.sl2 save file and the character slot to read. SoulsTracker only reads this file when it changes." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose your ER0000.sl2 save file and the character slot to read." />
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Choose save..." Click="BrowseEldenRingSave_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Elden Ring save file" />
                                     <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Text="{Binding EldenRingSaveFileName, TargetNullValue=No save file selected.}" AutomationProperties.Name="Selected Elden Ring save file" />

@@ -54,6 +54,15 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void EldenRingSavePickerUsesTheConciseDescription()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+
+        Assert.Contains("Choose your ER0000.sl2 save file and the character slot to read.", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SoulsTracker only reads this file when it changes.", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OverlayAppearanceEditorUsesScopedControlsWithoutPresetsOrTotalAlignment()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
