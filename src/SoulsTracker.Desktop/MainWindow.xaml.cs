@@ -113,6 +113,23 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.DecrementManualDeathsAsync();
     }
 
+    private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Elden Ring save (ER0000.sl2)|ER0000.sl2", CheckFileExists = true, Multiselect = false, Title = "Choose ER0000.sl2" };
+        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.SetEldenRingSaveFileAsync(dialog.FileName);
+        }
+    }
+
+    private async void EldenRingProfileSlot_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: EldenRingProfileSlotChoice slot } && viewModel.SelectedEldenRingProfileSlot != slot)
+        {
+            await viewModel.SetEldenRingProfileSlotAsync(slot);
+        }
+    }
+
     private void IncrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: true);
 
     private void DecrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: false);

@@ -18,6 +18,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string LocalOverlayUnavailableMessage = "Local OBS overlay is unavailable. Local tracker controls remain available.";
     internal const string GameUnavailableMessage = "Game unavailable";
     internal const string GameWaitingForActiveCharacterMessage = "Game detected — waiting for active character";
+    internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save file";
     internal const string GameSyncedMessage = "Synced";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
     internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable — waiting for active character.";
@@ -107,6 +108,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public ObservableCollection<GameChoice> GameChoices { get; }
 
     public ObservableCollection<BossChoice> Bosses { get; } = [];
+
+    public IReadOnlyList<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; } = Enumerable.Range(EldenRingSaveConfiguration.MinimumSlotIndex, EldenRingSaveConfiguration.MaximumSlotIndex + 1).Select(static index => new EldenRingProfileSlotChoice(index)).ToArray();
 
     public IReadOnlyList<BossListVisibilityMode> BossListVisibilityModes { get; } = Enum.GetValues<BossListVisibilityMode>();
     public IReadOnlyList<OverlayTextAlignment> OverlayAlignments { get; } = Enum.GetValues<OverlayTextAlignment>();
@@ -218,6 +221,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return runtimeReaderStatus switch
             {
                 RuntimeGameReaderStatus.WaitingForActiveCharacter => GameWaitingForActiveCharacterMessage,
+                RuntimeGameReaderStatus.WaitingForSaveFile => GameWaitingForSaveFileMessage,
                 RuntimeGameReaderStatus.Synced => GameSyncedMessage,
                 _ => GameUnavailableMessage,
             };
@@ -229,6 +233,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         : 0;
 
     public bool IsBloodborneSelected => state?.SelectedGameId == GameId.Bloodborne;
+    public bool IsEldenRingSelected => state?.SelectedGameId == GameId.EldenRing;
+    public string? EldenRingSaveFileName => state?.EldenRingSave.FileName;
+    public EldenRingProfileSlotChoice? SelectedEldenRingProfileSlot { get; private set; }
     public bool IsManualGameSelected => state?.SelectedGameId is GameId id && IsManualGame(id);
 
     public bool CanDecrementManualDeaths => IsManualGameSelected && ManualDeaths > 0 && ControlsEnabled;
@@ -408,6 +415,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public Task SetBossExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, state?.TextExports.BossListPath, enabled), cancellationToken);
     public Task ClearDeathsExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(null, IsDeathsExportEnabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
     public Task ClearBossExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, null, IsBossExportEnabled), cancellationToken);
+    public async Task SetEldenRingSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled) return;
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0), cancellationToken);
+    }
+    public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(slot);
+        if (!ControlsEnabled) return;
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index), cancellationToken);
+    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -733,7 +751,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         RefreshDeathSoundStatus();
         GameId? selectedId = state.SelectedGameId;
         SelectedGame = selectedId is null ? null : GameChoices.Single(choice => choice.GameId == selectedId);
+        SelectedEldenRingProfileSlot = EldenRingProfileSlots.Single(slot => slot.Index == state.EldenRingSave.SlotIndex);
         OnPropertyChanged(nameof(SelectedGame));
+        OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
 
         Bosses.Clear();
         if (selectedId is not null)
@@ -767,7 +787,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                     ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForActiveCharacter
                         ? GameTotalDeathsWaitingForActiveCharacterMessage
-                        : GameTotalDeathsUnavailableMessage;
+                        : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForSaveFile
+                            ? "Choose an Elden Ring save file to begin tracking."
+                            : GameTotalDeathsUnavailableMessage;
     }
 
     private static string LoadFailureMessage(TrackerStateLoadFailureKind kind) => kind switch
@@ -861,6 +883,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ControlsEnabled));
         OnPropertyChanged(nameof(ManualDeaths));
         OnPropertyChanged(nameof(IsBloodborneSelected));
+        OnPropertyChanged(nameof(IsEldenRingSelected));
+        OnPropertyChanged(nameof(EldenRingSaveFileName));
         OnPropertyChanged(nameof(IsManualGameSelected));
         OnPropertyChanged(nameof(IsCenterBossAlignment));
         OnPropertyChanged(nameof(AreBossMarkerControlsVisible));
@@ -920,6 +944,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (!ControlsEnabled) return;
         try { ApplyCommittedState(await coordinator.SetTextExportConfigurationAsync(configuration, cancellationToken)); }
         catch { ErrorMessage = "Text export settings could not be saved."; }
+    }
+
+    private async Task SaveEldenRingSaveAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken)
+    {
+        IsBusy = true;
+        try { ApplyCommittedState(await coordinator.SetEldenRingSaveConfigurationAsync(configuration, cancellationToken)); }
+        catch { ErrorMessage = "The Elden Ring save selection could not be saved."; }
+        finally { IsBusy = false; NotifyTrackerProperties(); }
     }
 
     private void RefreshDeathSoundStatus()

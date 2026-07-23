@@ -16,6 +16,7 @@ public interface IRuntimeGameDeathReader
 public enum RuntimeGameReaderStatus
 {
     Unavailable,
+    WaitingForSaveFile,
     WaitingForActiveCharacter,
     Synced,
 }
@@ -38,6 +39,9 @@ public sealed record RuntimeGameReadResult
 
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
+
+    public static RuntimeGameReadResult WaitingForSaveFile(GameId gameId) =>
+        new(gameId, RuntimeGameReaderStatus.WaitingForSaveFile, null);
 
     public static RuntimeGameReadResult Synced(RuntimeGameObservation observation) =>
         new(observation?.GameId ?? throw new ArgumentNullException(nameof(observation)), RuntimeGameReaderStatus.Synced, observation);

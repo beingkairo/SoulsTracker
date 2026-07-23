@@ -84,6 +84,31 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EldenRingSaveSelectionAndProfileSlotRoundTripLocally()
+    {
+        const string savePath = "C:\\local-only\\ER0000.sl2";
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true,
+            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3));
+
+        await using (var repository = new SqliteTrackerStateRepository(root, "elden-save.db", new ReversingProtector()))
+        {
+            await repository.LoadAsync();
+            await repository.SaveAsync(configured);
+        }
+
+        await using var reopened = new SqliteTrackerStateRepository(root, "elden-save.db", new ReversingProtector());
+        EldenRingSaveConfiguration restored = (await reopened.LoadAsync()).State!.EldenRingSave;
+        Assert.Equal(savePath, restored.LocalPath);
+        Assert.Equal(3, restored.SlotIndex);
+    }
+
+    [Fact]
     public async Task DeathSoundConfigurationRoundTripsAndMalformedPersistedPathFallsBackSafely()
     {
         const string path = "C:\\local-only\\death.wav";

@@ -177,8 +177,8 @@ public static class GameCatalog
             GameId.EldenRing,
             "Elden Ring",
             GameUiAvailability.Selectable,
-            GameTrackingMode.Unavailable,
-            ReaderBindingState.IntentionallyUnavailable),
+            GameTrackingMode.GameLifetimeReadOnly,
+            ReaderBindingState.PendingVerification),
     ]);
 
     private static readonly ReadOnlyDictionary<GameId, GameDefinition> DefinitionsById =

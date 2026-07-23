@@ -46,8 +46,9 @@ public sealed class MainWindowBindingTests
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
         Assert.Contains("Elden Ring notice", xaml, StringComparison.Ordinal);
-        Assert.Contains("SoulsTracker reads Elden Ring’s death count and boss progress from the running game.", xaml, StringComparison.Ordinal);
-        Assert.Contains("We have not found reports of bans caused by a read-only tracker like SoulsTracker, but use it at your own risk.", xaml, StringComparison.Ordinal);
+        Assert.Contains("SoulsTracker reads Total Deaths from the ER0000.sl2 save file you choose.", xaml, StringComparison.Ordinal);
+        Assert.Contains("It does not access the running game or change the save file, but we cannot guarantee this is safe for every account.", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("We have not found reports of bans", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"I understand, proceed\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"Never mind\"", xaml, StringComparison.Ordinal);
     }

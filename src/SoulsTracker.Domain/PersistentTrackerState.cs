@@ -24,7 +24,8 @@ public sealed class PersistentTrackerState
         DeathSoundConfiguration.Default,
         TextExportConfiguration.Default,
         ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
-        eldenRingNoticeAcknowledged: false);
+        eldenRingNoticeAcknowledged: false,
+        EldenRingSaveConfiguration.Default);
 
     /// <summary>
     /// Initializes validated persisted tracker state.
@@ -41,7 +42,8 @@ public sealed class PersistentTrackerState
         DeathSoundConfiguration? deathSound = null,
         TextExportConfiguration? textExports = null,
         ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
-        bool eldenRingNoticeAcknowledged = false)
+        bool eldenRingNoticeAcknowledged = false,
+        EldenRingSaveConfiguration? eldenRingSave = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -68,6 +70,7 @@ public sealed class PersistentTrackerState
         DeathSound = deathSound ?? DeathSoundConfiguration.Default;
         TextExports = textExports ?? TextExportConfiguration.Default;
         EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
+        EldenRingSave = eldenRingSave ?? EldenRingSaveConfiguration.Default;
     }
 
     /// <summary>
@@ -113,6 +116,9 @@ public sealed class PersistentTrackerState
 
     /// <summary>Gets whether this local installation accepted the Elden Ring notice.</summary>
     public bool EldenRingNoticeAcknowledged { get; }
+
+    /// <summary>Local configuration for the separate read-only Elden Ring save reader.</summary>
+    public EldenRingSaveConfiguration EldenRingSave { get; }
 
     private static void ValidateSelectedGame(GameId? selectedGameId, bool eldenRingNoticeAcknowledged)
     {

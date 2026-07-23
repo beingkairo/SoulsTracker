@@ -71,6 +71,11 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(configuration);
         var request = new TextExportRequest(configuration, cancellationToken); if (!requests.Writer.TryWrite(request)) ObjectDisposedException.ThrowIf(true, this); return request.Completion.Task;
     }
+    public Task<PersistentTrackerState> SetEldenRingSaveConfigurationAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var request = new EldenRingSaveRequest(configuration, cancellationToken); if (!requests.Writer.TryWrite(request)) ObjectDisposedException.ThrowIf(true, this); return request.Completion.Task;
+    }
 
     private async Task ProcessAsync()
     {
@@ -102,7 +107,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                         current.OverlayConfiguration,
                         hotkeyRequest.Hotkeys,
                         current.DeathSound,
-                        current.TextExports);
+                        current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave);
                     await repository.SaveAsync(updated, hotkeyRequest.CancellationToken).ConfigureAwait(false);
                     committedState = updated;
                     hotkeyRequest.Completion.TrySetResult(updated);
@@ -119,7 +124,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                 try
                 {
                     PersistentTrackerState current = committedState!;
-                    PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, deathSoundRequest.Configuration, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged);
+                    PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, deathSoundRequest.Configuration, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave);
                     await repository.SaveAsync(updated, deathSoundRequest.CancellationToken).ConfigureAwait(false);
                     committedState = updated;
                     deathSoundRequest.Completion.TrySetResult(updated);
@@ -129,8 +134,14 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
             }
             if (request is TextExportRequest exportRequest)
             {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
                 catch { exportRequest.Completion.TrySetException(new InvalidOperationException("The text export settings could not be saved.")); }
+                continue;
+            }
+            if (request is EldenRingSaveRequest eldenRingSaveRequest)
+            {
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, eldenRingSaveRequest.Configuration); await repository.SaveAsync(updated, eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateEldenRingSaveConfiguration), eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); eldenRingSaveRequest.Completion.TrySetResult(updated); }
+                catch { eldenRingSaveRequest.Completion.TrySetException(new InvalidOperationException("The Elden Ring save selection could not be saved.")); }
                 continue;
             }
             if (request is LegacyImportRequest importRequest)
@@ -198,7 +209,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
 
     public async ValueTask DisposeAsync() { requests.Writer.TryComplete(); await processor.ConfigureAwait(false); await repository.DisposeAsync().ConfigureAwait(false); }
     private static PersistentTrackerState WithEndpoint(PersistentTrackerState state, OverlayEndpointConfiguration endpoint) =>
-        state.OverlayConfiguration.Endpoint.Equals(endpoint) ? state : new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, new OverlayConfiguration(state.OverlayConfiguration.SchemaVersion, endpoint, state.OverlayConfiguration.TotalDeaths, state.OverlayConfiguration.BossList), state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged);
+        state.OverlayConfiguration.Endpoint.Equals(endpoint) ? state : new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, new OverlayConfiguration(state.OverlayConfiguration.SchemaVersion, endpoint, state.OverlayConfiguration.TotalDeaths, state.OverlayConfiguration.BossList), state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave);
 
     private abstract class CoordinatorRequest(CancellationToken cancellationToken) { public CancellationToken CancellationToken { get; } = cancellationToken; public abstract void RejectNotInitialized(); }
     private sealed class CommandRequest(ITrackerCommand command, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public ITrackerCommand Command { get; } = command; public TaskCompletionSource<TrackerCommandExecutionResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetResult(new(TrackerCommandExecutionStatus.NotInitialized, null, "Tracker state has not loaded.")); }
@@ -206,5 +217,6 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
     private sealed class HotkeyRequest(ManualBloodborneHotkeyConfiguration hotkeys, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public ManualBloodborneHotkeyConfiguration Hotkeys { get; } = hotkeys; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
     private sealed class DeathSoundRequest(DeathSoundConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public DeathSoundConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
     private sealed class TextExportRequest(TextExportConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public TextExportConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
+    private sealed class EldenRingSaveRequest(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public EldenRingSaveConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
     private sealed class LegacyImportRequest(ConfirmedLegacyImportRequest import, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public ConfirmedLegacyImportRequest Import { get; } = import; public TaskCompletionSource<ConfirmedLegacyImportExecutionResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetResult(new(ConfirmedLegacyImportExecutionStatus.NotInitialized, null, "Tracker state has not loaded.")); }
 }

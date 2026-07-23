@@ -55,8 +55,8 @@ public sealed class GameCatalogTests
                 GameId.EldenRing,
                 "Elden Ring",
                 GameUiAvailability.Selectable,
-                GameTrackingMode.Unavailable,
-                ReaderBindingState.IntentionallyUnavailable,
+                GameTrackingMode.GameLifetimeReadOnly,
+                ReaderBindingState.PendingVerification,
                 0),
         ];
 
@@ -102,13 +102,13 @@ public sealed class GameCatalogTests
 
     [Theory]
     [InlineData("elden_ring")]
-    public void EldenRingIsSelectableButItsReaderAndBossCatalogRemainUnavailable(string gameId)
+    public void EldenRingIsSelectableWithReadOnlySaveTrackingAndNoBossCatalog(string gameId)
     {
         GameDefinition definition = GameCatalog.GetRequired(gameId);
 
         Assert.Equal(GameUiAvailability.Selectable, definition.UiAvailability);
-        Assert.Equal(GameTrackingMode.Unavailable, definition.TrackingMode);
-        Assert.Equal(ReaderBindingState.IntentionallyUnavailable, definition.ReaderBindingState);
+        Assert.Equal(GameTrackingMode.GameLifetimeReadOnly, definition.TrackingMode);
+        Assert.Equal(ReaderBindingState.PendingVerification, definition.ReaderBindingState);
         Assert.True(definition.IsSelectable);
         Assert.Empty(definition.BossCatalog);
         Assert.Throws<ArgumentException>(() =>

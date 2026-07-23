@@ -61,6 +61,9 @@ public sealed record UpdateDeathSoundConfigurationCommand(DeathSoundConfiguratio
 /// <summary>Stores the local acknowledgement required before selecting Elden Ring.</summary>
 public sealed record AcknowledgeEldenRingNoticeCommand : ITrackerCommand;
 
+/// <summary>Updates the locally selected, read-only Elden Ring save and profile slot.</summary>
+public sealed record UpdateEldenRingSaveConfigurationCommand(EldenRingSaveConfiguration Configuration) : ITrackerCommand;
+
 /// <summary>
 /// Identifies the command whose transition was evaluated without carrying state or secrets.
 /// </summary>
@@ -75,6 +78,7 @@ public enum TrackerCommandType
     UpdateOverlayAppearance,
     UpdateDeathSoundConfiguration,
     AcknowledgeEldenRingNotice,
+    UpdateEldenRingSaveConfiguration,
     UpdateTextExports,
     LegacyImport,
 }

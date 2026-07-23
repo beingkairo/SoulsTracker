@@ -10,6 +10,8 @@ Install SoulsTracker, then open it before you open OBS. On the **Main** tab, pic
 
 SoulsTracker tracks deaths automatically for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
 
+Elden Ring uses a save file instead: after accepting the Elden Ring notice, choose your local `ER0000.sl2` file and character slot. SoulsTracker only reads the file after the game saves, so the number can take a moment to update.
+
 Bloodborne and Demon Souls are supported too, but their death counters are manual. Hit `+1` when you die, use `-1` for a correction, or set hotkeys if you would rather not click the buttons during a stream.
 
 Your boss list is on the Main tab as well. Check off a boss when you beat it. Death totals and boss progress save automatically, and every game keeps its own progress.
@@ -30,13 +32,14 @@ The **Settings** tab lets you choose a death sound, adjust its volume, and save 
 
 ## IMPORTANT: Disclaimer
 
-SoulsTracker does not write to game memory, edit save files, inject code, automate gameplay, or change any game values. For games with automatic tracking, it only reads the death-total information. Bloodborne and Demon Souls use manual counters.
+SoulsTracker does not write to game memory, edit save files, inject code, automate gameplay, or change any game values. For games with automatic tracking, it only reads the death-total information. Elden Ring reads the user-selected save file instead of game memory. Bloodborne and Demon Souls use manual counters.
 
 Automatic tracking is version-sensitive. A game update can change enough that tracking needs a SoulsTracker update too. Use SoulsTracker at your own discretion, especially online, and follow the game’s online and anti-cheat rules.
 
 ## Features
 
 - Read-only game Total Deaths readers for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
+- Read-only Elden Ring Total Deaths from a user-selected `ER0000.sl2` save file and character slot.
 - Independent manual death counters for Bloodborne and Demon Souls.
 - Game-specific boss checklists with local persistence.
 - Total Deaths and Boss List OBS browser overlays, hosted only on the local machine.

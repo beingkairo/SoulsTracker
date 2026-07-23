@@ -105,7 +105,7 @@ public static class ConfirmedLegacyProposalApplication
             progress,
             overlay,
             destination.ManualBloodborneHotkeys,
-            destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged);
+            destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave);
         return true;
     }
 
