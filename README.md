@@ -10,7 +10,7 @@ Install SoulsTracker, then open it before you open OBS. On the **Main** tab, pic
 
 SoulsTracker tracks deaths automatically for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
 
-Elden Ring uses a save file instead: after accepting the Elden Ring notice, choose your local `ER0000.sl2` file and character slot. SoulsTracker only reads the file after the game saves, so the number can take a moment to update.
+Elden Ring uses a save file instead: after accepting the Elden Ring notice, choose your local `ER0000.sl2` file and character slot. When the save supports it, the picker shows each character's name and level. SoulsTracker only reads the file after the game saves, so the number can take a moment to update.
 
 Bloodborne and Demon Souls are supported too, but their death counters are manual. Hit `+1` when you die, use `-1` for a correction, or set hotkeys if you would rather not click the buttons during a stream.
 

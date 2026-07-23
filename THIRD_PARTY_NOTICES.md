@@ -3,7 +3,8 @@
 SoulsTracker's Elden Ring save-file reader is an original C# implementation. It
 does not include third-party source code, assets, tests, or wording. The two
 MIT-licensed projects below were consulted only as independent references for the
-publicly documented ER0000.sl2 container and character-slot layout.
+publicly documented ER0000.sl2 container, character-slot, and USER_DATA_10
+profile-summary layout for safe character-name and level display.
 
 ## monodyle/elden-ring-death-counter
 

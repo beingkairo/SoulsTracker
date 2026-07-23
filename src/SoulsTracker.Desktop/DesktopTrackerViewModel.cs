@@ -26,6 +26,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string DeathSoundVolumeValidationMessage = "Death sound volume must be between 0 and 100.";
 
     private readonly SerializedTrackerCoordinator coordinator;
+    private readonly IEldenRingSaveProfileReader eldenRingSaveProfileReader;
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
     private RuntimeGameReaderStatus runtimeReaderStatus;
@@ -70,10 +71,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool legacyDraftShowGameName;
     private bool legacyDraftCompactTitle = true;
 
-    public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator)
+    public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null)
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+        this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
+        EldenRingProfileSlots = new ObservableCollection<EldenRingProfileSlotChoice>(CreateUnavailableEldenRingProfileSlots());
         BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
     }
 
@@ -109,7 +112,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     public ObservableCollection<BossChoice> Bosses { get; } = [];
 
-    public IReadOnlyList<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; } = Enumerable.Range(EldenRingSaveConfiguration.MinimumSlotIndex, EldenRingSaveConfiguration.MaximumSlotIndex + 1).Select(static index => new EldenRingProfileSlotChoice(index)).ToArray();
+    public ObservableCollection<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; }
 
     public IReadOnlyList<BossListVisibilityMode> BossListVisibilityModes { get; } = Enum.GetValues<BossListVisibilityMode>();
     public IReadOnlyList<OverlayTextAlignment> OverlayAlignments { get; } = Enum.GetValues<OverlayTextAlignment>();
@@ -419,6 +422,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (!ControlsEnabled) return;
         await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0), cancellationToken);
+        await RefreshEldenRingProfileSlotsAsync(cancellationToken);
     }
     public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
     {
@@ -442,6 +446,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             }
 
             ApplyCommittedState(result.State!);
+            if (state?.SelectedGameId == GameId.EldenRing)
+            {
+                await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+            }
             LocalTrackerStateStatus = LocalTrackerStateReadyMessage;
         }
         catch
@@ -558,14 +566,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         settings = new GlobalHotkeySettings(pendingIncrementBinding, pendingDecrementBinding); message = string.Empty; return true;
     }
 
-    public Task SelectGameAsync(GameChoice? choice, CancellationToken cancellationToken = default)
+    public async Task SelectGameAsync(GameChoice? choice, CancellationToken cancellationToken = default)
     {
         if (choice is null || !choice.IsSelectable || !ControlsEnabled)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
+        await SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
+        if (state?.SelectedGameId == GameId.EldenRing)
+        {
+            await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+        }
     }
 
     /// <summary>Starts a game selection, showing the local Elden Ring notice when needed.</summary>
@@ -953,6 +965,36 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         catch { ErrorMessage = "The Elden Ring save selection could not be saved."; }
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
+
+    private async Task RefreshEldenRingProfileSlotsAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<EldenRingCharacterSlotMetadata> metadata;
+        try
+        {
+            metadata = await eldenRingSaveProfileReader.ReadAsync(state?.EldenRingSave ?? EldenRingSaveConfiguration.Default, cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch
+        {
+            metadata = EldenRingCharacterSlotMetadata.UnavailableSlots;
+        }
+
+        EldenRingProfileSlots.Clear();
+        foreach (EldenRingCharacterSlotMetadata slot in metadata.OrderBy(static item => item.Index))
+        {
+            EldenRingProfileSlots.Add(EldenRingProfileSlotChoice.FromMetadata(slot));
+        }
+
+        int selectedIndex = state?.EldenRingSave.SlotIndex ?? EldenRingSaveConfiguration.MinimumSlotIndex;
+        SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == selectedIndex)
+            ?? new EldenRingProfileSlotChoice(selectedIndex);
+        OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
+    }
+
+    private static EldenRingProfileSlotChoice[] CreateUnavailableEldenRingProfileSlots() =>
+        Enumerable.Range(EldenRingSaveConfiguration.MinimumSlotIndex, EldenRingSaveConfiguration.MaximumSlotIndex + 1)
+            .Select(static index => new EldenRingProfileSlotChoice(index))
+            .ToArray();
 
     private void RefreshDeathSoundStatus()
     {

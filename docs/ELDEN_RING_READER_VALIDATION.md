@@ -11,6 +11,10 @@ queries, injects into, or changes the Elden Ring process. It does not write to t
 save file. A missing, locked, incomplete, malformed, or unsupported save fails
 closed without surfacing a guessed value.
 
+The character picker may read the save's profile-summary metadata for a local name
+and level label. Each field is independently validated. Invalid metadata falls back
+to a generic character label and is never shown as a guessed value.
+
 ## Compatibility policy
 
 The save parser must not lock itself to a game executable version. It validates the

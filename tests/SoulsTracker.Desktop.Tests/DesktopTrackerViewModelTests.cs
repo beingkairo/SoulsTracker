@@ -112,6 +112,31 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
+    public async Task EldenRingProfilePickerUsesOnlySafeReaderMetadata()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true,
+            eldenRingSave: new EldenRingSaveConfiguration("C:\\local-only\\ER0000.sl2", 0));
+        var profileReader = new FixedProfileReader([
+            new EldenRingCharacterSlotMetadata(0, IsEmpty: false, "Kairo", 125),
+            new EldenRingCharacterSlotMetadata(1, IsEmpty: true, null, null),
+            new EldenRingCharacterSlotMetadata(2, IsEmpty: false, null, 50),
+        ]);
+        await using TestHarness harness = new(state, profileReader);
+
+        await harness.ViewModel.InitializeAsync();
+
+        Assert.Equal("Kairo \u00B7 Level 125", harness.ViewModel.EldenRingProfileSlots[0].Label);
+        Assert.Equal("Character 2 \u00B7 Empty", harness.ViewModel.EldenRingProfileSlots[1].Label);
+        Assert.Equal("Character 3 \u00B7 Level 50", harness.ViewModel.EldenRingProfileSlots[2].Label);
+    }
+
+    [Fact]
     public async Task CenterAlignmentClearsAndHidesBossMarkersWithoutApply()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
@@ -749,14 +774,14 @@ public sealed class DesktopTrackerViewModelTests
     {
         private readonly SerializedTrackerCoordinator coordinator;
 
-        public TestHarness(PersistentTrackerState state)
-            : this(TrackerStateLoadResult.Loaded(state)) { }
+        public TestHarness(PersistentTrackerState state, IEldenRingSaveProfileReader? profileReader = null)
+            : this(TrackerStateLoadResult.Loaded(state), profileReader) { }
 
-        public TestHarness(TrackerStateLoadResult loadResult)
+        public TestHarness(TrackerStateLoadResult loadResult, IEldenRingSaveProfileReader? profileReader = null)
         {
             Repository = new FakeRepository(loadResult);
             coordinator = new SerializedTrackerCoordinator(Repository, new NullPublisher());
-            ViewModel = new DesktopTrackerViewModel(coordinator);
+            ViewModel = new DesktopTrackerViewModel(coordinator, profileReader);
         }
 
         public FakeRepository Repository { get; }
@@ -789,5 +814,10 @@ public sealed class DesktopTrackerViewModelTests
     private sealed class NullPublisher : ITrackerStateChangePublisher
     {
         public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class FixedProfileReader(IReadOnlyList<EldenRingCharacterSlotMetadata> slots) : IEldenRingSaveProfileReader
+    {
+        public ValueTask<IReadOnlyList<EldenRingCharacterSlotMetadata>> ReadAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken) => ValueTask.FromResult(slots);
     }
 }
