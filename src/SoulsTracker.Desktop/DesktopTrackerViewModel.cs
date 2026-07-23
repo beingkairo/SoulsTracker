@@ -70,6 +70,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private CenterMarkerAlignment draftCenterMarkerAlignment = CenterMarkerAlignment.Left;
     private bool legacyDraftShowGameName;
     private bool legacyDraftCompactTitle = true;
+    private EldenRingBossListScopeChoice selectedEldenRingBossListScope = EldenRingBossListScopeChoice.All[0];
+    private bool requiredEldenRingBossesOnly;
 
     public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null)
     {
@@ -113,6 +115,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public ObservableCollection<BossChoice> Bosses { get; } = [];
 
     public ObservableCollection<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; }
+    public IReadOnlyList<EldenRingBossListScopeChoice> EldenRingBossListScopes { get; } = EldenRingBossListScopeChoice.All;
+    public EldenRingBossListScopeChoice SelectedEldenRingBossListScope
+    {
+        get => selectedEldenRingBossListScope;
+        private set => SetField(ref selectedEldenRingBossListScope, value);
+    }
+    public bool RequiredEldenRingBossesOnly
+    {
+        get => requiredEldenRingBossesOnly;
+        private set => SetField(ref requiredEldenRingBossesOnly, value);
+    }
 
     public IReadOnlyList<BossListVisibilityMode> BossListVisibilityModes { get; } = Enum.GetValues<BossListVisibilityMode>();
     public IReadOnlyList<OverlayTextAlignment> OverlayAlignments { get; } = Enum.GetValues<OverlayTextAlignment>();
@@ -421,14 +434,26 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task SetEldenRingSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0), cancellationToken);
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses, state?.EldenRingSave.RequiredBossesOnly ?? false), cancellationToken);
         await RefreshEldenRingProfileSlotsAsync(cancellationToken);
     }
     public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(slot);
         if (!ControlsEnabled) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index), cancellationToken);
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses, state?.EldenRingSave.RequiredBossesOnly ?? false), cancellationToken);
+    }
+
+    public async Task SetEldenRingBossListScopeAsync(EldenRingBossListScopeChoice? scope, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled || state?.SelectedGameId != GameId.EldenRing || scope is null || scope.Value == state.EldenRingSave.BossListScope) return;
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, scope.Value, state.EldenRingSave.RequiredBossesOnly), cancellationToken);
+    }
+
+    public async Task SetRequiredEldenRingBossesOnlyAsync(bool requiredOnly, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled || state?.SelectedGameId != GameId.EldenRing || requiredOnly == state.EldenRingSave.RequiredBossesOnly) return;
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.EldenRingSave.BossListScope, requiredOnly), cancellationToken);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -764,14 +789,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         GameId? selectedId = state.SelectedGameId;
         SelectedGame = selectedId is null ? null : GameChoices.Single(choice => choice.GameId == selectedId);
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.Single(slot => slot.Index == state.EldenRingSave.SlotIndex);
+        SelectedEldenRingBossListScope = EldenRingBossListScopes.Single(scope => scope.Value == state.EldenRingSave.BossListScope);
+        RequiredEldenRingBossesOnly = state.EldenRingSave.RequiredBossesOnly;
         OnPropertyChanged(nameof(SelectedGame));
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
+        OnPropertyChanged(nameof(SelectedEldenRingBossListScope));
 
         Bosses.Clear();
         if (selectedId is not null)
         {
             GameDefinition game = GameCatalog.GetRequired(selectedId);
-            foreach (BossDefinition boss in game.BossCatalog)
+            foreach (BossDefinition boss in BossCatalogDisplayFilter.Apply(game, state.EldenRingSave))
             {
                 Bosses.Add(new BossChoice(boss, state.BossProgress.IsDefeated(selectedId, boss.Id)));
             }

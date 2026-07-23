@@ -57,7 +57,7 @@ public sealed class GameCatalogTests
                 GameUiAvailability.Selectable,
                 GameTrackingMode.GameLifetimeReadOnly,
                 ReaderBindingState.PendingVerification,
-                0),
+                207),
         ];
 
         ExpectedGameDefinition[] actual = GameCatalog.All
@@ -102,7 +102,7 @@ public sealed class GameCatalogTests
 
     [Theory]
     [InlineData("elden_ring")]
-    public void EldenRingIsSelectableWithReadOnlySaveTrackingAndNoBossCatalog(string gameId)
+    public void EldenRingIsSelectableWithReadOnlySaveTrackingAndItsManualBossCatalog(string gameId)
     {
         GameDefinition definition = GameCatalog.GetRequired(gameId);
 
@@ -110,7 +110,9 @@ public sealed class GameCatalogTests
         Assert.Equal(GameTrackingMode.GameLifetimeReadOnly, definition.TrackingMode);
         Assert.Equal(ReaderBindingState.PendingVerification, definition.ReaderBindingState);
         Assert.True(definition.IsSelectable);
-        Assert.Empty(definition.BossCatalog);
+        Assert.Equal(207, definition.BossCatalog.Count);
+        Assert.Equal("Ancient Hero of Zamor (Weeping Evergaol)", definition.BossCatalog[0].DisplayName);
+        Assert.Equal("Needle Knight Leda and Allies", definition.BossCatalog[^1].DisplayName);
         Assert.Throws<ArgumentException>(() =>
             GameCatalog.GetRequiredBoss(definition.Id, BossId.Parse("not_a_v1_boss")));
     }

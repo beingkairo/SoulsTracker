@@ -94,7 +94,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
             BossProgress.Empty,
             OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3));
+            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3, EldenRingBossListScope.ShadowOfTheErdtree, requiredBossesOnly: true));
 
         await using (var repository = new SqliteTrackerStateRepository(root, "elden-save.db", new ReversingProtector()))
         {
@@ -106,6 +106,8 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         EldenRingSaveConfiguration restored = (await reopened.LoadAsync()).State!.EldenRingSave;
         Assert.Equal(savePath, restored.LocalPath);
         Assert.Equal(3, restored.SlotIndex);
+        Assert.Equal(EldenRingBossListScope.ShadowOfTheErdtree, restored.BossListScope);
+        Assert.True(restored.RequiredBossesOnly);
     }
 
     [Fact]

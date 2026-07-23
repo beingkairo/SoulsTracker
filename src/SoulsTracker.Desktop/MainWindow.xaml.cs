@@ -130,6 +130,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void EldenRingBossListScope_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: EldenRingBossListScopeChoice scope } && viewModel.SelectedEldenRingBossListScope != scope)
+        {
+            await viewModel.SetEldenRingBossListScopeAsync(scope);
+        }
+    }
+
+    private async void RequiredEldenRingBossesOnly_Checked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetRequiredEldenRingBossesOnlyAsync(true);
+    }
+
+    private async void RequiredEldenRingBossesOnly_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetRequiredEldenRingBossesOnlyAsync(false);
+    }
+
     private void IncrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: true);
 
     private void DecrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: false);

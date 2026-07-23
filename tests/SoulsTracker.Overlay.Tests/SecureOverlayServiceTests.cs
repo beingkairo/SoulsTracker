@@ -147,6 +147,28 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
+    public async Task EldenRingBossOverlayUsesTheSamePersistedScopeAndRequiredFilter()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true,
+            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree, requiredBossesOnly: true));
+        var repository = new MemoryRepository(state);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
+        await service.StartAsync();
+        service.Publish(state);
+
+        string snapshot = await ReceiveSnapshotAsync(service);
+        Assert.Contains("Promised Consort Radahn", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("Blackgaol Knight", snapshot, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RealLoopbackHostProjectsValidatedPresentationWithoutEndpointSecrets()
     {
         const string rawToken = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";

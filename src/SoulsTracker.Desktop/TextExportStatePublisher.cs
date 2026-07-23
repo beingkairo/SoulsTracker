@@ -43,7 +43,8 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
         if (config.BossListEnabled && config.BossListPath is not null && state.SelectedGameId is not null)
         {
             GameDefinition game = GameCatalog.GetRequired(state.SelectedGameId);
-            string content = game.DisplayName + Environment.NewLine + string.Join(Environment.NewLine, game.BossCatalog.Select(b => state.BossProgress.IsDefeated(game.Id, b.Id) ? $"[x] {b.DisplayName}" : $"[ ] {b.DisplayName}"));
+            IEnumerable<BossDefinition> bosses = BossCatalogDisplayFilter.Apply(game, state.EldenRingSave);
+            string content = game.DisplayName + Environment.NewLine + string.Join(Environment.NewLine, bosses.Select(b => state.BossProgress.IsDefeated(game.Id, b.Id) ? $"[x] {b.DisplayName}" : $"[ ] {b.DisplayName}"));
             succeeded &= await AtomicWriteAsync(config.BossListPath, content).ConfigureAwait(false);
         }
         return succeeded;

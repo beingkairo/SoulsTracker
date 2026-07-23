@@ -70,4 +70,25 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
         Assert.True(await TextExportStatePublisher.WriteAsync(demonsSoulsState));
         Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
     }
+
+    [Fact]
+    public async Task EldenRingBossExportUsesTheSamePersistedScopeAndRequiredFilter()
+    {
+        string bossPath = Path.Combine(root, "elden-bosses.txt");
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(null, false, bossPath, true),
+            eldenRingNoticeAcknowledged: true,
+            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree, requiredBossesOnly: true));
+
+        Assert.True(await TextExportStatePublisher.WriteAsync(state));
+        string export = await File.ReadAllTextAsync(bossPath);
+        Assert.Contains("Promised Consort Radahn", export, StringComparison.Ordinal);
+        Assert.DoesNotContain("Blackgaol Knight", export, StringComparison.Ordinal);
+        Assert.Equal(7, export.Split(Environment.NewLine, StringSplitOptions.None).Length);
+    }
 }

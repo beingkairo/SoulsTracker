@@ -157,7 +157,10 @@ public sealed class SecureOverlayService : IAsyncDisposable
             : observation is not null && observation.GameId == state.SelectedGameId
                 ? TotalDeathsDisplayValue.FromRuntimeObservation(observation)
                 : TotalDeathsDisplayValue.Unavailable;
-        IEnumerable<OverlayBossEntry> bosses = state.SelectedGameId is null ? [] : GameCatalog.GetRequired(state.SelectedGameId).BossCatalog.Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
+        IEnumerable<OverlayBossEntry> bosses = state.SelectedGameId is null
+            ? []
+            : BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.EldenRingSave)
+                .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
         return new OverlaySnapshot(
             OverlaySnapshot.CurrentSchemaVersion,
             Interlocked.Read(ref sequence),

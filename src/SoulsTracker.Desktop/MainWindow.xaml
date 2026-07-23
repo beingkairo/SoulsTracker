@@ -357,6 +357,11 @@
                                     <TextBlock Width="90" VerticalAlignment="Center" Text="Character" />
                                     <ComboBox Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Elden Ring character slot" />
                                 </StackPanel>
+                                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                                    <TextBlock Width="90" VerticalAlignment="Center" Text="Boss list" />
+                                    <ComboBox Width="190" ItemsSource="{Binding EldenRingBossListScopes}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingBossListScope, Mode=OneWay}" SelectionChanged="EldenRingBossListScope_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Elden Ring boss list filter" />
+                                </StackPanel>
+                                <CheckBox x:Name="RequiredEldenRingBossesOnlyCheckBox" Margin="90,6,0,0" Content="Required bosses only" IsChecked="{Binding RequiredEldenRingBossesOnly, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Checked="RequiredEldenRingBossesOnly_Checked" Unchecked="RequiredEldenRingBossesOnly_Unchecked" AutomationProperties.Name="Required bosses only" />
                             </StackPanel>
                             <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4">
                                 <StackPanel>
