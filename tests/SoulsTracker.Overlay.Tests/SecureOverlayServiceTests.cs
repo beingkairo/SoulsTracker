@@ -164,7 +164,7 @@ public sealed class SecureOverlayServiceTests
         service.Publish(state);
 
         string snapshot = await ReceiveSnapshotAsync(service);
-        Assert.Contains("Promised Consort Radahn", snapshot, StringComparison.Ordinal);
+        Assert.Contains("Radahn (Promised Consort)", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("Blackgaol Knight", snapshot, StringComparison.Ordinal);
     }
 

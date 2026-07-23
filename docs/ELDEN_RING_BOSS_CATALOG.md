@@ -10,33 +10,33 @@ This is a practical streamer checklist, not a route solver. It contains fixed pr
 
 Base-game membership:
 
-- Godrick the Grafted
-- Rennala, Queen of the Full Moon
-- Starscourge Radahn
-- Rykard, Lord of Blasphemy
-- Mohg, Lord of Blood
-- Malenia, Blade of Miquella
-- Godfrey, First Elden Lord (Golden Shade)
-- Morgott, the Omen King
+- Godrick
+- Rennala
+- Radahn (Starscourge)
+- God-Devouring Serpent / Rykard
+- Mohg
+- Malenia
+- Godfrey (Golden Shade)
+- Morgott
 - Fire Giant
 - Godskin Duo
-- Maliketh, the Black Blade
-- Sir Gideon Ofnir, the All-Knowing
-- Godfrey, First Elden Lord (Hoarah Loux)
-- Radagon of the Golden Order / Elden Beast
+- Beast Clergyman / Maliketh
+- Gideon Ofnir
+- Godfrey (Hoarah Loux)
+- Radagon / Elden Beast
 
 The Great Rune route is branch-aware: a normal completion needs two Great Runes, but no particular two listed bosses are individually mandatory.
 
 Shadow of the Erdtree membership:
 
 - Divine Beast Dancing Lion
-- Rellana, Twin Moon Knight
+- Rellana
 - Golden Hippopotamus
-- Messmer the Impaler
-- Romina, Saint of the Bud
-- Promised Consort Radahn
+- Messmer
+- Romina
+- Radahn (Promised Consort)
 
-Promised Consort Radahn is the DLC completion gate. The earlier entries are concise route candidates for this manual checklist.
+Radahn (Promised Consort) is the DLC completion gate. The earlier entries are concise route candidates for this manual checklist.
 
 ## Catalog policy
 

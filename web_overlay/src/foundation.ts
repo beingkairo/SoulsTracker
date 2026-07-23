@@ -212,13 +212,6 @@ class OverlayClient {
         item.append(copy);
         if (markerAfterName) appendMarker();
 
-        if (boss.DlcLabel !== null && boss.DlcLabel.length > 0) {
-          const dlc = document.createElement("span");
-          dlc.className = "overlay-boss-dlc";
-          dlc.textContent = boss.DlcLabel;
-          copy.append(dlc);
-        }
-
         list.append(item);
       }
       list.style.rowGap = `${snapshot.Presentation.BossListAppearance.Padding}px`;

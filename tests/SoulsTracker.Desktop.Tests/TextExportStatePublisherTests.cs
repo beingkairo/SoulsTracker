@@ -87,7 +87,7 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
 
         Assert.True(await TextExportStatePublisher.WriteAsync(state));
         string export = await File.ReadAllTextAsync(bossPath);
-        Assert.Contains("Promised Consort Radahn", export, StringComparison.Ordinal);
+        Assert.Contains("Radahn (Promised Consort)", export, StringComparison.Ordinal);
         Assert.DoesNotContain("Blackgaol Knight", export, StringComparison.Ordinal);
         Assert.Equal(7, export.Split(Environment.NewLine, StringSplitOptions.None).Length);
     }

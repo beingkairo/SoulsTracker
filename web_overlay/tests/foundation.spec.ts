@@ -98,6 +98,21 @@ test("canonical Boss List route renders progress without redundant visible statu
   expect(await page.evaluate(() => (window as unknown as { pwned?: boolean }).pwned)).toBeUndefined();
 });
 
+test("Boss List category labels stay out of the overlay", async ({ page }) => {
+  await openOverlay(page, "/overlay/boss_list");
+  await emit(page, snapshot(1, {
+    selectedGame: "Elden Ring",
+    bosses: [
+      { DisplayName: "Radahn (Promised Consort)", DlcLabel: "Shadow of the Erdtree", IsDefeated: false },
+      { DisplayName: "Other DLC boss", DlcLabel: "The Old Hunters", IsDefeated: false },
+    ],
+  }));
+
+  await expect(page.getByTestId("boss-list")).toContainText("Radahn (Promised Consort)");
+  await expect(page.getByTestId("boss-list")).not.toContainText("Shadow of the Erdtree");
+  await expect(page.getByTestId("boss-list")).not.toContainText("The Old Hunters");
+});
+
 test("legacy boss alias ignores stale snapshots and reconnects after a disconnect", async ({ page }) => {
   await openOverlay(page, "/overlay/boss-progress");
   await emit(page, snapshot(2, { selectedGame: "Bloodborne", bosses: [{ DisplayName: "Vicar Amelia", DlcLabel: null, IsDefeated: false }] }));
