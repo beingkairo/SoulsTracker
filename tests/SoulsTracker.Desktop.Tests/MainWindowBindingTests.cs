@@ -47,11 +47,12 @@ public sealed class MainWindowBindingTests
 
         Assert.Contains("Text=\"Set up Elden Ring\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Elden Ring keeps all of your characters in one ER0000.sl2 save file.", xaml, StringComparison.Ordinal);
-        Assert.Contains("SoulsTracker normally looks for it automatically. If it can't find it, choose the file yourself, then pick the character you want to track.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Choose the save file, then pick the character you want to track.", xaml, StringComparison.Ordinal);
         Assert.Contains("Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
         Assert.Contains("Usual location: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("cannot guarantee this is safe", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("risk", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("normally looks for it automatically", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"Got it\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"Not now\"", xaml, StringComparison.Ordinal);
     }
