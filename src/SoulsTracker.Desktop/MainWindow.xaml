@@ -355,13 +355,8 @@
                                 </StackPanel>
                                 <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                                     <TextBlock Width="90" VerticalAlignment="Center" Text="Character" />
-                                    <ComboBox Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Elden Ring character slot" />
+                                    <ComboBox Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding CanSelectEldenRingProfile}" AutomationProperties.Name="Elden Ring character slot" />
                                 </StackPanel>
-                                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                                    <TextBlock Width="90" VerticalAlignment="Center" Text="Boss list" />
-                                    <ComboBox Width="190" ItemsSource="{Binding EldenRingBossListScopes}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingBossListScope, Mode=OneWay}" SelectionChanged="EldenRingBossListScope_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Elden Ring boss list filter" />
-                                </StackPanel>
-                                <CheckBox x:Name="RequiredEldenRingBossesOnlyCheckBox" Margin="90,6,0,0" Content="Required bosses only" IsChecked="{Binding RequiredEldenRingBossesOnly, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Checked="RequiredEldenRingBossesOnly_Checked" Unchecked="RequiredEldenRingBossesOnly_Unchecked" AutomationProperties.Name="Required bosses only" />
                             </StackPanel>
                             <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4">
                                 <StackPanel>
@@ -382,7 +377,22 @@
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death counter panel">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="TOTAL DEATHS" />
-                            <TextBlock x:Name="TotalDeathsTextBlock" Margin="0,6,0,0" FontSize="42" FontWeight="SemiBold" Text="{Binding TotalDeathsText}" TextWrapping="Wrap" AutomationProperties.Name="Current total deaths" />
+                            <TextBlock x:Name="TotalDeathsTextBlock" Margin="0,6,0,0" Text="{Binding TotalDeathsText}" TextWrapping="Wrap" AutomationProperties.Name="Current total deaths">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="FontSize" Value="16" />
+                                        <Setter Property="FontWeight" Value="Normal" />
+                                        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsTotalDeathsValueNumeric}" Value="True">
+                                                <Setter Property="FontSize" Value="42" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <StackPanel Margin="0,12,0,0" Orientation="Horizontal" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <Button Width="78" Click="IncrementDeaths_Click" IsEnabled="{Binding ControlsEnabled}" Content="+1" AutomationProperties.Name="Increase manual deaths" />
                                 <Button Width="78" Margin="8,0,0,0" Click="DecrementDeaths_Click" IsEnabled="{Binding CanDecrementManualDeaths}" Content="−1" AutomationProperties.Name="Decrease manual deaths" />
@@ -419,7 +429,14 @@
 
                 <Border x:Name="BossProgressPanel" Grid.Column="2" Style="{StaticResource Panel}" AutomationProperties.Name="Boss progress panel">
                     <DockPanel LastChildFill="True">
-                        <StackPanel DockPanel.Dock="Top"><TextBlock Style="{StaticResource PanelTitle}" Text="BOSSES" /><TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12" Text="Manual progress for the selected game." /></StackPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <WrapPanel>
+                                <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Style="{StaticResource PanelTitle}" Text="BOSSES" />
+                                <ComboBox x:Name="EldenRingBossListScopeSelector" Width="190" Margin="0,0,8,0" ItemsSource="{Binding EldenRingBossListScopes}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingBossListScope, Mode=OneWay}" SelectionChanged="EldenRingBossListScope_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring boss list filter" />
+                                <CheckBox x:Name="RequiredEldenRingBossesOnlyCheckBox" Margin="0,5,0,0" VerticalAlignment="Center" Content="Required bosses only" IsChecked="{Binding RequiredEldenRingBossesOnly, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" Checked="RequiredEldenRingBossesOnly_Checked" Unchecked="RequiredEldenRingBossesOnly_Unchecked" AutomationProperties.Name="Required bosses only" />
+                            </WrapPanel>
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12" Text="Manual progress for the selected game." />
+                        </StackPanel>
                         <ScrollViewer x:Name="BossesScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Boss checklist">
                             <ItemsControl ItemsSource="{Binding Bosses}"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Margin="0,3" Content="{Binding DisplayName}" IsChecked="{Binding IsDefeated, Mode=OneWay}" IsEnabled="{Binding DataContext.ControlsEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Click="BossCheckBox_Click" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                         </ScrollViewer>

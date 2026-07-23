@@ -63,6 +63,32 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void EldenRingChecklistFiltersLiveOnlyInTheBossesHeader()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+        string gameSession = Between(xaml, "AutomationProperties.Name=\"Game session panel\"", "AutomationProperties.Name=\"Death counter panel\"");
+        string bosses = Between(xaml, "x:Name=\"BossProgressPanel\"", "x:Name=\"OverlayWorkspaceTab\"");
+
+        Assert.DoesNotContain("EldenRingBossListScopes", gameSession, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequiredEldenRingBossesOnlyCheckBox", gameSession, StringComparison.Ordinal);
+        Assert.Contains("EldenRingBossListScopes", bosses, StringComparison.Ordinal);
+        Assert.Contains("RequiredEldenRingBossesOnlyCheckBox", bosses, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding IsEldenRingSelected", bosses, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainTotalDeathsUsesLargeTypographyOnlyForNumericValuesAndCharacterSelectorUsesAvailabilityBinding()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+        string counter = Between(xaml, "x:Name=\"TotalDeathsTextBlock\"", "AutomationProperties.Name=\"Increase manual deaths\"");
+
+        Assert.Contains("Binding IsTotalDeathsValueNumeric", counter, StringComparison.Ordinal);
+        Assert.Contains("FontSize\" Value=\"42\"", counter, StringComparison.Ordinal);
+        Assert.Contains("MutedTextBrush", counter, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanSelectEldenRingProfile}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OverlayAppearanceEditorUsesScopedControlsWithoutPresetsOrTotalAlignment()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
@@ -133,6 +159,10 @@ public sealed class MainWindowBindingTests
         Assert.Contains("SolidColorOnly = true", colorField, StringComparison.Ordinal);
         Assert.Contains("WindowInteropHelper(owner).Handle", colorField, StringComparison.Ordinal);
         Assert.Contains("dialog.ShowDialog(new NativeWindowOwner(ownerHandle))", colorField, StringComparison.Ordinal);
+        Assert.Contains("Open native color palette", colorField, StringComparison.Ordinal);
+        Assert.Contains("CreatePaletteButtonTemplate", colorField, StringComparison.Ordinal);
+        Assert.DoesNotContain("AccentBrush", colorField, StringComparison.Ordinal);
+        Assert.Contains("BorderThickness = new Thickness(0)", colorField, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateWheel", colorField, StringComparison.Ordinal);
         Assert.DoesNotContain("Popup picker", colorField, StringComparison.Ordinal);
     }

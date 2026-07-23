@@ -137,6 +137,72 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
+    public async Task EldenRingCharacterSelectorRequiresAnExistingSelectedSaveAndHonorsGlobalControlState()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "SoulsTracker.EldenRingProfileAvailability", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string savePath = Path.Combine(directory, "ER0000.sl2");
+        await File.WriteAllTextAsync(savePath, "local test file");
+        try
+        {
+            PersistentTrackerState state = new(
+                PersistentTrackerState.CurrentSchemaVersion,
+                GameId.EldenRing,
+                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+                BossProgress.Empty,
+                OverlayConfiguration.Default,
+                eldenRingNoticeAcknowledged: true,
+                eldenRingSave: new EldenRingSaveConfiguration(savePath, 2));
+            await using TestHarness harness = new(state);
+
+            Assert.False(harness.ViewModel.ControlsEnabled);
+            Assert.False(harness.ViewModel.CanSelectEldenRingProfile);
+            await harness.ViewModel.InitializeAsync();
+            Assert.True(harness.ViewModel.CanSelectEldenRingProfile);
+
+            File.Delete(savePath);
+            Assert.False(harness.ViewModel.CanSelectEldenRingProfile);
+            Assert.Equal(2, harness.Repository.State.EldenRingSave.SlotIndex);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task EldenRingCharacterSelectorStaysUnavailableWithoutASaveSelection()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true);
+        await using TestHarness harness = new(state);
+
+        await harness.ViewModel.InitializeAsync();
+
+        Assert.True(harness.ViewModel.ControlsEnabled);
+        Assert.False(harness.ViewModel.CanSelectEldenRingProfile);
+    }
+
+    [Fact]
+    public async Task TotalDeathsPresentationDistinguishesNumericCountersFromCompactStatuses()
+    {
+        await using TestHarness manual = new(WithSelectedGame(GameId.Bloodborne, 12));
+        await manual.ViewModel.InitializeAsync();
+        Assert.True(manual.ViewModel.IsTotalDeathsValueNumeric);
+
+        await using TestHarness automatic = new(PersistentTrackerState.Default);
+        await automatic.ViewModel.InitializeAsync();
+        await automatic.ViewModel.SelectGameAsync(automatic.Game(GameId.Sekiro));
+        Assert.False(automatic.ViewModel.IsTotalDeathsValueNumeric);
+        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, automatic.ViewModel.TotalDeathsText);
+    }
+
+    [Fact]
     public async Task CenterAlignmentClearsAndHidesBossMarkersWithoutApply()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);

@@ -184,6 +184,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             if (SetField(ref isLoading, value))
             {
+                OnPropertyChanged(nameof(ControlsEnabled));
+                OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
             }
@@ -200,6 +202,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
+                OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
             }
@@ -221,8 +224,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string TotalDeathsText
     {
         get => totalDeathsText;
-        private set => SetField(ref totalDeathsText, value);
+        private set
+        {
+            if (SetField(ref totalDeathsText, value))
+            {
+                OnPropertyChanged(nameof(IsTotalDeathsValueNumeric));
+            }
+        }
     }
+
+    /// <summary>Controls whether the Main-tab Total Deaths text uses counter or compact status presentation.</summary>
+    public bool IsTotalDeathsValueNumeric => long.TryParse(TotalDeathsText, out _);
 
     public string? RuntimeReaderStatusText
     {
@@ -251,6 +263,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsBloodborneSelected => state?.SelectedGameId == GameId.Bloodborne;
     public bool IsEldenRingSelected => state?.SelectedGameId == GameId.EldenRing;
     public string? EldenRingSaveFileName => state?.EldenRingSave.FileName;
+    /// <summary>True only when the selected local Elden Ring save is still available for slot selection.</summary>
+    public bool CanSelectEldenRingProfile => ControlsEnabled
+        && IsEldenRingSelected
+        && IsAvailableEldenRingSaveFile(state?.EldenRingSave.LocalPath);
     public EldenRingProfileSlotChoice? SelectedEldenRingProfileSlot { get; private set; }
     public bool IsManualGameSelected => state?.SelectedGameId is GameId id && IsManualGame(id);
 
@@ -440,7 +456,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(slot);
-        if (!ControlsEnabled) return;
+        if (!CanSelectEldenRingProfile) return;
         await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses, state?.EldenRingSave.RequiredBossesOnly ?? false), cancellationToken);
     }
 
@@ -925,6 +941,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBloodborneSelected));
         OnPropertyChanged(nameof(IsEldenRingSelected));
         OnPropertyChanged(nameof(EldenRingSaveFileName));
+        OnPropertyChanged(nameof(CanSelectEldenRingProfile));
         OnPropertyChanged(nameof(IsManualGameSelected));
         OnPropertyChanged(nameof(IsCenterBossAlignment));
         OnPropertyChanged(nameof(AreBossMarkerControlsVisible));
@@ -1023,6 +1040,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         Enumerable.Range(EldenRingSaveConfiguration.MinimumSlotIndex, EldenRingSaveConfiguration.MaximumSlotIndex + 1)
             .Select(static index => new EldenRingProfileSlotChoice(index))
             .ToArray();
+
+    private static bool IsAvailableEldenRingSaveFile(string? localPath) =>
+        localPath is not null
+        && string.Equals(Path.GetFileName(localPath), "ER0000.sl2", StringComparison.OrdinalIgnoreCase)
+        && File.Exists(localPath);
 
     private void RefreshDeathSoundStatus()
     {

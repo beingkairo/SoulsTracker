@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Interop;
+using System.Windows.Markup;
 using System.Windows.Media;
 using Forms = System.Windows.Forms;
 
@@ -43,7 +44,13 @@ public sealed class ColorField : Grid
         System.Windows.Controls.Button button = new()
         {
             MinWidth = 32,
-            Padding = new Thickness(7, 5, 7, 5),
+            MinHeight = 30,
+            Padding = new Thickness(7, 4, 7, 4),
+            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 29, 35)),
+            BorderBrush = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            FocusVisualStyle = null,
+            Template = CreatePaletteButtonTemplate(),
             ToolTip = "Choose color"
         };
         AutomationProperties.SetName(button, "Open native color palette");
@@ -51,7 +58,7 @@ public sealed class ColorField : Grid
         {
             Width = 16,
             Height = 16,
-            CornerRadius = new CornerRadius(2),
+            CornerRadius = new CornerRadius(8),
             BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(184, 192, 204)),
             BorderThickness = new Thickness(1),
             HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
@@ -99,6 +106,55 @@ public sealed class ColorField : Grid
 
     private void UpdateSwatch(string? value) =>
         swatch.Background = new SolidColorBrush(Parse(value) ?? Colors.Transparent);
+
+    private static ControlTemplate CreatePaletteButtonTemplate()
+    {
+        FrameworkElementFactory surface = new(typeof(Border));
+        surface.Name = "PaletteButtonSurface";
+        surface.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.Control.BackgroundProperty));
+        surface.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(System.Windows.Controls.Control.BorderBrushProperty));
+        surface.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(System.Windows.Controls.Control.BorderThicknessProperty));
+        surface.SetValue(Border.CornerRadiusProperty, new CornerRadius(0, 3, 3, 0));
+        surface.SetValue(Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.Control.PaddingProperty));
+
+        FrameworkElementFactory presenter = new(typeof(ContentPresenter));
+        presenter.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        presenter.SetValue(VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        surface.AppendChild(presenter);
+
+        ControlTemplate template = new(typeof(System.Windows.Controls.Button)) { VisualTree = surface };
+        Trigger hover = new() { Property = IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter
+        {
+            TargetName = "PaletteButtonSurface",
+            Property = Border.BackgroundProperty,
+            Value = new SolidColorBrush(System.Windows.Media.Color.FromRgb(32, 36, 43))
+        });
+        Trigger focused = new() { Property = IsKeyboardFocusedProperty, Value = true };
+        focused.Setters.Add(new Setter
+        {
+            TargetName = "PaletteButtonSurface",
+            Property = Border.BorderBrushProperty,
+            Value = new SolidColorBrush(System.Windows.Media.Color.FromRgb(184, 192, 204))
+        });
+        focused.Setters.Add(new Setter
+        {
+            TargetName = "PaletteButtonSurface",
+            Property = Border.BorderThicknessProperty,
+            Value = new Thickness(1, 1, 1, 1)
+        });
+        Trigger disabled = new() { Property = IsEnabledProperty, Value = false };
+        disabled.Setters.Add(new Setter
+        {
+            TargetName = "PaletteButtonSurface",
+            Property = UIElement.OpacityProperty,
+            Value = 0.45d
+        });
+        template.Triggers.Add(hover);
+        template.Triggers.Add(focused);
+        template.Triggers.Add(disabled);
+        return template;
+    }
 
     private static System.Windows.Media.Color? Parse(string? text)
     {
