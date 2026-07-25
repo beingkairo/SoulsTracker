@@ -12,6 +12,7 @@ namespace SoulsTracker.Desktop;
 /// <summary>Dark hex input paired with the Windows color palette dialog.</summary>
 public sealed class ColorField : Grid
 {
+    private static readonly Style KeyboardFocusVisualStyle = CreateKeyboardFocusVisualStyle();
     private readonly Border swatch;
 
     public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
@@ -49,7 +50,7 @@ public sealed class ColorField : Grid
             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 29, 35)),
             BorderBrush = System.Windows.Media.Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            FocusVisualStyle = null,
+            FocusVisualStyle = KeyboardFocusVisualStyle,
             Template = CreatePaletteButtonTemplate(),
             ToolTip = "Choose color"
         };
@@ -130,19 +131,6 @@ public sealed class ColorField : Grid
             Property = Border.BackgroundProperty,
             Value = new SolidColorBrush(System.Windows.Media.Color.FromRgb(32, 36, 43))
         });
-        Trigger focused = new() { Property = IsKeyboardFocusedProperty, Value = true };
-        focused.Setters.Add(new Setter
-        {
-            TargetName = "PaletteButtonSurface",
-            Property = Border.BorderBrushProperty,
-            Value = new SolidColorBrush(System.Windows.Media.Color.FromRgb(184, 192, 204))
-        });
-        focused.Setters.Add(new Setter
-        {
-            TargetName = "PaletteButtonSurface",
-            Property = Border.BorderThicknessProperty,
-            Value = new Thickness(1, 1, 1, 1)
-        });
         Trigger disabled = new() { Property = IsEnabledProperty, Value = false };
         disabled.Setters.Add(new Setter
         {
@@ -151,9 +139,24 @@ public sealed class ColorField : Grid
             Value = 0.45d
         });
         template.Triggers.Add(hover);
-        template.Triggers.Add(focused);
         template.Triggers.Add(disabled);
         return template;
+    }
+
+    private static Style CreateKeyboardFocusVisualStyle()
+    {
+        FrameworkElementFactory border = new(typeof(Border));
+        border.SetValue(Border.BorderBrushProperty, new SolidColorBrush(System.Windows.Media.Color.FromRgb(167, 139, 250)));
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+        border.SetValue(FrameworkElement.MarginProperty, new Thickness(-2));
+        border.SetValue(UIElement.IsHitTestVisibleProperty, false);
+        border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+
+        ControlTemplate template = new(typeof(System.Windows.Controls.Button)) { VisualTree = border };
+        var style = new Style(typeof(System.Windows.Controls.Button));
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        return style;
     }
 
     private static System.Windows.Media.Color? Parse(string? text)

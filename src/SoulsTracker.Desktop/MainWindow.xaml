@@ -27,6 +27,15 @@
         <SolidColorBrush x:Key="SuccessBrush" Color="#70D6A7" />
         <SolidColorBrush x:Key="WaitingBrush" Color="#F4C66A" />
         <SolidColorBrush x:Key="DangerBrush" Color="#FF8C8C" />
+        <Style x:Key="KeyboardFocusVisual" TargetType="Control">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Control">
+                        <Border Margin="-2" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" CornerRadius="5" IsHitTestVisible="False" SnapsToDevicePixels="True" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
@@ -71,7 +80,7 @@
             </Setter>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
             <Setter Property="OverridesDefaultStyle" Value="True" />
             <Setter Property="MinHeight" Value="30" />
             <Setter Property="Padding" Value="8,5" />
@@ -180,7 +189,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="14,8" />
             <Setter Property="Margin" Value="0" />
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
@@ -196,7 +205,7 @@
             </Setter>
         </Style>
         <Style TargetType="ComboBox">
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
             <Setter Property="OverridesDefaultStyle" Value="True" />
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="8,4" />
@@ -284,6 +293,7 @@
             <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}" />
         </Style>
         <Style TargetType="CheckBox">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />

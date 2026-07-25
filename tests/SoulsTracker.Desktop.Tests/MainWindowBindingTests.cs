@@ -178,16 +178,18 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void TabsAndColorFieldUseNeutralFocusAndTheNativeWindowsPalette()
+    public void TabsAndColorFieldUseKeyboardOnlyFocusVisualsAndTheNativeWindowsPalette()
     {
         string root = FindRepositoryRoot();
         string xaml = File.ReadAllText(Path.Combine(root, "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
         string tabStyle = Between(xaml, "<Style x:Key=\"DarkTabItem\"", "</Style>");
         string colorField = File.ReadAllText(Path.Combine(root, "src", "SoulsTracker.Desktop", "ColorField.cs"));
 
-        Assert.DoesNotContain("AccentBrush", tabStyle, StringComparison.Ordinal);
+        Assert.Contains("FocusVisualStyle\" Value=\"{StaticResource KeyboardFocusVisual}\"", tabStyle, StringComparison.Ordinal);
         Assert.DoesNotContain("IsKeyboardFocused", tabStyle, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Margin\" Value=\"0\"", tabStyle, StringComparison.Ordinal);
+        Assert.Contains("<Style x:Key=\"KeyboardFocusVisual\" TargetType=\"Control\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("Margin=\"-2\" BorderBrush=\"{StaticResource AccentBrush}\" BorderThickness=\"2\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Forms.ColorDialog", colorField, StringComparison.Ordinal);
         Assert.Contains("AllowFullOpen = true", colorField, StringComparison.Ordinal);
         Assert.Contains("FullOpen = true", colorField, StringComparison.Ordinal);
@@ -196,7 +198,9 @@ public sealed class MainWindowBindingTests
         Assert.Contains("dialog.ShowDialog(new NativeWindowOwner(ownerHandle))", colorField, StringComparison.Ordinal);
         Assert.Contains("Open native color palette", colorField, StringComparison.Ordinal);
         Assert.Contains("CreatePaletteButtonTemplate", colorField, StringComparison.Ordinal);
-        Assert.DoesNotContain("AccentBrush", colorField, StringComparison.Ordinal);
+        Assert.Contains("FocusVisualStyle = KeyboardFocusVisualStyle", colorField, StringComparison.Ordinal);
+        Assert.Contains("CreateKeyboardFocusVisualStyle", colorField, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsKeyboardFocusedProperty", colorField, StringComparison.Ordinal);
         Assert.Contains("BorderThickness = new Thickness(0)", colorField, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateWheel", colorField, StringComparison.Ordinal);
         Assert.DoesNotContain("Popup picker", colorField, StringComparison.Ordinal);
@@ -1000,8 +1004,10 @@ public sealed class MainWindowBindingTests
                 Assert.NotNull(Assert.IsType<Style>(window.Resources[typeof(ScrollBar)]).Setters.OfType<Setter>().Single(setter => setter.Property == Control.TemplateProperty).Value);
                 AssertExplicitDarkComboBoxTemplate(Assert.IsType<ComboBox>(window.FindName("GameSelector")));
                 AssertExplicitDarkComboBoxTemplate(bossMode);
-                AssertNoPersistentFocusVisual(Assert.IsType<TextBox>(window.FindName("TotalDeathsOverlayUrlTextBox")));
-                AssertNoPersistentFocusVisual(bossMode);
+                AssertKeyboardFocusVisual(Assert.IsType<TextBox>(window.FindName("TotalDeathsOverlayUrlTextBox")));
+                AssertKeyboardFocusVisual(bossMode);
+                AssertKeyboardFocusVisual(Assert.IsType<TabItem>(window.FindName("MainWorkspaceTab")));
+                AssertKeyboardFocusVisual(Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox")));
                 AssertComboBoxAccentIsLimitedToTheOpenDropDown(bossMode);
 
                 Border legacyPanel = Assert.IsType<Border>(window.FindName("LegacyImportPanel"));
@@ -1156,10 +1162,9 @@ public sealed class MainWindowBindingTests
         Assert.IsType<Popup>(comboBox.Template.FindName("PART_Popup", comboBox));
     }
 
-    private static void AssertNoPersistentFocusVisual(Control control)
+    private static void AssertKeyboardFocusVisual(Control control)
     {
-        Assert.Null(control.FocusVisualStyle);
-        Assert.True(control.OverridesDefaultStyle);
+        Assert.NotNull(control.FocusVisualStyle);
     }
 
     private static void AssertComboBoxAccentIsLimitedToTheOpenDropDown(ComboBox comboBox)
