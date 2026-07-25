@@ -462,11 +462,14 @@
                                 <CheckBox x:Name="RequiredEldenRingBossesOnlyCheckBox" Margin="0,5,0,0" VerticalAlignment="Center" Content="Required bosses only" IsChecked="{Binding RequiredEldenRingBossesOnly, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" Checked="RequiredEldenRingBossesOnly_Checked" Unchecked="RequiredEldenRingBossesOnly_Unchecked" AutomationProperties.Name="Required bosses only" />
                             </WrapPanel>
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12" Text="Manual progress for the selected game." />
+                            <Label Target="{Binding ElementName=BossSearchTextBox}" Content="Search bosses" />
+                            <TextBox x:Name="BossSearchTextBox" Margin="0,0,0,12" Text="{Binding BossSearchQuery, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Search bosses" AutomationProperties.HelpText="Filters the desktop boss checklist by boss name or DLC." />
                         </StackPanel>
                         <ScrollViewer x:Name="BossesScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Boss checklist">
                             <StackPanel>
                                 <TextBlock x:Name="NoBossesDisplayedTextBlock" Style="{StaticResource MutedText}" Text="No bosses being displayed" Visibility="{Binding IsBossListEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="No bosses being displayed" />
-                                <ItemsControl ItemsSource="{Binding Bosses}"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Margin="0,3" Content="{Binding DisplayName}" IsChecked="{Binding IsDefeated, Mode=OneWay}" IsEnabled="{Binding DataContext.ControlsEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Click="BossCheckBox_Click" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                <TextBlock x:Name="NoBossSearchResultsTextBlock" Style="{StaticResource MutedText}" Text="No matching bosses were found." Visibility="{Binding IsBossSearchNoResults, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="No matching bosses were found" />
+                                <ItemsControl x:Name="BossChecklistItems" ItemsSource="{Binding FilteredBosses}"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Margin="0,3" Content="{Binding DisplayName}" IsChecked="{Binding IsDefeated, Mode=OneWay}" IsEnabled="{Binding DataContext.ControlsEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Click="BossCheckBox_Click" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                             </StackPanel>
                         </ScrollViewer>
                     </DockPanel>

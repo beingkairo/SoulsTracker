@@ -163,6 +163,55 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void BossSearchBindingFiltersTheDesktopChecklistWithoutChangingOverlayOutput()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var repository = new PresentationRepository();
+            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                viewModel.SelectGameAsync(viewModel.GameChoices.Single(choice => choice.GameId == GameId.Ds1)).GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                TextBox search = Assert.IsType<TextBox>(window.FindName("BossSearchTextBox"));
+                ItemsControl checklist = Assert.IsType<ItemsControl>(window.FindName("BossChecklistItems"));
+                TextBlock noResults = Assert.IsType<TextBlock>(window.FindName("NoBossSearchResultsTextBlock"));
+                Binding searchBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(search, TextBox.TextProperty));
+                Assert.Equal(nameof(DesktopTrackerViewModel.BossSearchQuery), searchBinding.Path?.Path);
+                Assert.Equal(UpdateSourceTrigger.PropertyChanged, searchBinding.UpdateSourceTrigger);
+                AssertKeyboardFocusVisual(search);
+                string? overlayBeforeSearch = viewModel.BossListSceneUrl;
+                int savesBeforeSearch = repository.SaveCount;
+
+                search.Text = "aSyLuM";
+                WaitForDispatcher(() => checklist.Items.Count == 1 && viewModel.BossSearchQuery == "aSyLuM");
+                Assert.Equal("Asylum Demon", Assert.Single(viewModel.FilteredBosses).DisplayName);
+                Assert.Equal(Visibility.Collapsed, noResults.Visibility);
+
+                search.Text = "no such boss";
+                WaitForDispatcher(() => checklist.Items.Count == 0 && noResults.Visibility == Visibility.Visible);
+                Assert.True(viewModel.IsBossSearchNoResults);
+
+                search.Clear();
+                WaitForDispatcher(() => checklist.Items.Count == viewModel.Bosses.Count && noResults.Visibility == Visibility.Collapsed);
+                Assert.Equal(overlayBeforeSearch, viewModel.BossListSceneUrl);
+                Assert.Equal(savesBeforeSearch, repository.SaveCount);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
     public void MainTotalDeathsUsesLargeTypographyOnlyForNumericValuesAndCharacterSelectorUsesAvailabilityBinding()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));

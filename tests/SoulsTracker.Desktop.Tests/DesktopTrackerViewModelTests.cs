@@ -594,6 +594,46 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
+    public async Task BossSearchFiltersTheDesktopProjectionWithoutPersistingOrChangingOverlayOutput()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.EldenRing));
+        int savesBeforeSearch = harness.Repository.SaveCount;
+        string? overlayBeforeSearch = harness.ViewModel.BossListSceneUrl;
+        EldenRingSaveConfiguration savedFilter = harness.Repository.State.EldenRingSave;
+        BossProgress progressBeforeSearch = harness.Repository.State.BossProgress;
+
+        Assert.Equal(harness.ViewModel.Bosses.Select(boss => boss.BossId), harness.ViewModel.FilteredBosses.Select(boss => boss.BossId));
+
+        harness.ViewModel.BossSearchQuery = "gOdRiCk";
+        BossChoice godrick = Assert.Single(harness.ViewModel.FilteredBosses);
+        Assert.Equal("Godrick", godrick.DisplayName);
+        Assert.False(harness.ViewModel.IsBossSearchNoResults);
+
+        harness.ViewModel.BossSearchQuery = "sHaDoW oF tHe ErDtReE";
+        Assert.NotEmpty(harness.ViewModel.FilteredBosses);
+        Assert.All(harness.ViewModel.FilteredBosses, boss => Assert.Equal("Shadow of the Erdtree", boss.DlcLabel));
+
+        harness.ViewModel.BossSearchQuery = "does not exist";
+        Assert.Empty(harness.ViewModel.FilteredBosses);
+        Assert.True(harness.ViewModel.IsBossSearchNoResults);
+
+        harness.ViewModel.BossSearchQuery = string.Empty;
+        Assert.Equal(harness.ViewModel.Bosses.Select(boss => boss.BossId), harness.ViewModel.FilteredBosses.Select(boss => boss.BossId));
+        Assert.False(harness.ViewModel.IsBossSearchNoResults);
+        Assert.Equal(savesBeforeSearch, harness.Repository.SaveCount);
+        Assert.Equal(overlayBeforeSearch, harness.ViewModel.BossListSceneUrl);
+        Assert.Equal(savedFilter, harness.Repository.State.EldenRingSave);
+        Assert.Same(progressBeforeSearch, harness.Repository.State.BossProgress);
+
+        harness.ViewModel.BossSearchQuery = "gOdRiCk";
+        await harness.ViewModel.SetBossDefeatedAsync(Assert.Single(harness.ViewModel.FilteredBosses), true);
+        Assert.True(Assert.Single(harness.ViewModel.FilteredBosses).IsDefeated);
+        Assert.Equal(savesBeforeSearch + 1, harness.Repository.SaveCount);
+    }
+
+    [Fact]
     public async Task EldenRingIsSelectableOnlyThroughItsAcknowledgementGate()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);

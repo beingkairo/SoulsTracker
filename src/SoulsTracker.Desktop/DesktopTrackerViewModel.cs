@@ -72,6 +72,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool legacyDraftCompactTitle = true;
     private EldenRingBossListScopeChoice selectedEldenRingBossListScope = EldenRingBossListScopeChoice.All[0];
     private bool requiredEldenRingBossesOnly;
+    private string bossSearchQuery = string.Empty;
 
     public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null)
     {
@@ -114,6 +115,24 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public ObservableCollection<GameChoice> GameChoices { get; }
 
     public ObservableCollection<BossChoice> Bosses { get; } = [];
+
+    /// <summary>Gets the current desktop-only boss checklist projection after search filtering.</summary>
+    public ObservableCollection<BossChoice> FilteredBosses { get; } = [];
+
+    /// <summary>Gets or sets the transient desktop boss-search query.</summary>
+    public string BossSearchQuery
+    {
+        get => bossSearchQuery;
+        set
+        {
+            if (!SetField(ref bossSearchQuery, value ?? string.Empty)) return;
+            RefreshFilteredBosses();
+        }
+    }
+
+    /// <summary>Gets whether the current non-empty search has no matching bosses in the displayed scope.</summary>
+    public bool IsBossSearchNoResults =>
+        !string.IsNullOrWhiteSpace(BossSearchQuery) && Bosses.Count > 0 && FilteredBosses.Count == 0;
 
     /// <summary>Gets whether the selected game's current boss filter has no entries to display.</summary>
     public bool IsBossListEmpty => state?.SelectedGameId is not null && Bosses.Count == 0;
@@ -824,6 +843,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 Bosses.Add(new BossChoice(boss, state.BossProgress.IsDefeated(selectedId, boss.Id)));
             }
         }
+        RefreshFilteredBosses();
 
         UpdateTotalDeathsText();
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
@@ -850,6 +870,23 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                         : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForSaveFile
                             ? "Choose an Elden Ring save file to begin tracking."
                             : GameTotalDeathsUnavailableMessage;
+    }
+
+    private void RefreshFilteredBosses()
+    {
+        string query = BossSearchQuery.Trim();
+        FilteredBosses.Clear();
+        foreach (BossChoice boss in Bosses)
+        {
+            if (query.Length == 0 ||
+                boss.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                boss.DlcLabel?.Contains(query, StringComparison.OrdinalIgnoreCase) == true)
+            {
+                FilteredBosses.Add(boss);
+            }
+        }
+
+        OnPropertyChanged(nameof(IsBossSearchNoResults));
     }
 
     private static string LoadFailureMessage(TrackerStateLoadFailureKind kind) => kind switch
