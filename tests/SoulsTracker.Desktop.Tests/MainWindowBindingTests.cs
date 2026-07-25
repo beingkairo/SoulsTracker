@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Media;
 using SoulsTracker.Application;
@@ -55,6 +56,57 @@ public sealed class MainWindowBindingTests
         Assert.DoesNotContain("normally looks for it automatically", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"Got it\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"Not now\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EldenRingSetupIsKeyboardModalAndRestoresGameSelectionFocus()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                ComboBox gameSelector = Assert.IsType<ComboBox>(window.FindName("GameSelector"));
+                Grid overlay = Assert.IsType<Grid>(window.FindName("EldenRingNoticeOverlay"));
+                Button cancel = Assert.IsType<Button>(window.FindName("EldenRingNoticeCancelButton"));
+                Button confirm = Assert.IsType<Button>(window.FindName("EldenRingNoticeConfirmButton"));
+                GameChoice eldenRing = viewModel.GameChoices.Single(choice => choice.GameId == GameId.EldenRing);
+
+                Assert.False(viewModel.RequestGameSelection(eldenRing));
+                WaitForDispatcher(() => overlay.Visibility == Visibility.Visible && Keyboard.FocusedElement == confirm);
+                Assert.True(overlay.IsKeyboardFocusWithin);
+
+                Keyboard.Focus(gameSelector);
+                WaitForDispatcher(() => Keyboard.FocusedElement == confirm);
+
+                Assert.True(confirm.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next)));
+                WaitForDispatcher(() => Keyboard.FocusedElement == cancel);
+                Assert.True(cancel.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous)));
+                WaitForDispatcher(() => Keyboard.FocusedElement == confirm);
+
+                Assert.True(window.HandleEldenRingNoticeKeyAsync(Key.Escape).GetAwaiter().GetResult());
+                WaitForDispatcher(() => overlay.Visibility == Visibility.Collapsed && Keyboard.FocusedElement == gameSelector);
+                Assert.Null(viewModel.SelectedGame);
+
+                Assert.False(viewModel.RequestGameSelection(eldenRing));
+                WaitForDispatcher(() => overlay.Visibility == Visibility.Visible && Keyboard.FocusedElement == confirm);
+                Assert.True(window.HandleEldenRingNoticeKeyAsync(Key.Enter).GetAwaiter().GetResult());
+                WaitForDispatcher(() => overlay.Visibility == Visibility.Collapsed && Keyboard.FocusedElement == gameSelector);
+                Assert.Equal(GameId.EldenRing, viewModel.SelectedGame?.GameId);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
     }
 
     [Fact]

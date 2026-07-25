@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Navigation;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 using SoulsTracker.Domain;
 
@@ -29,6 +30,14 @@ public partial class MainWindow : Window
     private void PreviewViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(DesktopTrackerViewModel.TotalDeathsPreviewUri) or nameof(DesktopTrackerViewModel.BossListPreviewUri)) RefreshPreviews();
+        if (e.PropertyName == nameof(DesktopTrackerViewModel.IsEldenRingNoticeVisible))
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (previewViewModel?.IsEldenRingNoticeVisible == true) FocusEldenRingNoticePrimaryAction();
+                else RestoreGameSelectorFocus();
+            });
+        }
     }
 
     private void RefreshPreviews()
@@ -80,20 +89,12 @@ public partial class MainWindow : Window
 
     private async void ConfirmEldenRingNotice_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel)
-        {
-            await viewModel.ConfirmEldenRingNoticeAsync();
-            GameSelector.SelectedItem = viewModel.SelectedGame;
-        }
+        await ConfirmEldenRingNoticeAsync();
     }
 
     private void CancelEldenRingNotice_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel)
-        {
-            viewModel.CancelEldenRingNotice();
-            GameSelector.SelectedItem = viewModel.SelectedGame;
-        }
+        CancelEldenRingNotice();
     }
 
     private void GameSelector_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -165,9 +166,15 @@ public partial class MainWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (await HandleEldenRingNoticeKeyAsync(key))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (DataContext is not DesktopTrackerViewModel { IsHotkeyRecording: true } viewModel) return;
 
-        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (key == Key.Escape)
         {
             viewModel.CancelHotkeyRecording();
@@ -186,6 +193,81 @@ public partial class MainWindow : Window
 
         viewModel.CaptureRecordedHotkey(key, Keyboard.Modifiers);
         e.Handled = true;
+    }
+
+    internal async Task<bool> HandleEldenRingNoticeKeyAsync(Key key)
+    {
+        if (DataContext is not DesktopTrackerViewModel { IsEldenRingNoticeVisible: true }) return false;
+
+        if (key == Key.Escape)
+        {
+            CancelEldenRingNotice();
+            return true;
+        }
+
+        if (key == Key.Enter)
+        {
+            await ConfirmEldenRingNoticeAsync();
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task ConfirmEldenRingNoticeAsync()
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.ConfirmEldenRingNoticeAsync();
+            GameSelector.SelectedItem = viewModel.SelectedGame;
+            RestoreGameSelectorFocus();
+        }
+    }
+
+    private void CancelEldenRingNotice()
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel)
+        {
+            viewModel.CancelEldenRingNotice();
+            GameSelector.SelectedItem = viewModel.SelectedGame;
+            RestoreGameSelectorFocus();
+        }
+    }
+
+    private void FocusEldenRingNoticePrimaryAction()
+    {
+        if (DataContext is not DesktopTrackerViewModel { IsEldenRingNoticeVisible: true }) return;
+        FocusManager.SetFocusedElement(EldenRingNoticeOverlay, EldenRingNoticeConfirmButton);
+        Keyboard.Focus(EldenRingNoticeConfirmButton);
+    }
+
+    private void RestoreGameSelectorFocus()
+    {
+        if (!IsLoaded || DataContext is DesktopTrackerViewModel { IsEldenRingNoticeVisible: true }) return;
+        Keyboard.Focus(GameSelector);
+    }
+
+    private void Window_PreviewGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel { IsEldenRingNoticeVisible: true } ||
+            e.NewFocus is not DependencyObject nextFocus || IsDescendantOf(nextFocus, EldenRingNoticeOverlay)) return;
+
+        e.Handled = true;
+        Dispatcher.BeginInvoke(FocusEldenRingNoticePrimaryAction);
+    }
+
+    private static bool IsDescendantOf(DependencyObject child, DependencyObject ancestor)
+    {
+        for (DependencyObject? current = child; current is not null;)
+        {
+            if (ReferenceEquals(current, ancestor)) return true;
+
+            current = current is Visual visual
+                ? VisualTreeHelper.GetParent(visual)
+                : LogicalTreeHelper.GetParent(current);
+        }
+
+        return false;
     }
 
     private void ReturnToMainAfterHotkeyRecording()

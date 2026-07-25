@@ -1,6 +1,7 @@
 <Window x:Class="SoulsTracker.Desktop.MainWindow"
         DataContextChanged="Window_DataContextChanged"
         PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewGotKeyboardFocus="Window_PreviewGotKeyboardFocus"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:domain="clr-namespace:SoulsTracker.Domain;assembly=SoulsTracker.Domain"
@@ -674,9 +675,9 @@
               Panel.ZIndex="21"
               Background="#A8000000"
               Visibility="{Binding IsEldenRingNoticeVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-              Focusable="True"
+              FocusManager.IsFocusScope="True"
               AutomationProperties.Name="Set up Elden Ring">
-            <Border Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+            <Border x:Name="EldenRingNoticeDialog" Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
                 <StackPanel>
                     <TextBlock FontSize="18" FontWeight="SemiBold" Text="Set up Elden Ring" />
                     <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="Elden Ring keeps all of your characters in one ER0000.sl2 save file." />
@@ -684,8 +685,8 @@
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Death totals update after Elden Ring saves." />
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Usual location: %APPDATA%\EldenRing\&lt;your Steam ID&gt;\ER0000.sl2" />
                     <StackPanel Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Margin="0,0,8,0" Content="Not now" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Not now" />
-                        <Button Content="Got it" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Got it" />
+                        <Button x:Name="EldenRingNoticeCancelButton" Margin="0,0,8,0" Content="Not now" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Not now" />
+                        <Button x:Name="EldenRingNoticeConfirmButton" Content="Got it" IsDefault="True" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Got it" />
                     </StackPanel>
                 </StackPanel>
             </Border>
