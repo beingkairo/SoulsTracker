@@ -24,6 +24,7 @@
         <SolidColorBrush x:Key="BorderBrush" Color="#444B59" />
         <SolidColorBrush x:Key="PrimaryTextBrush" Color="#F2F4F8" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="#B8C0CC" />
+        <SolidColorBrush x:Key="GameAvailabilityLabelBrush" Color="#D8D2FF" />
         <SolidColorBrush x:Key="AccentBrush" Color="#A78BFA" />
         <SolidColorBrush x:Key="SuccessBrush" Color="#70D6A7" />
         <SolidColorBrush x:Key="WaitingBrush" Color="#F4C66A" />
@@ -354,7 +355,7 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding DisplayName}" />
-                                            <TextBlock Margin="8,0,0,0" Foreground="#7667A8" FontWeight="SemiBold" Text="{Binding AvailabilityLabel}" />
+                                            <TextBlock Margin="8,0,0,0" Foreground="{StaticResource GameAvailabilityLabelBrush}" FontWeight="SemiBold" Text="{Binding AvailabilityLabel}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>

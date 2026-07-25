@@ -110,6 +110,35 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void GameAvailabilityLabelUsesAnAccessibleSemanticColor()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            try
+            {
+                window = new MainWindow();
+                SolidColorBrush availability = Assert.IsType<SolidColorBrush>(window.Resources["GameAvailabilityLabelBrush"]);
+
+                Assert.Equal(Color.FromRgb(0xD8, 0xD2, 0xFF), availability.Color);
+                Assert.True(ContrastRatio(availability.Color, Color.FromRgb(0x29, 0x2E, 0x37)) >= 4.5);
+                Assert.True(ContrastRatio(availability.Color, Color.FromRgb(0x20, 0x24, 0x2B)) >= 4.5);
+                Assert.True(ContrastRatio(availability.Color, Color.FromRgb(0x5A, 0x4A, 0x88)) >= 4.5);
+                Assert.True(ContrastRatio(availability.Color, Color.FromRgb(0x25, 0x2A, 0x32)) >= 4.5);
+                Assert.NotEqual(Color.FromRgb(0x8B, 0x93, 0xA1), availability.Color);
+                Assert.NotEqual(Colors.White, availability.Color);
+            }
+            finally
+            {
+                window?.Close();
+            }
+        });
+
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+        Assert.Contains("Foreground=\"{StaticResource GameAvailabilityLabelBrush}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EldenRingSavePickerRetainsSetupHelpAfterTheModalIsDismissed()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
@@ -1226,6 +1255,25 @@ public sealed class MainWindowBindingTests
         Assert.Contains(triggers, trigger => trigger.Property == ComboBox.IsDropDownOpenProperty && Equals(trigger.Value, true));
         Assert.DoesNotContain(triggers, trigger => trigger.Property == Control.IsKeyboardFocusedProperty);
         Assert.DoesNotContain(triggers, trigger => trigger.Property == Control.IsKeyboardFocusWithinProperty);
+    }
+
+    private static double ContrastRatio(Color first, Color second)
+    {
+        double firstLuminance = RelativeLuminance(first);
+        double secondLuminance = RelativeLuminance(second);
+        return (Math.Max(firstLuminance, secondLuminance) + 0.05) /
+               (Math.Min(firstLuminance, secondLuminance) + 0.05);
+    }
+
+    private static double RelativeLuminance(Color color) =>
+        (0.2126 * Linearize(color.R)) +
+        (0.7152 * Linearize(color.G)) +
+        (0.0722 * Linearize(color.B));
+
+    private static double Linearize(byte channel)
+    {
+        double value = channel / 255d;
+        return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
     }
 
     private static void AssertOneWayCheckBoxBinding(
