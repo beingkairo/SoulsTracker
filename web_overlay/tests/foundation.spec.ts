@@ -113,7 +113,7 @@ test("Boss List category labels stay out of the overlay", async ({ page }) => {
   await expect(page.getByTestId("boss-list")).not.toContainText("The Old Hunters");
 });
 
-test("legacy boss alias ignores stale snapshots and reconnects after a disconnect", async ({ page }) => {
+test("legacy boss alias ignores stale snapshots and reconnects without stream-visible status text", async ({ page }) => {
   await openOverlay(page, "/overlay/boss-progress");
   await emit(page, snapshot(2, { selectedGame: "Bloodborne", bosses: [{ DisplayName: "Vicar Amelia", DlcLabel: null, IsDefeated: false }] }));
   await expect(page.getByTestId("boss-entry")).toContainText("Vicar Amelia");
@@ -125,11 +125,27 @@ test("legacy boss alias ignores stale snapshots and reconnects after a disconnec
     const sockets = (window as unknown as { __overlaySockets: Array<{ close(): void }> }).__overlaySockets;
     sockets.at(-1)?.close();
   });
-  await expect(page.getByTestId("connection-state")).toHaveText("SoulsTracker connection unavailable");
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __overlaySockets: unknown[] }).__overlaySockets.length)).toBeGreaterThan(1);
 
   await emit(page, snapshot(3, { selectedGame: "Bloodborne", bosses: [{ DisplayName: "Shadows of Yharnam", DlcLabel: null, IsDefeated: true }] }));
   await expect(page.getByTestId("boss-entry")).toContainText("Shadows of Yharnam");
+});
+
+test("Total Deaths stays blank during connection transitions and recovers without a reload", async ({ page }) => {
+  await openOverlay(page, "/overlay/total_deaths");
+  await emit(page, snapshot(1, { selectedGame: "Bloodborne", totalDeaths: 11, source: "ManualBloodborne" }));
+  await expect(page.getByRole("heading")).toContainText("11");
+
+  await page.evaluate(() => {
+    const sockets = (window as unknown as { __overlaySockets: Array<{ close(): void }> }).__overlaySockets;
+    sockets.at(-1)?.close();
+  });
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __overlaySockets: unknown[] }).__overlaySockets.length)).toBeGreaterThan(1);
+
+  await emit(page, snapshot(2, { selectedGame: "Bloodborne", totalDeaths: 12, source: "ManualBloodborne" }));
+  await expect(page.getByRole("heading")).toContainText("12");
 });
 
 test("unavailable Total Deaths is rendered as a safe display state", async ({ page }) => {
@@ -478,7 +494,7 @@ test("real loopback host loads the token-gated browser assets and applies its pr
 
 async function openOverlay(page: Page, route: string): Promise<void> {
   await page.goto(`http://overlay.test${route}${route.includes("?") ? "&" : "?"}token=${token}`);
-  await expect(page.getByTestId("connection-state")).toBeVisible();
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
 }
 
 async function emit(page: Page, value: unknown): Promise<void> {

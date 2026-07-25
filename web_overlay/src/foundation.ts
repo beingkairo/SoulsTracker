@@ -58,7 +58,7 @@ class OverlayClient {
   ) {}
 
   public start(): void {
-    this.renderConnectionState("Connecting to SoulsTracker…");
+    this.renderConnectionState();
     this.connect();
   }
 
@@ -77,7 +77,7 @@ class OverlayClient {
     socket.onmessage = (event) => this.acceptMessage(event.data);
     socket.onerror = () => socket.close();
     socket.onclose = () => {
-      this.renderConnectionState("SoulsTracker connection unavailable");
+      this.renderConnectionState();
       this.scheduleReconnect();
     };
   }
@@ -121,12 +121,8 @@ class OverlayClient {
     }
   }
 
-  private renderConnectionState(message: string): void {
-    const state = document.createElement("p");
-    state.className = "overlay-connection-state";
-    state.dataset.testid = "connection-state";
-    state.textContent = message;
-    replaceContent(this.target, state);
+  private renderConnectionState(): void {
+    replaceContent(this.target);
   }
 
   private renderTotalDeaths(snapshot: OverlaySnapshot): void {
