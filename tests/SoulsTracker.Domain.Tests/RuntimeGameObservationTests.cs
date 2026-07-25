@@ -37,6 +37,14 @@ public sealed class RuntimeGameObservationTests
             new DateTimeOffset(2026, 7, 11, 8, 0, 0, TimeSpan.FromHours(-4))));
     }
 
+    [Fact]
+    public void EldenRingObservationRetainsAReadZeroAsANumericTotal()
+    {
+        RuntimeGameObservation observation = new(GameId.EldenRing, 0, DateTimeOffset.UtcNow);
+
+        Assert.Equal(0, observation.TotalDeaths.Value);
+    }
+
     private static GameId CreateUnknownGameId()
     {
         ConstructorInfo constructor = typeof(GameId).GetConstructor(

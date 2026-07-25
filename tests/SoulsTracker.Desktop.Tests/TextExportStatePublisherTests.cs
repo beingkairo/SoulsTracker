@@ -72,6 +72,23 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WritesAReadEldenRingZeroToTheConfiguredDeathsFile()
+    {
+        string deathsPath = Path.Combine(root, "elden-ring-deaths.txt");
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(deathsPath, true, null, false),
+            eldenRingNoticeAcknowledged: true);
+
+        Assert.True(await TextExportStatePublisher.WriteAsync(state, 0));
+        Assert.Equal("Total Deaths: 0", await File.ReadAllTextAsync(deathsPath));
+    }
+
+    [Fact]
     public async Task EldenRingBossExportUsesTheSamePersistedScopeAndRequiredFilter()
     {
         string bossPath = Path.Combine(root, "elden-bosses.txt");

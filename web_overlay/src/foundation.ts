@@ -163,18 +163,22 @@ class OverlayClient {
       return;
     }
 
+    const bosses = visibleBosses(snapshot.Bosses, snapshot.Presentation.BossListVisibilityMode);
+    if (snapshot.SelectedGame !== null && bosses.length === 0) {
+      replaceContent(this.target);
+      return;
+    }
+
     const panel = panelFor("boss-list-overlay", snapshot.Presentation.BossListAppearance);
     if (snapshot.Presentation.BossListAppearance.Title.trim().length > 0) panel.append(heading(snapshot.Presentation.BossListAppearance.Title));
 
     if (snapshot.SelectedGame === null) {
       panel.append(message("Select a game in SoulsTracker to show its boss list."));
-    } else if (visibleBosses(snapshot.Bosses, snapshot.Presentation.BossListVisibilityMode).length === 0) {
-      panel.append(message("No bosses are available for this game."));
     } else {
       const list = document.createElement("ul");
       list.className = `overlay-boss-list overlay-boss-list-${snapshot.Presentation.BossListAppearance.Alignment.toLowerCase()}`;
       list.dataset.testid = "boss-list";
-      for (const boss of visibleBosses(snapshot.Bosses, snapshot.Presentation.BossListVisibilityMode).slice(0, snapshot.Presentation.BossListMaximumVisibleCount)) {
+      for (const boss of bosses.slice(0, snapshot.Presentation.BossListMaximumVisibleCount)) {
         const item = document.createElement("li");
         item.className = boss.IsDefeated ? "is-defeated" : "is-remaining";
         item.dataset.defeatedTreatment = snapshot.Presentation.BossListDefeatedTreatment;

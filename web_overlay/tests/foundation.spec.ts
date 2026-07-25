@@ -139,6 +139,42 @@ test("unavailable Total Deaths is rendered as a safe display state", async ({ pa
   await expect(page.getByRole("heading")).toContainText("Unavailable");
 });
 
+test("a synced Elden Ring zero renders as a numeric Total Deaths value", async ({ page }) => {
+  await openOverlay(page, "/overlay/total_deaths");
+  await emit(page, snapshot(1, { selectedGame: "Elden Ring", totalDeaths: 0, source: "GameLifetimeReader" }));
+
+  await expect(page.getByRole("heading")).toContainText("0");
+  await expect(page.getByTestId("total-deaths-value")).toHaveCount(0);
+});
+
+test("a selected game with no visible bosses leaves the Boss List overlay blank", async ({ page }) => {
+  await openOverlay(page, "/overlay/boss_list");
+  await emit(page, snapshot(1, { selectedGame: "Elden Ring", bosses: [] }));
+
+  await expect(page.getByTestId("boss-list-overlay")).toHaveCount(0);
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
+
+  await emit(page, snapshot(2, { selectedGame: null, bosses: [] }));
+  await expect(page.getByTestId("boss-list-overlay")).toContainText("Select a game in SoulsTracker to show its boss list.");
+});
+
+test("visibility filters blank the Boss List overlay when they hide every source boss", async ({ page }) => {
+  await openOverlay(page, "/overlay/boss_list");
+  await emit(page, snapshot(1, {
+    selectedGame: "Elden Ring",
+    bosses: [{ DisplayName: "Defeated Boss", DlcLabel: null, IsDefeated: true }],
+    presentation: { IsTotalDeathsEnabled: true, ShowGameName: true, IsBossListEnabled: true, BossListVisibilityMode: "Remaining" },
+  }));
+  await expect(page.getByTestId("boss-list-overlay")).toHaveCount(0);
+
+  await emit(page, snapshot(2, {
+    selectedGame: "Elden Ring",
+    bosses: [{ DisplayName: "Remaining Boss", DlcLabel: null, IsDefeated: false }],
+    presentation: { IsTotalDeathsEnabled: true, ShowGameName: true, IsBossListEnabled: true, BossListVisibilityMode: "Defeated" },
+  }));
+  await expect(page.getByTestId("boss-list-overlay")).toHaveCount(0);
+});
+
 test("validated presentation settings hide the game name and disabled Total Deaths layout", async ({ page }) => {
   await openOverlay(page, "/overlay/total_deaths");
   await emit(page, snapshot(1, {
@@ -457,7 +493,7 @@ function snapshot(
   options: {
     selectedGame?: string | null;
     totalDeaths?: number | null;
-    source?: "Unavailable" | "ManualBloodborne";
+    source?: "Unavailable" | "ManualBloodborne" | "GameLifetimeReader";
     bosses?: Array<{ DisplayName: string; DlcLabel: string | null; IsDefeated: boolean }>;
     presentation?: { IsTotalDeathsEnabled: boolean; ShowGameName: boolean; IsBossListEnabled: boolean; BossListVisibilityMode: "All" | "Remaining" | "Defeated" };
   },

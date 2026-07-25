@@ -50,6 +50,19 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task ReaderReportsZeroWhenAReadableSelectedSaveHasNoRecordedDeaths()
+    {
+        string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 0)));
+        var reader = new EldenRingSaveDeathReader();
+        reader.Configure(new EldenRingSaveConfiguration(path, 0));
+
+        RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
+
+        Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
+        Assert.Equal(0, result.Observation!.TotalDeaths.Value);
+    }
+
+    [Fact]
     public async Task ReaderDetectsAChangedSaveAndKeepsEldenStateIndependent()
     {
         string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 5), (1, 88)));

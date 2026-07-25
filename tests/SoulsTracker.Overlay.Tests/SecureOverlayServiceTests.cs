@@ -169,6 +169,28 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
+    public async Task EldenRingRuntimeZeroIsPublishedAsANumericOverlaySnapshot()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true);
+        var repository = new MemoryRepository(state);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
+        await service.StartAsync();
+        service.PublishRuntimeObservation(new RuntimeGameObservation(GameId.EldenRing, 0, DateTimeOffset.UtcNow));
+
+        using JsonDocument document = JsonDocument.Parse(await ReceiveSnapshotAsync(service));
+        JsonElement deaths = document.RootElement.GetProperty("TotalDeaths");
+        Assert.Equal("GameLifetimeReader", deaths.GetProperty("Source").GetString());
+        Assert.Equal(0, deaths.GetProperty("Value").GetInt64());
+    }
+
+    [Fact]
     public async Task RealLoopbackHostProjectsValidatedPresentationWithoutEndpointSecrets()
     {
         const string rawToken = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";

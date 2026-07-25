@@ -78,6 +78,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
+        Bosses.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsBossListEmpty));
         EldenRingProfileSlots = new ObservableCollection<EldenRingProfileSlotChoice>(CreateUnavailableEldenRingProfileSlots());
         BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
     }
@@ -113,6 +114,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public ObservableCollection<GameChoice> GameChoices { get; }
 
     public ObservableCollection<BossChoice> Bosses { get; } = [];
+
+    /// <summary>Gets whether the selected game's current boss filter has no entries to display.</summary>
+    public bool IsBossListEmpty => state?.SelectedGameId is not null && Bosses.Count == 0;
 
     public ObservableCollection<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; }
     public IReadOnlyList<EldenRingBossListScopeChoice> EldenRingBossListScopes { get; } = EldenRingBossListScopeChoice.All;

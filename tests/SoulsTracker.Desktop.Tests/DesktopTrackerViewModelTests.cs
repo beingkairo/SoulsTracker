@@ -829,6 +829,31 @@ public sealed class DesktopTrackerViewModelTests
         Assert.DoesNotContain("error", harness.ViewModel.RuntimeReaderStatusText!, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task EldenRingSyncedZeroUsesTheNumericDisplayWithoutMaskingUnavailableReaderStates()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true);
+        await using TestHarness harness = new(state);
+        await harness.ViewModel.InitializeAsync();
+
+        harness.ViewModel.ApplyRuntimeReaderResult(
+            RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.EldenRing, 0, DateTimeOffset.UtcNow)));
+        Assert.Equal("0", harness.ViewModel.TotalDeathsText);
+        Assert.True(harness.ViewModel.IsTotalDeathsValueNumeric);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(GameId.EldenRing));
+        Assert.Equal("Choose an Elden Ring save file to begin tracking.", harness.ViewModel.TotalDeathsText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(null);
+        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, harness.ViewModel.TotalDeathsText);
+    }
+
     private static PersistentTrackerState WithSelectedGame(GameId gameId, long manualDeaths) => new(
         PersistentTrackerState.CurrentSchemaVersion,
         gameId,

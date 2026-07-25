@@ -942,6 +942,16 @@ public sealed class MainWindowBindingTests
 
                 Assert.Equal(nameof(BossChoice.IsDefeated), binding.Path?.Path);
                 Assert.Equal(BindingMode.OneWay, binding.Mode);
+
+                TextBlock emptyState = Assert.IsType<TextBlock>(window.FindName("NoBossesDisplayedTextBlock"));
+                Binding emptyStateVisibility = Assert.IsType<Binding>(BindingOperations.GetBinding(emptyState, UIElement.VisibilityProperty));
+                Assert.Equal(nameof(DesktopTrackerViewModel.IsBossListEmpty), emptyStateVisibility.Path?.Path);
+                Assert.Equal(Visibility.Collapsed, emptyState.Visibility);
+
+                viewModel.Bosses.Clear();
+                window.UpdateLayout();
+                Assert.Equal("No bosses being displayed", emptyState.Text);
+                Assert.Equal(Visibility.Visible, emptyState.Visibility);
             }
             finally
             {

@@ -452,7 +452,10 @@
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12" Text="Manual progress for the selected game." />
                         </StackPanel>
                         <ScrollViewer x:Name="BossesScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Boss checklist">
-                            <ItemsControl ItemsSource="{Binding Bosses}"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Margin="0,3" Content="{Binding DisplayName}" IsChecked="{Binding IsDefeated, Mode=OneWay}" IsEnabled="{Binding DataContext.ControlsEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Click="BossCheckBox_Click" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                            <StackPanel>
+                                <TextBlock x:Name="NoBossesDisplayedTextBlock" Style="{StaticResource MutedText}" Text="No bosses being displayed" Visibility="{Binding IsBossListEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="No bosses being displayed" />
+                                <ItemsControl ItemsSource="{Binding Bosses}"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Margin="0,3" Content="{Binding DisplayName}" IsChecked="{Binding IsDefeated, Mode=OneWay}" IsEnabled="{Binding DataContext.ControlsEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Click="BossCheckBox_Click" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                            </StackPanel>
                         </ScrollViewer>
                     </DockPanel>
                 </Border>
