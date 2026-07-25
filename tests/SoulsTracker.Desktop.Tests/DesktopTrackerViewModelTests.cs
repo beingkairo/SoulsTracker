@@ -634,6 +634,41 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
+    public async Task BossSearchClearsOnlyAfterTheSelectedGameChanges()
+    {
+        PersistentTrackerState persistedState;
+        await using (TestHarness harness = new(PersistentTrackerState.Default))
+        {
+            await harness.ViewModel.InitializeAsync();
+            await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
+            harness.ViewModel.BossSearchQuery = "asylum";
+
+            await harness.ViewModel.SetBossDefeatedAsync(Assert.Single(harness.ViewModel.FilteredBosses), true);
+            Assert.Equal("asylum", harness.ViewModel.BossSearchQuery);
+
+            Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+            harness.ViewModel.CancelEldenRingNotice();
+            Assert.Equal("asylum", harness.ViewModel.BossSearchQuery);
+
+            await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
+            Assert.Equal("asylum", harness.ViewModel.BossSearchQuery);
+
+            await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
+            Assert.Equal(string.Empty, harness.ViewModel.BossSearchQuery);
+            Assert.Equal(harness.ViewModel.Bosses.Select(boss => boss.BossId), harness.ViewModel.FilteredBosses.Select(boss => boss.BossId));
+
+            harness.ViewModel.BossSearchQuery = "   ";
+            Assert.Equal(harness.ViewModel.Bosses.Select(boss => boss.BossId), harness.ViewModel.FilteredBosses.Select(boss => boss.BossId));
+            Assert.False(harness.ViewModel.IsBossSearchNoResults);
+            persistedState = harness.Repository.State;
+        }
+
+        await using TestHarness nextSession = new(persistedState);
+        await nextSession.ViewModel.InitializeAsync();
+        Assert.Equal(string.Empty, nextSession.ViewModel.BossSearchQuery);
+    }
+
+    [Fact]
     public async Task EldenRingIsSelectableOnlyThroughItsAcknowledgementGate()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);

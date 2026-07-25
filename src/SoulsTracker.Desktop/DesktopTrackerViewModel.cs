@@ -637,7 +637,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return;
         }
 
+        GameId? selectedGameBeforeSelection = state?.SelectedGameId;
         await SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
+        if (state?.SelectedGameId != selectedGameBeforeSelection)
+        {
+            BossSearchQuery = string.Empty;
+        }
+
         if (state?.SelectedGameId == GameId.EldenRing)
         {
             await RefreshEldenRingProfileSlotsAsync(cancellationToken);

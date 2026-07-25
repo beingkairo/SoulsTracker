@@ -212,6 +212,44 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void BossSearchBindingClearsAfterGameSelectionAndTreatsWhitespaceAsEmpty()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                viewModel.SelectGameAsync(viewModel.GameChoices.Single(choice => choice.GameId == GameId.Ds1)).GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                TextBox search = Assert.IsType<TextBox>(window.FindName("BossSearchTextBox"));
+                ItemsControl checklist = Assert.IsType<ItemsControl>(window.FindName("BossChecklistItems"));
+                TextBlock noResults = Assert.IsType<TextBlock>(window.FindName("NoBossSearchResultsTextBlock"));
+
+                search.Text = "asylum";
+                WaitForDispatcher(() => checklist.Items.Count == 1 && viewModel.BossSearchQuery == "asylum");
+
+                viewModel.SelectGameAsync(viewModel.GameChoices.Single(choice => choice.GameId == GameId.Bloodborne)).GetAwaiter().GetResult();
+                WaitForDispatcher(() => search.Text == string.Empty && checklist.Items.Count == viewModel.Bosses.Count);
+
+                search.Text = "   ";
+                WaitForDispatcher(() => checklist.Items.Count == viewModel.Bosses.Count && noResults.Visibility == Visibility.Collapsed);
+                Assert.False(viewModel.IsBossSearchNoResults);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
     public void MainTotalDeathsUsesLargeTypographyOnlyForNumericValuesAndCharacterSelectorUsesAvailabilityBinding()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
