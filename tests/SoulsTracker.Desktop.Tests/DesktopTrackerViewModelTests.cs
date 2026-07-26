@@ -1065,7 +1065,6 @@ public sealed class DesktopTrackerViewModelTests
         harness.ViewModel.BeginBlackMythWukongChange();
         LocalSaveSourceState priorState = harness.ViewModel.WukongSaveSourceState;
         string? priorStatus = harness.ViewModel.BlackMythWukongSaveDiscoveryStatus;
-        string? priorIdentity = harness.ViewModel.WukongSaveSourceIdentity;
         string? priorReaderStatus = harness.ViewModel.RuntimeReaderStatusText;
         using var cancellation = new CancellationTokenSource();
         discovery.Handler = async token =>
@@ -1086,7 +1085,6 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(priorState, harness.ViewModel.WukongSaveSourceState);
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
         Assert.Equal(priorStatus, harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
-        Assert.Equal(priorIdentity, harness.ViewModel.WukongSaveSourceIdentity);
         Assert.Equal(priorReaderStatus, harness.ViewModel.RuntimeReaderStatusText);
         Assert.True(harness.ViewModel.IsWukongSaveSelectorEnabled);
     }
@@ -1116,7 +1114,7 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task BlackMythWukongBrowseValidationPreservesFailureAndCommitsValidCustomSourceWithNotifications()
+    public async Task BlackMythWukongBrowseValidationPreservesFailureAndCommitsValidCustomSource()
     {
         using var files = new TemporaryWukongSaves();
         string originalPath = files.Add(1, 4);
@@ -1133,7 +1131,6 @@ public sealed class DesktopTrackerViewModelTests
         await harness.ViewModel.SetBlackMythWukongSaveFileAsync(invalidPath);
 
         Assert.Equal(originalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
-        Assert.Equal("Save slot 1", harness.ViewModel.WukongSaveSourceIdentity);
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
         Assert.Equal("Selected save is unavailable or unsupported.", harness.ViewModel.RuntimeReaderStatusText);
         Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
@@ -1143,37 +1140,28 @@ public sealed class DesktopTrackerViewModelTests
         await harness.ViewModel.SetBlackMythWukongSaveFileAsync(customPath);
 
         Assert.Equal(originalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
-        Assert.Equal("Save slot 1", harness.ViewModel.WukongSaveSourceIdentity);
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
 
         harness.Repository.FailSaves = false;
         await harness.ViewModel.SetBlackMythWukongSaveFileAsync(customPath);
 
         Assert.Equal(customPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
-        Assert.Equal("Custom save: ArchiveSaveFile.9.sav", harness.ViewModel.WukongSaveSourceIdentity);
         Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
         Assert.Equal(LocalSaveSourceState.CustomSelection, harness.ViewModel.WukongSaveSourceState);
-        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), notifications);
         Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
     }
 
     [Fact]
-    public async Task BlackMythWukongDiscoveredReplacementUpdatesIdentityOnlyAfterPersistenceSucceeds()
+    public async Task BlackMythWukongDiscoveredReplacementUpdatesMetadataOnlyAfterPersistenceSucceeds()
     {
         using var files = new TemporaryWukongSaves();
-        string firstPath = files.Add(1, 1);
-        string secondPath = files.Add(2, 2);
+        string firstPath = files.Add(1, 1, level: 41);
+        string secondPath = files.Add(2, 2, level: 72);
         var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
         var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
         await using TestHarness harness = new(WukongState(firstPath), saveDiscovery: new FixedSaveDiscovery(first, second));
         await harness.ViewModel.InitializeAsync();
-        var reconciliationNotifications = new List<string?>();
-        harness.ViewModel.PropertyChanged += (_, args) => reconciliationNotifications.Add(args.PropertyName);
-        await harness.ViewModel.RescanBlackMythWukongSavesAsync();
-        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), reconciliationNotifications);
-        reconciliationNotifications.Clear();
-        harness.ViewModel.ApplyImportedCommittedState(WukongState(firstPath));
-        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), reconciliationNotifications);
+        Assert.Equal("Level 41", harness.ViewModel.BlackMythWukongSaveMetadataText);
         harness.ViewModel.BeginBlackMythWukongChange();
         harness.Repository.FailSaves = true;
 
@@ -1181,7 +1169,7 @@ public sealed class DesktopTrackerViewModelTests
 
         Assert.Equal(firstPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal(first, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
-        Assert.Equal("Save slot 1", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.Equal("Level 41", harness.ViewModel.BlackMythWukongSaveMetadataText);
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
 
         harness.Repository.FailSaves = false;
@@ -1191,10 +1179,69 @@ public sealed class DesktopTrackerViewModelTests
 
         Assert.Equal(secondPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal(second, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
-        Assert.Equal("Save slot 2", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.Equal("Level 72", harness.ViewModel.BlackMythWukongSaveMetadataText);
         Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
-        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), notifications);
+        Assert.Contains(nameof(DesktopTrackerViewModel.BlackMythWukongSaveMetadataText), notifications);
         Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
+    }
+
+    [Fact]
+    public void BlackMythWukongMetadataFormattingIsCompactCultureAwareAndOmitsInvalidParts()
+    {
+        TimeZoneInfo localTimeZone = TimeZoneInfo.CreateCustomTimeZone(
+            "Fixture +02",
+            TimeSpan.FromHours(2),
+            "Fixture +02",
+            "Fixture +02");
+        var timeProvider = new FixedTimeProvider(
+            new DateTimeOffset(2024, 7, 3, 8, 0, 0, TimeSpan.Zero),
+            localTimeZone);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        var metadata = new BlackMythWukongSaveMetadata(
+            Level: 1,
+            TotalPlayTime: TimeSpan.FromSeconds(7_799),
+            LastSaved: new DateTimeOffset(2024, 7, 3, 2, 53, 0, TimeSpan.Zero));
+
+        Assert.Equal(
+            "Level 1 • Play time 2h 9m • Last saved Today, 4:53 AM",
+            DesktopTrackerViewModel.FormatBlackMythWukongSaveMetadata(metadata, culture, timeProvider));
+        Assert.Equal(
+            "Play time 1d 2h 3m",
+            DesktopTrackerViewModel.FormatBlackMythWukongSaveMetadata(
+                new BlackMythWukongSaveMetadata(0, TimeSpan.FromDays(1) + TimeSpan.FromHours(2) + TimeSpan.FromMinutes(3), null),
+                culture,
+                timeProvider));
+        Assert.Null(DesktopTrackerViewModel.FormatBlackMythWukongSaveMetadata(
+            new BlackMythWukongSaveMetadata(0, TimeSpan.FromSeconds(-1), null),
+            culture,
+            timeProvider));
+    }
+
+    [Fact]
+    public async Task BlackMythWukongMetadataRefreshesFromReaderUpdatesAndClearsOnFailureOrRemoval()
+    {
+        using var files = new TemporaryWukongSaves();
+        string path = files.Add(1, 4, level: 25);
+        var save = new DiscoveredLocalSave(path, "Save slot 1");
+        await using TestHarness harness = new(WukongState(path), saveDiscovery: new FixedSaveDiscovery(save));
+        await harness.ViewModel.InitializeAsync();
+        Assert.Equal("Level 25", harness.ViewModel.BlackMythWukongSaveMetadataText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
+            new RuntimeGameObservation(GameId.BlackMythWukong, 5, DateTimeOffset.UtcNow),
+            new BlackMythWukongSaveMetadata(26, TimeSpan.FromMinutes(90), null)));
+        Assert.Equal("Level 26 • Play time 1h 30m", harness.ViewModel.BlackMythWukongSaveMetadataText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(null);
+        Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
+            new RuntimeGameObservation(GameId.BlackMythWukong, 5, DateTimeOffset.UtcNow),
+            new BlackMythWukongSaveMetadata(26, null, null)));
+        File.Delete(path);
+        await harness.ViewModel.RescanBlackMythWukongSavesAsync();
+        Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
+        Assert.Equal("Selected save is unavailable.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
     }
 
     [Fact]
@@ -1560,11 +1607,11 @@ public sealed class DesktopTrackerViewModelTests
     {
         private readonly string root = Path.Combine(Path.GetTempPath(), "SoulsTracker.Desktop.Wukong", Guid.NewGuid().ToString("N"));
 
-        public string Add(int slot, int deaths)
+        public string Add(int slot, int deaths, int? level = null)
         {
             Directory.CreateDirectory(root);
             string path = Path.Combine(root, $"ArchiveSaveFile.{slot}.sav");
-            File.WriteAllBytes(path, CreateArchive(deaths));
+            File.WriteAllBytes(path, CreateArchive(deaths, level));
             return path;
         }
 
@@ -1581,10 +1628,14 @@ public sealed class DesktopTrackerViewModelTests
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
 
-        private static byte[] CreateArchive(int deaths)
+        private static byte[] CreateArchive(int deaths, int? level)
         {
             byte[] death = FieldVarint(1, (ulong)deaths);
-            byte[] decoded = FieldBytes(6, FieldBytes(1, FieldBytes(5, death)));
+            byte[] decoded = level is int value
+                ? Concat(
+                    FieldBytes(1, FieldBytes(1, FieldBytes(1, FieldVarint(4, (ulong)value)))),
+                    FieldBytes(6, FieldBytes(1, FieldBytes(5, death))))
+                : FieldBytes(6, FieldBytes(1, FieldBytes(5, death)));
             byte[] encrypted = decoded.ToArray();
             byte[] key = [0x7B, 0x5C, 0xDA, 0x91, 0x3E, 0xFC, 0xDA, 0x37];
             for (int index = 0; index < encrypted.Length; index++) encrypted[index] ^= key[index % key.Length];
@@ -1599,6 +1650,12 @@ public sealed class DesktopTrackerViewModelTests
         private static byte[] FieldVarint(ulong field, ulong value) { var result = new List<byte>(); Write(result, field << 3); Write(result, value); return result.ToArray(); }
         private static byte[] Concat(params byte[][] values) => values.SelectMany(static value => value).ToArray();
         private static void Write(List<byte> target, ulong value) { do { byte next = (byte)(value & 0x7F); value >>= 7; target.Add(value == 0 ? next : (byte)(next | 0x80)); } while (value != 0); }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow, TimeZoneInfo localTimeZone) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+        public override TimeZoneInfo LocalTimeZone => localTimeZone;
     }
 
     private sealed class TemporaryEldenRingSaves : IDisposable

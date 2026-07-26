@@ -1211,6 +1211,41 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void WukongSaveMetadataIsCompactAccessibleAndDuplicateSaveLabelsAreAbsent()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            try
+            {
+                window = new MainWindow();
+                TextBlock metadata = Assert.IsType<TextBlock>(window.FindName("BlackMythWukongSaveMetadataTextBlock"));
+                Binding textBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(metadata, TextBlock.TextProperty));
+                Assert.Equal(nameof(DesktopTrackerViewModel.BlackMythWukongSaveMetadataText), textBinding.Path?.Path);
+                Assert.Equal(BindingMode.OneWay, textBinding.Mode);
+                Assert.Equal(TextWrapping.NoWrap, metadata.TextWrapping);
+                Assert.Equal(TextTrimming.CharacterEllipsis, metadata.TextTrimming);
+                Assert.Equal("Black Myth Wukong save details", AutomationProperties.GetName(metadata));
+                Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(metadata));
+                DataTrigger emptyTrigger = Assert.Single(
+                    metadata.Style.Triggers.OfType<DataTrigger>(),
+                    trigger => Assert.IsType<Binding>(trigger.Binding).Path?.Path == nameof(DesktopTrackerViewModel.BlackMythWukongSaveMetadataText));
+                Setter collapsedSetter = Assert.Single(emptyTrigger.Setters.OfType<Setter>());
+                Assert.Equal(UIElement.VisibilityProperty, collapsedSetter.Property);
+                Assert.Equal(Visibility.Collapsed, collapsedSetter.Value);
+
+                string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+                Assert.DoesNotContain("Elden Ring selected save", xaml, StringComparison.Ordinal);
+                Assert.DoesNotContain("Black Myth Wukong selected save", xaml, StringComparison.Ordinal);
+            }
+            finally
+            {
+                window?.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void OverlayPresentationControlsUseOneWayProjectionAndStableAccessibleNames()
     {
         RunOnStaThread(() =>

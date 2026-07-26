@@ -24,11 +24,16 @@ public enum RuntimeGameReaderStatus
 /// <summary>Contains only a safe reader status and, when synced, its runtime-only observation.</summary>
 public sealed record RuntimeGameReadResult
 {
-    private RuntimeGameReadResult(GameId gameId, RuntimeGameReaderStatus status, RuntimeGameObservation? observation)
+    private RuntimeGameReadResult(
+        GameId gameId,
+        RuntimeGameReaderStatus status,
+        RuntimeGameObservation? observation,
+        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null)
     {
         GameId = gameId ?? throw new ArgumentNullException(nameof(gameId));
         Status = status;
         Observation = observation;
+        BlackMythWukongSaveMetadata = blackMythWukongSaveMetadata;
     }
 
     public GameId GameId { get; }
@@ -37,15 +42,30 @@ public sealed record RuntimeGameReadResult
 
     public RuntimeGameObservation? Observation { get; }
 
+    /// <summary>Contains optional setup-only metadata for a validated Wukong save.</summary>
+    public BlackMythWukongSaveMetadata? BlackMythWukongSaveMetadata { get; }
+
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
 
     public static RuntimeGameReadResult WaitingForSaveFile(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForSaveFile, null);
 
-    public static RuntimeGameReadResult Synced(RuntimeGameObservation observation) =>
-        new(observation?.GameId ?? throw new ArgumentNullException(nameof(observation)), RuntimeGameReaderStatus.Synced, observation);
+    public static RuntimeGameReadResult Synced(
+        RuntimeGameObservation observation,
+        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null) =>
+        new(
+            observation?.GameId ?? throw new ArgumentNullException(nameof(observation)),
+            RuntimeGameReaderStatus.Synced,
+            observation,
+            blackMythWukongSaveMetadata);
 }
+
+/// <summary>Optional character-identifying details decoded from one validated Wukong archive.</summary>
+public sealed record BlackMythWukongSaveMetadata(
+    int? Level,
+    TimeSpan? TotalPlayTime,
+    DateTimeOffset? LastSaved);
 
 /// <summary>Coordinates the small set of approved runtime-only game readers.</summary>
 public sealed class RuntimeGameReaderCoordinator

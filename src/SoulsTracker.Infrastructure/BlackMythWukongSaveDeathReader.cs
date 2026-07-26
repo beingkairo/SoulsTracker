@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using SoulsTracker.Domain;
@@ -74,9 +75,14 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
                     continue;
                 }
 
-                BlackMythWukongSaveParseOutcome outcome = BlackMythWukongSaveParser.TryReadTotalDeaths(bytes, out long totalDeaths);
+                BlackMythWukongSaveParseOutcome outcome = BlackMythWukongSaveParser.TryRead(
+                    bytes,
+                    out long totalDeaths,
+                    out BlackMythWukongSaveMetadata? saveMetadata);
                 RuntimeGameReadResult? result = outcome == BlackMythWukongSaveParseOutcome.Success
-                    ? RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow))
+                    ? RuntimeGameReadResult.Synced(
+                        new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
+                        saveMetadata)
                     : null;
                 lastFingerprint = fingerprint;
                 lastResult = result;
@@ -149,8 +155,15 @@ internal static class BlackMythWukongSaveParser
     private static ReadOnlySpan<byte> ChecksumSalt => "lhx2tkh6lj1wj8jmrgs3k1xb2brusehx"u8;
 
     public static BlackMythWukongSaveParseOutcome TryReadTotalDeaths(ReadOnlySpan<byte> file, out long totalDeaths)
+        => TryRead(file, out totalDeaths, out _);
+
+    public static BlackMythWukongSaveParseOutcome TryRead(
+        ReadOnlySpan<byte> file,
+        out long totalDeaths,
+        out BlackMythWukongSaveMetadata? saveMetadata)
     {
         totalDeaths = 0;
+        saveMetadata = null;
         if (file.IsEmpty || file.Length > MaximumSupportedFileBytes ||
             !TryReadRequiredLengthDelimitedField(file, 1, out ReadOnlySpan<byte> metadata) ||
             !TryReadRequiredLengthDelimitedField(file, 2, out ReadOnlySpan<byte> encryptedPayload))
@@ -188,7 +201,75 @@ internal static class BlackMythWukongSaveParser
         }
 
         totalDeaths = hasDeathCount ? (long)rawDeathCount : 0;
+        saveMetadata = ReadOptionalSaveMetadata(file, payload);
         return BlackMythWukongSaveParseOutcome.Success;
+    }
+
+    private static BlackMythWukongSaveMetadata? ReadOptionalSaveMetadata(
+        ReadOnlySpan<byte> archive,
+        ReadOnlySpan<byte> payload)
+    {
+        int? level = TryReadLevel(payload);
+        TimeSpan? playTime = TryReadPlayTime(payload);
+        DateTimeOffset? lastSaved = TryReadLastSaved(archive);
+        return level is null && playTime is null && lastSaved is null
+            ? null
+            : new BlackMythWukongSaveMetadata(level, playTime, lastSaved);
+    }
+
+    private static int? TryReadLevel(ReadOnlySpan<byte> payload)
+    {
+        if (!TryReadRequiredLengthDelimitedField(payload, 1, out ReadOnlySpan<byte> archiveData) ||
+            !TryReadRequiredLengthDelimitedField(archiveData, 1, out ReadOnlySpan<byte> roleData) ||
+            !TryReadRequiredLengthDelimitedField(roleData, 1, out ReadOnlySpan<byte> roleBase) ||
+            !TryReadOptionalVarintField(roleBase, 4, out bool found, out ulong value) ||
+            !found ||
+            value is 0 or > int.MaxValue)
+        {
+            return null;
+        }
+
+        return checked((int)value);
+    }
+
+    private static TimeSpan? TryReadPlayTime(ReadOnlySpan<byte> payload)
+    {
+        if (!TryReadRequiredLengthDelimitedField(payload, 1, out ReadOnlySpan<byte> archiveData) ||
+            !TryReadRequiredLengthDelimitedField(archiveData, 2, out ReadOnlySpan<byte> playData) ||
+            !TryReadRequiredLengthDelimitedField(playData, 1, out ReadOnlySpan<byte> playDataState) ||
+            !TryReadRequiredLengthDelimitedField(playDataState, 1, out ReadOnlySpan<byte> playDataValue) ||
+            !TryReadOptionalFixed32Field(playDataValue, 2, out bool found, out uint rawSeconds) ||
+            !found)
+        {
+            return null;
+        }
+
+        float seconds = BitConverter.Int32BitsToSingle(unchecked((int)rawSeconds));
+        if (!float.IsFinite(seconds) || seconds < 0 || seconds > TimeSpan.MaxValue.TotalSeconds)
+        {
+            return null;
+        }
+
+        try
+        {
+            return TimeSpan.FromSeconds(seconds);
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+    }
+
+    private static DateTimeOffset? TryReadLastSaved(ReadOnlySpan<byte> archive)
+    {
+        if (!TryReadOptionalVarintField(archive, 5, out bool found, out ulong unixSeconds) ||
+            !found ||
+            unixSeconds > 253_402_300_799UL)
+        {
+            return null;
+        }
+
+        return DateTimeOffset.FromUnixTimeSeconds(checked((long)unixSeconds));
     }
 
     private static bool TryReadArchiveMetadata(ReadOnlySpan<byte> metadata, out ReadOnlySpan<byte> checksum)
@@ -300,6 +381,23 @@ internal static class BlackMythWukongSaveParser
         return true;
     }
 
+    private static bool TryReadOptionalFixed32Field(ReadOnlySpan<byte> message, ulong requestedField, out bool found, out uint value)
+    {
+        found = false;
+        value = 0;
+        int offset = 0;
+        while (offset < message.Length)
+        {
+            if (!TryReadField(message, ref offset, out ulong field, out ulong wire, out _, out _, out ulong number)) return false;
+            if (field != requestedField) continue;
+            if (wire != 5 || found || number > uint.MaxValue) return false;
+            value = checked((uint)number);
+            found = true;
+        }
+
+        return true;
+    }
+
     private static bool TryReadField(ReadOnlySpan<byte> data, ref int offset, out ulong field, out ulong wire, out int valueOffset, out int valueLength, out ulong number)
     {
         field = 0;
@@ -325,6 +423,8 @@ internal static class BlackMythWukongSaveParser
                 offset += valueLength;
                 return true;
             case 5:
+                if (offset > data.Length - sizeof(uint)) return false;
+                number = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset, sizeof(uint)));
                 return TrySkip(data, ref offset, sizeof(uint));
             default:
                 return false;

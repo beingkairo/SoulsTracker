@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -26,6 +27,91 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
     }
 
     [Fact]
+    public void ParserReadsVerifiedCharacterMetadataTypesAndMultiByteLevel()
+    {
+        const ulong unixSeconds = 1_720_000_000;
+        byte[] archive = WukongSaveFixture.Create(
+            12,
+            levelField: WukongSaveFixture.FieldVarint(4, 300),
+            playTimeField: WukongSaveFixture.FieldFixed32(2, BitConverter.SingleToUInt32Bits(7_740f)),
+            timestampField: WukongSaveFixture.FieldVarint(5, unixSeconds));
+
+        Assert.Equal(
+            BlackMythWukongSaveParseOutcome.Success,
+            BlackMythWukongSaveParser.TryRead(archive, out long deaths, out BlackMythWukongSaveMetadata? metadata));
+        Assert.Equal(12, deaths);
+        Assert.NotNull(metadata);
+        Assert.Equal(300, metadata.Level);
+        Assert.Equal(TimeSpan.FromMinutes(129), metadata.TotalPlayTime);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds((long)unixSeconds), metadata.LastSaved);
+    }
+
+    [Fact]
+    public void ParserTreatsEveryCharacterMetadataFieldAsIndependentlyOptional()
+    {
+        byte[] archive = WukongSaveFixture.Create(
+            4,
+            levelField: WukongSaveFixture.Concat(
+                WukongSaveFixture.FieldVarint(4, 8),
+                WukongSaveFixture.FieldVarint(4, 9)),
+            playTimeField: WukongSaveFixture.FieldFixed32(2, BitConverter.SingleToUInt32Bits(90f)),
+            timestampField: WukongSaveFixture.FieldVarint(5, 1_720_000_000));
+
+        Assert.Equal(
+            BlackMythWukongSaveParseOutcome.Success,
+            BlackMythWukongSaveParser.TryRead(archive, out long deaths, out BlackMythWukongSaveMetadata? metadata));
+        Assert.Equal(4, deaths);
+        Assert.NotNull(metadata);
+        Assert.Null(metadata.Level);
+        Assert.Equal(TimeSpan.FromSeconds(90), metadata.TotalPlayTime);
+        Assert.NotNull(metadata.LastSaved);
+
+        Assert.Equal(
+            BlackMythWukongSaveParseOutcome.Success,
+            BlackMythWukongSaveParser.TryRead(WukongSaveFixture.Create(4), out _, out metadata));
+        Assert.Null(metadata);
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidMetadataFields))]
+    public void ParserOmitsInvalidMetadataWithoutChangingDeathSemantics(
+        byte[]? levelField,
+        byte[]? playTimeField,
+        byte[]? timestampField)
+    {
+        byte[] archive = WukongSaveFixture.Create(
+            19,
+            levelField: levelField,
+            playTimeField: playTimeField,
+            timestampField: timestampField);
+
+        Assert.Equal(
+            BlackMythWukongSaveParseOutcome.Success,
+            BlackMythWukongSaveParser.TryRead(archive, out long deaths, out BlackMythWukongSaveMetadata? metadata));
+        Assert.Equal(19, deaths);
+        Assert.Null(metadata);
+    }
+
+    public static TheoryData<byte[]?, byte[]?, byte[]?> InvalidMetadataFields => new()
+    {
+        { WukongSaveFixture.FieldVarint(4, 0), null, null },
+        { WukongSaveFixture.FieldVarint(4, (ulong)int.MaxValue + 1), null, null },
+        { WukongSaveFixture.FieldFixed32(4, 1), null, null },
+        { WukongSaveFixture.Concat(WukongSaveFixture.FieldVarint(4, 1), WukongSaveFixture.FieldVarint(4, 2)), null, null },
+        { [0x20, 0x80], null, null },
+        { null, WukongSaveFixture.FieldVarint(2, 1), null },
+        { null, WukongSaveFixture.Concat(WukongSaveFixture.FieldFixed32(2, 1), WukongSaveFixture.FieldFixed32(2, 2)), null },
+        { null, WukongSaveFixture.FieldFixed32(2, BitConverter.SingleToUInt32Bits(float.NaN)), null },
+        { null, WukongSaveFixture.FieldFixed32(2, BitConverter.SingleToUInt32Bits(float.PositiveInfinity)), null },
+        { null, WukongSaveFixture.FieldFixed32(2, BitConverter.SingleToUInt32Bits(-1f)), null },
+        { null, WukongSaveFixture.FieldFixed32(2, BitConverter.SingleToUInt32Bits(1e20f)), null },
+        { null, [0x15, 0x00, 0x00, 0x00], null },
+        { null, null, WukongSaveFixture.FieldBytes(5, []) },
+        { null, null, WukongSaveFixture.Concat(WukongSaveFixture.FieldVarint(5, 1), WukongSaveFixture.FieldVarint(5, 2)) },
+        { null, null, WukongSaveFixture.FieldVarint(5, 253_402_300_800UL) },
+    };
+
+    [Fact]
     public void ParserFailsClosedForBadChecksumsUnsupportedMetadataDuplicatesWrongWiresAndOverflows()
     {
         byte[] checksumCorrupt = WukongSaveFixture.Create(8);
@@ -33,6 +119,16 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         Assert.Equal(BlackMythWukongSaveParseOutcome.Invalid, BlackMythWukongSaveParser.TryReadTotalDeaths(checksumCorrupt, out _));
 
         Assert.Equal(BlackMythWukongSaveParseOutcome.Unsupported, BlackMythWukongSaveParser.TryReadTotalDeaths(WukongSaveFixture.Create(8, buildRevision: 23832), out _));
+        Assert.Equal(
+            BlackMythWukongSaveParseOutcome.Unsupported,
+            BlackMythWukongSaveParser.TryRead(
+                WukongSaveFixture.Create(
+                    8,
+                    buildRevision: 23832,
+                    levelField: WukongSaveFixture.FieldVarint(4, 10)),
+                out _,
+                out BlackMythWukongSaveMetadata? unsupportedMetadata));
+        Assert.Null(unsupportedMetadata);
 
         byte[] duplicateOuterField = WukongSaveFixture.Create(8).Concat(new byte[] { 0x0A, 0x00 }).ToArray();
         Assert.Equal(BlackMythWukongSaveParseOutcome.Invalid, BlackMythWukongSaveParser.TryReadTotalDeaths(duplicateOuterField, out _));
@@ -57,7 +153,9 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         var reader = new BlackMythWukongSaveDeathReader();
         Assert.Equal(RuntimeGameReaderStatus.WaitingForSaveFile, (await reader.ReadAsync(default))!.Status);
 
-        string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(null));
+        string path = WriteArchive(
+            "ArchiveSaveFile.1.sav",
+            WukongSaveFixture.Create(null, levelField: WukongSaveFixture.FieldVarint(4, 22)));
         byte[] before = await File.ReadAllBytesAsync(path);
         reader.Configure(new BlackMythWukongSaveConfiguration(path));
 
@@ -65,6 +163,7 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
         Assert.Equal(GameId.BlackMythWukong, result.Observation!.GameId);
         Assert.Equal(0, result.Observation.TotalDeaths.Value);
+        Assert.Equal(22, result.BlackMythWukongSaveMetadata!.Level);
         Assert.Equal(before, await File.ReadAllBytesAsync(path));
     }
 
@@ -121,12 +220,29 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         private static ReadOnlySpan<byte> XorKey => [0x7B, 0x5C, 0xDA, 0x91, 0x3E, 0xFC, 0xDA, 0x37];
         private static ReadOnlySpan<byte> Salt => "lhx2tkh6lj1wj8jmrgs3k1xb2brusehx"u8;
 
-        public static byte[] Create(int? deaths, int buildRevision = 23831)
+        public static byte[] Create(
+            int? deaths,
+            int buildRevision = 23831,
+            byte[]? levelField = null,
+            byte[]? playTimeField = null,
+            byte[]? timestampField = null)
         {
             byte[] deathData = deaths is int value ? FieldVarint(1, checked((ulong)value)) : [];
             byte[] persistentBgc = FieldBytes(5, deathData);
             byte[] persistentEcs = FieldBytes(1, persistentBgc);
-            byte[] decodedPayload = FieldBytes(6, persistentEcs);
+            var archiveDataFields = new List<byte[]>();
+            if (levelField is not null)
+            {
+                archiveDataFields.Add(FieldBytes(1, FieldBytes(1, levelField)));
+            }
+            if (playTimeField is not null)
+            {
+                archiveDataFields.Add(FieldBytes(2, FieldBytes(1, FieldBytes(1, playTimeField))));
+            }
+            byte[] archiveData = Concat(archiveDataFields.ToArray());
+            byte[] decodedPayload = archiveData.Length == 0
+                ? FieldBytes(6, persistentEcs)
+                : Concat(FieldBytes(1, archiveData), FieldBytes(6, persistentEcs));
             byte[] encryptedPayload = decodedPayload.ToArray();
             for (int index = 0; index < encryptedPayload.Length; index++) encryptedPayload[index] ^= XorKey[index % XorKey.Length];
 
@@ -140,10 +256,12 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
                 FieldVarint(8, 1),
                 FieldVarint(10, checked((ulong)buildRevision)),
                 FieldVarint(11, checked((ulong)buildRevision)));
-            return Concat(FieldBytes(1, metadata), FieldBytes(2, encryptedPayload));
+            return timestampField is null
+                ? Concat(FieldBytes(1, metadata), FieldBytes(2, encryptedPayload))
+                : Concat(FieldBytes(1, metadata), FieldBytes(2, encryptedPayload), timestampField);
         }
 
-        private static byte[] FieldBytes(ulong field, ReadOnlySpan<byte> value)
+        public static byte[] FieldBytes(ulong field, ReadOnlySpan<byte> value)
         {
             var result = new List<byte>();
             WriteVarint(result, field << 3 | 2);
@@ -152,7 +270,7 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
             return result.ToArray();
         }
 
-        private static byte[] FieldVarint(ulong field, ulong value)
+        public static byte[] FieldVarint(ulong field, ulong value)
         {
             var result = new List<byte>();
             WriteVarint(result, field << 3);
@@ -160,7 +278,15 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
             return result.ToArray();
         }
 
-        private static byte[] Concat(params byte[][] values) => values.SelectMany(static value => value).ToArray();
+        public static byte[] FieldFixed32(ulong field, uint value)
+        {
+            byte[] result = new byte[5];
+            result[0] = checked((byte)(field << 3 | 5));
+            BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(1), value);
+            return result;
+        }
+
+        public static byte[] Concat(params byte[][] values) => values.SelectMany(static value => value).ToArray();
 
         private static void WriteVarint(List<byte> target, ulong value)
         {
