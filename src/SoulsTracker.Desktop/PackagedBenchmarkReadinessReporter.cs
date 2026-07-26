@@ -5,6 +5,8 @@ namespace SoulsTracker.Desktop;
 
 internal static class PackagedBenchmarkReadinessReporter
 {
+    internal const PipeOptions ReadinessPipeOptions =
+        PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly;
     private static readonly TimeSpan ConnectionTimeout = TimeSpan.FromSeconds(10);
 
     public static async Task ReportAsync(
@@ -21,7 +23,7 @@ internal static class PackagedBenchmarkReadinessReporter
             ".",
             pipeName,
             PipeDirection.Out,
-            PipeOptions.Asynchronous);
+            ReadinessPipeOptions);
         await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
 
         byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new ReadinessPayload(

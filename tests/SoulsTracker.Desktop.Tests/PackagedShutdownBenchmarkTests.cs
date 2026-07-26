@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Pipes;
 using System.Text.Json;
 using SoulsTracker.PackagedAppShutdownBenchmark;
 
@@ -6,6 +7,19 @@ namespace SoulsTracker.Desktop.Tests;
 
 public sealed class PackagedShutdownBenchmarkTests
 {
+    [Fact]
+    public void BothReadinessPipeEndpointsAreRestrictedToTheCurrentUser()
+    {
+        Assert.Equal(
+            PipeOptions.CurrentUserOnly,
+            PackagedBenchmarkReadinessReporter.ReadinessPipeOptions &
+            PipeOptions.CurrentUserOnly);
+        Assert.Equal(
+            PipeOptions.CurrentUserOnly,
+            ShutdownBenchmarkRunner.ReadinessPipeOptions &
+            PipeOptions.CurrentUserOnly);
+    }
+
     [Fact]
     public void OptionsUseTheRequiredDefaults()
     {

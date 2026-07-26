@@ -7,6 +7,8 @@ namespace SoulsTracker.PackagedAppShutdownBenchmark;
 
 internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
 {
+    internal const PipeOptions ReadinessPipeOptions =
+        PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly;
     private const int MaximumReadinessPayloadBytes = 16 * 1024;
     private const string DataRootOption = "--data-root";
     private const string ReadinessPipeOption = "--benchmark-readiness-pipe";
@@ -88,7 +90,7 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
                 PipeDirection.In,
                 1,
                 PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous);
+                ReadinessPipeOptions);
             string executable = Path.Combine(packageRoot, "SoulsTracker.Desktop.exe");
             application = Process.Start(new ProcessStartInfo
             {
