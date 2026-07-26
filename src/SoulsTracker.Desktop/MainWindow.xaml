@@ -389,6 +389,14 @@
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
+                            <StackPanel Margin="0,12,0,0" Visibility="{Binding IsBlackMythWukongSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong save reader setup">
+                                <TextBlock Style="{StaticResource PanelTitle}" Text="BLACK MYTH: WUKONG SAVE" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose your local save file. Death totals update after the game saves, so they can take a moment." />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Choose save..." Click="BrowseBlackMythWukongSave_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Black Myth Wukong save file" />
+                                    <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Text="{Binding BlackMythWukongSaveFileName, TargetNullValue=No save file selected.}" AutomationProperties.Name="Selected Black Myth Wukong save file" />
+                                </StackPanel>
+                            </StackPanel>
                             <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4">
                                 <StackPanel>
                                     <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedTextBrush}" Text="READER STATUS" />

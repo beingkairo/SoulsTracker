@@ -148,13 +148,13 @@ public sealed class GameDefinition
             return;
         }
 
-        if (id == GameId.Bloodborne || id == GameId.DemonsSouls || id == GameId.BlackMythWukong)
+        if (id == GameId.Bloodborne || id == GameId.DemonsSouls)
         {
             if (trackingMode != GameTrackingMode.ManualOnly ||
                 readerBindingState != ReaderBindingState.IntentionallyUnavailable)
             {
                 throw new ArgumentException(
-                    "Manual PlayStation profiles must remain manual-only.");
+                    "Manual console profiles must remain manual-only.");
             }
 
             return;

@@ -67,6 +67,9 @@ public sealed record AcknowledgeEldenRingNoticeCommand : ITrackerCommand;
 /// <summary>Updates the locally selected, read-only Elden Ring save and profile slot.</summary>
 public sealed record UpdateEldenRingSaveConfigurationCommand(EldenRingSaveConfiguration Configuration) : ITrackerCommand;
 
+/// <summary>Updates the locally selected, read-only Black Myth: Wukong save.</summary>
+public sealed record UpdateBlackMythWukongSaveConfigurationCommand(BlackMythWukongSaveConfiguration Configuration) : ITrackerCommand;
+
 /// <summary>
 /// Identifies the command whose transition was evaluated without carrying state or secrets.
 /// </summary>
@@ -83,6 +86,7 @@ public enum TrackerCommandType
     UpdateDeathSoundConfiguration,
     AcknowledgeEldenRingNotice,
     UpdateEldenRingSaveConfiguration,
+    UpdateBlackMythWukongSaveConfiguration,
     UpdateTextExports,
     LegacyImport,
 }

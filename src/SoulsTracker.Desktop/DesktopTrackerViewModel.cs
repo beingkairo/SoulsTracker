@@ -20,6 +20,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string GameUnavailableMessage = "Game unavailable";
     internal const string GameWaitingForActiveCharacterMessage = "Game detected — waiting for active character";
     internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save file";
+    internal const string BlackMythWukongWaitingForSaveFileMessage = "Choose a Black Myth: Wukong save file";
     internal const string GameSyncedMessage = "Synced";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
     internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable — waiting for active character.";
@@ -274,7 +275,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         get
         {
             GameId? selectedGameId = state?.SelectedGameId;
-            if (selectedGameId is null || IsManualGame(selectedGameId))
+            if (selectedGameId is null || selectedGameId == GameId.Bloodborne || selectedGameId == GameId.DemonsSouls)
             {
                 return null;
             }
@@ -282,7 +283,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return runtimeReaderStatus switch
             {
                 RuntimeGameReaderStatus.WaitingForActiveCharacter => GameWaitingForActiveCharacterMessage,
-                RuntimeGameReaderStatus.WaitingForSaveFile => GameWaitingForSaveFileMessage,
+                RuntimeGameReaderStatus.WaitingForSaveFile => WaitingForSaveFileMessage(selectedGameId),
                 RuntimeGameReaderStatus.Synced => GameSyncedMessage,
                 _ => GameUnavailableMessage,
             };
@@ -296,6 +297,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsBloodborneSelected => state?.SelectedGameId == GameId.Bloodborne;
     public bool IsEldenRingSelected => state?.SelectedGameId == GameId.EldenRing;
     public string? EldenRingSaveFileName => state?.EldenRingSave.FileName;
+    public bool IsBlackMythWukongSelected => state?.SelectedGameId == GameId.BlackMythWukong;
+    public string? BlackMythWukongSaveFileName => state?.BlackMythWukongSave.FileName;
     /// <summary>True only when the selected local Elden Ring save is still available for slot selection.</summary>
     public bool CanSelectEldenRingProfile => ControlsEnabled
         && IsEldenRingSelected
@@ -517,6 +520,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (!CanSelectEldenRingProfile || !EldenRingProfileSlots.Any(choice => choice.Index == slot.Index)) return;
         await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index), cancellationToken);
     }
+    public Task SetBlackMythWukongSaveFileAsync(string localPath, CancellationToken cancellationToken = default) =>
+        !ControlsEnabled ? Task.CompletedTask : SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
 
     public async Task SetBossListScopeAsync(BossListScopeChoice? scope, CancellationToken cancellationToken = default)
     {
@@ -900,14 +905,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         GameId selectedId = state.SelectedGameId;
-        TotalDeathsText = IsManualGame(selectedId)
-            ? ManualDeaths.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : runtimeObservation?.GameId == selectedId
-                ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        TotalDeathsText = runtimeObservation?.GameId == selectedId
+            ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : IsManualGame(selectedId)
+                ? ManualDeaths.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForActiveCharacter
                     ? GameTotalDeathsWaitingForActiveCharacterMessage
                     : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForSaveFile
-                        ? "Choose an Elden Ring save file to begin tracking."
+                        ? WaitingForSaveFileMessage(selectedId) + " to begin tracking."
                         : GameTotalDeathsUnavailableMessage;
     }
 
@@ -1021,6 +1026,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBloodborneSelected));
         OnPropertyChanged(nameof(IsEldenRingSelected));
         OnPropertyChanged(nameof(EldenRingSaveFileName));
+        OnPropertyChanged(nameof(IsBlackMythWukongSelected));
+        OnPropertyChanged(nameof(BlackMythWukongSaveFileName));
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
         OnPropertyChanged(nameof(IsManualGameSelected));
         OnPropertyChanged(nameof(IsCenterBossAlignment));
@@ -1065,6 +1072,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             RefreshDeathSoundStatus();
         }
     }
+
+    private static string WaitingForSaveFileMessage(GameId gameId) => gameId == GameId.BlackMythWukong
+        ? BlackMythWukongWaitingForSaveFileMessage
+        : GameWaitingForSaveFileMessage;
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls || gameId == GameId.BlackMythWukong;
 
@@ -1142,6 +1153,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
 
+    private async Task SaveBlackMythWukongSaveAsync(BlackMythWukongSaveConfiguration configuration, CancellationToken cancellationToken)
+    {
+        IsBusy = true;
+        try { ApplyCommittedState(await coordinator.SetBlackMythWukongSaveConfigurationAsync(configuration, cancellationToken)); }
+        catch { ErrorMessage = "The Black Myth: Wukong save selection could not be saved."; }
+        finally { IsBusy = false; NotifyTrackerProperties(); }
+    }
+
     private async Task RefreshEldenRingProfileSlotsAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<EldenRingCharacterSlotMetadata> metadata;
@@ -1216,9 +1235,7 @@ public sealed class GameChoice
         ? "Bloodborne [Manual]"
         : GameId == SoulsTracker.Domain.GameId.DemonsSouls
             ? "Demon Souls [Manual]"
-            : GameId == SoulsTracker.Domain.GameId.BlackMythWukong
-                ? "Black Myth: Wukong [Manual]"
-                : definition!.DisplayName;
+        : definition!.DisplayName;
     public bool IsSelectable => definition!.IsSelectable;
     public string AvailabilityLabel => IsSelectable ? string.Empty : "SOON";
 }

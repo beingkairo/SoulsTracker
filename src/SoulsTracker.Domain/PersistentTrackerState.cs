@@ -27,7 +27,8 @@ public sealed class PersistentTrackerState
         eldenRingNoticeAcknowledged: false,
         EldenRingSaveConfiguration.Default,
         BossListScope.AllBosses,
-        ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
+        ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong),
+        BlackMythWukongSaveConfiguration.Default);
 
     /// <summary>
     /// Initializes validated persisted tracker state.
@@ -47,7 +48,8 @@ public sealed class PersistentTrackerState
         bool eldenRingNoticeAcknowledged = false,
         EldenRingSaveConfiguration? eldenRingSave = null,
         BossListScope bossListScope = BossListScope.AllBosses,
-        ManualBloodborneDeathCounter? manualBlackMythWukongDeathCounter = null)
+        ManualBloodborneDeathCounter? manualBlackMythWukongDeathCounter = null,
+        BlackMythWukongSaveConfiguration? blackMythWukongSave = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -68,6 +70,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneDeathCounter = manualBloodborneDeathCounter;
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
         ManualBlackMythWukongDeathCounter = manualBlackMythWukongDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong);
+        BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
         BossProgress = bossProgress;
         OverlayConfiguration = overlayConfiguration;
         ManualBloodborneHotkeys = manualBloodborneHotkeys is { IsValid: true } validHotkeys
@@ -100,6 +103,9 @@ public sealed class PersistentTrackerState
 
     /// <summary>Gets the persisted Black Myth: Wukong manual death counter.</summary>
     public ManualBloodborneDeathCounter ManualBlackMythWukongDeathCounter { get; }
+
+    /// <summary>Local configuration for the separate read-only Black Myth: Wukong save reader.</summary>
+    public BlackMythWukongSaveConfiguration BlackMythWukongSave { get; }
 
     /// <summary>Returns the independent manual counter for a supported manual profile.</summary>
     public ManualBloodborneDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.Bloodborne

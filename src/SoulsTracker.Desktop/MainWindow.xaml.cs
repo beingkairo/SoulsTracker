@@ -154,6 +154,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void BrowseBlackMythWukongSave_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Black Myth: Wukong save (ArchiveSaveFile.*.sav)|ArchiveSaveFile.*.sav", CheckFileExists = true, Multiselect = false, Title = "Choose Black Myth: Wukong save" };
+        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.SetBlackMythWukongSaveFileAsync(dialog.FileName);
+        }
+    }
+
     private async void EldenRingProfileSlot_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: EldenRingProfileSlotChoice slot } && viewModel.SelectedEldenRingProfileSlot != slot)

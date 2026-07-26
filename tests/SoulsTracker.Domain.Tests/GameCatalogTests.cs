@@ -62,8 +62,8 @@ public sealed class GameCatalogTests
                 GameId.BlackMythWukong,
                 "Black Myth: Wukong",
                 GameUiAvailability.Selectable,
-                GameTrackingMode.ManualOnly,
-                ReaderBindingState.IntentionallyUnavailable,
+                GameTrackingMode.GameLifetimeReadOnly,
+                ReaderBindingState.PendingVerification,
                 96),
         ];
 
@@ -137,13 +137,13 @@ public sealed class GameCatalogTests
     }
 
     [Fact]
-    public void BlackMythWukongIsASelectableManualProfileWithTheCuratedBaseGameCatalog()
+    public void BlackMythWukongIsASelectableSaveReadProfileWithTheCuratedBaseGameCatalog()
     {
         GameDefinition definition = GameCatalog.GetRequired(GameId.BlackMythWukong);
 
         Assert.True(definition.IsSelectable);
-        Assert.Equal(GameTrackingMode.ManualOnly, definition.TrackingMode);
-        Assert.Equal(ReaderBindingState.IntentionallyUnavailable, definition.ReaderBindingState);
+        Assert.Equal(GameTrackingMode.GameLifetimeReadOnly, definition.TrackingMode);
+        Assert.Equal(ReaderBindingState.PendingVerification, definition.ReaderBindingState);
         Assert.Equal(96, definition.BossCatalog.Count);
         Assert.Equal("c1_erlang_sacred_divinity", definition.BossCatalog[0].Id.Value);
         Assert.Equal("c6_stone_monkey_great_sage", definition.BossCatalog[^1].Id.Value);

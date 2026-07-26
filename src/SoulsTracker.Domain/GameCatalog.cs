@@ -184,8 +184,8 @@ public static class GameCatalog
             GameId.BlackMythWukong,
             "Black Myth: Wukong",
             GameUiAvailability.Selectable,
-            GameTrackingMode.ManualOnly,
-            ReaderBindingState.IntentionallyUnavailable,
+            GameTrackingMode.GameLifetimeReadOnly,
+            ReaderBindingState.PendingVerification,
             BlackMythWukongBossCatalog.Create()),
     ]);
 

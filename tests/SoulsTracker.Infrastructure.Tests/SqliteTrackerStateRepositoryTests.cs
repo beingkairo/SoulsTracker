@@ -111,6 +111,30 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BlackMythWukongSaveSelectionRoundTripsLocally()
+    {
+        const string savePath = "C:\\local-only\\ArchiveSaveFile.1.sav";
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            blackMythWukongSave: new BlackMythWukongSaveConfiguration(savePath));
+
+        await using (var repository = new SqliteTrackerStateRepository(root, "wukong-save.db", new ReversingProtector()))
+        {
+            await repository.LoadAsync();
+            await repository.SaveAsync(configured);
+        }
+
+        await using var reopened = new SqliteTrackerStateRepository(root, "wukong-save.db", new ReversingProtector());
+        PersistentTrackerState restored = (await reopened.LoadAsync()).State!;
+        Assert.Equal(savePath, restored.BlackMythWukongSave.LocalPath);
+        Assert.Equal(GameId.BlackMythWukong, restored.SelectedGameId);
+    }
+
+    [Fact]
     public async Task LegacyEldenRingRequiredBossFieldLoadsSafelyAndIsRemovedOnNextWrite()
     {
         const string database = "elden-legacy-filter.db";

@@ -152,10 +152,10 @@ public sealed class SecureOverlayService : IAsyncDisposable
     private OverlaySnapshot CreateSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation)
     {
         OverlayGameMetadata game = new(state.SelectedGameId);
-        TotalDeathsDisplayValue deaths = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly
-            ? TotalDeathsDisplayValue.FromManualCounter(state.SelectedGameId, state.GetManualDeathCounter(state.SelectedGameId))
-            : observation is not null && observation.GameId == state.SelectedGameId
-                ? TotalDeathsDisplayValue.FromRuntimeObservation(observation)
+        TotalDeathsDisplayValue deaths = observation is not null && observation.GameId == state.SelectedGameId
+            ? TotalDeathsDisplayValue.FromRuntimeObservation(observation)
+            : GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || state.SelectedGameId == GameId.BlackMythWukong
+                ? TotalDeathsDisplayValue.FromManualCounter(state.SelectedGameId, state.GetManualDeathCounter(state.SelectedGameId))
                 : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
         IEnumerable<OverlayBossEntry> bosses = BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.BossListScope)
                 .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));

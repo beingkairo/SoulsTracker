@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application, IDisposable
     private TextExportStatePublisher? textExportPublisher;
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private EldenRingSaveDeathReader? eldenRingSaveReader;
+    private BlackMythWukongSaveDeathReader? blackMythWukongSaveReader;
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
     private AutomatedDeathSoundNotifier? automatedDeathSoundNotifier;
@@ -118,6 +119,7 @@ public partial class App : System.Windows.Application, IDisposable
         if (!mainWindowCloseRequested && viewModel.ControlsEnabled)
         {
             eldenRingSaveReader = new EldenRingSaveDeathReader();
+            blackMythWukongSaveReader = new BlackMythWukongSaveDeathReader();
             runtimeReaders = new RuntimeGameReaderCoordinator([
                 new DarkSoulsRemasteredActiveCharacterDeathReader(
                     new ExactNameDarkSoulsRemasteredProcessEnumerator(),
@@ -147,6 +149,7 @@ public partial class App : System.Windows.Application, IDisposable
                         "1.6.0.0",
                         "637ACA527538C0EC6E1F136C8ED66046E95DFBDBB1F51926E134D9916398B856"))),
                 eldenRingSaveReader,
+                blackMythWukongSaveReader,
             ]);
             runtimeReaderCancellation = new CancellationTokenSource();
             runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
@@ -293,6 +296,7 @@ public partial class App : System.Windows.Application, IDisposable
                 runtimeReaderPollingTask = null;
                 runtimeReaders = null;
                 eldenRingSaveReader = null;
+                blackMythWukongSaveReader = null;
             }
 
             automatedDeathSoundNotifier = null;
@@ -317,6 +321,7 @@ public partial class App : System.Windows.Application, IDisposable
                 if (viewModel.CurrentState is { } currentState)
                 {
                     eldenRingSaveReader?.Configure(currentState.EldenRingSave);
+                    blackMythWukongSaveReader?.Configure(currentState.BlackMythWukongSave);
                 }
                 RuntimeGameReadResult? result = await runtimeReaders!
                     .PollAsync(viewModel.CurrentState?.SelectedGameId, cancellationToken)

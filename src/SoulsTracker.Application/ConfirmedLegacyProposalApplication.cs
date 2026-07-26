@@ -110,7 +110,7 @@ public static class ConfirmedLegacyProposalApplication
             overlay,
             destination.ManualBloodborneHotkeys,
             destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave,
-            destination.BossListScope, ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
+            destination.BossListScope, ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong), destination.BlackMythWukongSave);
         return true;
     }
 

@@ -778,22 +778,27 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task BlackMythWukongUsesItsOwnManualCounterAndBaseGameCatalog()
+    public async Task BlackMythWukongUsesAutomaticTrackingWithItsManualFallbackAndBaseGameCatalog()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
 
         GameChoice wukong = harness.Game(GameId.BlackMythWukong);
         Assert.True(wukong.IsSelectable);
-        Assert.Equal("Black Myth: Wukong [Manual]", wukong.DisplayName);
+        Assert.Equal("Black Myth: Wukong", wukong.DisplayName);
 
         await harness.ViewModel.SelectGameAsync(wukong);
 
         Assert.Equal(GameId.BlackMythWukong, harness.Repository.State.SelectedGameId);
-        Assert.Equal("Black Myth: Wukong [Manual]", harness.ViewModel.SelectedGame!.DisplayName);
+        Assert.Equal("Black Myth: Wukong", harness.ViewModel.SelectedGame!.DisplayName);
         Assert.True(harness.ViewModel.IsManualGameSelected);
         Assert.Equal("0", harness.ViewModel.TotalDeathsText);
-        Assert.Null(harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Equal(DesktopTrackerViewModel.GameUnavailableMessage, harness.ViewModel.RuntimeReaderStatusText);
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(GameId.BlackMythWukong));
+        Assert.Equal(DesktopTrackerViewModel.BlackMythWukongWaitingForSaveFileMessage, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Equal("0", harness.ViewModel.TotalDeathsText);
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow)));
+        Assert.Equal("12", harness.ViewModel.TotalDeathsText);
         Assert.Equal(96, harness.ViewModel.Bosses.Count);
         Assert.Equal("Track boss progress for Black Myth: Wukong.", harness.ViewModel.BossDescription);
     }

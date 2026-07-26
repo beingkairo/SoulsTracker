@@ -34,7 +34,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
     {
         TextExportConfiguration config = state.TextExports;
         bool succeeded = true;
-        bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || displayedTotal.HasValue;
+        bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || state.SelectedGameId == GameId.BlackMythWukong || displayedTotal.HasValue;
         if (config.DeathsEnabled && config.DeathsPath is not null && hasDisplayedDeathTotal)
         {
             long total = displayedTotal ?? state.GetManualDeathCounter(state.SelectedGameId).Value;
