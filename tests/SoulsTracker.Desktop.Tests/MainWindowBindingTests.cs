@@ -20,6 +20,59 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class MainWindowBindingTests
 {
     [Theory]
+    [InlineData("demons_souls")]
+    [InlineData("elden_ring")]
+    [InlineData("black_myth_wukong")]
+    public void ProductionStartupRestoresTheCommittedGameSelectorPresentation(string persistedGameId)
+    {
+        GameId gameId = GameId.Parse(persistedGameId);
+        PersistentTrackerState initialState = StateForSelectedGame(gameId);
+
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var repository = new TextExportPersistenceRepository(initialState);
+            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(
+                    coordinator,
+                    eldenRingSaveProfileReader: new FixedEldenRingProfileReader([]),
+                    blackMythWukongSaveDiscovery: new FixedSaveDiscovery(),
+                    eldenRingSaveDiscovery: new FixedSaveDiscovery());
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                ComboBox selector = Assert.IsType<ComboBox>(window.FindName("GameSelector"));
+                Assert.Null(selector.SelectedItem);
+
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                window.UpdateLayout();
+
+                GameChoice restoredGame = Assert.IsType<GameChoice>(viewModel.SelectedGame);
+                Assert.Same(restoredGame, selector.SelectedItem);
+                Assert.Equal(GameCatalog.GetRequired(gameId).Id, restoredGame.GameId);
+                Assert.NotNull(BindingOperations.GetBinding(selector, ComboBox.SelectedItemProperty));
+                selector.IsDropDownOpen = true;
+                window.UpdateLayout();
+                ComboBoxItem selectedItem = Assert.IsType<ComboBoxItem>(
+                    selector.ItemContainerGenerator.ContainerFromItem(restoredGame));
+                Assert.True(selectedItem.IsSelected);
+                Assert.Equal(restoredGame.DisplayName, AutomationProperties.GetName(selectedItem));
+                selector.IsDropDownOpen = false;
+                Assert.Equal(0, repository.SaveCount);
+                Assert.False(viewModel.IsEldenRingNoticeVisible);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void FailedWukongSelectionRestoresTheOneWayBoundCommittedChoice(bool hasCommittedChoice)
@@ -1694,6 +1747,14 @@ public sealed class MainWindowBindingTests
         OverlayConfiguration.Default,
         eldenRingNoticeAcknowledged: true,
         eldenRingSave: new EldenRingSaveConfiguration(localPath, slotIndex));
+
+    private static PersistentTrackerState StateForSelectedGame(GameId gameId) => new(
+        PersistentTrackerState.CurrentSchemaVersion,
+        gameId,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+        BossProgress.Empty,
+        OverlayConfiguration.Default,
+        eldenRingNoticeAcknowledged: gameId == GameId.EldenRing);
 
     private sealed class FixedSaveDiscovery(params DiscoveredLocalSave[] saves) : ILocalSaveDiscovery
     {

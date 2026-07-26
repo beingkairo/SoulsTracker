@@ -32,7 +32,6 @@ public partial class MainWindow : Window
         if (previewViewModel is not null) previewViewModel.PropertyChanged -= PreviewViewModel_PropertyChanged;
         previewViewModel = e.NewValue as DesktopTrackerViewModel;
         if (previewViewModel is not null) previewViewModel.PropertyChanged += PreviewViewModel_PropertyChanged;
-        GameSelector.SelectedItem = previewViewModel?.SelectedGame;
         RefreshPreviews();
     }
 

@@ -344,12 +344,16 @@
                             <ComboBox x:Name="GameSelector"
                                       ItemsSource="{Binding GameChoices}"
                                       SelectedItem="{Binding SelectedGame, Mode=OneWay}"
+                                      TextSearch.TextPath="DisplayName"
                                       SelectionChanged="GameSelector_SelectionChanged"
                                       PreviewMouseWheel="GameSelector_PreviewMouseWheel"
                                       IsEnabled="{Binding ControlsEnabled}"
                                       AutomationProperties.Name="Game selection">
                                 <ComboBox.ItemContainerStyle>
-                                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItem}"><Setter Property="IsEnabled" Value="{Binding IsSelectable}" /></Style>
+                                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItem}">
+                                        <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
+                                        <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
+                                    </Style>
                                 </ComboBox.ItemContainerStyle>
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
