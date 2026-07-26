@@ -348,7 +348,7 @@
                                       SelectionChanged="GameSelector_SelectionChanged"
                                       PreviewMouseWheel="GameSelector_PreviewMouseWheel"
                                       IsEnabled="{Binding ControlsEnabled}"
-                                      AutomationProperties.Name="Game selection">
+                                      AutomationProperties.Name="{Binding GameSelectionAutomationName, FallbackValue='Game selection'}">
                                 <ComboBox.ItemContainerStyle>
                                     <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItem}">
                                         <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />

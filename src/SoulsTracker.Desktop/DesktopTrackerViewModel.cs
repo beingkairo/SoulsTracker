@@ -263,6 +263,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string DraftMaximumVisibleCount { get; set; } = "25";
 
     public GameChoice? SelectedGame { get; private set; }
+    public string GameSelectionAutomationName => SelectedGame is null
+        ? "Game selection"
+        : $"Game selection: {SelectedGame.DisplayName}";
 
     public bool IsLoading
     {
@@ -1273,6 +1276,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         BossListScopes = BossListScopeChoice.For(GameCatalog.GetRequired(selectedId));
         SelectedBossListScope = BossListScopes.Single(scope => scope.Value == state.BossListScope);
         OnPropertyChanged(nameof(SelectedGame));
+        OnPropertyChanged(nameof(GameSelectionAutomationName));
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
         OnPropertyChanged(nameof(SelectedBossListScope));
         OnPropertyChanged(nameof(BossDescription));

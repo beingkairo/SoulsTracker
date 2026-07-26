@@ -3,6 +3,7 @@ using System.Threading;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -54,6 +55,9 @@ public sealed class MainWindowBindingTests
                 Assert.Same(restoredGame, selector.SelectedItem);
                 Assert.Equal(GameCatalog.GetRequired(gameId).Id, restoredGame.GameId);
                 Assert.NotNull(BindingOperations.GetBinding(selector, ComboBox.SelectedItemProperty));
+                AutomationPeer selectorPeer = Assert.IsAssignableFrom<AutomationPeer>(
+                    UIElementAutomationPeer.CreatePeerForElement(selector));
+                Assert.Equal($"Game selection: {restoredGame.DisplayName}", selectorPeer.GetName());
                 selector.IsDropDownOpen = true;
                 window.UpdateLayout();
                 ComboBoxItem selectedItem = Assert.IsType<ComboBoxItem>(
