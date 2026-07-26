@@ -155,6 +155,29 @@ test("unavailable Total Deaths is rendered as a safe display state", async ({ pa
   await expect(page.getByRole("heading")).toContainText("Unavailable");
 });
 
+test("no selected game leaves the Total Deaths overlay blank", async ({ page }) => {
+  await openOverlay(page, "/overlay/total_deaths");
+  await emit(page, snapshot(1, { selectedGame: null, totalDeaths: null, source: "Unavailable" }));
+
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
+});
+
+test("no selected game remains blank after a Total Deaths reconnect", async ({ page }) => {
+  await openOverlay(page, "/overlay/total_deaths");
+  await emit(page, snapshot(1, { selectedGame: "Bloodborne", totalDeaths: 8, source: "ManualBloodborne" }));
+  await expect(page.getByRole("heading")).toContainText("8");
+
+  await page.evaluate(() => {
+    const sockets = (window as unknown as { __overlaySockets: Array<{ close(): void }> }).__overlaySockets;
+    sockets.at(-1)?.close();
+  });
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __overlaySockets: unknown[] }).__overlaySockets.length)).toBeGreaterThan(1);
+
+  await emit(page, snapshot(2, { selectedGame: null, totalDeaths: null, source: "Unavailable" }));
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
+});
+
 test("a synced Elden Ring zero renders as a numeric Total Deaths value", async ({ page }) => {
   await openOverlay(page, "/overlay/total_deaths");
   await emit(page, snapshot(1, { selectedGame: "Elden Ring", totalDeaths: 0, source: "GameLifetimeReader" }));
@@ -171,7 +194,7 @@ test("a selected game with no visible bosses leaves the Boss List overlay blank"
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
 
   await emit(page, snapshot(2, { selectedGame: null, bosses: [] }));
-  await expect(page.getByTestId("boss-list-overlay")).toContainText("Select a game in SoulsTracker to show its boss list.");
+  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
 });
 
 test("visibility filters blank the Boss List overlay when they hide every source boss", async ({ page }) => {

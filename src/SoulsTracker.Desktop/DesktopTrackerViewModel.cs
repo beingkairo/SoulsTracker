@@ -78,7 +78,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
-        GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
+        GameChoices = new ObservableCollection<GameChoice>([GameChoice.NoGameSelected, .. GameCatalog.All.Select(static game => new GameChoice(game))]);
         Bosses.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsBossListEmpty));
         EldenRingProfileSlots = new ObservableCollection<EldenRingProfileSlotChoice>(CreateUnavailableEldenRingProfileSlots());
         BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
@@ -200,6 +200,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     public GameChoice? SelectedGame { get; private set; }
 
+    public bool IsNoGameSelected => state?.SelectedGameId is null;
+
     public bool IsLoading
     {
         get => isLoading;
@@ -303,8 +305,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? TotalDeathsSceneUrlDisplay => ShortenUrlForDisplay(TotalDeathsSceneUrl);
     /// <summary>Safe, compact presentation of a canonical URL. Copy always uses the full URL.</summary>
     public string? BossListSceneUrlDisplay => ShortenUrlForDisplay(BossListSceneUrl);
-    public Uri? TotalDeathsPreviewUri => Uri.TryCreate(TotalDeathsSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
-    public Uri? BossListPreviewUri => Uri.TryCreate(BossListSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
+    public Uri? TotalDeathsPreviewUri => IsNoGameSelected ? null : Uri.TryCreate(TotalDeathsSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
+    public Uri? BossListPreviewUri => IsNoGameSelected ? null : Uri.TryCreate(BossListSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
     public string? GlobalHotkeyStatus { get => globalHotkeyStatus; private set => SetField(ref globalHotkeyStatus, value); }
     public string PendingIncrementHotkey { get => pendingIncrementHotkey; set => SetField(ref pendingIncrementHotkey, value); }
     public string PendingDecrementHotkey { get => pendingDecrementHotkey; set => SetField(ref pendingDecrementHotkey, value); }
@@ -638,7 +640,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         GameId? selectedGameBeforeSelection = state?.SelectedGameId;
-        await SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
+        if (choice.IsNoGameSelected)
+        {
+            await SubmitAsync(new ClearSelectedGameCommand(), cancellationToken);
+        }
+        else
+        {
+            await SubmitAsync(new SelectGameCommand(choice.GameId!.Value), cancellationToken);
+        }
         if (state?.SelectedGameId != selectedGameBeforeSelection)
         {
             BossSearchQuery = string.Empty;
@@ -656,6 +665,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (choice is null || !choice.IsSelectable || !ControlsEnabled)
         {
             return false;
+        }
+
+        if (choice.IsNoGameSelected)
+        {
+            return true;
         }
 
         if (choice.GameId == GameId.EldenRing && state?.EldenRingNoticeAcknowledged != true)
@@ -832,7 +846,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         DraftMaximumVisibleCount = state.OverlayConfiguration.BossList.MaximumVisibleCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         RefreshDeathSoundStatus();
         GameId? selectedId = state.SelectedGameId;
-        SelectedGame = selectedId is null ? null : GameChoices.Single(choice => choice.GameId == selectedId);
+        SelectedGame = selectedId is null ? GameChoice.NoGameSelected : GameChoices.Single(choice => choice.GameId == selectedId);
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.Single(slot => slot.Index == state.EldenRingSave.SlotIndex);
         SelectedEldenRingBossListScope = EldenRingBossListScopes.Single(scope => scope.Value == state.EldenRingSave.BossListScope);
         RequiredEldenRingBossesOnly = state.EldenRingSave.RequiredBossesOnly;
@@ -866,7 +880,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         GameId? selectedId = state?.SelectedGameId;
         TotalDeathsText = selectedId is null
-            ? "Select a game to begin tracking."
+            ? "No game selected"
             : IsManualGame(selectedId)
                 ? ManualDeaths.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : runtimeObservation?.GameId == selectedId
@@ -986,6 +1000,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ControlsEnabled));
         OnPropertyChanged(nameof(ManualDeaths));
         OnPropertyChanged(nameof(IsBloodborneSelected));
+        OnPropertyChanged(nameof(IsNoGameSelected));
         OnPropertyChanged(nameof(IsEldenRingSelected));
         OnPropertyChanged(nameof(EldenRingSaveFileName));
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
@@ -1126,17 +1141,27 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     }
 }
 
-public sealed class GameChoice(GameDefinition definition)
+public sealed class GameChoice
 {
-    private readonly GameDefinition definition = definition ?? throw new ArgumentNullException(nameof(definition));
-    public GameId GameId => definition.Id;
-    public string DisplayName => GameId == GameId.Bloodborne
+    private readonly GameDefinition? definition;
+
+    public static GameChoice NoGameSelected { get; } = new();
+
+    private GameChoice() { }
+
+    public GameChoice(GameDefinition definition) => this.definition = definition ?? throw new ArgumentNullException(nameof(definition));
+
+    public GameId? GameId => definition?.Id;
+    public bool IsNoGameSelected => definition is null;
+    public string DisplayName => IsNoGameSelected
+        ? "No game selected"
+        : GameId == SoulsTracker.Domain.GameId.Bloodborne
         ? "Bloodborne [Manual]"
-        : GameId == GameId.DemonsSouls
+        : GameId == SoulsTracker.Domain.GameId.DemonsSouls
             ? "Demon Souls [Manual]"
-            : definition.DisplayName;
-    public bool IsSelectable => definition.IsSelectable;
-    public string AvailabilityLabel => IsSelectable ? string.Empty : "SOON";
+            : definition!.DisplayName;
+    public bool IsSelectable => IsNoGameSelected || definition!.IsSelectable;
+    public string AvailabilityLabel => IsNoGameSelected || IsSelectable ? string.Empty : "SOON";
 }
 
 public sealed class BossChoice(BossDefinition definition, bool isDefeated)

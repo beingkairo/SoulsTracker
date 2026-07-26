@@ -19,6 +19,7 @@ public static class TrackerStateTransitionService
         return command switch
         {
             SelectGameCommand selectGame => ApplySelectGame(state, selectGame),
+            ClearSelectedGameCommand => ApplyClearSelectedGame(state),
             IncrementManualBloodborneDeathsCommand increment => ApplyIncrementManualDeaths(state, increment),
             DecrementManualBloodborneDeathsCommand decrement => ApplyDecrementManualDeaths(state, decrement),
             SetBossDefeatedCommand setBossDefeated => ApplySetBossDefeated(state, setBossDefeated),
@@ -52,6 +53,23 @@ public static class TrackerStateTransitionService
                 state.BossProgress,
                 state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave),
             TrackerCommandType.SelectGame);
+    }
+
+    private static TrackerTransitionResult ApplyClearSelectedGame(PersistentTrackerState state)
+    {
+        if (state.SelectedGameId is null)
+        {
+            return Unchanged(state, TrackerCommandType.ClearSelectedGame);
+        }
+
+        return Changed(
+            new PersistentTrackerState(
+                state.SchemaVersion,
+                selectedGameId: null,
+                state.ManualBloodborneDeathCounter,
+                state.BossProgress,
+                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave),
+            TrackerCommandType.ClearSelectedGame);
     }
 
     private static TrackerTransitionResult ApplyIncrementManualDeaths(

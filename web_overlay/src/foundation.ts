@@ -126,7 +126,7 @@ class OverlayClient {
   }
 
   private renderTotalDeaths(snapshot: OverlaySnapshot): void {
-    if (!snapshot.Presentation.IsTotalDeathsEnabled) {
+    if (snapshot.SelectedGame === null || !snapshot.Presentation.IsTotalDeathsEnabled) {
       replaceContent(this.target);
       return;
     }
@@ -154,13 +154,13 @@ class OverlayClient {
   }
 
   private renderBossList(snapshot: OverlaySnapshot): void {
-    if (!snapshot.Presentation.IsBossListEnabled) {
+    if (snapshot.SelectedGame === null || !snapshot.Presentation.IsBossListEnabled) {
       replaceContent(this.target);
       return;
     }
 
     const bosses = visibleBosses(snapshot.Bosses, snapshot.Presentation.BossListVisibilityMode);
-    if (snapshot.SelectedGame !== null && bosses.length === 0) {
+    if (bosses.length === 0) {
       replaceContent(this.target);
       return;
     }
@@ -168,9 +168,7 @@ class OverlayClient {
     const panel = panelFor("boss-list-overlay", snapshot.Presentation.BossListAppearance);
     if (snapshot.Presentation.BossListAppearance.Title.trim().length > 0) panel.append(heading(snapshot.Presentation.BossListAppearance.Title));
 
-    if (snapshot.SelectedGame === null) {
-      panel.append(message("Select a game in SoulsTracker to show its boss list."));
-    } else {
+    {
       const list = document.createElement("ul");
       list.className = `overlay-boss-list overlay-boss-list-${snapshot.Presentation.BossListAppearance.Alignment.toLowerCase()}`;
       list.dataset.testid = "boss-list";
@@ -350,14 +348,6 @@ function ensureSkullFilter(color: string, appearance?: OverlayAppearance): strin
 }
 
 function safeColor(value: string, fallback: string): string { return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback; }
-
-function message(text: string): HTMLParagraphElement {
-  const paragraph = document.createElement("p");
-  paragraph.className = "overlay-empty-state";
-  paragraph.dataset.testid = "empty-state";
-  paragraph.textContent = text;
-  return paragraph;
-}
 
 function isOverlaySnapshot(value: unknown): value is OverlaySnapshot {
   if (!isRecord(value) || value.SchemaVersion !== 1 || !isNonNegativeInteger(value.SequenceNumber)) {

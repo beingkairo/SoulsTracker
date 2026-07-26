@@ -12,6 +12,9 @@ public interface ITrackerCommand;
 /// </summary>
 public sealed record SelectGameCommand(GameId GameId) : ITrackerCommand;
 
+/// <summary>Clears the selected game while retaining all game-specific progress and configuration.</summary>
+public sealed record ClearSelectedGameCommand : ITrackerCommand;
+
 /// <summary>
 /// Adds exactly one streamer-controlled Bloodborne death.
 /// </summary>
@@ -70,6 +73,7 @@ public sealed record UpdateEldenRingSaveConfigurationCommand(EldenRingSaveConfig
 public enum TrackerCommandType
 {
     SelectGame,
+    ClearSelectedGame,
     IncrementManualBloodborneDeaths,
     DecrementManualBloodborneDeaths,
     SetBossDefeated,

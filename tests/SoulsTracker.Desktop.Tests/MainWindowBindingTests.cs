@@ -93,7 +93,7 @@ public sealed class MainWindowBindingTests
 
                 Assert.True(window.HandleEldenRingNoticeKeyAsync(Key.Escape).GetAwaiter().GetResult());
                 WaitForDispatcher(() => overlay.Visibility == Visibility.Collapsed && Keyboard.FocusedElement == gameSelector);
-                Assert.Null(viewModel.SelectedGame);
+                Assert.True(viewModel.SelectedGame!.IsNoGameSelected);
 
                 Assert.False(viewModel.RequestGameSelection(eldenRing));
                 WaitForDispatcher(() => overlay.Visibility == Visibility.Visible && Keyboard.FocusedElement == confirm);
@@ -240,6 +240,43 @@ public sealed class MainWindowBindingTests
                 search.Text = "   ";
                 WaitForDispatcher(() => checklist.Items.Count == viewModel.Bosses.Count && noResults.Visibility == Visibility.Collapsed);
                 Assert.False(viewModel.IsBossSearchNoResults);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
+    public void GameSelectorSupportsKeyboardAccessibleNoGameSelection()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var repository = new TextExportPersistenceRepository();
+            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                viewModel.SelectGameAsync(viewModel.GameChoices.Single(choice => choice.GameId == GameId.Ds1)).GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                ComboBox selector = Assert.IsType<ComboBox>(window.FindName("GameSelector"));
+                GameChoice noGame = Assert.IsType<GameChoice>(selector.Items[0]);
+                Assert.Equal("No game selected", noGame.DisplayName);
+                Assert.Null(noGame.GameId);
+                Assert.True(noGame.IsSelectable);
+                Keyboard.Focus(selector);
+                selector.SelectedItem = noGame;
+
+                WaitForDispatcher(() => repository.State.SelectedGameId is null && ReferenceEquals(selector.SelectedItem, noGame));
+                Assert.Equal("No game selected", Assert.IsType<TextBlock>(window.FindName("TotalDeathsTextBlock")).Text);
+                Assert.Equal(Visibility.Visible, Assert.IsType<TextBlock>(window.FindName("NoGameSelectedBossesTextBlock")).Visibility);
             }
             finally
             {
