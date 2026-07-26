@@ -8,6 +8,37 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class DesktopTrackerViewModelTests
 {
     [Fact]
+    public void BossScopeChoicesMatchWhetherTheCatalogContainsDlc()
+    {
+        IReadOnlyList<BossListScopeChoice> baseOnly = BossListScopeChoice.For(GameCatalog.GetRequired(GameId.BlackMythWukong));
+        IReadOnlyList<BossListScopeChoice> baseAndDlc = BossListScopeChoice.For(GameCatalog.GetRequired(GameId.EldenRing));
+
+        BossListScopeChoice onlyBaseChoice = Assert.Single(baseOnly);
+        Assert.Equal(BossListScope.AllBosses, onlyBaseChoice.Value);
+        Assert.Equal("All bosses", onlyBaseChoice.Label);
+        Assert.Equal(
+            [BossListScope.AllBosses, BossListScope.MainGame, BossListScope.Dlc],
+            baseAndDlc.Select(static choice => choice.Value));
+        Assert.Equal(["All bosses", "Main game", "DLC"], baseAndDlc.Select(static choice => choice.Label));
+    }
+
+    [Fact]
+    public async Task ChangingFromDlcGameToBaseOnlyGameResetsTheSelectedScopeToTheOnlyVisibleChoice()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+        Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+        await harness.ViewModel.ConfirmEldenRingNoticeAsync();
+        await harness.ViewModel.SetBossListScopeAsync(harness.ViewModel.BossListScopes.Single(choice => choice.Value == BossListScope.Dlc));
+
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
+
+        Assert.Equal(BossListScope.AllBosses, harness.Repository.State.BossListScope);
+        Assert.Equal(BossListScope.AllBosses, harness.ViewModel.SelectedBossListScope.Value);
+        Assert.Equal([BossListScope.AllBosses], harness.ViewModel.BossListScopes.Select(static choice => choice.Value));
+    }
+
+    [Fact]
     public void BackgroundToggleUsesExistingZeroOpacityOutputWithoutDiscardingTheDraftValue()
     {
         OverlayAppearanceDraft draft = new()
