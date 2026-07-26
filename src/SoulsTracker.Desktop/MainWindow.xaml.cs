@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Navigation;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using SoulsTracker.Domain;
 
@@ -12,6 +13,8 @@ namespace SoulsTracker.Desktop;
 /// <summary>Hosts the P3-01 manual tracking surface.</summary>
 public partial class MainWindow : Window
 {
+    private bool deathSoundVolumeEditorIsActive;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -24,6 +27,7 @@ public partial class MainWindow : Window
         if (previewViewModel is not null) previewViewModel.PropertyChanged -= PreviewViewModel_PropertyChanged;
         previewViewModel = e.NewValue as DesktopTrackerViewModel;
         if (previewViewModel is not null) previewViewModel.PropertyChanged += PreviewViewModel_PropertyChanged;
+        GameSelector.SelectedItem = previewViewModel?.SelectedGame;
         RefreshPreviews();
     }
 
@@ -74,16 +78,40 @@ public partial class MainWindow : Window
 
     private async void GameSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel && GameSelector.SelectedItem is GameChoice choice)
+        GameChoice? choice = e.AddedItems.OfType<GameChoice>().LastOrDefault();
+        if (DataContext is DesktopTrackerViewModel viewModel && choice is not null)
         {
+            // One-way binding also raises SelectionChanged when committed state
+            // reapplies the current choice. That is presentation sync, not a
+            // new user request; ignoring it prevents an initial no-op request
+            // from racing a subsequent user selection.
+            if (ReferenceEquals(choice, viewModel.SelectedGame))
+            {
+                return;
+            }
+
             if (viewModel.RequestGameSelection(choice))
             {
-                await viewModel.SelectGameAsync(choice);
+                await SelectGameOnWindowDispatcherAsync(viewModel, choice);
             }
             else
             {
                 GameSelector.SelectedItem = viewModel.SelectedGame;
             }
+        }
+    }
+
+    private async Task SelectGameOnWindowDispatcherAsync(DesktopTrackerViewModel viewModel, GameChoice choice)
+    {
+        SynchronizationContext? priorContext = SynchronizationContext.Current;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
+            await viewModel.SelectGameAsync(choice);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(priorContext);
         }
     }
 
@@ -137,16 +165,6 @@ public partial class MainWindow : Window
         {
             await viewModel.SetEldenRingBossListScopeAsync(scope);
         }
-    }
-
-    private async void RequiredEldenRingBossesOnly_Checked(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetRequiredEldenRingBossesOnlyAsync(true);
-    }
-
-    private async void RequiredEldenRingBossesOnly_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetRequiredEldenRingBossesOnlyAsync(false);
     }
 
     private void IncrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: true);
@@ -389,15 +407,28 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        await viewModel.SetDeathSoundVolumeTextAsync(textBox.Text);
+        await viewModel.CommitDeathSoundVolumeTextAsync();
         await SynchronizeDeathSoundVolumeStatusAsync(viewModel);
     }
 
-    private async void SaveDeathSoundVolume_Click(object sender, RoutedEventArgs e)
+    private async void DeathSoundVolume_TextChanged(object sender, TextChangedEventArgs e)
     {
+        if (deathSoundVolumeEditorIsActive && sender is System.Windows.Controls.TextBox && DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.QueueDeathSoundVolumeTextSaveAsync();
+            await SynchronizeDeathSoundVolumeStatusAsync(viewModel);
+        }
+    }
+
+    private void DeathSoundVolume_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
+        deathSoundVolumeEditorIsActive = true;
+
+    private async void DeathSoundVolume_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        deathSoundVolumeEditorIsActive = false;
         if (DataContext is DesktopTrackerViewModel viewModel)
         {
-            await viewModel.SetDeathSoundVolumeTextAsync(DeathSoundVolumeTextBox.Text);
+            await viewModel.CommitDeathSoundVolumeTextAsync();
             await SynchronizeDeathSoundVolumeStatusAsync(viewModel);
         }
     }
@@ -405,8 +436,7 @@ public partial class MainWindow : Window
     // The coordinator intentionally completes on a worker thread, and its task uses
     // RunContinuationsAsynchronously. A routed async handler therefore cannot assume
     // that its continuation still owns this Window's dispatcher. Marshal the
-    // already-authoritative VM result back to the visible live-region after the await
-    // so Save and Enter have identical, observable feedback.
+    // already-authoritative VM result back to the visible live-region after the await.
     private async Task SynchronizeDeathSoundVolumeStatusAsync(DesktopTrackerViewModel viewModel)
     {
         await Dispatcher.InvokeAsync(() =>

@@ -58,6 +58,13 @@ public sealed class GameCatalogTests
                 GameTrackingMode.GameLifetimeReadOnly,
                 ReaderBindingState.PendingVerification,
                 207),
+            new(
+                GameId.BlackMythWukong,
+                "Black Myth: Wukong",
+                GameUiAvailability.Selectable,
+                GameTrackingMode.Unavailable,
+                ReaderBindingState.IntentionallyUnavailable,
+                0),
         ];
 
         ExpectedGameDefinition[] actual = GameCatalog.All
@@ -71,7 +78,7 @@ public sealed class GameCatalogTests
             .ToArray();
 
         Assert.Equal(expected, actual);
-        Assert.Equal(7, actual.Select(static definition => definition.Id).Distinct().Count());
+        Assert.Equal(8, actual.Select(static definition => definition.Id).Distinct().Count());
         Assert.Equal(GameId.All, actual.Select(static definition => definition.Id));
     }
 
@@ -83,6 +90,7 @@ public sealed class GameCatalogTests
     [InlineData("bloodborne")]
     [InlineData("elden_ring")]
     [InlineData("demons_souls")]
+    [InlineData("black_myth_wukong")]
     public void CanonicalGameIdsParseExactly(string value)
     {
         Assert.True(GameId.TryParse(value, out GameId? gameId));
@@ -126,6 +134,17 @@ public sealed class GameCatalogTests
         Assert.Equal(16, definition.BossCatalog.Count);
         Assert.Equal("Phalanx", definition.BossCatalog[0].DisplayName);
         Assert.Equal("Maiden Astraea", definition.BossCatalog[^1].DisplayName);
+    }
+
+    [Fact]
+    public void BlackMythWukongIsSelectableWithoutReaderOrBossData()
+    {
+        GameDefinition definition = GameCatalog.GetRequired(GameId.BlackMythWukong);
+
+        Assert.True(definition.IsSelectable);
+        Assert.Equal(GameTrackingMode.Unavailable, definition.TrackingMode);
+        Assert.Equal(ReaderBindingState.IntentionallyUnavailable, definition.ReaderBindingState);
+        Assert.Empty(definition.BossCatalog);
     }
 
     private sealed record ExpectedGameDefinition(

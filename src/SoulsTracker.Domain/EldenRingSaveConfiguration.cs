@@ -19,8 +19,7 @@ public sealed record EldenRingSaveConfiguration
     public EldenRingSaveConfiguration(
         string? localPath,
         int slotIndex,
-        EldenRingBossListScope bossListScope = EldenRingBossListScope.AllBosses,
-        bool requiredBossesOnly = false)
+        EldenRingBossListScope bossListScope = EldenRingBossListScope.AllBosses)
     {
         if (slotIndex is < MinimumSlotIndex or > MaximumSlotIndex)
         {
@@ -41,7 +40,6 @@ public sealed record EldenRingSaveConfiguration
         LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath;
         SlotIndex = slotIndex;
         BossListScope = bossListScope;
-        RequiredBossesOnly = requiredBossesOnly;
     }
 
     /// <summary>Private, user-selected path. It must never be logged or shown outside the local picker.</summary>
@@ -52,9 +50,6 @@ public sealed record EldenRingSaveConfiguration
 
     /// <summary>Locally persisted scope shared by the checklist, overlay, preview, and TXT export.</summary>
     public EldenRingBossListScope BossListScope { get; }
-
-    /// <summary>Gets whether only the documented progression-gate entries are displayed.</summary>
-    public bool RequiredBossesOnly { get; }
 
     public string? FileName => LocalPath is null ? null : Path.GetFileName(LocalPath);
 }

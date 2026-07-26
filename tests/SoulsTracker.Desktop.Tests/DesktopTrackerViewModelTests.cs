@@ -699,6 +699,8 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Empty(harness.ViewModel.Bosses);
         Assert.Null(harness.ViewModel.TotalDeathsPreviewUri);
         Assert.Null(harness.ViewModel.BossListPreviewUri);
+        Assert.Null(harness.ViewModel.ErrorMessage);
+        Assert.Equal("Choose a game to track boss progress.", harness.ViewModel.BossDescription);
         Assert.True(harness.Repository.State.BossProgress.IsDefeated(GameId.Ds1, bossId));
         Assert.Equal(3, harness.Repository.State.ManualBloodborneDeathCounter.Value);
         Assert.Equal(2, harness.Repository.State.ManualDemonsSoulsDeathCounter.Value);
@@ -715,6 +717,42 @@ public sealed class DesktopTrackerViewModelTests
         await nextSession.ViewModel.InitializeAsync();
         Assert.True(nextSession.ViewModel.IsNoGameSelected);
         Assert.Same(GameChoice.NoGameSelected, nextSession.ViewModel.SelectedGame);
+    }
+
+    [Fact]
+    public async Task LateRuntimeUpdatesCannotReplaceTheNoGameDisplay()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
+        await harness.ViewModel.SelectGameAsync(GameChoice.NoGameSelected);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForActiveCharacter(GameId.Ds1));
+
+        Assert.True(harness.ViewModel.IsNoGameSelected);
+        Assert.Equal("No game selected", harness.ViewModel.TotalDeathsText);
+        Assert.Null(harness.ViewModel.RuntimeReaderStatusText);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongIsSelectableWithoutClaimingAReaderOrBossCatalog()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default);
+        await harness.ViewModel.InitializeAsync();
+
+        GameChoice wukong = harness.Game(GameId.BlackMythWukong);
+        Assert.True(wukong.IsSelectable);
+        Assert.DoesNotContain("Manual", wukong.DisplayName, StringComparison.Ordinal);
+
+        await harness.ViewModel.SelectGameAsync(wukong);
+
+        Assert.Equal(GameId.BlackMythWukong, harness.Repository.State.SelectedGameId);
+        Assert.Equal("Black Myth: Wukong", harness.ViewModel.SelectedGame!.DisplayName);
+        Assert.False(harness.ViewModel.IsManualGameSelected);
+        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, harness.ViewModel.TotalDeathsText);
+        Assert.Equal(DesktopTrackerViewModel.GameUnavailableMessage, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Empty(harness.ViewModel.Bosses);
+        Assert.Equal("Track boss progress for Black Myth: Wukong.", harness.ViewModel.BossDescription);
     }
 
     [Fact]

@@ -147,7 +147,7 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
-    public async Task EldenRingBossOverlayUsesTheSamePersistedScopeAndRequiredFilter()
+    public async Task EldenRingBossOverlayUsesTheSamePersistedScope()
     {
         PersistentTrackerState state = new(
             PersistentTrackerState.CurrentSchemaVersion,
@@ -156,7 +156,7 @@ public sealed class SecureOverlayServiceTests
             BossProgress.Empty,
             OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree, requiredBossesOnly: true));
+            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree));
         var repository = new MemoryRepository(state);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
@@ -165,7 +165,7 @@ public sealed class SecureOverlayServiceTests
 
         string snapshot = await ReceiveSnapshotAsync(service);
         Assert.Contains("Radahn (Promised Consort)", snapshot, StringComparison.Ordinal);
-        Assert.DoesNotContain("Blackgaol Knight", snapshot, StringComparison.Ordinal);
+        Assert.Contains("Blackgaol Knight", snapshot, StringComparison.Ordinal);
     }
 
     [Fact]

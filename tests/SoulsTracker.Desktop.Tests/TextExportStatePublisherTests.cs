@@ -89,7 +89,7 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EldenRingBossExportUsesTheSamePersistedScopeAndRequiredFilter()
+    public async Task EldenRingBossExportUsesTheSamePersistedScope()
     {
         string bossPath = Path.Combine(root, "elden-bosses.txt");
         PersistentTrackerState state = new(
@@ -100,12 +100,12 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
             OverlayConfiguration.Default,
             textExports: new TextExportConfiguration(null, false, bossPath, true),
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree, requiredBossesOnly: true));
+            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree));
 
         Assert.True(await TextExportStatePublisher.WriteAsync(state));
         string export = await File.ReadAllTextAsync(bossPath);
         Assert.Contains("Radahn (Promised Consort)", export, StringComparison.Ordinal);
-        Assert.DoesNotContain("Blackgaol Knight", export, StringComparison.Ordinal);
-        Assert.Equal(7, export.Split(Environment.NewLine, StringSplitOptions.None).Length);
+        Assert.Contains("Blackgaol Knight", export, StringComparison.Ordinal);
+        Assert.Equal(43, export.Split(Environment.NewLine, StringSplitOptions.None).Length);
     }
 }

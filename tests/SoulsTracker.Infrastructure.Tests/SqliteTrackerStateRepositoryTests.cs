@@ -94,7 +94,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
             BossProgress.Empty,
             OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3, EldenRingBossListScope.ShadowOfTheErdtree, requiredBossesOnly: true));
+            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3, EldenRingBossListScope.ShadowOfTheErdtree));
 
         await using (var repository = new SqliteTrackerStateRepository(root, "elden-save.db", new ReversingProtector()))
         {
@@ -107,7 +107,40 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         Assert.Equal(savePath, restored.LocalPath);
         Assert.Equal(3, restored.SlotIndex);
         Assert.Equal(EldenRingBossListScope.ShadowOfTheErdtree, restored.BossListScope);
-        Assert.True(restored.RequiredBossesOnly);
+    }
+
+    [Fact]
+    public async Task LegacyEldenRingRequiredBossFieldLoadsSafelyAndIsRemovedOnNextWrite()
+    {
+        const string database = "elden-legacy-filter.db";
+        await using (var repository = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
+        {
+            await repository.LoadAsync();
+            await repository.SaveAsync(PersistentTrackerState.Default);
+        }
+
+        string path = Path.Combine(root, database);
+        await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE tracker_state SET payload=json_set(payload, '$.EldenRingRequiredBossesOnly', json('true')) WHERE id=1";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using (var reopened = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
+        {
+            TrackerStateLoadResult loaded = await reopened.LoadAsync();
+            Assert.True(loaded.IsSuccess);
+            await reopened.SaveAsync(loaded.State!);
+        }
+
+        await using var verification = new SqliteConnection($"Data Source={path};Pooling=False");
+        await verification.OpenAsync();
+        await using var query = verification.CreateCommand();
+        query.CommandText = "SELECT payload FROM tracker_state WHERE id=1";
+        string payload = (string)(await query.ExecuteScalarAsync())!;
+        Assert.DoesNotContain("EldenRingRequiredBossesOnly", payload, StringComparison.Ordinal);
     }
 
     [Fact]

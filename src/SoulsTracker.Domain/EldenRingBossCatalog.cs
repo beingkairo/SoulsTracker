@@ -8,26 +8,11 @@ internal static class EldenRingBossCatalog
 {
     internal const string ShadowOfTheErdtree = "Shadow of the Erdtree";
 
-    private static readonly HashSet<string> RequiredBaseGameNames = new(StringComparer.Ordinal)
-    {
-        "Godrick", "Rennala", "Radahn (Starscourge)",
-        "God-Devouring Serpent / Rykard", "Mohg", "Malenia",
-        "Godfrey (Golden Shade)", "Morgott", "Fire Giant",
-        "Godskin Duo", "Beast Clergyman / Maliketh", "Gideon Ofnir",
-        "Godfrey (Hoarah Loux)", "Radagon / Elden Beast",
-    };
-
-    private static readonly HashSet<string> RequiredShadowOfTheErdtreeNames = new(StringComparer.Ordinal)
-    {
-        "Divine Beast Dancing Lion", "Rellana", "Golden Hippopotamus",
-        "Messmer", "Romina", "Radahn (Promised Consort)",
-    };
-
     internal static IReadOnlyList<BossDefinition> Create()
     {
         var bosses = new List<BossDefinition>(207);
-        Add(bosses, BaseGameNames, "er_base", null, RequiredBaseGameNames);
-        Add(bosses, ShadowOfTheErdtreeNames, "er_sote", ShadowOfTheErdtree, RequiredShadowOfTheErdtreeNames);
+        Add(bosses, BaseGameNames, "er_base", null);
+        Add(bosses, ShadowOfTheErdtreeNames, "er_sote", ShadowOfTheErdtree);
         return bosses;
     }
 
@@ -35,17 +20,14 @@ internal static class EldenRingBossCatalog
         List<BossDefinition> destination,
         IReadOnlyList<string> names,
         string prefix,
-        string? dlcLabel,
-        HashSet<string> requiredNames)
+        string? dlcLabel)
     {
         for (int index = 0; index < names.Count; index++)
         {
-            string name = names[index];
             destination.Add(new BossDefinition(
                 BossId.Parse($"{prefix}_{index + 1:D3}"),
-                name,
-                dlcLabel,
-                requiredNames.Contains(name)));
+                names[index],
+                dlcLabel));
         }
     }
 

@@ -180,6 +180,12 @@ public static class GameCatalog
             GameTrackingMode.GameLifetimeReadOnly,
             ReaderBindingState.PendingVerification,
             EldenRingBossCatalog.Create()),
+        new GameDefinition(
+            GameId.BlackMythWukong,
+            "Black Myth: Wukong",
+            GameUiAvailability.Selectable,
+            GameTrackingMode.Unavailable,
+            ReaderBindingState.IntentionallyUnavailable),
     ]);
 
     private static readonly ReadOnlyDictionary<GameId, GameDefinition> DefinitionsById =

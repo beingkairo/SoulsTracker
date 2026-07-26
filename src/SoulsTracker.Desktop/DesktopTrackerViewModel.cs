@@ -58,6 +58,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>>? applyHotkeysAsync;
     private IDeathSoundPlayer? deathSoundPlayer;
     private string? deathSoundStatus;
+    private string deathSoundVolumeText = "100";
+    private readonly object deathSoundVolumeSaveSync = new();
+    private Task deathSoundVolumeSaveTail = Task.CompletedTask;
+    private long deathSoundVolumeEditVersion;
     private string? textExportStatus;
     private OverlayTitleIconModeChoice draftTitleIconModeChoice = OverlayTitleIconModeChoice.All[0];
     private BossListVisibilityMode draftBossListMode;
@@ -71,7 +75,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool legacyDraftShowGameName;
     private bool legacyDraftCompactTitle = true;
     private EldenRingBossListScopeChoice selectedEldenRingBossListScope = EldenRingBossListScopeChoice.All[0];
-    private bool requiredEldenRingBossesOnly;
     private string bossSearchQuery = string.Empty;
 
     public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null)
@@ -127,6 +130,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             if (!SetField(ref bossSearchQuery, value ?? string.Empty)) return;
             RefreshFilteredBosses();
+            OnPropertyChanged(nameof(ShowBossSearchPlaceholder));
         }
     }
 
@@ -137,6 +141,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     /// <summary>Gets whether the selected game's current boss filter has no entries to display.</summary>
     public bool IsBossListEmpty => state?.SelectedGameId is not null && Bosses.Count == 0;
 
+    /// <summary>Shows the search hint until a meaningful filter has been entered.</summary>
+    public bool ShowBossSearchPlaceholder => string.IsNullOrWhiteSpace(BossSearchQuery);
+
+    /// <summary>Describes the boss checklist for the current selection without implying a catalog is available.</summary>
+    public string BossDescription => state?.SelectedGameId is GameId selectedGame
+        ? $"Track boss progress for {GameCatalog.GetRequired(selectedGame).DisplayName}."
+        : "Choose a game to track boss progress.";
+
     public ObservableCollection<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; }
     public IReadOnlyList<EldenRingBossListScopeChoice> EldenRingBossListScopes { get; } = EldenRingBossListScopeChoice.All;
     public EldenRingBossListScopeChoice SelectedEldenRingBossListScope
@@ -144,12 +156,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         get => selectedEldenRingBossListScope;
         private set => SetField(ref selectedEldenRingBossListScope, value);
     }
-    public bool RequiredEldenRingBossesOnly
-    {
-        get => requiredEldenRingBossesOnly;
-        private set => SetField(ref requiredEldenRingBossesOnly, value);
-    }
-
     public IReadOnlyList<BossListVisibilityMode> BossListVisibilityModes { get; } = Enum.GetValues<BossListVisibilityMode>();
     public IReadOnlyList<OverlayTextAlignment> OverlayAlignments { get; } = Enum.GetValues<OverlayTextAlignment>();
     public IReadOnlyList<DefeatedBossTreatment> DefeatedBossTreatments { get; } = [DefeatedBossTreatment.Nothing, DefeatedBossTreatment.Dimmed, DefeatedBossTreatment.Strikethrough, DefeatedBossTreatment.Both];
@@ -335,6 +341,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     /// <summary>Volume controls are available only while the optional sound feature is enabled.</summary>
     public bool CanEditDeathSoundVolume => ControlsEnabled && IsDeathSoundEnabled;
     public int DeathSoundVolume => state?.DeathSound.Volume ?? 100;
+    /// <summary>Editable volume draft; valid values persist after editing settles or is committed.</summary>
+    public string DeathSoundVolumeText
+    {
+        get => deathSoundVolumeText;
+        set => SetField(ref deathSoundVolumeText, value ?? string.Empty);
+    }
     public string? DeathSoundStatus
     {
         get => deathSoundStatus;
@@ -367,6 +379,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal PersistentTrackerState? CurrentState => state;
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
+        if (state?.SelectedGameId is null)
+        {
+            runtimeReaderGameId = null;
+            runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
+            runtimeObservation = null;
+            UpdateTotalDeathsText();
+            OnPropertyChanged(nameof(RuntimeReaderStatusText));
+            return;
+        }
+
         runtimeReaderGameId = result?.GameId;
         if (result is not null && result.GameId == state?.SelectedGameId)
         {
@@ -416,6 +438,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         deathSoundPlayer.PlaybackEnded += DeathSoundPlayer_PlaybackEnded;
         deathSoundPlayer.PlaybackFailed += DeathSoundPlayer_PlaybackFailed;
         RefreshDeathSoundStatus();
+        if (state is not null)
+        {
+            DeathSoundVolumeText = state.DeathSound.Volume.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
     }
 
     /// <summary>Starts a local preview using the already-saved configuration; it never persists or changes tracking state.</summary>
@@ -452,19 +478,23 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     }
     public async Task SetDeathSoundVolumeTextAsync(string? volumeText, CancellationToken cancellationToken = default)
     {
-        if (!int.TryParse(volumeText, out int volume) || volume is < 0 or > 100)
-        {
-            // Replace any prior success acknowledgement so invalid input cannot leave stale green feedback visible.
-            DeathSoundStatus = DeathSoundVolumeValidationMessage;
-            OnPropertyChanged(nameof(DeathSoundVolume));
-            return;
-        }
+        DeathSoundVolumeText = volumeText ?? string.Empty;
+        await CommitDeathSoundVolumeTextAsync(cancellationToken);
+    }
 
-        await SaveDeathSoundAsync(new DeathSoundConfiguration(state?.DeathSound.LocalPath, IsDeathSoundEnabled, volume), cancellationToken);
-        if (state?.DeathSound.Volume == volume)
-        {
-            DeathSoundStatus = $"Volume changed to {volume}%";
-        }
+    /// <summary>Debounces an in-progress edit so partial values are never written during normal typing.</summary>
+    public async Task QueueDeathSoundVolumeTextSaveAsync(CancellationToken cancellationToken = default)
+    {
+        long version = Interlocked.Increment(ref deathSoundVolumeEditVersion);
+        await Task.Delay(TimeSpan.FromMilliseconds(450), cancellationToken);
+        await PersistDeathSoundVolumeTextAsync(version, cancellationToken);
+    }
+
+    /// <summary>Immediately commits the current volume draft on focus loss or Enter.</summary>
+    public async Task CommitDeathSoundVolumeTextAsync(CancellationToken cancellationToken = default)
+    {
+        long version = Interlocked.Increment(ref deathSoundVolumeEditVersion);
+        await PersistDeathSoundVolumeTextAsync(version, cancellationToken);
     }
     public Task SetDeathsExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(path, IsDeathsExportEnabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
     public Task SetBossExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, path, IsBossExportEnabled), cancellationToken);
@@ -475,26 +505,20 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task SetEldenRingSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses, state?.EldenRingSave.RequiredBossesOnly ?? false), cancellationToken);
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses), cancellationToken);
         await RefreshEldenRingProfileSlotsAsync(cancellationToken);
     }
     public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(slot);
         if (!CanSelectEldenRingProfile) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses, state?.EldenRingSave.RequiredBossesOnly ?? false), cancellationToken);
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index, state?.EldenRingSave.BossListScope ?? EldenRingBossListScope.AllBosses), cancellationToken);
     }
 
     public async Task SetEldenRingBossListScopeAsync(EldenRingBossListScopeChoice? scope, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || state?.SelectedGameId != GameId.EldenRing || scope is null || scope.Value == state.EldenRingSave.BossListScope) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, scope.Value, state.EldenRingSave.RequiredBossesOnly), cancellationToken);
-    }
-
-    public async Task SetRequiredEldenRingBossesOnlyAsync(bool requiredOnly, CancellationToken cancellationToken = default)
-    {
-        if (!ControlsEnabled || state?.SelectedGameId != GameId.EldenRing || requiredOnly == state.EldenRingSave.RequiredBossesOnly) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.EldenRingSave.BossListScope, requiredOnly), cancellationToken);
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, scope.Value), cancellationToken);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -849,10 +873,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         SelectedGame = selectedId is null ? GameChoice.NoGameSelected : GameChoices.Single(choice => choice.GameId == selectedId);
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.Single(slot => slot.Index == state.EldenRingSave.SlotIndex);
         SelectedEldenRingBossListScope = EldenRingBossListScopes.Single(scope => scope.Value == state.EldenRingSave.BossListScope);
-        RequiredEldenRingBossesOnly = state.EldenRingSave.RequiredBossesOnly;
         OnPropertyChanged(nameof(SelectedGame));
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
         OnPropertyChanged(nameof(SelectedEldenRingBossListScope));
+        OnPropertyChanged(nameof(BossDescription));
 
         Bosses.Clear();
         if (selectedId is not null)
@@ -1016,6 +1040,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsDeathSoundEnabled));
         NotifyDeathSoundControlAvailability();
         OnPropertyChanged(nameof(DeathSoundVolume));
+        OnPropertyChanged(nameof(DeathSoundVolumeText));
         OnPropertyChanged(nameof(DeathsExportFileName)); OnPropertyChanged(nameof(BossExportFileName)); OnPropertyChanged(nameof(IsDeathsExportEnabled)); OnPropertyChanged(nameof(IsBossExportEnabled));
         NotifyTextExportControlAvailability();
     }
@@ -1049,11 +1074,61 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
 
+    private async Task PersistDeathSoundVolumeTextAsync(long version, CancellationToken cancellationToken)
+    {
+        string volumeText = DeathSoundVolumeText;
+        if (!int.TryParse(volumeText, out int volume) || volume is < 0 or > 100)
+        {
+            DeathSoundStatus = DeathSoundVolumeValidationMessage;
+            OnPropertyChanged(nameof(DeathSoundVolume));
+            return;
+        }
+
+        Task queued;
+        lock (deathSoundVolumeSaveSync)
+        {
+            queued = PersistDeathSoundVolumeTextAfterAsync(deathSoundVolumeSaveTail, version, volume, cancellationToken);
+            deathSoundVolumeSaveTail = queued;
+        }
+
+        await queued;
+    }
+
+    private async Task PersistDeathSoundVolumeTextAfterAsync(Task prior, long version, int volume, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await prior;
+            if (version != Interlocked.Read(ref deathSoundVolumeEditVersion))
+            {
+                return;
+            }
+
+            if (state?.DeathSound.Volume != volume)
+            {
+                await SaveDeathSoundAsync(new DeathSoundConfiguration(state?.DeathSound.LocalPath, IsDeathSoundEnabled, volume), cancellationToken);
+            }
+
+            if (state?.DeathSound.Volume == volume)
+            {
+                DeathSoundStatus = $"Volume changed to {volume}%";
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
     private async Task SaveDeathSoundAsync(DeathSoundConfiguration configuration, CancellationToken cancellationToken)
     {
         if (!ControlsEnabled) return;
         IsBusy = true;
-        try { ApplyCommittedState(await coordinator.SetDeathSoundConfigurationAsync(configuration, cancellationToken)); }
+        string volumeDraft = DeathSoundVolumeText;
+        try
+        {
+            ApplyCommittedState(await coordinator.SetDeathSoundConfigurationAsync(configuration, cancellationToken));
+            DeathSoundVolumeText = volumeDraft;
+        }
         catch { DeathSoundStatus = "Death sound settings could not be saved."; }
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }

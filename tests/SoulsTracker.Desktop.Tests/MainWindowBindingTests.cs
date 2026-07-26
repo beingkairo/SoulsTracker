@@ -156,9 +156,8 @@ public sealed class MainWindowBindingTests
         string bosses = Between(xaml, "x:Name=\"BossProgressPanel\"", "x:Name=\"OverlayWorkspaceTab\"");
 
         Assert.DoesNotContain("EldenRingBossListScopes", gameSession, StringComparison.Ordinal);
-        Assert.DoesNotContain("RequiredEldenRingBossesOnlyCheckBox", gameSession, StringComparison.Ordinal);
         Assert.Contains("EldenRingBossListScopes", bosses, StringComparison.Ordinal);
-        Assert.Contains("RequiredEldenRingBossesOnlyCheckBox", bosses, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequiredEldenRingBossesOnly", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{Binding IsEldenRingSelected", bosses, StringComparison.Ordinal);
     }
 
@@ -180,17 +179,20 @@ public sealed class MainWindowBindingTests
                 window.UpdateLayout();
 
                 TextBox search = Assert.IsType<TextBox>(window.FindName("BossSearchTextBox"));
+                TextBlock placeholder = Assert.IsType<TextBlock>(window.FindName("BossSearchPlaceholderTextBlock"));
                 ItemsControl checklist = Assert.IsType<ItemsControl>(window.FindName("BossChecklistItems"));
                 TextBlock noResults = Assert.IsType<TextBlock>(window.FindName("NoBossSearchResultsTextBlock"));
                 Binding searchBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(search, TextBox.TextProperty));
                 Assert.Equal(nameof(DesktopTrackerViewModel.BossSearchQuery), searchBinding.Path?.Path);
                 Assert.Equal(UpdateSourceTrigger.PropertyChanged, searchBinding.UpdateSourceTrigger);
                 AssertKeyboardFocusVisual(search);
+                Assert.Equal(Visibility.Visible, placeholder.Visibility);
                 string? overlayBeforeSearch = viewModel.BossListSceneUrl;
                 int savesBeforeSearch = repository.SaveCount;
 
                 search.Text = "aSyLuM";
                 WaitForDispatcher(() => checklist.Items.Count == 1 && viewModel.BossSearchQuery == "aSyLuM");
+                Assert.Equal(Visibility.Collapsed, placeholder.Visibility);
                 Assert.Equal("Asylum Demon", Assert.Single(viewModel.FilteredBosses).DisplayName);
                 Assert.Equal(Visibility.Collapsed, noResults.Visibility);
 
@@ -200,6 +202,7 @@ public sealed class MainWindowBindingTests
 
                 search.Clear();
                 WaitForDispatcher(() => checklist.Items.Count == viewModel.Bosses.Count && noResults.Visibility == Visibility.Collapsed);
+                Assert.Equal(Visibility.Visible, placeholder.Visibility);
                 Assert.Equal(overlayBeforeSearch, viewModel.BossListSceneUrl);
                 Assert.Equal(savesBeforeSearch, repository.SaveCount);
             }
@@ -228,6 +231,7 @@ public sealed class MainWindowBindingTests
                 window.UpdateLayout();
 
                 TextBox search = Assert.IsType<TextBox>(window.FindName("BossSearchTextBox"));
+                TextBlock placeholder = Assert.IsType<TextBlock>(window.FindName("BossSearchPlaceholderTextBlock"));
                 ItemsControl checklist = Assert.IsType<ItemsControl>(window.FindName("BossChecklistItems"));
                 TextBlock noResults = Assert.IsType<TextBlock>(window.FindName("NoBossSearchResultsTextBlock"));
 
@@ -240,6 +244,7 @@ public sealed class MainWindowBindingTests
                 search.Text = "   ";
                 WaitForDispatcher(() => checklist.Items.Count == viewModel.Bosses.Count && noResults.Visibility == Visibility.Collapsed);
                 Assert.False(viewModel.IsBossSearchNoResults);
+                Assert.Equal(Visibility.Visible, placeholder.Visibility);
             }
             finally
             {
@@ -262,21 +267,33 @@ public sealed class MainWindowBindingTests
                 var viewModel = new DesktopTrackerViewModel(coordinator);
                 viewModel.InitializeAsync().GetAwaiter().GetResult();
                 viewModel.SelectGameAsync(viewModel.GameChoices.Single(choice => choice.GameId == GameId.Ds1)).GetAwaiter().GetResult();
+                Assert.Equal(GameId.Ds1, repository.State.SelectedGameId);
                 window = new MainWindow { DataContext = viewModel };
                 window.Show();
                 window.UpdateLayout();
 
                 ComboBox selector = Assert.IsType<ComboBox>(window.FindName("GameSelector"));
                 GameChoice noGame = Assert.IsType<GameChoice>(selector.Items[0]);
+                var requestedChoices = new List<GameChoice?>();
+                var propertyNotificationAccess = new List<bool>();
+                selector.SelectionChanged += (_, eventArgs) => requestedChoices.Add(eventArgs.AddedItems.OfType<GameChoice>().LastOrDefault());
+                viewModel.PropertyChanged += (_, _) => propertyNotificationAccess.Add(window.Dispatcher.CheckAccess());
+                Assert.Same(viewModel.SelectedGame, selector.SelectedItem);
                 Assert.Equal("No game selected", noGame.DisplayName);
                 Assert.Null(noGame.GameId);
                 Assert.True(noGame.IsSelectable);
+                Assert.True(viewModel.RequestGameSelection(noGame));
                 Keyboard.Focus(selector);
                 selector.SelectedItem = noGame;
 
-                WaitForDispatcher(() => repository.State.SelectedGameId is null && ReferenceEquals(selector.SelectedItem, noGame));
+                WaitForDispatcher(
+                    () => repository.State.SelectedGameId is null && ReferenceEquals(selector.SelectedItem, noGame) && viewModel.TotalDeathsText == "No game selected",
+                    () => $"Requested: {string.Join(", ", requestedChoices.Select(choice => choice?.DisplayName ?? "<none>"))}; selected: {(selector.SelectedItem is GameChoice selected ? selected.DisplayName : "<none>")}; committed: {repository.State.SelectedGameId?.ToString() ?? "<none>"}; view-model: {viewModel.SelectedGame?.DisplayName ?? "<none>"}; error: {viewModel.ErrorMessage ?? "<none>"}; property notifications on window dispatcher: {string.Join(", ", propertyNotificationAccess)}");
+                Assert.Contains(noGame, requestedChoices);
+                Assert.All(propertyNotificationAccess, Assert.True);
                 Assert.Equal("No game selected", Assert.IsType<TextBlock>(window.FindName("TotalDeathsTextBlock")).Text);
                 Assert.Equal(Visibility.Visible, Assert.IsType<TextBlock>(window.FindName("NoGameSelectedBossesTextBlock")).Visibility);
+                Assert.Null(viewModel.ErrorMessage);
             }
             finally
             {
@@ -585,17 +602,19 @@ public sealed class MainWindowBindingTests
                 Assert.Equal(72d, volume.Width);
                 Assert.True(volume.Focusable);
                 Assert.DoesNotContain("Slider", volume.Name, StringComparison.OrdinalIgnoreCase);
-                Assert.Contains("DeathSoundVolume_KeyDown", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
-                Assert.IsType<Button>(window.FindName("SaveDeathSoundVolumeButton"));
-                AssertPropertyBinding(window, "SaveDeathSoundVolumeButton", nameof(DesktopTrackerViewModel.CanEditDeathSoundVolume), Button.IsEnabledProperty);
+                string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+                Assert.Contains("DeathSoundVolume_KeyDown", xaml, StringComparison.Ordinal);
+                Assert.Contains("DeathSoundVolume_GotKeyboardFocus", xaml, StringComparison.Ordinal);
+                Assert.Contains("DeathSoundVolume_TextChanged", xaml, StringComparison.Ordinal);
+                Assert.Contains("DeathSoundVolume_LostKeyboardFocus", xaml, StringComparison.Ordinal);
+                Assert.DoesNotContain("SaveDeathSoundVolume", xaml, StringComparison.Ordinal);
+                Binding volumeBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(volume, TextBox.TextProperty));
+                Assert.Equal(nameof(DesktopTrackerViewModel.DeathSoundVolumeText), volumeBinding.Path?.Path);
+                Assert.Equal(BindingMode.TwoWay, volumeBinding.Mode);
                 Button clear = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
-                Button save = Assert.IsType<Button>(window.FindName("SaveDeathSoundVolumeButton"));
                 Assert.Equal(2, Grid.GetColumn(clear));
                 Assert.Equal(0, Grid.GetRow(clear));
-                Assert.Equal(2, Grid.GetColumn(save));
-                Assert.Equal(1, Grid.GetRow(save));
                 Assert.Equal(HorizontalAlignment.Right, clear.HorizontalAlignment);
-                Assert.Equal(HorizontalAlignment.Right, save.HorizontalAlignment);
                 Assert.Contains("Text=\"%\"", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
                 TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
                 Assert.Equal(System.Windows.Automation.AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(status));
@@ -617,7 +636,7 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void RoutedVolumeSaveClickUpdatesTheVisibleStatusAfterAsyncPersistence()
+    public void VolumeAutosaveUpdatesTheVisibleStatusAfterEditingSettles()
     {
         RunOnStaThread(() =>
         {
@@ -628,16 +647,17 @@ public sealed class MainWindowBindingTests
             {
                 var viewModel = new DesktopTrackerViewModel(coordinator);
                 viewModel.InitializeAsync().GetAwaiter().GetResult();
+                viewModel.SetDeathSoundEnabledAsync(true).GetAwaiter().GetResult();
                 window = new MainWindow { DataContext = viewModel };
                 window.Show();
                 Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 2;
                 window.UpdateLayout();
 
                 TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
-                Button save = Assert.IsType<Button>(window.FindName("SaveDeathSoundVolumeButton"));
                 TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
+                int savesBeforeVolumeEdit = repository.SaveCount;
+                volume.Focus();
                 volume.Text = "37";
-                save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
                 WaitForDispatcher(() => string.Equals(status.Text, "Volume changed to 37%", StringComparison.Ordinal));
 
@@ -645,17 +665,16 @@ public sealed class MainWindowBindingTests
                 Assert.True(viewModel.IsDeathSoundVolumeUpdateSuccessful);
                 Assert.Equal("#FF70D6A7", ((SolidColorBrush)status.Foreground).Color.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 Assert.Equal("Volume changed to 37%", AutomationProperties.GetName(status));
-                Assert.Equal(1, repository.SaveCount);
+                Assert.Equal(savesBeforeVolumeEdit + 1, repository.SaveCount);
 
                 volume.Text = "101";
-                save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 WaitForDispatcher(() => string.Equals(status.Text, DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, StringComparison.Ordinal));
 
                 Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, status.Text);
                 Assert.True(viewModel.IsDeathSoundVolumeValidationError);
                 Assert.Equal("#FFFF8C8C", ((SolidColorBrush)status.Foreground).Color.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, AutomationProperties.GetName(status));
-                Assert.Equal(1, repository.SaveCount);
+                Assert.Equal(savesBeforeVolumeEdit + 1, repository.SaveCount);
             }
             finally
             {
@@ -801,14 +820,12 @@ public sealed class MainWindowBindingTests
                 Button clear = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
                 Button play = Assert.IsType<Button>(window.FindName("PlayDeathSoundButton"));
                 TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
-                Button saveVolume = Assert.IsType<Button>(window.FindName("SaveDeathSoundVolumeButton"));
 
                 Assert.False(enabled.IsChecked);
                 Assert.False(browse.IsEnabled);
                 Assert.False(clear.IsEnabled);
                 Assert.False(play.IsEnabled);
                 Assert.False(volume.IsEnabled);
-                Assert.False(saveVolume.IsEnabled);
 
                 enabled.IsChecked = true;
                 WaitForDispatcher(() => viewModel.IsDeathSoundEnabled && enabled.IsChecked == true && repository.SaveCount >= 1);
@@ -816,14 +833,12 @@ public sealed class MainWindowBindingTests
                 clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 volume.GetBindingExpression(TextBox.IsEnabledProperty)?.UpdateTarget();
-                saveVolume.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 Assert.True(viewModel.CanBrowseDeathSound);
                 Assert.False(viewModel.CanClearDeathSound);
                 Assert.True(browse.IsEnabled);
                 Assert.False(clear.IsEnabled);
                 Assert.False(play.IsEnabled);
                 Assert.True(volume.IsEnabled);
-                Assert.True(saveVolume.IsEnabled);
                 Assert.True(repository.State.DeathSound.IsEnabled);
 
                 File.WriteAllBytes(soundPath, []);
@@ -844,14 +859,12 @@ public sealed class MainWindowBindingTests
                 clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 volume.GetBindingExpression(TextBox.IsEnabledProperty)?.UpdateTarget();
-                saveVolume.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
                 Assert.False(viewModel.CanBrowseDeathSound);
                 Assert.False(viewModel.CanClearDeathSound);
                 Assert.False(browse.IsEnabled);
                 Assert.False(clear.IsEnabled);
                 Assert.False(play.IsEnabled);
                 Assert.False(volume.IsEnabled);
-                Assert.False(saveVolume.IsEnabled);
                 Assert.False(repository.State.DeathSound.IsEnabled);
 
                 window.Close();
@@ -1560,7 +1573,7 @@ public sealed class MainWindowBindingTests
         }
     }
 
-    private static void WaitForDispatcher(Func<bool> condition)
+    private static void WaitForDispatcher(Func<bool> condition, Func<string>? diagnostic = null)
     {
         var frame = new DispatcherFrame();
         int ticks = 0;
@@ -1576,6 +1589,6 @@ public sealed class MainWindowBindingTests
         };
         timer.Start();
         Dispatcher.PushFrame(frame);
-        Assert.True(condition(), "The routed WPF Save action did not publish its visible volume confirmation.");
+        Assert.True(condition(), diagnostic?.Invoke() ?? "The routed WPF Save action did not publish its visible volume confirmation.");
     }
 }

@@ -456,14 +456,13 @@
                 <Border x:Name="BossProgressPanel" Grid.Column="2" Style="{StaticResource Panel}" AutomationProperties.Name="Boss progress panel">
                     <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Top">
-                            <WrapPanel>
-                                <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Style="{StaticResource PanelTitle}" Text="BOSSES" />
-                                <ComboBox x:Name="EldenRingBossListScopeSelector" Width="190" Margin="0,0,8,0" ItemsSource="{Binding EldenRingBossListScopes}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingBossListScope, Mode=OneWay}" SelectionChanged="EldenRingBossListScope_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring boss list filter" />
-                                <CheckBox x:Name="RequiredEldenRingBossesOnlyCheckBox" Margin="0,5,0,0" VerticalAlignment="Center" Content="Required bosses only" IsChecked="{Binding RequiredEldenRingBossesOnly, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" Checked="RequiredEldenRingBossesOnly_Checked" Unchecked="RequiredEldenRingBossesOnly_Unchecked" AutomationProperties.Name="Required bosses only" />
-                            </WrapPanel>
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12" Text="Manual progress for the selected game." />
-                            <Label Target="{Binding ElementName=BossSearchTextBox}" Content="Search bosses" />
-                            <TextBox x:Name="BossSearchTextBox" Margin="0,0,0,12" Text="{Binding BossSearchQuery, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Search bosses" AutomationProperties.HelpText="Filters the desktop boss checklist by boss name or DLC." />
+                            <TextBlock Style="{StaticResource PanelTitle}" Text="BOSSES" />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="{Binding BossDescription}" />
+                            <ComboBox x:Name="EldenRingBossListScopeSelector" Width="190" Margin="0,0,0,8" ItemsSource="{Binding EldenRingBossListScopes}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingBossListScope, Mode=OneWay}" SelectionChanged="EldenRingBossListScope_SelectionChanged" IsEnabled="{Binding ControlsEnabled}" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring boss list filter" />
+                            <Grid Margin="0,0,0,12">
+                                <TextBox x:Name="BossSearchTextBox" Text="{Binding BossSearchQuery, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Search bosses" AutomationProperties.HelpText="Filters the desktop boss checklist by boss name or DLC." />
+                                <TextBlock x:Name="BossSearchPlaceholderTextBlock" Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{StaticResource MutedTextBrush}" Text="Search bosses" Visibility="{Binding ShowBossSearchPlaceholder, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </Grid>
                         </StackPanel>
                         <ScrollViewer x:Name="BossesScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Boss checklist">
                             <StackPanel>
@@ -598,7 +597,8 @@
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="DEATH SOUND" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Play one local WAV or MP3 after a confirmed death increment." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,0" Text="Play one local WAV or MP3 after a confirmed death increment." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,2,0,10" Text="Save-file tracking may delay the sound." />
                             <CheckBox x:Name="DeathSoundEnabledCheckBox" Content="Enable death sound" IsChecked="{Binding IsDeathSoundEnabled, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Checked="DeathSoundEnabled_Checked" Unchecked="DeathSoundEnabled_Unchecked" AutomationProperties.Name="Enable death sound" />
                             <TextBlock x:Name="DeathSoundFileNameTextBlock" Text="{Binding DeathSoundFileName, TargetNullValue=No death sound selected.}" AutomationProperties.Name="Selected death sound file name" />
                             <Grid Margin="0,8,0,0">
@@ -607,8 +607,7 @@
                                 <Button x:Name="BrowseDeathSoundButton" Content="Browse…" Click="BrowseDeathSound_Click" IsEnabled="{Binding CanBrowseDeathSound}" AutomationProperties.Name="Browse for death sound" />
                                 <Button x:Name="PlayDeathSoundButton" Grid.Column="1" Margin="8,0,0,0" Content="Play" Click="PlayDeathSound_Click" IsEnabled="{Binding CanPreviewDeathSound}" AutomationProperties.Name="Play selected death sound" />
                                 <Button x:Name="ClearDeathSoundButton" Grid.Column="2" Margin="8,0,0,0" HorizontalAlignment="Right" Content="Clear" Click="ClearDeathSound_Click" IsEnabled="{Binding CanClearDeathSound}" AutomationProperties.Name="Clear death sound" />
-                                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" Orientation="Horizontal"><TextBlock Margin="0,0,12,0" VerticalAlignment="Center" Text="Volume" /><TextBox x:Name="DeathSoundVolumeTextBox" Width="72" Padding="8,5" Text="{Binding DeathSoundVolume, Mode=OneWay}" IsEnabled="{Binding CanEditDeathSoundVolume}" KeyDown="DeathSoundVolume_KeyDown" AutomationProperties.Name="Death sound volume percentage" ToolTip="Enter a percentage from 0 to 100" /><TextBlock Margin="6,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{StaticResource MutedTextBrush}" Text="%" /></StackPanel>
-                                <Button x:Name="SaveDeathSoundVolumeButton" Grid.Row="1" Grid.Column="2" Margin="8,8,0,0" HorizontalAlignment="Right" Content="Save" Click="SaveDeathSoundVolume_Click" IsEnabled="{Binding CanEditDeathSoundVolume}" AutomationProperties.Name="Save death sound volume" />
+                                <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,8,0,0" Orientation="Horizontal"><TextBlock Margin="0,0,12,0" VerticalAlignment="Center" Text="Volume" /><TextBox x:Name="DeathSoundVolumeTextBox" Width="72" Padding="8,5" Text="{Binding DeathSoundVolumeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditDeathSoundVolume}" GotKeyboardFocus="DeathSoundVolume_GotKeyboardFocus" TextChanged="DeathSoundVolume_TextChanged" LostKeyboardFocus="DeathSoundVolume_LostKeyboardFocus" KeyDown="DeathSoundVolume_KeyDown" AutomationProperties.Name="Death sound volume percentage" ToolTip="Enter a percentage from 0 to 100" /><TextBlock Margin="6,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{StaticResource MutedTextBrush}" Text="%" /></StackPanel>
                             </Grid>
                             <TextBlock x:Name="DeathSoundStatusTextBlock" Margin="0,8,0,0" Text="{Binding DeathSoundStatus, Mode=OneWay}" AutomationProperties.Name="Death sound status" AutomationProperties.LiveSetting="Polite">
                                 <TextBlock.Style>

@@ -21,8 +21,6 @@ public static class BossCatalogDisplayFilter
             _ => throw new ArgumentOutOfRangeException(nameof(eldenRingSave)),
         };
 
-        return eldenRingSave.RequiredBossesOnly
-            ? bosses.Where(static boss => boss.IsProgressionRequired)
-            : bosses;
+        return bosses;
     }
 }

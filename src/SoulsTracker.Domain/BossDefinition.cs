@@ -8,7 +8,7 @@ public sealed record BossDefinition
     /// <summary>
     /// Initializes a boss definition.
     /// </summary>
-    public BossDefinition(BossId id, string displayName, string? dlcLabel = null, bool isProgressionRequired = false)
+    public BossDefinition(BossId id, string displayName, string? dlcLabel = null)
     {
         ArgumentNullException.ThrowIfNull(id);
 
@@ -25,7 +25,6 @@ public sealed record BossDefinition
         Id = id;
         DisplayName = displayName;
         DlcLabel = dlcLabel;
-        IsProgressionRequired = isProgressionRequired;
     }
 
     /// <summary>
@@ -43,6 +42,4 @@ public sealed record BossDefinition
     /// </summary>
     public string? DlcLabel { get; }
 
-    /// <summary>Gets whether this boss belongs in the manual progression-gate filter.</summary>
-    public bool IsProgressionRequired { get; }
 }

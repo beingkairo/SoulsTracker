@@ -160,10 +160,10 @@ public sealed class GameDefinition
             return;
         }
 
-        // Elden Ring is selectable only after the user acknowledges its local
-        // notice. Its reader remains intentionally unavailable until separate
-        // live validation authorizes one.
-        if (id == GameId.EldenRing &&
+        // Elden Ring requires its local acknowledgement before selection. Black
+        // Myth: Wukong is selectable for UI testing, but deliberately exposes no
+        // reader or boss catalog until separately approved data work exists.
+        if ((id == GameId.EldenRing || id == GameId.BlackMythWukong) &&
             trackingMode == GameTrackingMode.Unavailable &&
             readerBindingState == ReaderBindingState.IntentionallyUnavailable &&
             bossCatalog.Length == 0)

@@ -24,43 +24,24 @@ public sealed class EldenRingBossCatalogTests
     }
 
     [Theory]
-    [InlineData(EldenRingBossListScope.AllBosses, false, 207)]
-    [InlineData(EldenRingBossListScope.BaseGame, false, 165)]
-    [InlineData(EldenRingBossListScope.ShadowOfTheErdtree, false, 42)]
-    [InlineData(EldenRingBossListScope.AllBosses, true, 20)]
-    [InlineData(EldenRingBossListScope.BaseGame, true, 14)]
-    [InlineData(EldenRingBossListScope.ShadowOfTheErdtree, true, 6)]
-    public void DisplayFilterHasTheExpectedScopeAndRequiredBossMatrix(
+    [InlineData(EldenRingBossListScope.AllBosses, 207)]
+    [InlineData(EldenRingBossListScope.BaseGame, 165)]
+    [InlineData(EldenRingBossListScope.ShadowOfTheErdtree, 42)]
+    public void DisplayFilterHasTheExpectedScope(
         EldenRingBossListScope scope,
-        bool requiredOnly,
         int expectedCount)
     {
         GameDefinition game = GameCatalog.GetRequired(GameId.EldenRing);
         BossDefinition[] filtered = BossCatalogDisplayFilter.Apply(
             game,
-            new EldenRingSaveConfiguration(null, 0, scope, requiredOnly)).ToArray();
+            new EldenRingSaveConfiguration(null, 0, scope)).ToArray();
 
         Assert.Equal(expectedCount, filtered.Length);
         Assert.All(filtered, boss =>
         {
             if (scope == EldenRingBossListScope.BaseGame) Assert.Null(boss.DlcLabel);
             if (scope == EldenRingBossListScope.ShadowOfTheErdtree) Assert.Equal("Shadow of the Erdtree", boss.DlcLabel);
-            if (requiredOnly) Assert.True(boss.IsProgressionRequired);
         });
-    }
-
-    [Fact]
-    public void RequiredMembershipIncludesDocumentedRouteCandidatesAndFinalGates()
-    {
-        GameDefinition game = GameCatalog.GetRequired(GameId.EldenRing);
-        BossDefinition[] required = BossCatalogDisplayFilter.Apply(
-            game,
-            new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.AllBosses, true)).ToArray();
-
-        Assert.Contains(required, static boss => boss.DisplayName == "Godrick");
-        Assert.Contains(required, static boss => boss.DisplayName == "Godskin Duo");
-        Assert.Contains(required, static boss => boss.DisplayName == "Radagon / Elden Beast");
-        Assert.Contains(required, static boss => boss.DisplayName == "Radahn (Promised Consort)");
     }
 
     [Fact]
