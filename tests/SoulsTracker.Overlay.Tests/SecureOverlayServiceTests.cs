@@ -26,11 +26,13 @@ public sealed class SecureOverlayServiceTests
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(socketUrl, CancellationToken.None);
         await socket.ReceiveAsync(new byte[16_384], CancellationToken.None);
+        Assert.Equal(1, service.ActiveWebSocketConnectionCount);
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         await service.DisposeAsync();
         stopwatch.Stop();
 
+        Assert.Equal(0, service.ActiveWebSocketConnectionCount);
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(2),
             $"Local overlay shutdown took {stopwatch.Elapsed}; an open browser socket must not make desktop close feel stalled.");

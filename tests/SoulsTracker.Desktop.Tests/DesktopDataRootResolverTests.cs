@@ -52,4 +52,46 @@ public sealed class DesktopDataRootResolverTests
             [DesktopDataRootResolver.DataRootOption, normalRoot],
             localApplicationData));
     }
+
+    [Fact]
+    public void BenchmarkReadinessRequiresAnIsolatedDataRoot()
+    {
+        Assert.Throws<ArgumentException>(() => DesktopDataRootResolver.Resolve(
+            [DesktopDataRootResolver.BenchmarkReadinessPipeOption, "SoulsTrackerShutdown-123"],
+            Path.Combine(Path.GetTempPath(), "SoulsTracker-tests")));
+    }
+
+    [Fact]
+    public void BenchmarkReadinessAcceptsASafePipeOnlyWithAnIsolatedDataRoot()
+    {
+        string localApplicationData = Path.Combine(Path.GetTempPath(), "SoulsTracker-tests", Guid.NewGuid().ToString("N"));
+        string developmentRoot = Path.Combine(Path.GetTempPath(), "SoulsTracker-development", Guid.NewGuid().ToString("N"));
+
+        DesktopDataRootSelection selection = DesktopDataRootResolver.Resolve(
+            [
+                DesktopDataRootResolver.DataRootOption,
+                developmentRoot,
+                DesktopDataRootResolver.BenchmarkReadinessPipeOption,
+                "SoulsTrackerShutdown-123",
+            ],
+            localApplicationData);
+
+        Assert.Equal("SoulsTrackerShutdown-123", selection.BenchmarkReadinessPipeName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("contains spaces")]
+    [InlineData("contains/slash")]
+    public void BenchmarkReadinessRejectsUnsafePipeNames(string pipeName)
+    {
+        Assert.Throws<ArgumentException>(() => DesktopDataRootResolver.Resolve(
+            [
+                DesktopDataRootResolver.DataRootOption,
+                Path.Combine(Path.GetTempPath(), "SoulsTracker-development", Guid.NewGuid().ToString("N")),
+                DesktopDataRootResolver.BenchmarkReadinessPipeOption,
+                pipeName,
+            ],
+            Path.Combine(Path.GetTempPath(), "SoulsTracker-tests")));
+    }
 }

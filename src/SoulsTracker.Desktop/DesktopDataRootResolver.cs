@@ -9,6 +9,7 @@ namespace SoulsTracker.Desktop;
 public static class DesktopDataRootResolver
 {
     public const string DataRootOption = "--data-root";
+    public const string BenchmarkReadinessPipeOption = "--benchmark-readiness-pipe";
 
     public static DesktopDataRootSelection Resolve(IReadOnlyList<string> arguments, string localApplicationDataPath)
     {
@@ -20,7 +21,11 @@ public static class DesktopDataRootResolver
             return new DesktopDataRootSelection(defaultRoot, IsDevelopmentOverride: false);
         }
 
-        if (arguments.Count != 2 || !string.Equals(arguments[0], DataRootOption, StringComparison.Ordinal))
+        bool hasDataRoot = arguments.Count is 2 or 4 &&
+            string.Equals(arguments[0], DataRootOption, StringComparison.Ordinal);
+        bool hasBenchmarkReadinessPipe = arguments.Count == 4 &&
+            string.Equals(arguments[2], BenchmarkReadinessPipeOption, StringComparison.Ordinal);
+        if (!hasDataRoot || (arguments.Count == 4 && !hasBenchmarkReadinessPipe))
         {
             throw new ArgumentException("Use --data-root followed by a separate absolute folder path.", nameof(arguments));
         }
@@ -42,10 +47,30 @@ public static class DesktopDataRootResolver
             throw new ArgumentException("The development data root must be a folder below a drive root.", nameof(arguments));
         }
 
-        return new DesktopDataRootSelection(overrideRoot, IsDevelopmentOverride: true);
+        string? benchmarkReadinessPipeName = null;
+        if (hasBenchmarkReadinessPipe)
+        {
+            benchmarkReadinessPipeName = arguments[3];
+            if (!IsValidBenchmarkPipeName(benchmarkReadinessPipeName))
+            {
+                throw new ArgumentException("The benchmark readiness pipe name is invalid.", nameof(arguments));
+            }
+        }
+
+        return new DesktopDataRootSelection(
+            overrideRoot,
+            IsDevelopmentOverride: true,
+            benchmarkReadinessPipeName);
     }
 
     private static string Normalize(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+    private static bool IsValidBenchmarkPipeName(string? value) =>
+        value is { Length: >= 1 and <= 128 } &&
+        value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
 }
 
-public sealed record DesktopDataRootSelection(string RootPath, bool IsDevelopmentOverride);
+public sealed record DesktopDataRootSelection(
+    string RootPath,
+    bool IsDevelopmentOverride,
+    string? BenchmarkReadinessPipeName = null);

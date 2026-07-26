@@ -81,6 +81,32 @@ public partial class MainWindow : Window
         }
     }
 
+    internal async Task PrepareLiveOverlayPreviewForBenchmarkAsync(Uri source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        WorkspaceTabs.SelectedItem = OverlayWorkspaceTab;
+        await LiveOverlayPreview.EnsureCoreWebView2Async();
+        LiveOverlayPreview.Source = source;
+
+        long timeoutTimestamp = Stopwatch.GetTimestamp() +
+            (long)(TimeSpan.FromSeconds(10).TotalSeconds * Stopwatch.Frequency);
+        while (Stopwatch.GetTimestamp() < timeoutTimestamp)
+        {
+            string isReady = await LiveOverlayPreview.CoreWebView2.ExecuteScriptAsync(
+                "document.readyState === 'complete' && " +
+                "document.getElementById('souls-tracker-overlay') !== null");
+            if (string.Equals(isReady, "true", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await Task.Delay(25);
+        }
+
+        throw new TimeoutException("The embedded overlay preview did not become ready.");
+    }
+
     private async void GameSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         GameChoice? choice = e.AddedItems.OfType<GameChoice>().LastOrDefault();

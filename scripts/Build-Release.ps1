@@ -100,7 +100,7 @@ Invoke-External npm @("ci", "--prefix", $overlayPath)
 Invoke-External npm @("exec", "--prefix", $overlayPath, "playwright", "install", "chromium")
 Invoke-External npm @("run", "build", "--prefix", $overlayPath)
 Invoke-External npm @("run", "check", "--prefix", $overlayPath)
-Invoke-External npm @("test", "--prefix", $overlayPath)
+Invoke-External npm @("test", "--prefix", $overlayPath, "--", "--workers=1")
 Invoke-External dotnet @("format", $solution, "--no-restore", "--verify-no-changes")
 Invoke-External dotnet @("build", $solution, "--configuration", "Release", "--no-restore")
 

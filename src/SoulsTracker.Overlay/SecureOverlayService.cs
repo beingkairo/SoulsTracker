@@ -33,6 +33,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
     private PersistentTrackerState? trackerState;
     private RuntimeGameObservation? runtimeObservation;
     private readonly object snapshotSynchronization = new();
+    private int activeWebSocketConnectionCount;
     private long sequence;
     private OverlaySnapshot snapshot = EmptySnapshot();
 
@@ -102,6 +103,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
 
     public string TotalDeathsUrl => CanonicalUrl("/overlay/total_deaths");
     public string BossListUrl => CanonicalUrl("/overlay/boss_list");
+    public int ActiveWebSocketConnectionCount => Volatile.Read(ref activeWebSocketConnectionCount);
 
     private string CanonicalUrl(string path)
     {
@@ -133,26 +135,34 @@ public sealed class SecureOverlayService : IAsyncDisposable
     {
         if (!TryGetAuthorizedToken(context, out _) || !context.WebSockets.IsWebSocketRequest) { context.Response.StatusCode = StatusCodes.Status404NotFound; return; }
         using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
-        long delivered = -1;
-        while (socket.State == WebSocketState.Open && !context.RequestAborted.IsCancellationRequested)
+        Interlocked.Increment(ref activeWebSocketConnectionCount);
+        try
         {
-            OverlaySnapshot? currentSnapshot = null;
-            long current = delivered;
-            lock (snapshotSynchronization)
+            long delivered = -1;
+            while (socket.State == WebSocketState.Open && !context.RequestAborted.IsCancellationRequested)
             {
-                current = sequence;
-                if (current != delivered)
+                OverlaySnapshot? currentSnapshot = null;
+                long current = delivered;
+                lock (snapshotSynchronization)
                 {
-                    currentSnapshot = snapshot;
+                    current = sequence;
+                    if (current != delivered)
+                    {
+                        currentSnapshot = snapshot;
+                    }
                 }
+                if (currentSnapshot is not null)
+                {
+                    byte[] json = JsonSerializer.SerializeToUtf8Bytes(currentSnapshot, SnapshotJsonOptions);
+                    await socket.SendAsync(json, WebSocketMessageType.Text, true, context.RequestAborted).ConfigureAwait(false);
+                    delivered = current;
+                }
+                await Task.Delay(25, context.RequestAborted).ConfigureAwait(false);
             }
-            if (currentSnapshot is not null)
-            {
-                byte[] json = JsonSerializer.SerializeToUtf8Bytes(currentSnapshot, SnapshotJsonOptions);
-                await socket.SendAsync(json, WebSocketMessageType.Text, true, context.RequestAborted).ConfigureAwait(false);
-                delivered = current;
-            }
-            await Task.Delay(25, context.RequestAborted).ConfigureAwait(false);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref activeWebSocketConnectionCount);
         }
     }
 
