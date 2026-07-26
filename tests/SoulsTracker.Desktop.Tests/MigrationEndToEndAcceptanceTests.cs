@@ -182,7 +182,7 @@ public sealed class MigrationEndToEndAcceptanceTests : IAsyncLifetime
 
         Assert.Equal(sourceBytes, File.ReadAllBytes(sourcePath));
         Assert.Equal(sourceBytes, File.ReadAllBytes(backupPath));
-        Assert.Null((await flow.Repository.LoadAsync()).State!.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, (await flow.Repository.LoadAsync()).State!.SelectedGameId);
         Assert.Empty(flow.Publisher.Notifications);
         Assert.Equal(0L, await AuditRowCountAsync());
     }
@@ -210,7 +210,7 @@ public sealed class MigrationEndToEndAcceptanceTests : IAsyncLifetime
 
         Assert.Equal(expected, flow.Import.Review!.Outcome);
         Assert.False(flow.Import.CanImport);
-        Assert.Null((await flow.Repository.LoadAsync()).State!.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, (await flow.Repository.LoadAsync()).State!.SelectedGameId);
         Assert.Empty(flow.Publisher.Notifications);
         Assert.Equal(0L, await AuditRowCountAsync());
         if (expected == LegacyImportPreflightOutcome.VerificationFailed)

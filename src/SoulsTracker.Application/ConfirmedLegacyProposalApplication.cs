@@ -24,7 +24,9 @@ public static class ConfirmedLegacyProposalApplication
             return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.RejectedAnalysis);
         }
 
-        if (destination.SelectedGameId is not null)
+        // Demon’s Souls is the first-run default, so it does not by itself mean
+        // that a person has begun tracking and should block a one-time import.
+        if (destination.SelectedGameId != GameId.DemonsSouls)
         {
             return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.DestinationHasSelectedGame);
         }
@@ -34,7 +36,9 @@ public static class ConfirmedLegacyProposalApplication
             return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.DestinationHasDefeatedBossProgress);
         }
 
-        if (destination.ManualBloodborneDeathCounter.Value != 0 || destination.ManualDemonsSoulsDeathCounter.Value != 0)
+        if (destination.ManualBloodborneDeathCounter.Value != 0 ||
+            destination.ManualDemonsSoulsDeathCounter.Value != 0 ||
+            destination.ManualBlackMythWukongDeathCounter.Value != 0)
         {
             return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.DestinationHasManualBloodborneDeaths);
         }
@@ -105,7 +109,8 @@ public static class ConfirmedLegacyProposalApplication
             progress,
             overlay,
             destination.ManualBloodborneHotkeys,
-            destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave);
+            destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave,
+            destination.BossListScope, ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
         return true;
     }
 

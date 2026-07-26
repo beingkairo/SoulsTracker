@@ -16,7 +16,7 @@ public sealed class PersistentTrackerState
     /// </summary>
     public static PersistentTrackerState Default { get; } = new(
         CurrentSchemaVersion,
-        selectedGameId: null,
+        selectedGameId: GameId.DemonsSouls,
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
         BossProgress.Empty,
         OverlayConfiguration.Default,
@@ -25,7 +25,9 @@ public sealed class PersistentTrackerState
         TextExportConfiguration.Default,
         ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
         eldenRingNoticeAcknowledged: false,
-        EldenRingSaveConfiguration.Default);
+        EldenRingSaveConfiguration.Default,
+        BossListScope.AllBosses,
+        ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
 
     /// <summary>
     /// Initializes validated persisted tracker state.
@@ -43,7 +45,9 @@ public sealed class PersistentTrackerState
         TextExportConfiguration? textExports = null,
         ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
         bool eldenRingNoticeAcknowledged = false,
-        EldenRingSaveConfiguration? eldenRingSave = null)
+        EldenRingSaveConfiguration? eldenRingSave = null,
+        BossListScope bossListScope = BossListScope.AllBosses,
+        ManualBloodborneDeathCounter? manualBlackMythWukongDeathCounter = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -53,6 +57,7 @@ public sealed class PersistentTrackerState
                 "The persistent tracker state schema version is unsupported.");
         }
 
+        selectedGameId ??= GameId.DemonsSouls;
         ValidateSelectedGame(selectedGameId, eldenRingNoticeAcknowledged);
         ArgumentNullException.ThrowIfNull(manualBloodborneDeathCounter);
         ArgumentNullException.ThrowIfNull(bossProgress);
@@ -62,6 +67,7 @@ public sealed class PersistentTrackerState
         SelectedGameId = selectedGameId;
         ManualBloodborneDeathCounter = manualBloodborneDeathCounter;
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
+        ManualBlackMythWukongDeathCounter = manualBlackMythWukongDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong);
         BossProgress = bossProgress;
         OverlayConfiguration = overlayConfiguration;
         ManualBloodborneHotkeys = manualBloodborneHotkeys is { IsValid: true } validHotkeys
@@ -71,6 +77,7 @@ public sealed class PersistentTrackerState
         TextExports = textExports ?? TextExportConfiguration.Default;
         EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
         EldenRingSave = eldenRingSave ?? EldenRingSaveConfiguration.Default;
+        BossListScope = BossCatalogDisplayFilter.NormalizeScope(GameCatalog.GetRequired(selectedGameId), bossListScope);
     }
 
     /// <summary>
@@ -79,10 +86,9 @@ public sealed class PersistentTrackerState
     public int SchemaVersion { get; }
 
     /// <summary>
-    /// Gets the selected canonical game, or <see langword="null"/> before a
-    /// later application command selects one.
+    /// Gets the selected canonical game. Legacy absent values normalize to Demon Souls.
     /// </summary>
-    public GameId? SelectedGameId { get; }
+    public GameId SelectedGameId { get; }
 
     /// <summary>
     /// Gets the persisted Bloodborne manual death counter.
@@ -92,11 +98,16 @@ public sealed class PersistentTrackerState
     /// <summary>Gets the persisted Demon’s Souls manual death counter.</summary>
     public ManualBloodborneDeathCounter ManualDemonsSoulsDeathCounter { get; }
 
+    /// <summary>Gets the persisted Black Myth: Wukong manual death counter.</summary>
+    public ManualBloodborneDeathCounter ManualBlackMythWukongDeathCounter { get; }
+
     /// <summary>Returns the independent manual counter for a supported manual profile.</summary>
     public ManualBloodborneDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.Bloodborne
         ? ManualBloodborneDeathCounter
         : gameId == GameId.DemonsSouls
             ? ManualDemonsSoulsDeathCounter
+            : gameId == GameId.BlackMythWukong
+                ? ManualBlackMythWukongDeathCounter
             : throw new InvalidOperationException("The selected game does not use a manual death counter.");
 
     /// <summary>
@@ -120,14 +131,12 @@ public sealed class PersistentTrackerState
     /// <summary>Local configuration for the separate read-only Elden Ring save reader.</summary>
     public EldenRingSaveConfiguration EldenRingSave { get; }
 
+    /// <summary>Gets the persisted scope shared by checklist, overlay, preview, and TXT export.</summary>
+    public BossListScope BossListScope { get; }
+
     private static void ValidateSelectedGame(GameId? selectedGameId, bool eldenRingNoticeAcknowledged)
     {
-        if (selectedGameId is null)
-        {
-            return;
-        }
-
-        GameDefinition definition = GameCatalog.GetRequired(selectedGameId);
+        GameDefinition definition = GameCatalog.GetRequired(selectedGameId!);
         if (!definition.IsSelectable)
         {
             throw new ArgumentException("A disabled SOON game cannot be selected.", nameof(selectedGameId));

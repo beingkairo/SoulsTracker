@@ -54,37 +54,6 @@ public sealed class TrackerStateTransitionServiceTests
     }
 
     [Fact]
-    public void ClearSelectedGamePersistsNullWithoutChangingOtherState()
-    {
-        BossId bossId = GameCatalog.GetRequired(GameId.Ds1).BossCatalog[0].Id;
-        BossProgress progress = BossProgress.Empty.MarkDefeated(GameId.Ds1, bossId);
-        OverlayConfiguration configuration = OverlayConfiguration.Default;
-        TextExportConfiguration exports = new("deaths.txt", true, "bosses.txt", true);
-        PersistentTrackerState selected = new(
-            PersistentTrackerState.CurrentSchemaVersion,
-            GameId.Ds1,
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 4),
-            progress,
-            configuration,
-            textExports: exports,
-            manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 2));
-
-        TrackerTransitionResult cleared = TrackerStateTransitionService.Apply(selected, new ClearSelectedGameCommand());
-        TrackerTransitionResult unchanged = TrackerStateTransitionService.Apply(cleared.State, new ClearSelectedGameCommand());
-
-        Assert.True(cleared.StateChanged);
-        Assert.Equal(TrackerCommandType.ClearSelectedGame, cleared.CommandType);
-        Assert.Null(cleared.State.SelectedGameId);
-        Assert.Equal(4, cleared.State.ManualBloodborneDeathCounter.Value);
-        Assert.Equal(2, cleared.State.ManualDemonsSoulsDeathCounter.Value);
-        Assert.Same(progress, cleared.State.BossProgress);
-        Assert.Same(configuration, cleared.State.OverlayConfiguration);
-        Assert.Same(exports, cleared.State.TextExports);
-        Assert.False(unchanged.StateChanged);
-        Assert.Same(cleared.State, unchanged.State);
-    }
-
-    [Fact]
     public void SelectGameRejectsUnknownDisabledAndNullGameIdsWithoutChangingState()
     {
         PersistentTrackerState state = PersistentTrackerState.Default;
@@ -135,16 +104,29 @@ public sealed class TrackerStateTransitionServiceTests
     }
 
     [Fact]
-    public void ManualCounterTransitionsRejectNoSelectionAndAutomaticGamesWithoutChangingState()
+    public void ManualWukongCounterIsIndependentFromEveryOtherManualProfile()
     {
-        PersistentTrackerState noSelection = PersistentTrackerState.Default;
-        PersistentTrackerState automatic = Select(noSelection, GameId.Ds1);
+        PersistentTrackerState wukong = Select(PersistentTrackerState.Default, GameId.BlackMythWukong);
+        PersistentTrackerState incremented = TrackerStateTransitionService.Apply(wukong, new IncrementManualBloodborneDeathsCommand()).State;
+        PersistentTrackerState restoredDemonsSouls = Select(incremented, GameId.DemonsSouls);
 
-        Assert.Throws<ArgumentException>(() => TrackerStateTransitionService.Apply(noSelection, new IncrementManualBloodborneDeathsCommand()));
-        Assert.Throws<ArgumentException>(() => TrackerStateTransitionService.Apply(noSelection, new DecrementManualBloodborneDeathsCommand()));
+        Assert.Equal(1, incremented.ManualBlackMythWukongDeathCounter.Value);
+        Assert.Equal(0, incremented.ManualBloodborneDeathCounter.Value);
+        Assert.Equal(0, incremented.ManualDemonsSoulsDeathCounter.Value);
+        Assert.Equal(1, restoredDemonsSouls.GetManualDeathCounter(GameId.BlackMythWukong).Value);
+    }
+
+    [Fact]
+    public void ManualCounterTransitionsWorkForTheDefaultManualGameAndRejectAutomaticGames()
+    {
+        PersistentTrackerState defaultManualGame = PersistentTrackerState.Default;
+        PersistentTrackerState automatic = Select(defaultManualGame, GameId.Ds1);
+
+        Assert.Equal(GameId.DemonsSouls, defaultManualGame.SelectedGameId);
+        Assert.Equal(1, TrackerStateTransitionService.Apply(defaultManualGame, new IncrementManualBloodborneDeathsCommand()).State.ManualDemonsSoulsDeathCounter.Value);
         Assert.Throws<ArgumentException>(() => TrackerStateTransitionService.Apply(automatic, new IncrementManualBloodborneDeathsCommand()));
         Assert.Throws<ArgumentException>(() => TrackerStateTransitionService.Apply(automatic, new DecrementManualBloodborneDeathsCommand()));
-        Assert.Equal(0, noSelection.ManualBloodborneDeathCounter.Value);
+        Assert.Equal(0, defaultManualGame.ManualBloodborneDeathCounter.Value);
         Assert.Equal(0, automatic.ManualBloodborneDeathCounter.Value);
     }
 
@@ -306,10 +288,10 @@ public sealed class TrackerStateTransitionServiceTests
         Type[] contracts =
         [
             typeof(SelectGameCommand),
-            typeof(ClearSelectedGameCommand),
             typeof(IncrementManualBloodborneDeathsCommand),
             typeof(DecrementManualBloodborneDeathsCommand),
             typeof(SetBossDefeatedCommand),
+            typeof(UpdateBossListScopeCommand),
             typeof(UpdateOverlayPresentationCommand),
             typeof(ResetOverlayAppearanceCommand),
             typeof(UpdateOverlayAppearanceCommand),

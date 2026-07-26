@@ -24,23 +24,22 @@ public sealed class EldenRingBossCatalogTests
     }
 
     [Theory]
-    [InlineData(EldenRingBossListScope.AllBosses, 207)]
-    [InlineData(EldenRingBossListScope.BaseGame, 165)]
-    [InlineData(EldenRingBossListScope.ShadowOfTheErdtree, 42)]
+    [InlineData(BossListScope.AllBosses, 207)]
+    [InlineData(BossListScope.MainGame, 165)]
+    [InlineData(BossListScope.Dlc, 42)]
     public void DisplayFilterHasTheExpectedScope(
-        EldenRingBossListScope scope,
+        BossListScope scope,
         int expectedCount)
     {
         GameDefinition game = GameCatalog.GetRequired(GameId.EldenRing);
         BossDefinition[] filtered = BossCatalogDisplayFilter.Apply(
-            game,
-            new EldenRingSaveConfiguration(null, 0, scope)).ToArray();
+            game, scope).ToArray();
 
         Assert.Equal(expectedCount, filtered.Length);
         Assert.All(filtered, boss =>
         {
-            if (scope == EldenRingBossListScope.BaseGame) Assert.Null(boss.DlcLabel);
-            if (scope == EldenRingBossListScope.ShadowOfTheErdtree) Assert.Equal("Shadow of the Erdtree", boss.DlcLabel);
+            if (scope == BossListScope.MainGame) Assert.Null(boss.DlcLabel);
+            if (scope == BossListScope.Dlc) Assert.Equal("Shadow of the Erdtree", boss.DlcLabel);
         });
     }
 

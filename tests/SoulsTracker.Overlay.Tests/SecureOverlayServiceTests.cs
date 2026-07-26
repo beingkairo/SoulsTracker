@@ -156,7 +156,7 @@ public sealed class SecureOverlayServiceTests
             BossProgress.Empty,
             OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree));
+            bossListScope: BossListScope.Dlc);
         var repository = new MemoryRepository(state);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
@@ -315,8 +315,16 @@ public sealed class SecureOverlayServiceTests
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(socketUrl, CancellationToken.None);
         byte[] buffer = new byte[16_384];
-        WebSocketReceiveResult received = await socket.ReceiveAsync(buffer, CancellationToken.None);
-        return Encoding.UTF8.GetString(buffer, 0, received.Count);
+        using var payload = new MemoryStream();
+        WebSocketReceiveResult received;
+        do
+        {
+            received = await socket.ReceiveAsync(buffer, CancellationToken.None);
+            payload.Write(buffer, 0, received.Count);
+        }
+        while (!received.EndOfMessage);
+
+        return Encoding.UTF8.GetString(payload.ToArray());
     }
 
     private sealed class MemoryRepository(PersistentTrackerState state) : ITrackerStateRepository

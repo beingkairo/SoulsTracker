@@ -107,7 +107,7 @@ public sealed class ConfirmedLegacyProposalApplicationTests
 
         Assert.Equal(LegacyProposalApplicationOutcome.RejectedAnalysis, result.Outcome);
         Assert.Null(result.CandidateState);
-        Assert.Null(destination.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, destination.SelectedGameId);
         Assert.Equal(0, destination.ManualBloodborneDeathCounter.Value);
     }
 

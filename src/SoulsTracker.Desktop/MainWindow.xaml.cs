@@ -102,12 +102,15 @@ public partial class MainWindow : Window
     }
 
     private async Task SelectGameOnWindowDispatcherAsync(DesktopTrackerViewModel viewModel, GameChoice choice)
+        => await RunOnWindowDispatcherAsync(() => viewModel.SelectGameAsync(choice));
+
+    private async Task RunOnWindowDispatcherAsync(Func<Task> operation)
     {
         SynchronizationContext? priorContext = SynchronizationContext.Current;
         try
         {
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
-            await viewModel.SelectGameAsync(choice);
+            await operation();
         }
         finally
         {
@@ -159,11 +162,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void EldenRingBossListScope_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void BossListScope_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: EldenRingBossListScopeChoice scope } && viewModel.SelectedEldenRingBossListScope != scope)
+        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: BossListScopeChoice scope } && viewModel.SelectedBossListScope != scope)
         {
-            await viewModel.SetEldenRingBossListScopeAsync(scope);
+            await viewModel.SetBossListScopeAsync(scope);
         }
     }
 
@@ -237,8 +240,14 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel)
         {
             await viewModel.ConfirmEldenRingNoticeAsync();
-            GameSelector.SelectedItem = viewModel.SelectedGame;
-            RestoreGameSelectorFocus();
+            void ApplyConfirmedSelection()
+            {
+                GameSelector.SelectedItem = viewModel.SelectedGame;
+                RestoreGameSelectorFocus();
+            }
+
+            if (Dispatcher.CheckAccess()) ApplyConfirmedSelection();
+            else _ = Dispatcher.BeginInvoke(ApplyConfirmedSelection);
         }
     }
 

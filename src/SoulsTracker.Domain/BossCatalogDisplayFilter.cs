@@ -3,24 +3,28 @@ namespace SoulsTracker.Domain;
 /// <summary>Applies persisted display filtering without changing canonical catalogs or progress.</summary>
 public static class BossCatalogDisplayFilter
 {
-    public static IEnumerable<BossDefinition> Apply(GameDefinition game, EldenRingSaveConfiguration eldenRingSave)
+    /// <summary>Returns a scope that can produce a truthful catalog for the supplied game.</summary>
+    public static BossListScope NormalizeScope(GameDefinition game, BossListScope scope)
     {
         ArgumentNullException.ThrowIfNull(game);
-        ArgumentNullException.ThrowIfNull(eldenRingSave);
+        if (!Enum.IsDefined(scope)) return BossListScope.AllBosses;
 
-        if (game.Id != GameId.EldenRing)
-        {
-            return game.BossCatalog;
-        }
+        return scope == BossListScope.Dlc && !game.BossCatalog.Any(static boss => boss.DlcLabel is not null)
+            ? BossListScope.AllBosses
+            : scope;
+    }
 
-        IEnumerable<BossDefinition> bosses = eldenRingSave.BossListScope switch
+    public static IEnumerable<BossDefinition> Apply(GameDefinition game, BossListScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(game);
+        scope = NormalizeScope(game, scope);
+
+        return scope switch
         {
-            EldenRingBossListScope.AllBosses => game.BossCatalog,
-            EldenRingBossListScope.BaseGame => game.BossCatalog.Where(static boss => boss.DlcLabel is null),
-            EldenRingBossListScope.ShadowOfTheErdtree => game.BossCatalog.Where(static boss => boss.DlcLabel == EldenRingBossCatalog.ShadowOfTheErdtree),
-            _ => throw new ArgumentOutOfRangeException(nameof(eldenRingSave)),
+            BossListScope.AllBosses => game.BossCatalog,
+            BossListScope.MainGame => game.BossCatalog.Where(static boss => boss.DlcLabel is null),
+            BossListScope.Dlc => game.BossCatalog.Where(static boss => boss.DlcLabel is not null),
+            _ => throw new ArgumentOutOfRangeException(nameof(scope)),
         };
-
-        return bosses;
     }
 }

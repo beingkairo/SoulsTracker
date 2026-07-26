@@ -132,7 +132,10 @@ class OverlayClient {
     }
 
     const panel = panelFor("total-deaths-overlay", snapshot.Presentation.TotalDeathsAppearance);
-    const displayValue = snapshot.TotalDeaths.Source === "Unavailable" || snapshot.TotalDeaths.Value === null ? "Unavailable" : String(snapshot.TotalDeaths.Value);
+    // A selected reader-backed game may have no observation yet. The snapshot
+    // represents that safe state as Unavailable with its numeric zero
+    // placeholder, which must remain a number in the browser overlay.
+    const displayValue = snapshot.TotalDeaths.Value === null ? "Unavailable" : String(snapshot.TotalDeaths.Value);
     const inlineTitle = true;
     const titleIcon = snapshot.Presentation.TotalDeathsTitleIconMode;
     const hasTitle = snapshot.Presentation.TotalDeathsAppearance.Title.trim().length > 0;

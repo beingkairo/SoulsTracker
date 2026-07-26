@@ -25,7 +25,7 @@ public sealed class PersistentTrackerStateTests
         PersistentTrackerState state = PersistentTrackerState.Default;
 
         Assert.Equal(1, state.SchemaVersion);
-        Assert.Null(state.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, state.SelectedGameId);
         Assert.Equal(0L, state.ManualBloodborneDeathCounter.Value);
         Assert.Equal(0L, state.ManualDemonsSoulsDeathCounter.Value);
 
@@ -67,7 +67,24 @@ public sealed class PersistentTrackerStateTests
             OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true).SelectedGameId);
         Assert.Throws<ArgumentException>(() => CreateState(CreateUnknownGameId()));
-        Assert.Null(PersistentTrackerState.Default.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, PersistentTrackerState.Default.SelectedGameId);
+    }
+
+    [Theory]
+    [InlineData("demons_souls")]
+    [InlineData("black_myth_wukong")]
+    public void DlcScopeNormalizesToAllBossesForBaseOnlyProfiles(string gameId)
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.Parse(gameId),
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            bossListScope: BossListScope.Dlc);
+
+        Assert.Equal(BossListScope.AllBosses, state.BossListScope);
+        Assert.NotEmpty(BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.BossListScope));
     }
 
     [Fact]

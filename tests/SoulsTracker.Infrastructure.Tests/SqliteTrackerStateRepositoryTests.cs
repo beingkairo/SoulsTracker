@@ -94,7 +94,8 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
             BossProgress.Empty,
             OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3, EldenRingBossListScope.ShadowOfTheErdtree));
+            eldenRingSave: new EldenRingSaveConfiguration(savePath, 3),
+            bossListScope: BossListScope.Dlc);
 
         await using (var repository = new SqliteTrackerStateRepository(root, "elden-save.db", new ReversingProtector()))
         {
@@ -103,10 +104,10 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         }
 
         await using var reopened = new SqliteTrackerStateRepository(root, "elden-save.db", new ReversingProtector());
-        EldenRingSaveConfiguration restored = (await reopened.LoadAsync()).State!.EldenRingSave;
-        Assert.Equal(savePath, restored.LocalPath);
-        Assert.Equal(3, restored.SlotIndex);
-        Assert.Equal(EldenRingBossListScope.ShadowOfTheErdtree, restored.BossListScope);
+        PersistentTrackerState restored = (await reopened.LoadAsync()).State!;
+        Assert.Equal(savePath, restored.EldenRingSave.LocalPath);
+        Assert.Equal(3, restored.EldenRingSave.SlotIndex);
+        Assert.Equal(BossListScope.Dlc, restored.BossListScope);
     }
 
     [Fact]
@@ -141,6 +142,96 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         query.CommandText = "SELECT payload FROM tracker_state WHERE id=1";
         string payload = (string)(await query.ExecuteScalarAsync())!;
         Assert.DoesNotContain("EldenRingRequiredBossesOnly", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyNullSelectedGameMigratesToDemonsSoulsWithoutLosingPersistedContent()
+    {
+        const string database = "legacy-null-selected-game.db";
+        BossId boss = GameCatalog.GetRequired(GameId.Ds1).BossCatalog[0].Id;
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.Ds1,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 7),
+            BossProgress.Empty.MarkDefeated(GameId.Ds1, boss),
+            OverlayConfiguration.Default,
+            manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 3),
+            bossListScope: BossListScope.MainGame,
+            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 11));
+
+        await using (var repository = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
+        {
+            await repository.SaveAsync(configured);
+        }
+
+        string path = Path.Combine(root, database);
+        await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE tracker_state SET payload=json_set(payload, '$.SelectedGameId', null) WHERE id=1";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using (var reopened = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
+        {
+            PersistentTrackerState loaded = (await reopened.LoadAsync()).State!;
+            Assert.Equal(GameId.DemonsSouls, loaded.SelectedGameId);
+            Assert.Equal(7, loaded.ManualBloodborneDeathCounter.Value);
+            Assert.Equal(3, loaded.ManualDemonsSoulsDeathCounter.Value);
+            Assert.Equal(11, loaded.ManualBlackMythWukongDeathCounter.Value);
+            Assert.True(loaded.BossProgress.IsDefeated(GameId.Ds1, boss));
+            Assert.Equal(BossListScope.MainGame, loaded.BossListScope);
+            await reopened.SaveAsync(loaded);
+        }
+
+        await using var verification = new SqliteConnection($"Data Source={path};Pooling=False");
+        await verification.OpenAsync();
+        await using var query = verification.CreateCommand();
+        query.CommandText = "SELECT payload FROM tracker_state WHERE id=1";
+        string payload = (string)(await query.ExecuteScalarAsync())!;
+        Assert.Contains("\"SelectedGameId\":\"demons_souls\"", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("EldenRingBossListScope", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PersistedDlcScopeForABaseOnlyGameNormalizesAndIsRewrittenAsAllBosses()
+    {
+        const string database = "base-only-dlc-scope.db";
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default);
+
+        await using (var repository = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
+        {
+            await repository.SaveAsync(configured);
+        }
+
+        string path = Path.Combine(root, database);
+        await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE tracker_state SET payload=json_set(payload, '$.BossListScope', 2) WHERE id=1";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using (var reopened = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
+        {
+            PersistentTrackerState loaded = (await reopened.LoadAsync()).State!;
+            Assert.Equal(BossListScope.AllBosses, loaded.BossListScope);
+            Assert.NotEmpty(BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(loaded.SelectedGameId), loaded.BossListScope));
+        }
+
+        await using var verification = new SqliteConnection($"Data Source={path};Pooling=False");
+        await verification.OpenAsync();
+        await using var query = verification.CreateCommand();
+        query.CommandText = "SELECT payload FROM tracker_state WHERE id=1";
+        JsonObject payload = JsonNode.Parse((string)(await query.ExecuteScalarAsync())!)!.AsObject();
+        Assert.Equal(0, payload["BossListScope"]!.GetValue<int>());
     }
 
     [Fact]
@@ -468,7 +559,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
 
         Assert.Equal(ConfirmedLegacyImportCommitOutcome.StorageUnavailable, result.Outcome);
         TrackerStateLoadResult reloaded = await interrupted.LoadAsync();
-        Assert.Null(reloaded.State!.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, reloaded.State!.SelectedGameId);
         Assert.Equal(0L, await AuditRowCountAsync());
     }
 
@@ -509,7 +600,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
                 property.Name.Contains("Token", StringComparison.Ordinal));
         Assert.All(typeof(ConfirmedLegacyImportCommitResult).GetProperties(BindingFlags.Instance | BindingFlags.Public), property => Assert.False(property.CanWrite));
         Assert.Equal(0L, await AuditRowCountAsync());
-        Assert.Null((await repository.LoadAsync()).State!.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, (await repository.LoadAsync()).State!.SelectedGameId);
     }
 
     [Fact]
@@ -544,7 +635,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         ConfirmedLegacyImportCommitResult result = await repository.CommitConfirmedLegacyImportAsync(nonApplied, AcceptedAuditMetadata());
 
         Assert.Equal(ConfirmedLegacyImportCommitOutcome.InvalidCandidate, result.Outcome);
-        Assert.Null((await repository.LoadAsync()).State!.SelectedGameId);
+        Assert.Equal(GameId.DemonsSouls, (await repository.LoadAsync()).State!.SelectedGameId);
         Assert.Equal(0L, await AuditRowCountAsync());
     }
 

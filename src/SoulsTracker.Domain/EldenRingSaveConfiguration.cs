@@ -1,13 +1,5 @@
 namespace SoulsTracker.Domain;
 
-/// <summary>Chooses the locally remembered Elden Ring boss-list view.</summary>
-public enum EldenRingBossListScope
-{
-    AllBosses,
-    BaseGame,
-    ShadowOfTheErdtree,
-}
-
 /// <summary>Validated, local-only selection for Elden Ring's read-only save reader.</summary>
 public sealed record EldenRingSaveConfiguration
 {
@@ -18,8 +10,7 @@ public sealed record EldenRingSaveConfiguration
 
     public EldenRingSaveConfiguration(
         string? localPath,
-        int slotIndex,
-        EldenRingBossListScope bossListScope = EldenRingBossListScope.AllBosses)
+        int slotIndex)
     {
         if (slotIndex is < MinimumSlotIndex or > MaximumSlotIndex)
         {
@@ -32,14 +23,8 @@ public sealed record EldenRingSaveConfiguration
             throw new ArgumentException("Choose the ER0000.sl2 Elden Ring save file.", nameof(localPath));
         }
 
-        if (!Enum.IsDefined(bossListScope))
-        {
-            throw new ArgumentOutOfRangeException(nameof(bossListScope));
-        }
-
         LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath;
         SlotIndex = slotIndex;
-        BossListScope = bossListScope;
     }
 
     /// <summary>Private, user-selected path. It must never be logged or shown outside the local picker.</summary>
@@ -47,9 +32,6 @@ public sealed record EldenRingSaveConfiguration
 
     /// <summary>Zero-based Elden Ring profile slot.</summary>
     public int SlotIndex { get; }
-
-    /// <summary>Locally persisted scope shared by the checklist, overlay, preview, and TXT export.</summary>
-    public EldenRingBossListScope BossListScope { get; }
 
     public string? FileName => LocalPath is null ? null : Path.GetFileName(LocalPath);
 }

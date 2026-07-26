@@ -63,9 +63,10 @@ public sealed class LegacyImportWorkflow
     public void Cancel() => finished = true;
 
     private static bool IsEligible(PersistentTrackerState state) =>
-        state.SelectedGameId is null &&
+        state.SelectedGameId == GameId.DemonsSouls &&
         state.ManualBloodborneDeathCounter.Value == 0 &&
         state.ManualDemonsSoulsDeathCounter.Value == 0 &&
+        state.ManualBlackMythWukongDeathCounter.Value == 0 &&
         !GameCatalog.All.Any(game => game.BossCatalog.Any(boss => state.BossProgress.IsDefeated(game.Id, boss.Id)));
 
     private static LegacyImportReviewResult CreateReviewResult(LegacyImportCandidate candidate, LegacyImportPreflightReview result)

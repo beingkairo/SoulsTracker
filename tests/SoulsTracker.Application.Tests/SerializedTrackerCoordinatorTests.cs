@@ -27,7 +27,7 @@ public sealed class SerializedTrackerCoordinatorTests
         await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
         await coordinator.InitializeAsync();
         TrackerCommandExecutionResult result = await coordinator.SubmitAsync(new SelectGameCommand(GameId.Bloodborne));
-        Assert.Equal(TrackerCommandExecutionStatus.SaveFailed, result.Status); Assert.Null(result.CommittedState!.SelectedGameId); Assert.Equal(0, publisher.Published); Assert.DoesNotContain("secret", result.FailureMessage!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TrackerCommandExecutionStatus.SaveFailed, result.Status); Assert.Equal(GameId.DemonsSouls, result.CommittedState!.SelectedGameId); Assert.Equal(0, publisher.Published); Assert.DoesNotContain("secret", result.FailureMessage!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

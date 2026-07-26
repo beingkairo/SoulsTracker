@@ -49,7 +49,7 @@ public sealed class MainWindowBindingTests
         Assert.Contains("Text=\"Set up Elden Ring\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Elden Ring keeps all of your characters in one ER0000.sl2 save file.", xaml, StringComparison.Ordinal);
         Assert.Contains("Choose the save file, then pick the character you want to track.", xaml, StringComparison.Ordinal);
-        Assert.Contains("Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
         Assert.Contains("Usual location: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("cannot guarantee this is safe", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("risk", xaml, StringComparison.OrdinalIgnoreCase);
@@ -93,7 +93,7 @@ public sealed class MainWindowBindingTests
 
                 Assert.True(window.HandleEldenRingNoticeKeyAsync(Key.Escape).GetAwaiter().GetResult());
                 WaitForDispatcher(() => overlay.Visibility == Visibility.Collapsed && Keyboard.FocusedElement == gameSelector);
-                Assert.True(viewModel.SelectedGame!.IsNoGameSelected);
+                Assert.Equal(GameId.DemonsSouls, viewModel.SelectedGame!.GameId);
 
                 Assert.False(viewModel.RequestGameSelection(eldenRing));
                 WaitForDispatcher(() => overlay.Visibility == Visibility.Visible && Keyboard.FocusedElement == confirm);
@@ -143,7 +143,9 @@ public sealed class MainWindowBindingTests
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
-        Assert.Contains("Choose your ER0000.sl2 save file, then choose the character you want to track. Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Set up the local save file and character to track.", xaml, StringComparison.Ordinal);
+        Assert.Contains("1. Choose save file", xaml, StringComparison.Ordinal);
+        Assert.Contains("2. Choose character", xaml, StringComparison.Ordinal);
         Assert.Contains("Can't find it? Most saves are here: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
         Assert.Contains("DataTrigger Binding=\"{Binding EldenRingSaveFileName}\" Value=\"{x:Null}\"", xaml, StringComparison.Ordinal);
     }
@@ -155,10 +157,10 @@ public sealed class MainWindowBindingTests
         string gameSession = Between(xaml, "AutomationProperties.Name=\"Game session panel\"", "AutomationProperties.Name=\"Death counter panel\"");
         string bosses = Between(xaml, "x:Name=\"BossProgressPanel\"", "x:Name=\"OverlayWorkspaceTab\"");
 
-        Assert.DoesNotContain("EldenRingBossListScopes", gameSession, StringComparison.Ordinal);
-        Assert.Contains("EldenRingBossListScopes", bosses, StringComparison.Ordinal);
-        Assert.DoesNotContain("RequiredEldenRingBossesOnly", xaml, StringComparison.Ordinal);
-        Assert.Contains("Visibility=\"{Binding IsEldenRingSelected", bosses, StringComparison.Ordinal);
+        Assert.DoesNotContain("BossListScopeSelector", gameSession, StringComparison.Ordinal);
+        Assert.Contains("BossListScopeSelector", bosses, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding BossListScopes}\"", bosses, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Search bosses\"", bosses, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -230,6 +232,7 @@ public sealed class MainWindowBindingTests
                 window.Show();
                 window.UpdateLayout();
 
+                ComboBox selector = Assert.IsType<ComboBox>(window.FindName("GameSelector"));
                 TextBox search = Assert.IsType<TextBox>(window.FindName("BossSearchTextBox"));
                 TextBlock placeholder = Assert.IsType<TextBlock>(window.FindName("BossSearchPlaceholderTextBlock"));
                 ItemsControl checklist = Assert.IsType<ItemsControl>(window.FindName("BossChecklistItems"));
@@ -238,7 +241,7 @@ public sealed class MainWindowBindingTests
                 search.Text = "asylum";
                 WaitForDispatcher(() => checklist.Items.Count == 1 && viewModel.BossSearchQuery == "asylum");
 
-                viewModel.SelectGameAsync(viewModel.GameChoices.Single(choice => choice.GameId == GameId.Bloodborne)).GetAwaiter().GetResult();
+                selector.SelectedItem = viewModel.GameChoices.Single(choice => choice.GameId == GameId.Bloodborne);
                 WaitForDispatcher(() => search.Text == string.Empty && checklist.Items.Count == viewModel.Bosses.Count);
 
                 search.Text = "   ";
@@ -255,7 +258,7 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void GameSelectorSupportsKeyboardAccessibleNoGameSelection()
+    public void GameSelectorKeepsASelectableDefaultGameInsteadOfOfferingNoGame()
     {
         RunOnStaThread(() =>
         {
@@ -273,26 +276,26 @@ public sealed class MainWindowBindingTests
                 window.UpdateLayout();
 
                 ComboBox selector = Assert.IsType<ComboBox>(window.FindName("GameSelector"));
-                GameChoice noGame = Assert.IsType<GameChoice>(selector.Items[0]);
+                GameChoice defaultGame = Assert.IsType<GameChoice>(selector.Items[0]);
                 var requestedChoices = new List<GameChoice?>();
                 var propertyNotificationAccess = new List<bool>();
                 selector.SelectionChanged += (_, eventArgs) => requestedChoices.Add(eventArgs.AddedItems.OfType<GameChoice>().LastOrDefault());
                 viewModel.PropertyChanged += (_, _) => propertyNotificationAccess.Add(window.Dispatcher.CheckAccess());
                 Assert.Same(viewModel.SelectedGame, selector.SelectedItem);
-                Assert.Equal("No game selected", noGame.DisplayName);
-                Assert.Null(noGame.GameId);
-                Assert.True(noGame.IsSelectable);
-                Assert.True(viewModel.RequestGameSelection(noGame));
+                Assert.Equal(GameId.DemonsSouls, defaultGame.GameId);
+                Assert.Equal("Demon Souls [Manual]", defaultGame.DisplayName);
+                Assert.True(defaultGame.IsSelectable);
+                Assert.True(viewModel.RequestGameSelection(defaultGame));
                 Keyboard.Focus(selector);
-                selector.SelectedItem = noGame;
+                selector.SelectedItem = defaultGame;
 
                 WaitForDispatcher(
-                    () => repository.State.SelectedGameId is null && ReferenceEquals(selector.SelectedItem, noGame) && viewModel.TotalDeathsText == "No game selected",
+                    () => repository.State.SelectedGameId == GameId.DemonsSouls && ReferenceEquals(selector.SelectedItem, defaultGame) && viewModel.TotalDeathsText == "0",
                     () => $"Requested: {string.Join(", ", requestedChoices.Select(choice => choice?.DisplayName ?? "<none>"))}; selected: {(selector.SelectedItem is GameChoice selected ? selected.DisplayName : "<none>")}; committed: {repository.State.SelectedGameId?.ToString() ?? "<none>"}; view-model: {viewModel.SelectedGame?.DisplayName ?? "<none>"}; error: {viewModel.ErrorMessage ?? "<none>"}; property notifications on window dispatcher: {string.Join(", ", propertyNotificationAccess)}");
-                Assert.Contains(noGame, requestedChoices);
+                Assert.Contains(defaultGame, requestedChoices);
                 Assert.All(propertyNotificationAccess, Assert.True);
-                Assert.Equal("No game selected", Assert.IsType<TextBlock>(window.FindName("TotalDeathsTextBlock")).Text);
-                Assert.Equal(Visibility.Visible, Assert.IsType<TextBlock>(window.FindName("NoGameSelectedBossesTextBlock")).Visibility);
+                Assert.Equal("0", Assert.IsType<TextBlock>(window.FindName("TotalDeathsTextBlock")).Text);
+                Assert.Null(window.FindName("NoGameSelectedBossesTextBlock"));
                 Assert.Null(viewModel.ErrorMessage);
             }
             finally

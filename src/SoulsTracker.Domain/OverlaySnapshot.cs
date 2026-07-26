@@ -66,6 +66,13 @@ public sealed class TotalDeathsDisplayValue
         gameId: null,
         value: null);
 
+    /// <summary>Creates a numeric zero for a selected game whose reader has no value yet.</summary>
+    public static TotalDeathsDisplayValue FromUnavailableSelectedGame(GameId gameId)
+    {
+        ArgumentNullException.ThrowIfNull(gameId);
+        return new TotalDeathsDisplayValue(TotalDeathsDisplaySource.Unavailable, gameId, 0);
+    }
+
     /// <summary>
     /// Creates a manual display value from the sole approved manual counter.
     /// </summary>
@@ -80,7 +87,7 @@ public sealed class TotalDeathsDisplayValue
     {
         ArgumentNullException.ThrowIfNull(gameId);
         ArgumentNullException.ThrowIfNull(manualDeathCounter);
-        if (gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls)
+        if (gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls && gameId != GameId.BlackMythWukong)
         {
             throw new ArgumentException("Manual Total Deaths is available only for the supported manual profiles.", nameof(gameId));
         }
@@ -425,17 +432,17 @@ public sealed class OverlaySnapshot
         switch (totalDeaths.Source)
         {
             case TotalDeathsDisplaySource.Unavailable:
-                if (totalDeaths.GameId is not null || totalDeaths.Value is not null)
+                if (totalDeaths.GameId != selectedDefinition.Id || totalDeaths.Value != 0)
                 {
                     throw new ArgumentException(
-                        "Unavailable Total Deaths cannot include a game or numeric value.",
+                        "Unavailable Total Deaths for a selected game must use its numeric zero placeholder.",
                         nameof(totalDeaths));
                 }
 
                 return;
 
             case TotalDeathsDisplaySource.ManualBloodborne:
-                if ((selectedDefinition.Id != GameId.Bloodborne && selectedDefinition.Id != GameId.DemonsSouls) ||
+                if ((selectedDefinition.Id != GameId.Bloodborne && selectedDefinition.Id != GameId.DemonsSouls && selectedDefinition.Id != GameId.BlackMythWukong) ||
                     totalDeaths.GameId != selectedDefinition.Id ||
                     totalDeaths.Value is null ||
                     totalDeaths.Value < 0)

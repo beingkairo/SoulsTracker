@@ -221,6 +221,14 @@ test("unavailable Total Deaths is rendered as a safe display state", async ({ pa
   await expect(page.getByRole("heading")).toContainText("Unavailable");
 });
 
+test("unavailable reader data with a numeric placeholder renders zero", async ({ page }) => {
+  await openOverlay(page, "/overlay/total_deaths");
+  await emit(page, snapshot(1, { selectedGame: "Elden Ring", totalDeaths: 0, source: "Unavailable" }));
+
+  await expect(page.getByRole("heading")).toContainText("0");
+  await expect(page.getByRole("heading")).not.toContainText("Unavailable");
+});
+
 test("no selected game leaves the Total Deaths overlay blank", async ({ page }) => {
   await openOverlay(page, "/overlay/total_deaths");
   await emit(page, snapshot(1, { selectedGame: null, totalDeaths: null, source: "Unavailable" }));

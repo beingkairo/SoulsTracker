@@ -151,15 +151,13 @@ public sealed class SecureOverlayService : IAsyncDisposable
 
     private OverlaySnapshot CreateSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation)
     {
-        OverlayGameMetadata? game = state.SelectedGameId is null ? null : new OverlayGameMetadata(state.SelectedGameId);
-        TotalDeathsDisplayValue deaths = state.SelectedGameId is GameId selectedGame && GameCatalog.GetRequired(selectedGame).TrackingMode == GameTrackingMode.ManualOnly
-            ? TotalDeathsDisplayValue.FromManualCounter(selectedGame, state.GetManualDeathCounter(selectedGame))
+        OverlayGameMetadata game = new(state.SelectedGameId);
+        TotalDeathsDisplayValue deaths = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly
+            ? TotalDeathsDisplayValue.FromManualCounter(state.SelectedGameId, state.GetManualDeathCounter(state.SelectedGameId))
             : observation is not null && observation.GameId == state.SelectedGameId
                 ? TotalDeathsDisplayValue.FromRuntimeObservation(observation)
-                : TotalDeathsDisplayValue.Unavailable;
-        IEnumerable<OverlayBossEntry> bosses = state.SelectedGameId is null
-            ? []
-            : BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.EldenRingSave)
+                : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
+        IEnumerable<OverlayBossEntry> bosses = BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.BossListScope)
                 .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
         return new OverlaySnapshot(
             OverlaySnapshot.CurrentSchemaVersion,

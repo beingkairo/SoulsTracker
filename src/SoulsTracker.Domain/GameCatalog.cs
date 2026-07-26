@@ -184,8 +184,9 @@ public static class GameCatalog
             GameId.BlackMythWukong,
             "Black Myth: Wukong",
             GameUiAvailability.Selectable,
-            GameTrackingMode.Unavailable,
-            ReaderBindingState.IntentionallyUnavailable),
+            GameTrackingMode.ManualOnly,
+            ReaderBindingState.IntentionallyUnavailable,
+            BlackMythWukongBossCatalog.Create()),
     ]);
 
     private static readonly ReadOnlyDictionary<GameId, GameDefinition> DefinitionsById =

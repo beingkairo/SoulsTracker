@@ -149,7 +149,7 @@ public sealed class OverlaySnapshotTests
             sequenceNumber: 1,
             UtcTimestamp,
             new OverlayGameMetadata(GameId.Ds1),
-            TotalDeathsDisplayValue.Unavailable,
+            TotalDeathsDisplayValue.FromUnavailableSelectedGame(GameId.Ds1),
             bosses: [CreateBossEntry(GameId.Ds1, 0, isDefeated: false)]);
 
         string json = JsonSerializer.Serialize(snapshot);

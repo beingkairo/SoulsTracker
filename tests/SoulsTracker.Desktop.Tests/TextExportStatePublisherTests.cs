@@ -100,7 +100,7 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
             OverlayConfiguration.Default,
             textExports: new TextExportConfiguration(null, false, bossPath, true),
             eldenRingNoticeAcknowledged: true,
-            eldenRingSave: new EldenRingSaveConfiguration(null, 0, EldenRingBossListScope.ShadowOfTheErdtree));
+            bossListScope: BossListScope.Dlc);
 
         Assert.True(await TextExportStatePublisher.WriteAsync(state));
         string export = await File.ReadAllTextAsync(bossPath);

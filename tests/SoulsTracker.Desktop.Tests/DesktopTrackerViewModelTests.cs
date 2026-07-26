@@ -598,7 +598,8 @@ public sealed class DesktopTrackerViewModelTests
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.EldenRing));
+        Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
+        await harness.ViewModel.ConfirmEldenRingNoticeAsync();
         int savesBeforeSearch = harness.Repository.SaveCount;
         string? overlayBeforeSearch = harness.ViewModel.BossListSceneUrl;
         EldenRingSaveConfiguration savedFilter = harness.Repository.State.EldenRingSave;
@@ -607,7 +608,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(harness.ViewModel.Bosses.Select(boss => boss.BossId), harness.ViewModel.FilteredBosses.Select(boss => boss.BossId));
 
         harness.ViewModel.BossSearchQuery = "gOdRiCk";
-        BossChoice godrick = Assert.Single(harness.ViewModel.FilteredBosses);
+        BossChoice godrick = Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick");
         Assert.Equal("Godrick", godrick.DisplayName);
         Assert.False(harness.ViewModel.IsBossSearchNoResults);
 
@@ -628,8 +629,8 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Same(progressBeforeSearch, harness.Repository.State.BossProgress);
 
         harness.ViewModel.BossSearchQuery = "gOdRiCk";
-        await harness.ViewModel.SetBossDefeatedAsync(Assert.Single(harness.ViewModel.FilteredBosses), true);
-        Assert.True(Assert.Single(harness.ViewModel.FilteredBosses).IsDefeated);
+        await harness.ViewModel.SetBossDefeatedAsync(Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick"), true);
+        Assert.True(Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick").IsDefeated);
         Assert.Equal(savesBeforeSearch + 1, harness.Repository.SaveCount);
     }
 
@@ -669,89 +670,23 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task NoGameSelectionClearsOnlyTheSelectedGameAndRestoresExistingGameData()
-    {
-        BossId bossId = GameCatalog.GetRequired(GameId.Ds1).BossCatalog[0].Id;
-        BossProgress progress = BossProgress.Empty.MarkDefeated(GameId.Ds1, bossId);
-        TextExportConfiguration exports = new("deaths.txt", true, "bosses.txt", true);
-        PersistentTrackerState persistedState = new(
-            PersistentTrackerState.CurrentSchemaVersion,
-            GameId.Ds1,
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 3),
-            progress,
-            OverlayConfiguration.Default,
-            textExports: exports,
-            manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 2));
-
-        await using TestHarness harness = new(persistedState);
-        await harness.ViewModel.InitializeAsync();
-        harness.ViewModel.SetOverlayUrls("http://localhost/total", "http://localhost/bosses");
-        GameChoice noGame = GameChoice.NoGameSelected;
-        Assert.Same(noGame, harness.ViewModel.GameChoices[0]);
-
-        await harness.ViewModel.SelectGameAsync(noGame);
-
-        Assert.Null(harness.Repository.State.SelectedGameId);
-        Assert.True(harness.ViewModel.IsNoGameSelected);
-        Assert.Same(GameChoice.NoGameSelected, harness.ViewModel.SelectedGame);
-        Assert.Null(harness.ViewModel.SelectedGame!.GameId);
-        Assert.Equal("No game selected", harness.ViewModel.TotalDeathsText);
-        Assert.Empty(harness.ViewModel.Bosses);
-        Assert.Null(harness.ViewModel.TotalDeathsPreviewUri);
-        Assert.Null(harness.ViewModel.BossListPreviewUri);
-        Assert.Null(harness.ViewModel.ErrorMessage);
-        Assert.Equal("Choose a game to track boss progress.", harness.ViewModel.BossDescription);
-        Assert.True(harness.Repository.State.BossProgress.IsDefeated(GameId.Ds1, bossId));
-        Assert.Equal(3, harness.Repository.State.ManualBloodborneDeathCounter.Value);
-        Assert.Equal(2, harness.Repository.State.ManualDemonsSoulsDeathCounter.Value);
-        Assert.Same(exports, harness.Repository.State.TextExports);
-        PersistentTrackerState clearedState = harness.Repository.State;
-
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
-        Assert.Equal(GameId.Ds1, harness.Repository.State.SelectedGameId);
-        Assert.True(harness.ViewModel.Bosses.Single(boss => boss.BossId == bossId).IsDefeated);
-        Assert.NotNull(harness.ViewModel.TotalDeathsPreviewUri);
-        Assert.NotNull(harness.ViewModel.BossListPreviewUri);
-
-        await using TestHarness nextSession = new(clearedState);
-        await nextSession.ViewModel.InitializeAsync();
-        Assert.True(nextSession.ViewModel.IsNoGameSelected);
-        Assert.Same(GameChoice.NoGameSelected, nextSession.ViewModel.SelectedGame);
-    }
-
-    [Fact]
-    public async Task LateRuntimeUpdatesCannotReplaceTheNoGameDisplay()
-    {
-        await using TestHarness harness = new(PersistentTrackerState.Default);
-        await harness.ViewModel.InitializeAsync();
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
-        await harness.ViewModel.SelectGameAsync(GameChoice.NoGameSelected);
-
-        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForActiveCharacter(GameId.Ds1));
-
-        Assert.True(harness.ViewModel.IsNoGameSelected);
-        Assert.Equal("No game selected", harness.ViewModel.TotalDeathsText);
-        Assert.Null(harness.ViewModel.RuntimeReaderStatusText);
-    }
-
-    [Fact]
-    public async Task BlackMythWukongIsSelectableWithoutClaimingAReaderOrBossCatalog()
+    public async Task BlackMythWukongUsesItsOwnManualCounterAndBaseGameCatalog()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
 
         GameChoice wukong = harness.Game(GameId.BlackMythWukong);
         Assert.True(wukong.IsSelectable);
-        Assert.DoesNotContain("Manual", wukong.DisplayName, StringComparison.Ordinal);
+        Assert.Equal("Black Myth: Wukong [Manual]", wukong.DisplayName);
 
         await harness.ViewModel.SelectGameAsync(wukong);
 
         Assert.Equal(GameId.BlackMythWukong, harness.Repository.State.SelectedGameId);
-        Assert.Equal("Black Myth: Wukong", harness.ViewModel.SelectedGame!.DisplayName);
-        Assert.False(harness.ViewModel.IsManualGameSelected);
-        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, harness.ViewModel.TotalDeathsText);
-        Assert.Equal(DesktopTrackerViewModel.GameUnavailableMessage, harness.ViewModel.RuntimeReaderStatusText);
-        Assert.Empty(harness.ViewModel.Bosses);
+        Assert.Equal("Black Myth: Wukong [Manual]", harness.ViewModel.SelectedGame!.DisplayName);
+        Assert.True(harness.ViewModel.IsManualGameSelected);
+        Assert.Equal("0", harness.ViewModel.TotalDeathsText);
+        Assert.Null(harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Equal(96, harness.ViewModel.Bosses.Count);
         Assert.Equal("Track boss progress for Black Myth: Wukong.", harness.ViewModel.BossDescription);
     }
 
@@ -769,7 +704,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(string.Empty, demonsSouls.AvailabilityLabel);
         Assert.False(harness.ViewModel.RequestGameSelection(eldenRing));
 
-        Assert.True(harness.ViewModel.SelectedGame!.IsNoGameSelected);
+        Assert.Equal(GameId.DemonsSouls, harness.ViewModel.SelectedGame!.GameId);
         Assert.Equal(0, harness.Repository.SaveCount);
         Assert.True(harness.ViewModel.IsEldenRingNoticeVisible);
     }

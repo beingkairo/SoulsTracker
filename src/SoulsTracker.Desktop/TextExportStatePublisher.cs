@@ -34,16 +34,16 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
     {
         TextExportConfiguration config = state.TextExports;
         bool succeeded = true;
-        bool hasDisplayedDeathTotal = state.SelectedGameId is GameId selectedGame && (GameCatalog.GetRequired(selectedGame).TrackingMode == GameTrackingMode.ManualOnly || displayedTotal.HasValue);
+        bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || displayedTotal.HasValue;
         if (config.DeathsEnabled && config.DeathsPath is not null && hasDisplayedDeathTotal)
         {
-            long total = displayedTotal ?? state.GetManualDeathCounter(state.SelectedGameId!).Value;
+            long total = displayedTotal ?? state.GetManualDeathCounter(state.SelectedGameId).Value;
             succeeded &= await AtomicWriteAsync(config.DeathsPath, $"Total Deaths: {total}").ConfigureAwait(false);
         }
-        if (config.BossListEnabled && config.BossListPath is not null && state.SelectedGameId is not null)
+        if (config.BossListEnabled && config.BossListPath is not null)
         {
             GameDefinition game = GameCatalog.GetRequired(state.SelectedGameId);
-            IEnumerable<BossDefinition> bosses = BossCatalogDisplayFilter.Apply(game, state.EldenRingSave);
+            IEnumerable<BossDefinition> bosses = BossCatalogDisplayFilter.Apply(game, state.BossListScope);
             string content = game.DisplayName + Environment.NewLine + string.Join(Environment.NewLine, bosses.Select(b => state.BossProgress.IsDefeated(game.Id, b.Id) ? $"[x] {b.DisplayName}" : $"[ ] {b.DisplayName}"));
             succeeded &= await AtomicWriteAsync(config.BossListPath, content).ConfigureAwait(false);
         }

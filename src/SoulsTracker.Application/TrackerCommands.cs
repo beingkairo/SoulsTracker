@@ -12,9 +12,6 @@ public interface ITrackerCommand;
 /// </summary>
 public sealed record SelectGameCommand(GameId GameId) : ITrackerCommand;
 
-/// <summary>Clears the selected game while retaining all game-specific progress and configuration.</summary>
-public sealed record ClearSelectedGameCommand : ITrackerCommand;
-
 /// <summary>
 /// Adds exactly one streamer-controlled Bloodborne death.
 /// </summary>
@@ -29,6 +26,9 @@ public sealed record DecrementManualBloodborneDeathsCommand : ITrackerCommand;
 /// Sets the defeated state of one canonical boss in one canonical game's catalog.
 /// </summary>
 public sealed record SetBossDefeatedCommand(GameId GameId, BossId BossId, bool IsDefeated) : ITrackerCommand;
+
+/// <summary>Updates the persisted boss scope shared by every output surface.</summary>
+public sealed record UpdateBossListScopeCommand(BossListScope Scope) : ITrackerCommand;
 
 /// <summary>
 /// Updates the persisted presentation choices for the two read-only browser overlays.
@@ -73,10 +73,10 @@ public sealed record UpdateEldenRingSaveConfigurationCommand(EldenRingSaveConfig
 public enum TrackerCommandType
 {
     SelectGame,
-    ClearSelectedGame,
     IncrementManualBloodborneDeaths,
     DecrementManualBloodborneDeaths,
     SetBossDefeated,
+    UpdateBossListScope,
     UpdateOverlayPresentation,
     ResetOverlayAppearance,
     UpdateOverlayAppearance,

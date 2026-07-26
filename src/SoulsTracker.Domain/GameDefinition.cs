@@ -148,7 +148,7 @@ public sealed class GameDefinition
             return;
         }
 
-        if (id == GameId.Bloodborne || id == GameId.DemonsSouls)
+        if (id == GameId.Bloodborne || id == GameId.DemonsSouls || id == GameId.BlackMythWukong)
         {
             if (trackingMode != GameTrackingMode.ManualOnly ||
                 readerBindingState != ReaderBindingState.IntentionallyUnavailable)
@@ -160,10 +160,8 @@ public sealed class GameDefinition
             return;
         }
 
-        // Elden Ring requires its local acknowledgement before selection. Black
-        // Myth: Wukong is selectable for UI testing, but deliberately exposes no
-        // reader or boss catalog until separately approved data work exists.
-        if ((id == GameId.EldenRing || id == GameId.BlackMythWukong) &&
+        // Elden Ring requires its local acknowledgement before selection.
+        if (id == GameId.EldenRing &&
             trackingMode == GameTrackingMode.Unavailable &&
             readerBindingState == ReaderBindingState.IntentionallyUnavailable &&
             bossCatalog.Length == 0)
