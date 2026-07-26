@@ -113,6 +113,72 @@ test("Boss List category labels stay out of the overlay", async ({ page }) => {
   await expect(page.getByTestId("boss-list")).not.toContainText("The Old Hunters");
 });
 
+test("Boss List remains inside the fixed 600px widget with long names at every alignment", async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 1080 });
+  await openOverlay(page, "/overlay/boss_list");
+
+  const longName = "KnightOfThePutrescentCrescentOfTheAncientRuinsAndTheForgottenAbyss";
+  for (const [index, alignment] of ["Left", "Center", "Right"].entries()) {
+    await emit(page, {
+      SchemaVersion: 1,
+      SequenceNumber: index + 1,
+      SelectedGame: { DisplayName: "Elden Ring" },
+      TotalDeaths: { Source: "GameLifetimeReader", Value: 0 },
+      Bosses: [{ DisplayName: longName, DlcLabel: "Shadow of the Erdtree", IsDefeated: true }],
+      Presentation: {
+        IsTotalDeathsEnabled: true,
+        ShowGameName: false,
+        IsBossListEnabled: true,
+        BossListVisibilityMode: "All",
+        TotalDeathsCompactTitle: true,
+        TotalDeathsAppearance: { Title: "TOTAL DEATHS", FontFamily: "Segoe UI", FontSize: 30, TextColor: "#FFFFFF", AccentColor: "#A78BFA", BackgroundColor: "#15171B", BackgroundOpacity: 88, Padding: 16, CornerRadius: 8, Alignment: "Left" },
+        BossListAppearance: { Title: "BOSS LIST", FontFamily: "Segoe UI", FontSize: 30, TextColor: "#FFFFFF", AccentColor: "#A78BFA", BackgroundColor: "#15171B", BackgroundOpacity: 88, Padding: 16, CornerRadius: 8, Alignment: alignment as "Left" | "Center" | "Right" },
+        BossListDefeatedColor: "#8C8C96",
+        BossListDefeatedTreatment: "Nothing",
+        BossListShowCheckmark: true,
+        BossListCheckmarkAccent: "#A78BFA",
+        BossListMaximumVisibleCount: 25,
+        BossListShowDefeatedSkull: false,
+      },
+    });
+
+    const panel = page.getByTestId("boss-list-overlay");
+    await expect(panel).toHaveCSS("width", "600px");
+    const geometry = await panel.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const name = element.querySelector(".overlay-boss-name")!.getBoundingClientRect();
+      const marker = element.querySelector(".overlay-checkmark")?.getBoundingClientRect();
+      return {
+        panelLeft: bounds.left,
+        panelRight: bounds.right,
+        panelWidth: bounds.width,
+        nameLeft: name.left,
+        nameRight: name.right,
+        nameHeight: name.height,
+        markerLeft: marker?.left,
+        markerRight: marker?.right,
+        documentWidth: document.documentElement.scrollWidth,
+      };
+    });
+
+    expect(geometry.panelLeft).toBe(0);
+    expect(geometry.panelWidth).toBe(600);
+    expect(geometry.panelRight).toBe(600);
+    expect(geometry.nameLeft).toBeGreaterThanOrEqual(0);
+    expect(geometry.nameRight).toBeLessThanOrEqual(600);
+    expect(geometry.nameHeight).toBeGreaterThan(30);
+    if (alignment === "Center") {
+      // Centered lists deliberately keep the existing marker-free treatment.
+      expect(geometry.markerLeft).toBeUndefined();
+      expect(geometry.markerRight).toBeUndefined();
+    } else {
+      expect(geometry.markerLeft).toBeGreaterThanOrEqual(0);
+      expect(geometry.markerRight).toBeLessThanOrEqual(600);
+    }
+    expect(geometry.documentWidth).toBe(600);
+  }
+});
+
 test("legacy boss alias ignores stale snapshots and reconnects without stream-visible status text", async ({ page }) => {
   await openOverlay(page, "/overlay/boss-progress");
   await emit(page, snapshot(2, { selectedGame: "Bloodborne", bosses: [{ DisplayName: "Vicar Amelia", DlcLabel: null, IsDefeated: false }] }));

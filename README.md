@@ -20,7 +20,7 @@ Your boss list is on the Main tab as well. Check off a boss when you beat it. De
 
 Open SoulsTracker first, then head to the **Overlay** tab. Turn on the Total Deaths overlay, the Boss List overlay, or both. Copy the URL for the overlay you want.
 
-In OBS, add a **Browser Source**, paste in that URL, then move and resize it however you like.
+In OBS, add a **Browser Source** and paste in that URL. For the Boss List, use a **600 x 1080** source, position it once in your scene, then lock it. Long names wrap inside that fixed widget so the list does not shift during a stream. You can move and resize the Total Deaths source however you like.
 
 **Important: open SoulsTracker before OBS.** If OBS was already open when you started SoulsTracker, refresh each SoulsTracker Browser Source in OBS after the app says the overlay is ready.
 

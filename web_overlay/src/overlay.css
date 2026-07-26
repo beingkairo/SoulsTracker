@@ -20,6 +20,13 @@ body {
   background: rgb(12 12 16 / 88%);
 }
 
+/* Boss List is a fixed-size browser widget.  Streamers can position the
+   600px-wide source once in OBS and lock it; longer names wrap within the
+   widget instead of changing its scene footprint. */
+.souls-tracker-overlay-panel[data-testid="boss-list-overlay"] {
+  width: 600px;
+}
+
 .overlay-heading,
 .overlay-game-name,
 .overlay-total-deaths,
@@ -80,12 +87,15 @@ body {
   gap: 0.35rem;
   list-style: none;
   margin: 0;
+  max-width: 100%;
   padding: 0;
 }
 
 .overlay-boss-list li {
   display: flex;
   align-items: flex-start;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* A marker always shares its boss-name row.  This avoids grid-track drift
@@ -97,6 +107,7 @@ body {
 .overlay-boss-copy {
   display: inline-flex;
   flex-direction: column;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -106,6 +117,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .overlay-boss-list li[data-marker] .overlay-defeated-skull,
@@ -115,7 +128,13 @@ body {
 
 .overlay-boss-name {
   font-weight: 600;
+  min-width: 0;
   opacity: var(--text-opacity, 1);
+  overflow-wrap: anywhere;
+}
+
+.souls-tracker-overlay-panel[data-testid="boss-list-overlay"] .overlay-heading {
+  overflow-wrap: anywhere;
 }
 
 .overlay-heading,
