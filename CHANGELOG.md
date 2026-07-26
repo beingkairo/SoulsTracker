@@ -2,6 +2,19 @@
 
 All notable changes to SoulsTracker are documented here.
 
+## 1.2.0 - 2026-07-26
+
+* Added automatic, read-only Elden Ring save discovery, character selection, and lifetime death totals.
+* Added automatic, read-only Black Myth: Wukong Steam and Epic save discovery, slot selection, lifetime death totals, and useful slot details.
+* Added a Black Myth: Wukong boss checklist.
+* Added boss-list filters that adapt to each game's available base-game and DLC content.
+* Added boss search, including normal reset behavior when changing games or restarting the app.
+* Stabilized the Boss List browser overlay as a fixed 600 x 1080 widget so long boss names no longer move the list during a stream.
+* Clarified empty boss lists and missing death totals; valid save readers now show zero until a death total is available.
+* Streamlined game and save selection, filtered empty Elden Ring character slots, and fixed the restored game name sometimes appearing blank at startup.
+* Death-sound volume changes now save automatically.
+* Improved shutdown reliability and added a packaged-app shutdown benchmark.
+
 ## 1.0.3 - 2026-07-22
 
 * Added a Play button for death sounds so you can test the sound and volume before going live.
