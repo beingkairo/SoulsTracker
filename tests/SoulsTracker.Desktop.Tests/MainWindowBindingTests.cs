@@ -838,7 +838,7 @@ public sealed class MainWindowBindingTests
         RunOnStaThread(() =>
         {
             MainWindow? window = null;
-            var repository = new PresentationRepository();
+            var repository = new TextExportPersistenceRepository();
             var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
             try
             {
@@ -857,7 +857,18 @@ public sealed class MainWindowBindingTests
                 volume.Focus();
                 volume.Text = "37";
 
-                WaitForDispatcher(() => string.Equals(status.Text, "Volume changed to 37%", StringComparison.Ordinal));
+                WaitForVolumeStatus(
+                    volume,
+                    status,
+                    viewModel,
+                    repository,
+                    "37",
+                    "Volume changed to 37%",
+                    isSuccessful: true,
+                    isValidationError: false,
+                    "#FF70D6A7",
+                    savesBeforeVolumeEdit + 1,
+                    37);
 
                 Assert.Equal("Volume changed to 37%", status.Text);
                 Assert.Equal(Visibility.Visible, status.Visibility);
@@ -867,7 +878,18 @@ public sealed class MainWindowBindingTests
                 Assert.Equal(savesBeforeVolumeEdit + 1, repository.SaveCount);
 
                 volume.Text = "101";
-                WaitForDispatcher(() => string.Equals(status.Text, DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, StringComparison.Ordinal));
+                WaitForVolumeStatus(
+                    volume,
+                    status,
+                    viewModel,
+                    repository,
+                    "101",
+                    DesktopTrackerViewModel.DeathSoundVolumeValidationMessage,
+                    isSuccessful: false,
+                    isValidationError: true,
+                    "#FFFF8C8C",
+                    savesBeforeVolumeEdit + 1,
+                    37);
 
                 Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, status.Text);
                 Assert.Equal(Visibility.Visible, status.Visibility);
@@ -1897,5 +1919,45 @@ public sealed class MainWindowBindingTests
         timer.Start();
         Dispatcher.PushFrame(frame);
         Assert.True(condition(), diagnostic?.Invoke() ?? "The routed WPF Save action did not publish its visible volume confirmation.");
+    }
+
+    private static void WaitForVolumeStatus(
+        TextBox volume,
+        TextBlock status,
+        DesktopTrackerViewModel viewModel,
+        TextExportPersistenceRepository repository,
+        string expectedEditorText,
+        string expectedStatus,
+        bool isSuccessful,
+        bool isValidationError,
+        string expectedForeground,
+        int expectedSaveCount,
+        int expectedPersistedVolume)
+    {
+        string Foreground() =>
+            status.Foreground is SolidColorBrush brush
+                ? brush.Color.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : status.Foreground?.GetType().Name ?? "<null>";
+
+        bool IsSettled() =>
+            string.Equals(volume.Text, expectedEditorText, StringComparison.Ordinal)
+            && string.Equals(status.Text, expectedStatus, StringComparison.Ordinal)
+            && status.Visibility == Visibility.Visible
+            && viewModel.IsDeathSoundVolumeUpdateSuccessful == isSuccessful
+            && viewModel.IsDeathSoundVolumeValidationError == isValidationError
+            && string.Equals(AutomationProperties.GetName(status), expectedStatus, StringComparison.Ordinal)
+            && string.Equals(Foreground(), expectedForeground, StringComparison.Ordinal)
+            && repository.SaveCount == expectedSaveCount
+            && repository.State.DeathSound.Volume == expectedPersistedVolume
+            && viewModel.DeathSoundVolume == expectedPersistedVolume;
+
+        WaitForDispatcher(
+            IsSettled,
+            () =>
+                $"Volume status did not settle. Editor: '{volume.Text}'; status: '{status.Text}'; visibility: {status.Visibility}; "
+                + $"success: {viewModel.IsDeathSoundVolumeUpdateSuccessful}; validation error: {viewModel.IsDeathSoundVolumeValidationError}; "
+                + $"accessible name: '{AutomationProperties.GetName(status)}'; foreground: {Foreground()}; "
+                + $"save count: {repository.SaveCount}; persisted volume: {repository.State.DeathSound.Volume}; "
+                + $"view-model volume: {viewModel.DeathSoundVolume}.");
     }
 }
