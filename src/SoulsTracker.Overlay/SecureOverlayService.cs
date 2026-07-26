@@ -78,7 +78,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(state);
         trackerState = state;
-        if (runtimeObservation?.GameId != state.SelectedGameId)
+        if (!CanUseRuntimeObservation(state, runtimeObservation))
         {
             runtimeObservation = null;
         }
@@ -152,8 +152,8 @@ public sealed class SecureOverlayService : IAsyncDisposable
     private OverlaySnapshot CreateSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation)
     {
         OverlayGameMetadata game = new(state.SelectedGameId);
-        TotalDeathsDisplayValue deaths = observation is not null && observation.GameId == state.SelectedGameId
-            ? TotalDeathsDisplayValue.FromRuntimeObservation(observation)
+        TotalDeathsDisplayValue deaths = CanUseRuntimeObservation(state, observation)
+            ? TotalDeathsDisplayValue.FromRuntimeObservation(observation!)
             : GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || state.SelectedGameId == GameId.BlackMythWukong
                 ? TotalDeathsDisplayValue.FromManualCounter(state.SelectedGameId, state.GetManualDeathCounter(state.SelectedGameId))
                 : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
@@ -168,6 +168,10 @@ public sealed class SecureOverlayService : IAsyncDisposable
             bosses,
             OverlayPresentationConfiguration.From(state.OverlayConfiguration));
     }
+
+    private static bool CanUseRuntimeObservation(PersistentTrackerState state, RuntimeGameObservation? observation) =>
+        observation?.GameId == state.SelectedGameId &&
+        (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null);
 
     private static OverlaySnapshot EmptySnapshot() => new(1, 0, DateTimeOffset.UtcNow, null, TotalDeathsDisplayValue.Unavailable, []);
     private static int FindAvailablePort()

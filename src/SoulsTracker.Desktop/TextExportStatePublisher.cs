@@ -9,21 +9,33 @@ namespace SoulsTracker.Desktop;
 /// <summary>Best-effort local OBS Text-source writer; tracker commits never wait for file I/O.</summary>
 internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
 {
+    private RuntimeGameObservation? runtimeObservation;
+
     internal event EventHandler<bool>? WriteCompleted;
 
     public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
     {
-        QueueWrite(notification.State, displayedTotal: null);
+        RuntimeGameObservation? observation = RuntimeObservationFor(notification.State, Volatile.Read(ref runtimeObservation));
+        if (observation is null) Volatile.Write(ref runtimeObservation, null);
+        long? displayedTotal = observation?.TotalDeaths.Value;
+        QueueWrite(notification.State, displayedTotal);
         return Task.CompletedTask;
     }
 
     internal void PublishRuntimeObservation(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
-        long? displayedTotal = result is { Status: RuntimeGameReaderStatus.Synced, Observation: { } observation } && observation.GameId == state.SelectedGameId
-            ? observation.TotalDeaths.Value
+        RuntimeGameObservation? observation = result is { Status: RuntimeGameReaderStatus.Synced, Observation: { } candidate }
+            ? RuntimeObservationFor(state, candidate)
             : null;
-        QueueWrite(state, displayedTotal);
+        Volatile.Write(ref runtimeObservation, observation);
+        QueueWrite(state, observation?.TotalDeaths.Value);
     }
+
+    private static RuntimeGameObservation? RuntimeObservationFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
+        observation?.GameId == state.SelectedGameId &&
+        (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null)
+            ? observation
+            : null;
 
     private void QueueWrite(PersistentTrackerState state, long? displayedTotal) =>
         _ = Task.Run(async () => WriteCompleted?.Invoke(this, await WriteAsync(state, displayedTotal).ConfigureAwait(false)), CancellationToken.None);

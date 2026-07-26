@@ -395,11 +395,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return;
         }
 
+        bool blackMythWukongSaveIsUnconfigured = state.SelectedGameId == GameId.BlackMythWukong && state.BlackMythWukongSave.LocalPath is null;
         runtimeReaderGameId = result?.GameId;
-        if (result is not null && result.GameId == state?.SelectedGameId)
+        if (result is not null && result.GameId == state.SelectedGameId && !blackMythWukongSaveIsUnconfigured)
         {
             runtimeReaderStatus = result.Status;
             runtimeObservation = result.Observation;
+        }
+        else if (blackMythWukongSaveIsUnconfigured)
+        {
+            runtimeReaderGameId = GameId.BlackMythWukong;
+            runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
+            runtimeObservation = null;
         }
         else
         {
@@ -840,11 +847,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private void ApplyCommittedState(PersistentTrackerState committedState)
     {
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
-        if (runtimeReaderGameId != state.SelectedGameId)
+        bool blackMythWukongSaveIsUnconfigured = state.SelectedGameId == GameId.BlackMythWukong && state.BlackMythWukongSave.LocalPath is null;
+        if (runtimeReaderGameId != state.SelectedGameId || blackMythWukongSaveIsUnconfigured)
         {
             runtimeObservation = null;
-            runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
-            runtimeReaderGameId = null;
+            runtimeReaderStatus = blackMythWukongSaveIsUnconfigured
+                ? RuntimeGameReaderStatus.WaitingForSaveFile
+                : RuntimeGameReaderStatus.Unavailable;
+            runtimeReaderGameId = blackMythWukongSaveIsUnconfigured ? GameId.BlackMythWukong : null;
         }
         IsTotalDeathsOverlayEnabled = state.OverlayConfiguration.TotalDeaths.IsEnabled;
         ShowTotalDeathsGameName = state.OverlayConfiguration.TotalDeaths.ShowGameName;

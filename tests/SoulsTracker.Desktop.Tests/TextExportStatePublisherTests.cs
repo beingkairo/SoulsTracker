@@ -1,5 +1,7 @@
 using SoulsTracker.Desktop;
 using SoulsTracker.Domain;
+using SoulsTracker.Application;
+using SoulsTracker.Infrastructure;
 using System.IO;
 
 namespace SoulsTracker.Desktop.Tests;
@@ -89,6 +91,58 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WukongExportUsesItsManualFallbackAfterAnUnavailableReadAndRetainsAValidRuntimeTotal()
+    {
+        string deathsPath = Path.Combine(root, "wukong-deaths.txt");
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(deathsPath, true, null, false),
+            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 1),
+            blackMythWukongSave: new BlackMythWukongSaveConfiguration(@"C:\Tracker\ArchiveSaveFile.1.sav"));
+        var publisher = new TextExportStatePublisher();
+
+        Task<bool> runtimeWrite = NextWriteAsync(publisher);
+        publisher.PublishRuntimeObservation(state, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.BlackMythWukong, 9, DateTimeOffset.UtcNow)));
+        Assert.True(await runtimeWrite.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
+
+        Task<bool> stateWrite = NextWriteAsync(publisher);
+        await publisher.PublishAsync(new TrackerStateChanged(state, TrackerCommandType.IncrementManualBloodborneDeaths));
+        Assert.True(await stateWrite.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
+
+        PersistentTrackerState fallbackState = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(deathsPath, true, null, false),
+            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 1));
+        Task<bool> fallbackWrite = NextWriteAsync(publisher);
+        publisher.PublishRuntimeObservation(fallbackState, RuntimeGameReadResult.WaitingForSaveFile(GameId.BlackMythWukong));
+        Assert.True(await fallbackWrite.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 1", await File.ReadAllTextAsync(deathsPath));
+
+        PersistentTrackerState incrementedFallbackState = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(deathsPath, true, null, false),
+            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 2));
+        Task<bool> manualUpdateWrite = NextWriteAsync(publisher);
+        await publisher.PublishAsync(new TrackerStateChanged(incrementedFallbackState, TrackerCommandType.IncrementManualBloodborneDeaths));
+        Assert.True(await manualUpdateWrite.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 2", await File.ReadAllTextAsync(deathsPath));
+    }
+
+    [Fact]
     public async Task EldenRingBossExportUsesTheSamePersistedScope()
     {
         string bossPath = Path.Combine(root, "elden-bosses.txt");
@@ -107,5 +161,18 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
         Assert.Contains("Radahn (Promised Consort)", export, StringComparison.Ordinal);
         Assert.Contains("Blackgaol Knight", export, StringComparison.Ordinal);
         Assert.Equal(43, export.Split(Environment.NewLine, StringSplitOptions.None).Length);
+    }
+
+    private static Task<bool> NextWriteAsync(TextExportStatePublisher publisher)
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler<bool>? handler = null;
+        handler = (_, succeeded) =>
+        {
+            publisher.WriteCompleted -= handler;
+            completion.TrySetResult(succeeded);
+        };
+        publisher.WriteCompleted += handler;
+        return completion.Task;
     }
 }

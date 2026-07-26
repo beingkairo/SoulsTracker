@@ -191,6 +191,33 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
+    public async Task WukongWithoutAConfiguredSavePublishesItsManualFallbackAfterCommittedChanges()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
+        var repository = new MemoryRepository(state);
+        var publisher = new OverlayStateChangePublisher();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
+        await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
+        publisher.Attach(service);
+        await service.StartAsync();
+
+        // A stale observation cannot override the manual fallback when no save is configured.
+        service.PublishRuntimeObservation(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow));
+        await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
+
+        using JsonDocument document = JsonDocument.Parse(await ReceiveSnapshotAsync(service));
+        JsonElement deaths = document.RootElement.GetProperty("TotalDeaths");
+        Assert.Equal("ManualBloodborne", deaths.GetProperty("Source").GetString());
+        Assert.Equal(1, deaths.GetProperty("Value").GetInt64());
+    }
+
+    [Fact]
     public async Task RealLoopbackHostProjectsValidatedPresentationWithoutEndpointSecrets()
     {
         const string rawToken = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";

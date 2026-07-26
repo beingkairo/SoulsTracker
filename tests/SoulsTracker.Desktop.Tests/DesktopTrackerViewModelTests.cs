@@ -793,10 +793,9 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal("Black Myth: Wukong", harness.ViewModel.SelectedGame!.DisplayName);
         Assert.True(harness.ViewModel.IsManualGameSelected);
         Assert.Equal("0", harness.ViewModel.TotalDeathsText);
-        Assert.Equal(DesktopTrackerViewModel.GameUnavailableMessage, harness.ViewModel.RuntimeReaderStatusText);
-        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(GameId.BlackMythWukong));
         Assert.Equal(DesktopTrackerViewModel.BlackMythWukongWaitingForSaveFileMessage, harness.ViewModel.RuntimeReaderStatusText);
         Assert.Equal("0", harness.ViewModel.TotalDeathsText);
+        await harness.ViewModel.SetBlackMythWukongSaveFileAsync(@"C:\Tracker\ArchiveSaveFile.1.sav");
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow)));
         Assert.Equal("12", harness.ViewModel.TotalDeathsText);
         Assert.Equal(96, harness.ViewModel.Bosses.Count);
