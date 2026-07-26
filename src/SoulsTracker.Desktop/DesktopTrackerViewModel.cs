@@ -588,6 +588,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (!IsBlackMythWukongSelected) return;
         long version = Interlocked.Increment(ref blackMythWukongDiscoveryVersion);
+        WukongSaveSourceState stableState = WukongSaveSourceState;
+        bool stableChangeMode = IsBlackMythWukongChangeMode;
         WukongSaveSourceState = WukongSaveSourceState.Scanning;
         BlackMythWukongSaveDiscoveryStatus = "Looking for local saves…";
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
@@ -596,13 +598,25 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             candidates = await Task.Run(async () => await blackMythWukongSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (version == Interlocked.Read(ref blackMythWukongDiscoveryVersion))
+            {
+                WukongSaveSourceState = stableState;
+                IsBlackMythWukongChangeMode = stableChangeMode;
+                OnPropertyChanged(nameof(RuntimeReaderStatusText));
+            }
+            return;
+        }
         catch
         {
             if (version == Interlocked.Read(ref blackMythWukongDiscoveryVersion))
             {
+                WukongSaveSourceState = stableState;
+                IsBlackMythWukongChangeMode = stableChangeMode;
                 BlackMythWukongSaveDiscoveryStatus = "Could not search for local saves. Try Rescan or Browse…";
                 OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+                OnPropertyChanged(nameof(RuntimeReaderStatusText));
             }
             return;
         }

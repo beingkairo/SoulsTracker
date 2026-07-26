@@ -90,7 +90,7 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
         catch { return false; }
     }
 
-    private static bool IsRegularBoundedSave(string path)
+    internal static bool IsRegularBoundedSave(string path)
     {
         try
         {
@@ -133,6 +133,10 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
 public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInstallRootSource
 {
     private const int MaximumMetadataBytes = 1_048_576;
+    private readonly IBlackMythWukongLauncherEnvironment environment;
+
+    public LocalBlackMythWukongInstallRootSource(IBlackMythWukongLauncherEnvironment? environment = null) =>
+        this.environment = environment ?? new WindowsBlackMythWukongLauncherEnvironment();
 
     public IEnumerable<string> GetInstallRoots(CancellationToken cancellationToken)
     {
@@ -142,32 +146,31 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
         return roots;
     }
 
-    private static IEnumerable<string> SteamInstallRoots(CancellationToken cancellationToken)
+    private IEnumerable<string> SteamInstallRoots(CancellationToken cancellationToken)
     {
-        string? steamRoot = null;
-        try { if (OperatingSystem.IsWindows()) steamRoot = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")?.GetValue("SteamPath") as string; }
-        catch { }
-        steamRoot ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
-        if (!TryLocalDirectory(steamRoot, out string root)) yield break;
-
-        var libraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { root };
-        string folders = Path.Combine(root, "steamapps", "libraryfolders.vdf");
-        foreach (string library in ReadVdfPaths(folders)) libraries.Add(library);
+        var libraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? candidateRoot in new[] { environment.CurrentUserSteamRoot, environment.ConventionalSteamRoot })
+            if (TryLocalDirectory(candidateRoot, out string root)) libraries.Add(root);
+        if (libraries.Count == 0) yield break;
+        foreach (string root in libraries.ToArray())
+        {
+            string folders = Path.Combine(root, "steamapps", "libraryfolders.vdf");
+            foreach (string library in ReadVdfPaths(folders)) libraries.Add(library);
+        }
         foreach (string library in libraries)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string manifest = Path.Combine(library, "steamapps", "appmanifest_2358720.acf");
             string? installDirectory = ReadVdfValue(manifest, "installdir");
-            if (string.IsNullOrWhiteSpace(installDirectory) || installDirectory.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) continue;
-            string candidate = Path.Combine(library, "steamapps", "common", installDirectory);
+            if (!IsSingleDirectoryName(installDirectory)) continue;
+            string candidate = Path.Combine(library, "steamapps", "common", installDirectory!);
             if (TryLocalDirectory(candidate, out string canonical)) yield return canonical;
         }
     }
 
-    private static List<string> EpicInstallRoots(CancellationToken cancellationToken)
+    private List<string> EpicInstallRoots(CancellationToken cancellationToken)
     {
-        string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        string manifests = Path.Combine(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests");
+        string? manifests = environment.EpicManifestRoot;
         if (!TryLocalDirectory(manifests, out string root)) return [];
         var results = new List<string>();
         foreach (string manifest in SafeFiles(root, "*.item", 128))
@@ -178,10 +181,8 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
                 if (new FileInfo(manifest).Length > MaximumMetadataBytes) continue;
                 using JsonDocument document = JsonDocument.Parse(File.ReadAllText(manifest));
                 JsonElement value = document.RootElement;
-                string? appName = value.TryGetProperty("AppName", out JsonElement app) ? app.GetString() : null;
                 string? install = value.TryGetProperty("InstallLocation", out JsonElement location) ? location.GetString() : null;
-                if (appName is null || !appName.Contains("wukong", StringComparison.OrdinalIgnoreCase) && !appName.Contains("blackmyth", StringComparison.OrdinalIgnoreCase)) continue;
-                if (TryLocalDirectory(install, out string canonical)) results.Add(canonical);
+                if (TryLocalDirectory(install, out string canonical) && HasParserValidWukongSave(canonical)) results.Add(canonical);
             }
             catch (JsonException) { }
             catch (IOException) { }
@@ -209,6 +210,14 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
         return match.Success ? match.Groups[1].Value : null;
     }
 
+    private static bool IsSingleDirectoryName(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value is not "." and not ".." &&
+        !Path.IsPathRooted(value) &&
+        value.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+        !value.Contains(Path.DirectorySeparatorChar) &&
+        !value.Contains(Path.AltDirectorySeparatorChar);
+
     private static string? ReadBoundedText(string path)
     {
         try { return new FileInfo(path).Length <= MaximumMetadataBytes ? File.ReadAllText(path) : null; }
@@ -233,4 +242,30 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
         }
         catch { return false; }
     }
+
+    private static bool HasParserValidWukongSave(string root)
+    {
+        try
+        {
+            string saves = Path.Combine(root, "b1", "Saved", "SaveGames");
+            if (!TryLocalDirectory(saves, out string saveRoot)) return false;
+            return Directory.EnumerateDirectories(saveRoot).Take(64).SelectMany(account => Directory.EnumerateFiles(account, "ArchiveSaveFile.*.sav", SearchOption.TopDirectoryOnly).Take(64)).Any(BlackMythWukongSaveDiscovery.IsRegularBoundedSave);
+        }
+        catch { return false; }
+    }
+}
+
+/// <summary>Immutable local launcher locations used by production discovery and temporary test fixtures.</summary>
+public interface IBlackMythWukongLauncherEnvironment
+{
+    string? CurrentUserSteamRoot { get; }
+    string? ConventionalSteamRoot { get; }
+    string? EpicManifestRoot { get; }
+}
+
+internal sealed class WindowsBlackMythWukongLauncherEnvironment : IBlackMythWukongLauncherEnvironment
+{
+    public string? CurrentUserSteamRoot { get { try { return OperatingSystem.IsWindows() ? Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")?.GetValue("SteamPath") as string : null; } catch { return null; } } }
+    public string? ConventionalSteamRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
+    public string? EpicManifestRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
 }

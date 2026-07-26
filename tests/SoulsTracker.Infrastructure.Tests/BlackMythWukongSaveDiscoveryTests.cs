@@ -1,5 +1,6 @@
 using SoulsTracker.Infrastructure;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace SoulsTracker.Infrastructure.Tests;
 
@@ -39,10 +40,48 @@ public sealed class BlackMythWukongSaveDiscoveryTests : IAsyncLifetime
         await Assert.ThrowsAsync<OperationCanceledException>(async () => await discovery.DiscoverAsync(cancellation.Token));
     }
 
+    [Fact]
+    public async Task ProductionSteamBoundaryFindsConventionalAndCustomLibrariesButRejectsEscapedInstallDirectories()
+    {
+        string steam = Path.Combine(root, "steam");
+        string custom = Path.Combine(root, "custom");
+        Directory.CreateDirectory(Path.Combine(steam, "steamapps"));
+        Directory.CreateDirectory(Path.Combine(custom, "steamapps", "common", "Wukong", "b1", "Saved", "SaveGames", "a"));
+        await File.WriteAllTextAsync(Path.Combine(steam, "steamapps", "libraryfolders.vdf"), $"\"path\" \"{custom.Replace("\\", "\\\\", StringComparison.Ordinal)}\"");
+        await File.WriteAllTextAsync(Path.Combine(custom, "steamapps", "appmanifest_2358720.acf"), "\"installdir\" \"Wukong\"");
+        await File.WriteAllBytesAsync(Path.Combine(custom, "steamapps", "common", "Wukong", "b1", "Saved", "SaveGames", "a", "ArchiveSaveFile.1.sav"), CreateArchive(1));
+        await File.WriteAllTextAsync(Path.Combine(steam, "steamapps", "appmanifest_2358720.acf"), "\"installdir\" \"..\\escape\"");
+
+        var roots = new LocalBlackMythWukongInstallRootSource(new TestEnvironment(steam, null, null));
+        var discovery = new BlackMythWukongSaveDiscovery(roots);
+
+        DiscoveredLocalSave save = Assert.Single(await discovery.DiscoverAsync(default));
+        Assert.Equal("Save slot 1", save.Label);
+    }
+
+    [Fact]
+    public async Task ProductionEpicBoundaryUsesParserValidInstallWithoutAppName()
+    {
+        string manifests = Path.Combine(root, "epic", "manifests");
+        string install = Path.Combine(root, "epic-install");
+        Directory.CreateDirectory(Path.Combine(manifests));
+        Directory.CreateDirectory(Path.Combine(install, "b1", "Saved", "SaveGames", "a"));
+        await File.WriteAllBytesAsync(Path.Combine(install, "b1", "Saved", "SaveGames", "a", "ArchiveSaveFile.4.sav"), CreateArchive(4));
+        await File.WriteAllTextAsync(Path.Combine(manifests, "one.item"), JsonSerializer.Serialize(new { InstallLocation = install }));
+        await File.WriteAllTextAsync(Path.Combine(manifests, "bad.item"), "{");
+
+        var discovery = new BlackMythWukongSaveDiscovery(new LocalBlackMythWukongInstallRootSource(new TestEnvironment(null, null, manifests)));
+
+        DiscoveredLocalSave save = Assert.Single(await discovery.DiscoverAsync(default));
+        Assert.Equal("Save slot 4", save.Label);
+    }
+
     private sealed class TestInstallRoots(params string[] roots) : IBlackMythWukongInstallRootSource
     {
         public IEnumerable<string> GetInstallRoots(CancellationToken cancellationToken) => roots;
     }
+
+    private sealed record TestEnvironment(string? CurrentUserSteamRoot, string? ConventionalSteamRoot, string? EpicManifestRoot) : IBlackMythWukongLauncherEnvironment;
 
     private static byte[] CreateArchive(int deaths)
     {

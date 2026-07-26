@@ -796,6 +796,9 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(save.LocalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal(save, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
         Assert.Equal("Tracking Save slot 1", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal(WukongSaveSourceState.AutomaticallySelected, harness.ViewModel.WukongSaveSourceState);
+        Assert.True(harness.ViewModel.IsWukongChangeVisible);
+        Assert.False(harness.ViewModel.IsWukongBrowseVisible);
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow)));
         Assert.Equal("12", harness.ViewModel.TotalDeathsText);
         Assert.Equal(96, harness.ViewModel.Bosses.Count);
@@ -815,11 +818,15 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Null(harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.True(harness.ViewModel.HasMultipleBlackMythWukongSaveChoices);
         Assert.Equal("Choose the save slot you’re streaming.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal(WukongSaveSourceState.MultipleCandidates, harness.ViewModel.WukongSaveSourceState);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
+        Assert.True(harness.ViewModel.IsWukongBrowseVisible);
 
         await harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
 
         Assert.Equal(second.LocalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal(second, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
+        Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
     }
 
     [Fact]
@@ -840,6 +847,14 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(savedPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal("Selected save is unavailable.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
         Assert.Null(harness.ViewModel.SelectedBlackMythWukongSaveChoice);
+        Assert.Equal(WukongSaveSourceState.UnavailableSelection, harness.ViewModel.WukongSaveSourceState);
+
+        harness.ViewModel.BeginBlackMythWukongChange();
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorEnabled);
+        harness.ViewModel.CancelBlackMythWukongChange();
+        Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
     }
 
     [Fact]
