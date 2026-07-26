@@ -82,7 +82,8 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
                 RuntimeGameReadResult? result = outcome == BlackMythWukongSaveParseOutcome.Success
                     ? RuntimeGameReadResult.Synced(
                         new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
-                        saveMetadata)
+                        saveMetadata,
+                        configuration.LocalPath)
                     : null;
                 lastFingerprint = fingerprint;
                 lastResult = result;

@@ -28,12 +28,14 @@ public sealed record RuntimeGameReadResult
         GameId gameId,
         RuntimeGameReaderStatus status,
         RuntimeGameObservation? observation,
-        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null)
+        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null,
+        string? blackMythWukongSavePath = null)
     {
         GameId = gameId ?? throw new ArgumentNullException(nameof(gameId));
         Status = status;
         Observation = observation;
         BlackMythWukongSaveMetadata = blackMythWukongSaveMetadata;
+        BlackMythWukongSavePath = blackMythWukongSavePath;
     }
 
     public GameId GameId { get; }
@@ -45,6 +47,9 @@ public sealed record RuntimeGameReadResult
     /// <summary>Contains optional setup-only metadata for a validated Wukong save.</summary>
     public BlackMythWukongSaveMetadata? BlackMythWukongSaveMetadata { get; }
 
+    /// <summary>Identifies the selected Wukong save that produced the optional metadata.</summary>
+    public string? BlackMythWukongSavePath { get; }
+
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
 
@@ -53,12 +58,14 @@ public sealed record RuntimeGameReadResult
 
     public static RuntimeGameReadResult Synced(
         RuntimeGameObservation observation,
-        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null) =>
+        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null,
+        string? blackMythWukongSavePath = null) =>
         new(
             observation?.GameId ?? throw new ArgumentNullException(nameof(observation)),
             RuntimeGameReaderStatus.Synced,
             observation,
-            blackMythWukongSaveMetadata);
+            blackMythWukongSaveMetadata,
+            blackMythWukongSavePath);
 }
 
 /// <summary>Optional character-identifying details decoded from one validated Wukong archive.</summary>

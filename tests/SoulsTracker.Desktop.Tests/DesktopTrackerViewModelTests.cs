@@ -392,6 +392,10 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(EldenRingSaveConfiguration.NoSlotIndex, harness.Repository.State.EldenRingSave.SlotIndex);
         Assert.Null(harness.ViewModel.SelectedEldenRingProfileSlot);
         Assert.Equal(2, harness.ViewModel.EldenRingProfileSlots.Count);
+        Assert.Equal(
+            $"Tracking custom save: {Path.GetFileName(manyPath)}",
+            harness.ViewModel.EldenRingSaveDiscoveryStatus);
+        Assert.DoesNotContain(Path.GetDirectoryName(manyPath)!, harness.ViewModel.EldenRingSaveDiscoveryStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1148,6 +1152,9 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(customPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
         Assert.Equal(LocalSaveSourceState.CustomSelection, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal("Tracking custom save: ArchiveSaveFile.9.sav", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.DoesNotContain(Path.GetDirectoryName(customPath)!, harness.ViewModel.BlackMythWukongSaveDiscoveryStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
         Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
     }
 
@@ -1229,7 +1236,14 @@ public sealed class DesktopTrackerViewModelTests
 
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
             new RuntimeGameObservation(GameId.BlackMythWukong, 5, DateTimeOffset.UtcNow),
-            new BlackMythWukongSaveMetadata(26, TimeSpan.FromMinutes(90), null)));
+            new BlackMythWukongSaveMetadata(26, TimeSpan.FromMinutes(90), null),
+            path));
+        Assert.Equal("Level 26 • Play time 1h 30m", harness.ViewModel.BlackMythWukongSaveMetadataText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
+            new RuntimeGameObservation(GameId.BlackMythWukong, 9, DateTimeOffset.UtcNow),
+            new BlackMythWukongSaveMetadata(77, null, null),
+            Path.Combine(Path.GetDirectoryName(path)!, "ArchiveSaveFile.2.sav")));
         Assert.Equal("Level 26 • Play time 1h 30m", harness.ViewModel.BlackMythWukongSaveMetadataText);
 
         harness.ViewModel.ApplyRuntimeReaderResult(null);
@@ -1237,11 +1251,127 @@ public sealed class DesktopTrackerViewModelTests
 
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
             new RuntimeGameObservation(GameId.BlackMythWukong, 5, DateTimeOffset.UtcNow),
-            new BlackMythWukongSaveMetadata(26, null, null)));
+            new BlackMythWukongSaveMetadata(26, null, null),
+            path));
         File.Delete(path);
         await harness.ViewModel.RescanBlackMythWukongSavesAsync();
         Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
         Assert.Equal("Selected save is unavailable.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongReverseMetadataCompletionCannotRelabelTheCurrentSlot()
+    {
+        string firstPath = @"C:\Tracker\ArchiveSaveFile.1.sav";
+        string secondPath = @"C:\Tracker\ArchiveSaveFile.2.sav";
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        var reader = new DeferredWukongMetadataReader();
+        reader.Prepare(firstPath);
+        reader.Prepare(secondPath);
+        await using TestHarness harness = new(
+            PersistentTrackerState.Default,
+            saveDiscovery: new FixedSaveDiscovery(first, second),
+            readWukongSaveMetadataAsync: reader.ReadAsync);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
+
+        Task selectSecond = harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+        await reader.WaitUntilStartedAsync(secondPath);
+        Task selectFirst = harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(first);
+        await reader.WaitUntilStartedAsync(firstPath);
+
+        reader.Complete(firstPath, new BlackMythWukongSaveMetadata(11, null, null));
+        await selectFirst;
+        Assert.Equal("Tracking Save slot 1", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal("Level 11", harness.ViewModel.BlackMythWukongSaveMetadataText);
+
+        reader.Complete(secondPath, new BlackMythWukongSaveMetadata(22, null, null));
+        await selectSecond;
+        Assert.Equal(firstPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal("Tracking Save slot 1", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal("Level 11", harness.ViewModel.BlackMythWukongSaveMetadataText);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongImportedPathInvalidatesPendingMetadata()
+    {
+        string firstPath = @"C:\Tracker\ArchiveSaveFile.1.sav";
+        string secondPath = @"C:\Tracker\ArchiveSaveFile.2.sav";
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        var reader = new DeferredWukongMetadataReader();
+        reader.Prepare(secondPath);
+        await using TestHarness harness = new(
+            PersistentTrackerState.Default,
+            saveDiscovery: new FixedSaveDiscovery(first, second),
+            readWukongSaveMetadataAsync: reader.ReadAsync);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
+
+        Task selection = harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+        await reader.WaitUntilStartedAsync(secondPath);
+        harness.ViewModel.ApplyImportedCommittedState(WukongState(firstPath));
+        reader.Complete(secondPath, new BlackMythWukongSaveMetadata(22, null, null));
+        await selection;
+
+        Assert.Equal("Tracking Save slot 1", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongRuntimeMetadataInvalidatesAnOlderPendingRead()
+    {
+        string firstPath = @"C:\Tracker\ArchiveSaveFile.1.sav";
+        string secondPath = @"C:\Tracker\ArchiveSaveFile.2.sav";
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        var reader = new DeferredWukongMetadataReader();
+        reader.Prepare(secondPath);
+        await using TestHarness harness = new(
+            PersistentTrackerState.Default,
+            saveDiscovery: new FixedSaveDiscovery(first, second),
+            readWukongSaveMetadataAsync: reader.ReadAsync);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
+
+        Task selection = harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+        await reader.WaitUntilStartedAsync(secondPath);
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
+            new RuntimeGameObservation(GameId.BlackMythWukong, 8, DateTimeOffset.UtcNow),
+            new BlackMythWukongSaveMetadata(99, null, null),
+            secondPath));
+        reader.Complete(secondPath, new BlackMythWukongSaveMetadata(22, null, null));
+        await selection;
+
+        Assert.Equal("Tracking Save slot 2", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal("Level 99", harness.ViewModel.BlackMythWukongSaveMetadataText);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongGameChangeInvalidatesPendingMetadata()
+    {
+        string firstPath = @"C:\Tracker\ArchiveSaveFile.1.sav";
+        string secondPath = @"C:\Tracker\ArchiveSaveFile.2.sav";
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        var reader = new DeferredWukongMetadataReader();
+        reader.Prepare(secondPath);
+        await using TestHarness harness = new(
+            PersistentTrackerState.Default,
+            saveDiscovery: new FixedSaveDiscovery(first, second),
+            readWukongSaveMetadataAsync: reader.ReadAsync);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
+
+        Task selection = harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+        await reader.WaitUntilStartedAsync(secondPath);
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
+        reader.Complete(secondPath, new BlackMythWukongSaveMetadata(22, null, null));
+        await selection;
+
+        Assert.Equal(GameId.DemonsSouls, harness.Repository.State.SelectedGameId);
+        Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
     }
 
     [Fact]
@@ -1533,14 +1663,39 @@ public sealed class DesktopTrackerViewModelTests
     {
         private readonly SerializedTrackerCoordinator coordinator;
 
-        public TestHarness(PersistentTrackerState state, IEldenRingSaveProfileReader? profileReader = null, ILocalSaveDiscovery? saveDiscovery = null, ILocalSaveDiscovery? eldenRingSaveDiscovery = null)
-            : this(TrackerStateLoadResult.Loaded(state), profileReader, saveDiscovery, eldenRingSaveDiscovery) { }
+        public TestHarness(
+            PersistentTrackerState state,
+            IEldenRingSaveProfileReader? profileReader = null,
+            ILocalSaveDiscovery? saveDiscovery = null,
+            ILocalSaveDiscovery? eldenRingSaveDiscovery = null,
+            Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>>? readWukongSaveMetadataAsync = null)
+            : this(
+                TrackerStateLoadResult.Loaded(state),
+                profileReader,
+                saveDiscovery,
+                eldenRingSaveDiscovery,
+                readWukongSaveMetadataAsync)
+        {
+        }
 
-        public TestHarness(TrackerStateLoadResult loadResult, IEldenRingSaveProfileReader? profileReader = null, ILocalSaveDiscovery? saveDiscovery = null, ILocalSaveDiscovery? eldenRingSaveDiscovery = null)
+        public TestHarness(
+            TrackerStateLoadResult loadResult,
+            IEldenRingSaveProfileReader? profileReader = null,
+            ILocalSaveDiscovery? saveDiscovery = null,
+            ILocalSaveDiscovery? eldenRingSaveDiscovery = null,
+            Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>>? readWukongSaveMetadataAsync = null)
         {
             Repository = new FakeRepository(loadResult);
             coordinator = new SerializedTrackerCoordinator(Repository, new NullPublisher());
-            ViewModel = new DesktopTrackerViewModel(coordinator, profileReader, saveDiscovery, eldenRingSaveDiscovery ?? new FixedSaveDiscovery());
+            ViewModel = readWukongSaveMetadataAsync is null
+                ? new DesktopTrackerViewModel(coordinator, profileReader, saveDiscovery, eldenRingSaveDiscovery ?? new FixedSaveDiscovery())
+                : new DesktopTrackerViewModel(
+                    coordinator,
+                    profileReader,
+                    saveDiscovery,
+                    eldenRingSaveDiscovery ?? new FixedSaveDiscovery(),
+                    TimeProvider.System,
+                    readWukongSaveMetadataAsync);
         }
 
         public FakeRepository Repository { get; }
@@ -1601,6 +1756,34 @@ public sealed class DesktopTrackerViewModelTests
     {
         public Func<CancellationToken, ValueTask<IReadOnlyList<DiscoveredLocalSave>>> Handler { get; set; } = handler;
         public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) => Handler(cancellationToken);
+    }
+
+    private sealed class DeferredWukongMetadataReader
+    {
+        private readonly Dictionary<string, PendingRead> pending = new(StringComparer.OrdinalIgnoreCase);
+
+        public void Prepare(string path)
+        {
+            pending.Add(path, new PendingRead());
+        }
+
+        public async Task<WukongSaveMetadataReadResult> ReadAsync(string path, CancellationToken cancellationToken)
+        {
+            PendingRead read = pending[path];
+            read.Started.TrySetResult();
+            return await read.Completion.Task.WaitAsync(cancellationToken);
+        }
+
+        public Task WaitUntilStartedAsync(string path) => pending[path].Started.Task;
+
+        public void Complete(string path, BlackMythWukongSaveMetadata? metadata, bool isValid = true) =>
+            pending[path].Completion.TrySetResult(new WukongSaveMetadataReadResult(isValid, metadata));
+
+        private sealed class PendingRead
+        {
+            public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource<WukongSaveMetadataReadResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
     }
 
     private sealed class TemporaryWukongSaves : IDisposable

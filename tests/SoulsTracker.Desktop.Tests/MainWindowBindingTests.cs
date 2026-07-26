@@ -1218,14 +1218,25 @@ public sealed class MainWindowBindingTests
             MainWindow? window = null;
             try
             {
-                window = new MainWindow();
+                const string currentMetadata = "Level 9 â€¢ Play time 1h 2m";
+                window = new MainWindow
+                {
+                    DataContext = new { BlackMythWukongSaveMetadataText = currentMetadata },
+                };
+                window.Show();
+                window.UpdateLayout();
                 TextBlock metadata = Assert.IsType<TextBlock>(window.FindName("BlackMythWukongSaveMetadataTextBlock"));
                 Binding textBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(metadata, TextBlock.TextProperty));
                 Assert.Equal(nameof(DesktopTrackerViewModel.BlackMythWukongSaveMetadataText), textBinding.Path?.Path);
                 Assert.Equal(BindingMode.OneWay, textBinding.Mode);
+                Binding accessibleNameBinding = Assert.IsType<Binding>(
+                    BindingOperations.GetBinding(metadata, AutomationProperties.NameProperty));
+                Assert.Equal(nameof(DesktopTrackerViewModel.BlackMythWukongSaveMetadataText), accessibleNameBinding.Path?.Path);
+                Assert.Equal(BindingMode.OneWay, accessibleNameBinding.Mode);
                 Assert.Equal(TextWrapping.NoWrap, metadata.TextWrapping);
                 Assert.Equal(TextTrimming.CharacterEllipsis, metadata.TextTrimming);
-                Assert.Equal("Black Myth Wukong save details", AutomationProperties.GetName(metadata));
+                Assert.Equal(currentMetadata, AutomationProperties.GetName(metadata));
+                Assert.Equal(currentMetadata, AutomationProperties.GetHelpText(metadata));
                 Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(metadata));
                 DataTrigger emptyTrigger = Assert.Single(
                     metadata.Style.Triggers.OfType<DataTrigger>(),
@@ -1237,6 +1248,8 @@ public sealed class MainWindowBindingTests
                 string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
                 Assert.DoesNotContain("Elden Ring selected save", xaml, StringComparison.Ordinal);
                 Assert.DoesNotContain("Black Myth Wukong selected save", xaml, StringComparison.Ordinal);
+                Assert.Contains("ToolTip=\"{Binding EldenRingSaveDiscoveryStatus}\"", xaml, StringComparison.Ordinal);
+                Assert.Contains("ToolTip=\"{Binding BlackMythWukongSaveDiscoveryStatus}\"", xaml, StringComparison.Ordinal);
             }
             finally
             {

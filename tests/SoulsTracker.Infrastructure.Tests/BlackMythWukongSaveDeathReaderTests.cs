@@ -164,6 +164,7 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         Assert.Equal(GameId.BlackMythWukong, result.Observation!.GameId);
         Assert.Equal(0, result.Observation.TotalDeaths.Value);
         Assert.Equal(22, result.BlackMythWukongSaveMetadata!.Level);
+        Assert.Equal(path, result.BlackMythWukongSavePath);
         Assert.Equal(before, await File.ReadAllBytesAsync(path));
     }
 

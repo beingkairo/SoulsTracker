@@ -371,7 +371,7 @@
                                     <Button Margin="8,0,0,0" Content="Change…" Click="ChangeEldenRingSave_Click" Visibility="{Binding IsEldenRingChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Elden Ring save" />
                                     <Button Margin="8,0,0,0" Content="Cancel" Click="CancelEldenRingChange_Click" Visibility="{Binding IsEldenRingCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Elden Ring save change" />
                                 </StackPanel>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" MinHeight="18" Text="{Binding EldenRingSaveDiscoveryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring save discovery status" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" MinHeight="18" Text="{Binding EldenRingSaveDiscoveryStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding EldenRingSaveDiscoveryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring save discovery status" AutomationProperties.HelpText="{Binding EldenRingSaveDiscoveryStatus}" />
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock FontWeight="SemiBold" Text="2. Choose character" />
                                     <StackPanel Margin="0,5,0,0" Orientation="Horizontal">
@@ -390,14 +390,14 @@
                                     <Button Margin="8,0,0,0" Content="Change…" Click="ChangeBlackMythWukongSave_Click" Visibility="{Binding IsWukongChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Black Myth Wukong save file" />
                                     <Button Margin="8,0,0,0" Content="Cancel" Click="CancelBlackMythWukongChange_Click" Visibility="{Binding IsWukongCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Black Myth Wukong save change" />
                                 </StackPanel>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" MinHeight="18" Text="{Binding BlackMythWukongSaveDiscoveryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Black Myth Wukong save discovery status" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" MinHeight="18" Text="{Binding BlackMythWukongSaveDiscoveryStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding BlackMythWukongSaveDiscoveryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Black Myth Wukong save discovery status" AutomationProperties.HelpText="{Binding BlackMythWukongSaveDiscoveryStatus}" />
                                 <TextBlock x:Name="BlackMythWukongSaveMetadataTextBlock"
                                            Margin="0,3,0,0"
                                            Text="{Binding BlackMythWukongSaveMetadataText, Mode=OneWay}"
                                            TextTrimming="CharacterEllipsis"
                                            TextWrapping="NoWrap"
                                            ToolTip="{Binding BlackMythWukongSaveMetadataText, Mode=OneWay}"
-                                           AutomationProperties.Name="Black Myth Wukong save details"
+                                           AutomationProperties.Name="{Binding BlackMythWukongSaveMetadataText, Mode=OneWay}"
                                            AutomationProperties.HelpText="{Binding BlackMythWukongSaveMetadataText, Mode=OneWay}"
                                            AutomationProperties.LiveSetting="Polite">
                                     <TextBlock.Style>
