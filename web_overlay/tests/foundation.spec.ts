@@ -10,7 +10,7 @@ interface OverlayHostProcess {
 const childProcess = await import(("node:child_process") as string) as unknown as {
   spawn(command: string, args: string[], options: { cwd: string; stdio: ["ignore", "pipe", "pipe"] }): OverlayHostProcess;
 };
-const nodeProcess = await import(("node:process") as string) as unknown as { default: { cwd(): string } };
+const nodeProcess = await import(("node:process") as string) as unknown as { default: { cwd(): string; env: Record<string, string | undefined> } };
 
 const token = "test-token";
 const overlayDocument = `<!doctype html><html><head><link rel="stylesheet" href="/overlay/assets/overlay-bootstrap.css?token=${token}"></head><body><div id="souls-tracker-overlay"></div><script type="module" src="/overlay/assets/overlay-bootstrap.js?token=${token}"></script></body></html>`;
@@ -589,6 +589,19 @@ test("real loopback host loads the token-gated browser assets and applies its pr
   }
 });
 
+test("connected Wukong browser overlay renders a committed manual fallback increment", async ({ browser }) => {
+  const host = await startRealOverlayHost(["--wukong-manual-increment"]);
+  try {
+    const page = await browser.newPage();
+    await page.goto(host.totalDeathsUrl);
+    await expect(page.getByTestId("total-deaths-overlay")).toBeVisible();
+    await expect(page.getByRole("heading")).toContainText("0");
+    await expect(page.getByRole("heading")).toContainText("1", { timeout: 8_000 });
+  } finally {
+    host.process.kill();
+  }
+});
+
 async function openOverlay(page: Page, route: string): Promise<void> {
   await page.goto(`http://overlay.test${route}${route.includes("?") ? "&" : "?"}token=${token}`);
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
@@ -626,10 +639,10 @@ function snapshot(
   };
 }
 
-async function startRealOverlayHost(): Promise<{ process: OverlayHostProcess; totalDeathsUrl: string; bossListUrl: string }> {
+async function startRealOverlayHost(arguments_: string[] = []): Promise<{ process: OverlayHostProcess; totalDeathsUrl: string; bossListUrl: string }> {
   const process = childProcess.spawn(
-    "dotnet",
-    ["run", "--project", "../tests/SoulsTracker.Overlay.TestHost/SoulsTracker.Overlay.TestHost.csproj", "--configuration", "Release"],
+    nodeProcess.default.env.DOTNET_HOST_PATH ?? "dotnet",
+    ["run", "--project", "../tests/SoulsTracker.Overlay.TestHost/SoulsTracker.Overlay.TestHost.csproj", "--configuration", "Release", "--", ...arguments_],
     { cwd: nodeProcess.default.cwd(), stdio: ["ignore", "pipe", "pipe"] },
   );
   const ready = await new Promise<string>((resolve, reject) => {

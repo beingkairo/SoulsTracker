@@ -5,23 +5,44 @@ using SoulsTracker.Domain;
 using SoulsTracker.Overlay;
 
 const string Token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+bool publishWukongManualIncrement = args.Contains("--wukong-manual-increment", StringComparer.Ordinal);
 int port = FindAvailablePort();
 OverlayConfiguration configuration = new(
     OverlayConfiguration.CurrentSchemaVersion,
     new OverlayEndpointConfiguration(port, OverlayAccessToken.Parse(Token)),
     new TotalDeathsOverlayOptions(isEnabled: true, showGameName: false),
     new BossListOverlayOptions(isEnabled: true, BossListVisibilityMode.Defeated));
-PersistentTrackerState state = new(
-    PersistentTrackerState.CurrentSchemaVersion,
-    GameId.Bloodborne,
-    ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, initialValue: 6),
-    BossProgress.Empty.MarkDefeated(GameId.Bloodborne, GameCatalog.GetRequired(GameId.Bloodborne).BossCatalog[0].Id),
-    configuration);
-await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(state), new NullPublisher());
+PersistentTrackerState state = publishWukongManualIncrement
+    ? new(
+        PersistentTrackerState.CurrentSchemaVersion,
+        GameId.BlackMythWukong,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+        BossProgress.Empty,
+        configuration,
+        manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong))
+    : new(
+        PersistentTrackerState.CurrentSchemaVersion,
+        GameId.Bloodborne,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, initialValue: 6),
+        BossProgress.Empty.MarkDefeated(GameId.Bloodborne, GameCatalog.GetRequired(GameId.Bloodborne).BossCatalog[0].Id),
+        configuration);
+var publisher = new OverlayStateChangePublisher();
+await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(state), publisher);
 await using var service = new SecureOverlayService(coordinator, new EndpointAccessFactory());
+publisher.Attach(service);
 await service.StartAsync();
 Console.WriteLine($"READY {service.TotalDeathsUrl} {service.BossListUrl}");
+if (publishWukongManualIncrement)
+{
+    _ = PublishWukongManualIncrementAsync(coordinator);
+}
 await Task.Delay(Timeout.InfiniteTimeSpan);
+
+static async Task PublishWukongManualIncrementAsync(SerializedTrackerCoordinator coordinator)
+{
+    await Task.Delay(TimeSpan.FromSeconds(2));
+    await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
+}
 
 static int FindAvailablePort()
 {

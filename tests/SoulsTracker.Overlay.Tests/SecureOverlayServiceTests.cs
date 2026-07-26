@@ -218,6 +218,38 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
+    public async Task ConnectedWukongOverlayReceivesTheNextManualFallbackSnapshot()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
+        var repository = new MemoryRepository(state);
+        var publisher = new OverlayStateChangePublisher();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
+        await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
+        publisher.Attach(service);
+        await service.StartAsync();
+
+        Uri socketUrl = new UriBuilder(service.TotalDeathsUrl) { Scheme = "ws", Path = "/overlay/ws" }.Uri;
+        using var socket = new ClientWebSocket();
+        await socket.ConnectAsync(socketUrl, CancellationToken.None);
+        using JsonDocument initial = JsonDocument.Parse(await ReceiveSnapshotAsync(socket));
+        long initialSequence = initial.RootElement.GetProperty("SequenceNumber").GetInt64();
+        Assert.Equal(0, initial.RootElement.GetProperty("TotalDeaths").GetProperty("Value").GetInt64());
+
+        await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
+
+        using JsonDocument updated = JsonDocument.Parse(await ReceiveSnapshotAsync(socket));
+        Assert.True(updated.RootElement.GetProperty("SequenceNumber").GetInt64() > initialSequence);
+        Assert.Equal("ManualBloodborne", updated.RootElement.GetProperty("TotalDeaths").GetProperty("Source").GetString());
+        Assert.Equal(1, updated.RootElement.GetProperty("TotalDeaths").GetProperty("Value").GetInt64());
+    }
+
+    [Fact]
     public async Task RealLoopbackHostProjectsValidatedPresentationWithoutEndpointSecrets()
     {
         const string rawToken = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -341,6 +373,21 @@ public sealed class SecureOverlayServiceTests
         Uri socketUrl = new UriBuilder(service.TotalDeathsUrl) { Scheme = "ws", Path = "/overlay/ws" }.Uri;
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(socketUrl, CancellationToken.None);
+        byte[] buffer = new byte[16_384];
+        using var payload = new MemoryStream();
+        WebSocketReceiveResult received;
+        do
+        {
+            received = await socket.ReceiveAsync(buffer, CancellationToken.None);
+            payload.Write(buffer, 0, received.Count);
+        }
+        while (!received.EndOfMessage);
+
+        return Encoding.UTF8.GetString(payload.ToArray());
+    }
+
+    private static async Task<string> ReceiveSnapshotAsync(ClientWebSocket socket)
+    {
         byte[] buffer = new byte[16_384];
         using var payload = new MemoryStream();
         WebSocketReceiveResult received;

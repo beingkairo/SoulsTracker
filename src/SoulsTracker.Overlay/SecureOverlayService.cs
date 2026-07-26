@@ -32,6 +32,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
     private IOverlayEndpointAccess? endpointAccess;
     private PersistentTrackerState? trackerState;
     private RuntimeGameObservation? runtimeObservation;
+    private readonly object snapshotSynchronization = new();
     private long sequence;
     private OverlaySnapshot snapshot = EmptySnapshot();
 
@@ -63,7 +64,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
 
         Port = endpoint.Port!.Value;
         trackerState = loaded.State!;
-        snapshot = CreateSnapshot(trackerState, runtimeObservation);
+        snapshot = CreateSnapshot(trackerState, runtimeObservation, sequence);
         application = BuildApplication(Port);
         try { await application.StartAsync(cancellationToken).ConfigureAwait(false); }
         catch (Exception ex)
@@ -77,22 +78,26 @@ public sealed class SecureOverlayService : IAsyncDisposable
     public void Publish(PersistentTrackerState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        trackerState = state;
-        if (!CanUseRuntimeObservation(state, runtimeObservation))
+        lock (snapshotSynchronization)
         {
-            runtimeObservation = null;
+            trackerState = state;
+            if (!CanUseRuntimeObservation(state, runtimeObservation))
+            {
+                runtimeObservation = null;
+            }
+            PublishSnapshot(state, runtimeObservation);
         }
-        Interlocked.Increment(ref sequence);
-        snapshot = CreateSnapshot(state, runtimeObservation);
     }
 
     /// <summary>Publishes a runtime-only reader observation without persisting or retaining an unavailable value.</summary>
     public void PublishRuntimeObservation(RuntimeGameObservation? observation)
     {
-        if (trackerState is null) return;
-        runtimeObservation = observation?.GameId == trackerState.SelectedGameId ? observation : null;
-        Interlocked.Increment(ref sequence);
-        snapshot = CreateSnapshot(trackerState, runtimeObservation);
+        lock (snapshotSynchronization)
+        {
+            if (trackerState is null) return;
+            runtimeObservation = CanUseRuntimeObservation(trackerState, observation) ? observation : null;
+            PublishSnapshot(trackerState, runtimeObservation);
+        }
     }
 
     public string TotalDeathsUrl => CanonicalUrl("/overlay/total_deaths");
@@ -131,10 +136,18 @@ public sealed class SecureOverlayService : IAsyncDisposable
         long delivered = -1;
         while (socket.State == WebSocketState.Open && !context.RequestAborted.IsCancellationRequested)
         {
-            long current = Volatile.Read(ref sequence);
-            if (current != delivered)
+            OverlaySnapshot? currentSnapshot = null;
+            long current = delivered;
+            lock (snapshotSynchronization)
             {
-                OverlaySnapshot currentSnapshot = snapshot;
+                current = sequence;
+                if (current != delivered)
+                {
+                    currentSnapshot = snapshot;
+                }
+            }
+            if (currentSnapshot is not null)
+            {
                 byte[] json = JsonSerializer.SerializeToUtf8Bytes(currentSnapshot, SnapshotJsonOptions);
                 await socket.SendAsync(json, WebSocketMessageType.Text, true, context.RequestAborted).ConfigureAwait(false);
                 delivered = current;
@@ -149,7 +162,14 @@ public sealed class SecureOverlayService : IAsyncDisposable
         return endpointAccess is not null && endpointAccess.IsAuthorized(token);
     }
 
-    private OverlaySnapshot CreateSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation)
+    private void PublishSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation)
+    {
+        long nextSequence = checked(sequence + 1);
+        snapshot = CreateSnapshot(state, observation, nextSequence);
+        Volatile.Write(ref sequence, nextSequence);
+    }
+
+    private static OverlaySnapshot CreateSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation, long sequenceNumber)
     {
         OverlayGameMetadata game = new(state.SelectedGameId);
         TotalDeathsDisplayValue deaths = CanUseRuntimeObservation(state, observation)
@@ -161,7 +181,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
                 .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
         return new OverlaySnapshot(
             OverlaySnapshot.CurrentSchemaVersion,
-            Interlocked.Read(ref sequence),
+            sequenceNumber,
             DateTimeOffset.UtcNow,
             game,
             deaths,
