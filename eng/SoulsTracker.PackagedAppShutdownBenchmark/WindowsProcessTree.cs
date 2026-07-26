@@ -6,16 +6,32 @@ namespace SoulsTracker.PackagedAppShutdownBenchmark;
 
 internal sealed class WindowsProcessTree : IDisposable
 {
-    private const uint SnapshotProcesses = 0x00000002;
-    private readonly Dictionary<int, Process> ownedProcesses = [];
+    private readonly IProcessSnapshotSource snapshotSource;
+    private readonly IProcessHandleFactory processFactory;
+    private readonly Dictionary<int, IOwnedProcessHandle> ownedProcesses = [];
     private bool disposed;
 
     public WindowsProcessTree(Process rootProcess)
+        : this(
+            new SystemProcessHandle(rootProcess ?? throw new ArgumentNullException(nameof(rootProcess))),
+            new ToolhelpProcessSnapshotSource(),
+            new SystemProcessHandleFactory())
+    {
+    }
+
+    internal WindowsProcessTree(
+        IOwnedProcessHandle rootProcess,
+        IProcessSnapshotSource snapshotSource,
+        IProcessHandleFactory processFactory)
     {
         ArgumentNullException.ThrowIfNull(rootProcess);
+        this.snapshotSource = snapshotSource ?? throw new ArgumentNullException(nameof(snapshotSource));
+        this.processFactory = processFactory ?? throw new ArgumentNullException(nameof(processFactory));
         ownedProcesses.Add(rootProcess.Id, rootProcess);
         Refresh();
     }
+
+    internal IReadOnlySet<int> OwnedProcessIds => ownedProcesses.Keys.ToHashSet();
 
     public bool AllExited
     {
@@ -29,33 +45,49 @@ internal sealed class WindowsProcessTree : IDisposable
     public void Refresh()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        Dictionary<int, int> parents = SnapshotParentProcessIds();
-        IReadOnlySet<int> ownedIds = ProcessTreeOwnership.ExpandOwnedProcessIds(
-            ownedProcesses.Keys,
-            parents);
-        foreach (int processId in ownedIds)
-        {
-            if (ownedProcesses.ContainsKey(processId))
-            {
-                continue;
-            }
 
-            try
+        bool retainedCandidate;
+        do
+        {
+            retainedCandidate = false;
+            IReadOnlyDictionary<int, int> initialSnapshot = snapshotSource.CaptureParentProcessIds();
+            IOwnedProcessHandle[] liveParents = ownedProcesses.Values
+                .Where(process => !IsExited(process))
+                .ToArray();
+            foreach (IOwnedProcessHandle parent in liveParents)
             {
-                ownedProcesses.Add(processId, Process.GetProcessById(processId));
-            }
-            catch (ArgumentException)
-            {
-                // The child exited between the process snapshot and opening its handle.
+                int[] candidateIds = initialSnapshot
+                    .Where(entry => entry.Value == parent.Id && !ownedProcesses.ContainsKey(entry.Key))
+                    .Select(entry => entry.Key)
+                    .ToArray();
+                foreach (int candidateId in candidateIds)
+                {
+                    IOwnedProcessHandle? candidate = TryOpen(candidateId);
+                    if (candidate is null)
+                    {
+                        continue;
+                    }
+
+                    if (CanRetainCandidate(candidateId, candidate, parent))
+                    {
+                        ownedProcesses.Add(candidateId, candidate);
+                        retainedCandidate = true;
+                    }
+                    else
+                    {
+                        candidate.Dispose();
+                    }
+                }
             }
         }
+        while (retainedCandidate);
     }
 
     public void KillRemainingAfterMeasurement()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         Refresh();
-        foreach (Process process in ownedProcesses.Values.Where(process => !IsExited(process)))
+        foreach (IOwnedProcessHandle process in ownedProcesses.Values.Where(process => !IsExited(process)))
         {
             try
             {
@@ -73,7 +105,7 @@ internal sealed class WindowsProcessTree : IDisposable
     public async Task WaitForExitAfterCleanupAsync(TimeSpan timeout)
     {
         using var cancellation = new CancellationTokenSource(timeout);
-        foreach (Process process in ownedProcesses.Values)
+        foreach (IOwnedProcessHandle process in ownedProcesses.Values)
         {
             try
             {
@@ -97,7 +129,7 @@ internal sealed class WindowsProcessTree : IDisposable
         }
 
         disposed = true;
-        foreach (Process process in ownedProcesses.Values)
+        foreach (IOwnedProcessHandle process in ownedProcesses.Values)
         {
             process.Dispose();
         }
@@ -105,7 +137,40 @@ internal sealed class WindowsProcessTree : IDisposable
         ownedProcesses.Clear();
     }
 
-    private static bool IsExited(Process process)
+    private bool CanRetainCandidate(
+        int expectedCandidateId,
+        IOwnedProcessHandle candidate,
+        IOwnedProcessHandle parent)
+    {
+        if (candidate.Id != expectedCandidateId || IsExited(candidate) || IsExited(parent))
+        {
+            return false;
+        }
+
+        IReadOnlyDictionary<int, int> verificationSnapshot = snapshotSource.CaptureParentProcessIds();
+        return verificationSnapshot.TryGetValue(expectedCandidateId, out int verifiedParentId) &&
+            verifiedParentId == parent.Id &&
+            !IsExited(candidate) &&
+            !IsExited(parent);
+    }
+
+    private IOwnedProcessHandle? TryOpen(int processId)
+    {
+        try
+        {
+            return processFactory.Open(processId);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsExited(IOwnedProcessHandle process)
     {
         try
         {
@@ -116,8 +181,49 @@ internal sealed class WindowsProcessTree : IDisposable
             return true;
         }
     }
+}
 
-    private static Dictionary<int, int> SnapshotParentProcessIds()
+internal interface IOwnedProcessHandle : IDisposable
+{
+    int Id { get; }
+    bool HasExited { get; }
+    void Kill();
+    Task WaitForExitAsync(CancellationToken cancellationToken);
+}
+
+internal interface IProcessHandleFactory
+{
+    IOwnedProcessHandle Open(int processId);
+}
+
+internal interface IProcessSnapshotSource
+{
+    IReadOnlyDictionary<int, int> CaptureParentProcessIds();
+}
+
+internal sealed class SystemProcessHandle(Process process) : IOwnedProcessHandle
+{
+    private readonly Process process = process ?? throw new ArgumentNullException(nameof(process));
+
+    public int Id => process.Id;
+    public bool HasExited => process.HasExited;
+    public void Kill() => process.Kill();
+    public Task WaitForExitAsync(CancellationToken cancellationToken) =>
+        process.WaitForExitAsync(cancellationToken);
+    public void Dispose() => process.Dispose();
+}
+
+internal sealed class SystemProcessHandleFactory : IProcessHandleFactory
+{
+    public IOwnedProcessHandle Open(int processId) =>
+        new SystemProcessHandle(Process.GetProcessById(processId));
+}
+
+internal sealed class ToolhelpProcessSnapshotSource : IProcessSnapshotSource
+{
+    private const uint SnapshotProcesses = 0x00000002;
+
+    public IReadOnlyDictionary<int, int> CaptureParentProcessIds()
     {
         nint snapshot = CreateToolhelp32Snapshot(SnapshotProcesses, 0);
         if (snapshot == -1)
@@ -189,30 +295,4 @@ internal sealed class WindowsProcessTree : IDisposable
     [DllImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(nint handle);
-}
-
-internal static class ProcessTreeOwnership
-{
-    public static IReadOnlySet<int> ExpandOwnedProcessIds(
-        IEnumerable<int> roots,
-        IReadOnlyDictionary<int, int> parentProcessIds)
-    {
-        var owned = roots.ToHashSet();
-        bool added;
-        do
-        {
-            added = false;
-            foreach ((int processId, int parentProcessId) in parentProcessIds)
-            {
-                if (!owned.Contains(processId) && owned.Contains(parentProcessId))
-                {
-                    owned.Add(processId);
-                    added = true;
-                }
-            }
-        }
-        while (added);
-
-        return owned;
-    }
 }

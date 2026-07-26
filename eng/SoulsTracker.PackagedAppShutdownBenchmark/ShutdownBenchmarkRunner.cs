@@ -87,7 +87,7 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
         {
             await using var readinessPipe = new NamedPipeServerStream(
                 pipeName,
-                PipeDirection.In,
+                PipeDirection.InOut,
                 1,
                 PipeTransmissionMode.Byte,
                 ReadinessPipeOptions);
@@ -106,13 +106,31 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
             }) ?? throw new InvalidOperationException("The packaged application did not start.");
 
             processTree = new WindowsProcessTree(application);
-            BenchmarkReadinessMessage readiness = await WaitForReadinessAsync(
-                readinessPipe,
-                application.Id,
-                cancellationToken);
+            using var readinessCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            readinessCancellation.CancelAfter(ReadinessTimeout);
+            await readinessPipe.WaitForConnectionAsync(readinessCancellation.Token);
+            BenchmarkReadinessMessage readiness = BenchmarkReadinessMessage.ParsePreview(
+                await ReadReadinessMessageAsync(
+                    readinessPipe,
+                    readinessCancellation.Token),
+                application.Id);
             overlaySocket = new ClientWebSocket();
-            await overlaySocket.ConnectAsync(readiness.CreateWebSocketUri(), cancellationToken);
-            await ReceiveInitialOverlayMessageAsync(overlaySocket, cancellationToken);
+            await overlaySocket.ConnectAsync(
+                readiness.CreateWebSocketUri(),
+                readinessCancellation.Token);
+            await ReceiveInitialOverlayMessageAsync(
+                overlaySocket,
+                readinessCancellation.Token);
+            await WriteReadinessMessageAsync(
+                readinessPipe,
+                BenchmarkReadinessMessage.CreateAcknowledgement(application.Id),
+                readinessCancellation.Token);
+            BenchmarkReadinessMessage.ValidateFinal(
+                await ReadReadinessMessageAsync(
+                    readinessPipe,
+                    readinessCancellation.Token),
+                application.Id);
 
             processTree.Refresh();
             Task<bool> overlayClosure = WaitForOverlayClosureAsync(overlaySocket);
@@ -145,12 +163,14 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
                 }
             }
 
-            overlayConnectionClosed = await overlayClosure.WaitAsync(
+            string? overlayClosureFailure = await VerifyOverlayClosureAsync(
+                overlayClosure,
                 TimeSpan.FromSeconds(1),
                 cancellationToken);
-            if (!overlayConnectionClosed && failureCode is null)
+            overlayConnectionClosed = overlayClosureFailure is null;
+            if (overlayClosureFailure is not null && failureCode is null)
             {
-                failureCode = "overlay_connection_remained_open";
+                failureCode = overlayClosureFailure;
             }
 
             mutexReleased = IsSingleInstanceMutexReleased();
@@ -166,6 +186,10 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             failureCode ??= "readiness_timeout";
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (WebSocketException)
         {
@@ -203,33 +227,62 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
             failureCode);
     }
 
-    private static async Task<BenchmarkReadinessMessage> WaitForReadinessAsync(
-        NamedPipeServerStream readinessPipe,
-        int expectedProcessId,
+    internal static async Task<string?> VerifyOverlayClosureAsync(
+        Task<bool> overlayClosure,
+        TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(ReadinessTimeout);
-        await readinessPipe.WaitForConnectionAsync(timeout.Token);
-        using var payload = new MemoryStream();
-        byte[] buffer = new byte[4096];
-        while (true)
+        ArgumentNullException.ThrowIfNull(overlayClosure);
+        try
         {
-            int read = await readinessPipe.ReadAsync(buffer, timeout.Token);
+            bool closed = await overlayClosure.WaitAsync(timeout, cancellationToken);
+            return closed ? null : "overlay_connection_remained_open";
+        }
+        catch (TimeoutException)
+        {
+            return "overlay_connection_remained_open";
+        }
+    }
+
+    private static async Task<byte[]> ReadReadinessMessageAsync(
+        Stream stream,
+        CancellationToken cancellationToken)
+    {
+        using var payload = new MemoryStream();
+        byte[] nextByte = new byte[1];
+        while (payload.Length <= MaximumReadinessPayloadBytes)
+        {
+            int read = await stream.ReadAsync(nextByte, cancellationToken);
             if (read == 0)
             {
-                break;
+                throw new EndOfStreamException(
+                    "The readiness channel closed before a complete message.");
             }
 
-            if (payload.Length + read > MaximumReadinessPayloadBytes)
+            if (nextByte[0] == (byte)'\n')
             {
-                throw new InvalidDataException("The readiness payload was too large.");
+                return payload.ToArray();
             }
 
-            await payload.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
+            payload.WriteByte(nextByte[0]);
         }
 
-        return BenchmarkReadinessMessage.Parse(payload.ToArray(), expectedProcessId);
+        throw new InvalidDataException("The readiness message was too large.");
+    }
+
+    private static async Task WriteReadinessMessageAsync(
+        Stream stream,
+        byte[] payload,
+        CancellationToken cancellationToken)
+    {
+        if (payload.Length > MaximumReadinessPayloadBytes)
+        {
+            throw new InvalidDataException("The readiness message was too large.");
+        }
+
+        await stream.WriteAsync(payload, cancellationToken);
+        await stream.WriteAsync("\n"u8.ToArray(), cancellationToken);
+        await stream.FlushAsync(cancellationToken);
     }
 
     private static async Task ReceiveInitialOverlayMessageAsync(

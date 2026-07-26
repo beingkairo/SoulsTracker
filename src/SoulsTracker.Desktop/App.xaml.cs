@@ -165,7 +165,8 @@ public partial class App : System.Windows.Application, IDisposable
             await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ContextIdle);
             await PackagedBenchmarkReadinessReporter.ReportAsync(
                 readinessPipeName,
-                readyOverlay.TotalDeathsUrl);
+                readyOverlay.TotalDeathsUrl,
+                () => readyOverlay.ActiveWebSocketConnectionCount);
         }
     }
 
