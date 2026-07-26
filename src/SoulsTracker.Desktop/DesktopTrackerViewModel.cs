@@ -474,6 +474,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal PersistentTrackerState? CurrentState => state;
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
+        if (result is
+            {
+                GameId: var resultGameId,
+                BlackMythWukongSavePath: { } resultPath,
+            } &&
+            resultGameId == GameId.BlackMythWukong &&
+            state?.SelectedGameId == GameId.BlackMythWukong &&
+            !PathsEqual(resultPath, state.BlackMythWukongSave.LocalPath))
+        {
+            return;
+        }
+
         InvalidateWukongMetadataOperations();
         if (state is null)
         {
@@ -487,17 +499,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         bool blackMythWukongSaveIsUnconfigured = state.SelectedGameId == GameId.BlackMythWukong && state.BlackMythWukongSave.LocalPath is null;
-        if (result is
-            {
-                GameId: var resultGameId,
-                BlackMythWukongSavePath: { } resultPath,
-            } &&
-            resultGameId == GameId.BlackMythWukong &&
-            state.SelectedGameId == GameId.BlackMythWukong &&
-            !PathsEqual(resultPath, state.BlackMythWukongSave.LocalPath))
-        {
-            return;
-        }
         runtimeReaderGameId = result?.GameId;
         if (result is not null && result.GameId == state.SelectedGameId && !blackMythWukongSaveIsUnconfigured)
         {

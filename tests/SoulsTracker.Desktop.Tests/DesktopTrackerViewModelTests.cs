@@ -1349,6 +1349,44 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
+    public async Task BlackMythWukongStaleRuntimeResultDoesNotInvalidateTheCurrentPendingRead()
+    {
+        string firstPath = @"C:\Tracker\ArchiveSaveFile.1.sav";
+        string secondPath = @"C:\Tracker\ArchiveSaveFile.2.sav";
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        var reader = new DeferredWukongMetadataReader();
+        reader.Prepare(secondPath);
+        await using TestHarness harness = new(
+            PersistentTrackerState.Default,
+            saveDiscovery: new FixedSaveDiscovery(first, second),
+            readWukongSaveMetadataAsync: reader.ReadAsync);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
+
+        Task selection = harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+        await reader.WaitUntilStartedAsync(secondPath);
+        string totalDeathsBeforeStaleResult = harness.ViewModel.TotalDeathsText;
+        string? readerStatusBeforeStaleResult = harness.ViewModel.RuntimeReaderStatusText;
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(
+            new RuntimeGameObservation(GameId.BlackMythWukong, 101, DateTimeOffset.UtcNow),
+            new BlackMythWukongSaveMetadata(88, null, null),
+            firstPath));
+
+        Assert.Equal(totalDeathsBeforeStaleResult, harness.ViewModel.TotalDeathsText);
+        Assert.Equal(readerStatusBeforeStaleResult, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
+
+        reader.Complete(secondPath, new BlackMythWukongSaveMetadata(22, null, null));
+        await selection;
+
+        Assert.Equal("Tracking Save slot 2", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal("Level 22", harness.ViewModel.BlackMythWukongSaveMetadataText);
+        Assert.Equal(totalDeathsBeforeStaleResult, harness.ViewModel.TotalDeathsText);
+    }
+
+    [Fact]
     public async Task BlackMythWukongGameChangeInvalidatesPendingMetadata()
     {
         string firstPath = @"C:\Tracker\ArchiveSaveFile.1.sav";
