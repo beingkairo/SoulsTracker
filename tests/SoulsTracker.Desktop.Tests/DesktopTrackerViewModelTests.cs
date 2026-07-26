@@ -277,10 +277,10 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Theory]
-    [InlineData(0, WukongSaveSourceState.NoCandidate, false)]
-    [InlineData(1, WukongSaveSourceState.AutomaticallySelected, true)]
-    [InlineData(3, WukongSaveSourceState.MultipleCandidates, false)]
-    public async Task EldenRingAcknowledgedDiscoveryHandlesZeroOneAndManySaves(int saveCount, WukongSaveSourceState expectedState, bool expectsSelection)
+    [InlineData(0, LocalSaveSourceState.NoCandidate, false)]
+    [InlineData(1, LocalSaveSourceState.AutomaticallySelected, true)]
+    [InlineData(3, LocalSaveSourceState.MultipleCandidates, false)]
+    public async Task EldenRingAcknowledgedDiscoveryHandlesZeroOneAndManySaves(int saveCount, LocalSaveSourceState expectedState, bool expectsSelection)
     {
         using var saveFiles = new TemporaryEldenRingSaves();
         DiscoveredLocalSave[] saves = Enumerable.Range(1, saveCount)
@@ -405,7 +405,7 @@ public sealed class DesktopTrackerViewModelTests
 
         await harness.ViewModel.InitializeAsync();
 
-        Assert.Equal(WukongSaveSourceState.UnavailableSelection, harness.ViewModel.EldenRingSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.UnavailableSelection, harness.ViewModel.EldenRingSaveSourceState);
         Assert.Equal(missingPath, harness.Repository.State.EldenRingSave.LocalPath);
         Assert.True(harness.ViewModel.IsEldenRingChangeVisible);
 
@@ -416,6 +416,37 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(availablePath, harness.Repository.State.EldenRingSave.LocalPath);
         Assert.Equal(3, harness.Repository.State.EldenRingSave.SlotIndex);
         Assert.Equal("Tarnished · Level 70", harness.ViewModel.SelectedEldenRingProfileSlot?.Label);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedEldenRingCharacterPersistencePreservesCommittedStateAndIssuesOneRequest(bool hasCommittedCharacter)
+    {
+        using var saves = new TemporaryEldenRingSaves();
+        string path = saves.Add(1, (2, "First", 50), (5, "Second", 60));
+        int committedIndex = hasCommittedCharacter ? 2 : EldenRingSaveConfiguration.NoSlotIndex;
+        var discovered = new DiscoveredLocalSave(path, "Save 1");
+        await using TestHarness harness = new(EldenRingState(path, committedIndex), eldenRingSaveDiscovery: new FixedSaveDiscovery(discovered));
+        await harness.ViewModel.InitializeAsync();
+        EldenRingProfileSlotChoice attempted = harness.ViewModel.EldenRingProfileSlots.Single(slot => slot.Index == 5);
+        EldenRingProfileSlotChoice? committed = hasCommittedCharacter
+            ? harness.ViewModel.EldenRingProfileSlots.Single(slot => slot.Index == 2)
+            : null;
+        harness.ViewModel.BeginEldenRingChange();
+        int attemptsBefore = harness.Repository.SaveAttemptCount;
+        int savesBefore = harness.Repository.SaveCount;
+        harness.Repository.FailSaves = true;
+
+        await harness.ViewModel.SetEldenRingProfileSlotAsync(attempted);
+
+        Assert.Equal(committedIndex, harness.Repository.State.EldenRingSave.SlotIndex);
+        Assert.Same(committed, harness.ViewModel.SelectedEldenRingProfileSlot);
+        Assert.Equal(LocalSaveSourceState.PersistedDiscovered, harness.ViewModel.EldenRingSaveSourceState);
+        Assert.True(harness.ViewModel.IsEldenRingChangeMode);
+        Assert.Equal("The Elden Ring save selection could not be saved.", harness.ViewModel.ErrorMessage);
+        Assert.Equal(attemptsBefore + 1, harness.Repository.SaveAttemptCount);
+        Assert.Equal(savesBefore, harness.Repository.SaveCount);
     }
 
     [Fact]
@@ -935,7 +966,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(save.LocalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal(save, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
         Assert.Equal("Tracking Save slot 1", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
-        Assert.Equal(WukongSaveSourceState.AutomaticallySelected, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.AutomaticallySelected, harness.ViewModel.WukongSaveSourceState);
         Assert.True(harness.ViewModel.IsWukongChangeVisible);
         Assert.False(harness.ViewModel.IsWukongBrowseVisible);
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow)));
@@ -957,7 +988,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Null(harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal(2, harness.ViewModel.BlackMythWukongSaveChoices.Count);
         Assert.Equal("Choose the save slot you’re streaming.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
-        Assert.Equal(WukongSaveSourceState.MultipleCandidates, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.MultipleCandidates, harness.ViewModel.WukongSaveSourceState);
         Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
         Assert.True(harness.ViewModel.IsWukongBrowseVisible);
 
@@ -986,7 +1017,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(savedPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal("Selected save is unavailable.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
         Assert.Null(harness.ViewModel.SelectedBlackMythWukongSaveChoice);
-        Assert.Equal(WukongSaveSourceState.UnavailableSelection, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.UnavailableSelection, harness.ViewModel.WukongSaveSourceState);
 
         harness.ViewModel.BeginBlackMythWukongChange();
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
@@ -1032,7 +1063,7 @@ public sealed class DesktopTrackerViewModelTests
         await harness.ViewModel.InitializeAsync();
         harness.ViewModel.ApplyRuntimeReaderResult(null);
         harness.ViewModel.BeginBlackMythWukongChange();
-        WukongSaveSourceState priorState = harness.ViewModel.WukongSaveSourceState;
+        LocalSaveSourceState priorState = harness.ViewModel.WukongSaveSourceState;
         string? priorStatus = harness.ViewModel.BlackMythWukongSaveDiscoveryStatus;
         string? priorIdentity = harness.ViewModel.WukongSaveSourceIdentity;
         string? priorReaderStatus = harness.ViewModel.RuntimeReaderStatusText;
@@ -1045,7 +1076,7 @@ public sealed class DesktopTrackerViewModelTests
 
         Task scan = harness.ViewModel.RescanBlackMythWukongSavesAsync(cancellation.Token);
 
-        Assert.Equal(WukongSaveSourceState.Scanning, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.Scanning, harness.ViewModel.WukongSaveSourceState);
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
         Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
         Assert.False(harness.ViewModel.IsWukongSaveSelectorEnabled);
@@ -1076,7 +1107,7 @@ public sealed class DesktopTrackerViewModelTests
 
         await harness.ViewModel.RescanBlackMythWukongSavesAsync();
 
-        Assert.Equal(WukongSaveSourceState.PersistedDiscovered, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.PersistedDiscovered, harness.ViewModel.WukongSaveSourceState);
         Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
         Assert.True(harness.ViewModel.IsWukongSaveSelectorEnabled);
         Assert.Equal("Could not search for local saves. Try Rescan or Browse…", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
@@ -1121,7 +1152,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(customPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
         Assert.Equal("Custom save: ArchiveSaveFile.9.sav", harness.ViewModel.WukongSaveSourceIdentity);
         Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
-        Assert.Equal(WukongSaveSourceState.CustomSelection, harness.ViewModel.WukongSaveSourceState);
+        Assert.Equal(LocalSaveSourceState.CustomSelection, harness.ViewModel.WukongSaveSourceState);
         Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), notifications);
         Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
     }
@@ -1476,6 +1507,7 @@ public sealed class DesktopTrackerViewModelTests
         private TrackerStateLoadResult loadResult = loadResult;
         public PersistentTrackerState State { get; private set; } = PersistentTrackerState.Default;
         public int SaveCount { get; private set; }
+        public int SaveAttemptCount { get; private set; }
         public bool FailSaves { get; set; }
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default)
         {
@@ -1484,6 +1516,7 @@ public sealed class DesktopTrackerViewModelTests
         }
         public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
         {
+            SaveAttemptCount++;
             if (FailSaves) throw new IOException("token=not-for-display");
             State = state;
             SaveCount++;

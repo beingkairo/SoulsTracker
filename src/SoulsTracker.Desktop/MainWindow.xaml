@@ -376,7 +376,7 @@
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock FontWeight="SemiBold" Text="2. Choose character" />
                                     <StackPanel Margin="0,5,0,0" Orientation="Horizontal">
-                                        <ComboBox Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding CanSelectEldenRingProfile}" AutomationProperties.Name="Elden Ring character slot" />
+                                        <ComboBox x:Name="EldenRingProfileSlotSelector" Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding CanSelectEldenRingProfile}" AutomationProperties.Name="Elden Ring character slot" />
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,0" Text="{Binding EldenRingCharacterStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring character selection status" />
                                 </StackPanel>

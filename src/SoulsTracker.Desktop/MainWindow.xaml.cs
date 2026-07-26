@@ -16,6 +16,7 @@ namespace SoulsTracker.Desktop;
 public partial class MainWindow : Window
 {
     private bool deathSoundVolumeEditorIsActive;
+    private bool isRestoringEldenRingProfileSelection;
     private bool isRestoringEldenRingSaveSelection;
     private bool isRestoringBlackMythWukongSaveSelection;
 
@@ -259,9 +260,31 @@ public partial class MainWindow : Window
 
     private async void EldenRingProfileSlot_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: EldenRingProfileSlotChoice slot } && viewModel.SelectedEldenRingProfileSlot != slot)
+        if (isRestoringEldenRingProfileSelection) return;
+        if (DataContext is DesktopTrackerViewModel viewModel
+            && sender is System.Windows.Controls.ComboBox { SelectedItem: EldenRingProfileSlotChoice slot } selector
+            && viewModel.SelectedEldenRingProfileSlot != slot)
         {
             await viewModel.SetEldenRingProfileSlotAsync(slot);
+            EldenRingProfileSlotChoice? committedSlot = viewModel.SelectedEldenRingProfileSlot;
+            if (selector.Dispatcher.HasShutdownStarted) return;
+            await selector.Dispatcher.InvokeAsync(() =>
+            {
+                if (Equals(selector.SelectedItem, committedSlot)) return;
+                try
+                {
+                    isRestoringEldenRingProfileSelection = true;
+                    BindingOperations.GetBindingExpression(selector, System.Windows.Controls.ComboBox.SelectedItemProperty)?.UpdateTarget();
+                    if (!Equals(selector.SelectedItem, committedSlot))
+                    {
+                        selector.SetCurrentValue(System.Windows.Controls.ComboBox.SelectedItemProperty, committedSlot);
+                    }
+                }
+                finally
+                {
+                    isRestoringEldenRingProfileSelection = false;
+                }
+            });
         }
     }
 

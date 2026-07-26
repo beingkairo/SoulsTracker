@@ -43,7 +43,7 @@ public sealed class MainWindowBindingTests
                 var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
                 try
                 {
-                    var viewModel = new DesktopTrackerViewModel(coordinator, blackMythWukongSaveDiscovery: new FixedWukongDiscovery(first, second));
+                    var viewModel = new DesktopTrackerViewModel(coordinator, blackMythWukongSaveDiscovery: new FixedSaveDiscovery(first, second));
                     viewModel.InitializeAsync().GetAwaiter().GetResult();
                     window = new MainWindow { DataContext = viewModel };
                     window.Show();
@@ -61,6 +61,80 @@ public sealed class MainWindowBindingTests
                     Assert.Equal(committedPath, repository.State.BlackMythWukongSave.LocalPath);
                     Assert.Same(hasCommittedChoice ? first : null, viewModel.SelectedBlackMythWukongSaveChoice);
                     Assert.Equal(hasCommittedChoice, viewModel.IsBlackMythWukongChangeMode);
+                }
+                finally
+                {
+                    window?.Close();
+                    coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+            });
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedEldenRingCharacterSelectionRestoresTheOneWayBoundCommittedChoiceWithoutResubmission(bool hasCommittedCharacter)
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "SoulsTracker.EldenCharacterSelection", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        string savePath = Path.Combine(tempRoot, "ER0000.sl2");
+        File.WriteAllBytes(savePath, [1]);
+        int committedIndex = hasCommittedCharacter ? 0 : EldenRingSaveConfiguration.NoSlotIndex;
+        var repository = new FailingSelectionRepository(EldenRingState(savePath, committedIndex));
+        var discovered = new DiscoveredLocalSave(savePath, "Save 1");
+        var profileReader = new FixedEldenRingProfileReader([
+            new EldenRingCharacterSlotMetadata(0, IsEmpty: false, "First", 50),
+            new EldenRingCharacterSlotMetadata(1, IsEmpty: false, "Second", 60),
+        ]);
+
+        try
+        {
+            RunOnStaThread(() =>
+            {
+                MainWindow? window = null;
+                var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+                try
+                {
+                    var viewModel = new DesktopTrackerViewModel(
+                        coordinator,
+                        profileReader,
+                        eldenRingSaveDiscovery: new FixedSaveDiscovery(discovered));
+                    viewModel.InitializeAsync().GetAwaiter().GetResult();
+                    window = new MainWindow { DataContext = viewModel };
+                    window.Show();
+                    window.UpdateLayout();
+                    ComboBox selector = Assert.IsType<ComboBox>(window.FindName("EldenRingProfileSlotSelector"));
+                    EldenRingProfileSlotChoice first = viewModel.EldenRingProfileSlots.Single(slot => slot.Index == 0);
+                    EldenRingProfileSlotChoice second = viewModel.EldenRingProfileSlots.Single(slot => slot.Index == 1);
+                    EldenRingProfileSlotChoice? committed = hasCommittedCharacter ? first : null;
+                    BindingOperations.GetBindingExpression(selector, ComboBox.SelectedItemProperty)?.UpdateTarget();
+                    selector.SetCurrentValue(ComboBox.SelectedItemProperty, committed);
+                    WaitForDispatcher(
+                        () => Equals(selector.SelectedItem, committed),
+                        () => $"Initial rendered: {(selector.SelectedItem as EldenRingProfileSlotChoice)?.Label ?? "<none>"}; ViewModel: {viewModel.SelectedEldenRingProfileSlot?.Label ?? "<none>"}; persisted slot: {repository.State.EldenRingSave.SlotIndex}; attempts: {repository.SaveAttemptCount}");
+                    int saveAttemptsBeforeSelection = repository.SaveAttemptCount;
+                    Assert.Equal(committedIndex, repository.State.EldenRingSave.SlotIndex);
+                    Assert.Equal(committed, viewModel.SelectedEldenRingProfileSlot);
+                    repository.FailSaves = true;
+
+                    selector.SetCurrentValue(ComboBox.SelectedItemProperty, second);
+
+                    WaitForDispatcher(
+                        () => Equals(selector.SelectedItem, committed)
+                            && viewModel.ErrorMessage is not null
+                            && repository.SaveAttemptCount == saveAttemptsBeforeSelection + 1,
+                        () => $"Rendered: {(selector.SelectedItem as EldenRingProfileSlotChoice)?.Label ?? "<none>"}; committed: {viewModel.SelectedEldenRingProfileSlot?.Label ?? "<none>"}; error: {viewModel.ErrorMessage ?? "<none>"}");
+                    Assert.Equal(committedIndex, repository.State.EldenRingSave.SlotIndex);
+                    Assert.Equal(committed, viewModel.SelectedEldenRingProfileSlot);
+                    Assert.Equal(LocalSaveSourceState.PersistedDiscovered, viewModel.EldenRingSaveSourceState);
+                    Assert.False(viewModel.IsEldenRingChangeMode);
+                    Assert.Equal("The Elden Ring save selection could not be saved.", viewModel.ErrorMessage);
+                    Assert.Equal(saveAttemptsBeforeSelection + 1, repository.SaveAttemptCount);
                 }
                 finally
                 {
@@ -124,7 +198,7 @@ public sealed class MainWindowBindingTests
             var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
             try
             {
-                var viewModel = new DesktopTrackerViewModel(coordinator, eldenRingSaveDiscovery: new FixedWukongDiscovery());
+                var viewModel = new DesktopTrackerViewModel(coordinator, eldenRingSaveDiscovery: new FixedSaveDiscovery());
                 viewModel.InitializeAsync().GetAwaiter().GetResult();
                 window = new MainWindow { DataContext = viewModel };
                 window.Show();
@@ -1564,22 +1638,41 @@ public sealed class MainWindowBindingTests
         OverlayConfiguration.Default,
         blackMythWukongSave: new BlackMythWukongSaveConfiguration(localPath));
 
-    private sealed class FixedWukongDiscovery(params DiscoveredLocalSave[] saves) : ILocalSaveDiscovery
+    private static PersistentTrackerState EldenRingState(string localPath, int slotIndex) => new(
+        PersistentTrackerState.CurrentSchemaVersion,
+        GameId.EldenRing,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+        BossProgress.Empty,
+        OverlayConfiguration.Default,
+        eldenRingNoticeAcknowledged: true,
+        eldenRingSave: new EldenRingSaveConfiguration(localPath, slotIndex));
+
+    private sealed class FixedSaveDiscovery(params DiscoveredLocalSave[] saves) : ILocalSaveDiscovery
     {
         public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) =>
             ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>(saves);
+    }
+
+    private sealed class FixedEldenRingProfileReader(IReadOnlyList<EldenRingCharacterSlotMetadata> slots) : IEldenRingSaveProfileReader
+    {
+        public ValueTask<IReadOnlyList<EldenRingCharacterSlotMetadata>> ReadAsync(
+            EldenRingSaveConfiguration configuration,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(slots);
     }
 
     private sealed class FailingSelectionRepository(PersistentTrackerState initialState) : ITrackerStateRepository
     {
         public PersistentTrackerState State { get; private set; } = initialState;
         public bool FailSaves { get; set; }
+        public int SaveAttemptCount { get; private set; }
 
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(TrackerStateLoadResult.Loaded(State));
 
         public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
         {
+            SaveAttemptCount++;
             if (FailSaves) throw new IOException("fixture persistence failure");
             State = state;
             return Task.CompletedTask;
