@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -816,7 +817,7 @@ public sealed class DesktopTrackerViewModelTests
         await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
 
         Assert.Null(harness.Repository.State.BlackMythWukongSave.LocalPath);
-        Assert.True(harness.ViewModel.HasMultipleBlackMythWukongSaveChoices);
+        Assert.Equal(2, harness.ViewModel.BlackMythWukongSaveChoices.Count);
         Assert.Equal("Choose the save slot you’re streaming.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
         Assert.Equal(WukongSaveSourceState.MultipleCandidates, harness.ViewModel.WukongSaveSourceState);
         Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
@@ -855,6 +856,151 @@ public sealed class DesktopTrackerViewModelTests
         Assert.True(harness.ViewModel.IsWukongSaveSelectorEnabled);
         harness.ViewModel.CancelBlackMythWukongChange();
         Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongChangeModeScanDisablesSelectorAndCancellationRestoresAllVisibleState()
+    {
+        using var files = new TemporaryWukongSaves();
+        string path = files.Add(1, 4);
+        var save = new DiscoveredLocalSave(path, "Save slot 1");
+        var discovery = new MutableSaveDiscovery(_ => ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>([save]));
+        await using TestHarness harness = new(WukongState(path), saveDiscovery: discovery);
+        await harness.ViewModel.InitializeAsync();
+        harness.ViewModel.ApplyRuntimeReaderResult(null);
+        harness.ViewModel.BeginBlackMythWukongChange();
+        WukongSaveSourceState priorState = harness.ViewModel.WukongSaveSourceState;
+        string? priorStatus = harness.ViewModel.BlackMythWukongSaveDiscoveryStatus;
+        string? priorIdentity = harness.ViewModel.WukongSaveSourceIdentity;
+        string? priorReaderStatus = harness.ViewModel.RuntimeReaderStatusText;
+        using var cancellation = new CancellationTokenSource();
+        discovery.Handler = async token =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return [];
+        };
+
+        Task scan = harness.ViewModel.RescanBlackMythWukongSavesAsync(cancellation.Token);
+
+        Assert.Equal(WukongSaveSourceState.Scanning, harness.ViewModel.WukongSaveSourceState);
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
+        Assert.False(harness.ViewModel.IsWukongSaveSelectorEnabled);
+        cancellation.Cancel();
+        await scan;
+
+        Assert.Equal(priorState, harness.ViewModel.WukongSaveSourceState);
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.Equal(priorStatus, harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal(priorIdentity, harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.Equal(priorReaderStatus, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorEnabled);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongScanExceptionRestoresControlsAndPublishesRecoverableReaderStatus()
+    {
+        using var files = new TemporaryWukongSaves();
+        string path = files.Add(1, 4);
+        var save = new DiscoveredLocalSave(path, "Save slot 1");
+        var discovery = new MutableSaveDiscovery(_ => ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>([save]));
+        await using TestHarness harness = new(WukongState(path), saveDiscovery: discovery);
+        await harness.ViewModel.InitializeAsync();
+        harness.ViewModel.BeginBlackMythWukongChange();
+        var notifications = new List<string?>();
+        harness.ViewModel.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+        discovery.Handler = _ => ValueTask.FromException<IReadOnlyList<DiscoveredLocalSave>>(new IOException("fixture failure"));
+
+        await harness.ViewModel.RescanBlackMythWukongSavesAsync();
+
+        Assert.Equal(WukongSaveSourceState.PersistedDiscovered, harness.ViewModel.WukongSaveSourceState);
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorEnabled);
+        Assert.Equal("Could not search for local saves. Try Rescan or Browse…", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Equal(harness.ViewModel.BlackMythWukongSaveDiscoveryStatus, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongBrowseValidationPreservesFailureAndCommitsValidCustomSourceWithNotifications()
+    {
+        using var files = new TemporaryWukongSaves();
+        string originalPath = files.Add(1, 4);
+        string invalidPath = files.AddInvalid(8);
+        string customPath = files.Add(9, 9);
+        var original = new DiscoveredLocalSave(originalPath, "Save slot 1");
+        await using TestHarness harness = new(WukongState(originalPath), saveDiscovery: new FixedSaveDiscovery(original));
+        await harness.ViewModel.InitializeAsync();
+        harness.ViewModel.ApplyRuntimeReaderResult(null);
+        harness.ViewModel.BeginBlackMythWukongChange();
+        var notifications = new List<string?>();
+        harness.ViewModel.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+
+        await harness.ViewModel.SetBlackMythWukongSaveFileAsync(invalidPath);
+
+        Assert.Equal(originalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal("Save slot 1", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.Equal("Selected save is unavailable or unsupported.", harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
+
+        notifications.Clear();
+        harness.Repository.FailSaves = true;
+        await harness.ViewModel.SetBlackMythWukongSaveFileAsync(customPath);
+
+        Assert.Equal(originalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal("Save slot 1", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+
+        harness.Repository.FailSaves = false;
+        await harness.ViewModel.SetBlackMythWukongSaveFileAsync(customPath);
+
+        Assert.Equal(customPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal("Custom save: ArchiveSaveFile.9.sav", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.Equal(WukongSaveSourceState.CustomSelection, harness.ViewModel.WukongSaveSourceState);
+        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), notifications);
+        Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongDiscoveredReplacementUpdatesIdentityOnlyAfterPersistenceSucceeds()
+    {
+        using var files = new TemporaryWukongSaves();
+        string firstPath = files.Add(1, 1);
+        string secondPath = files.Add(2, 2);
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        await using TestHarness harness = new(WukongState(firstPath), saveDiscovery: new FixedSaveDiscovery(first, second));
+        await harness.ViewModel.InitializeAsync();
+        var reconciliationNotifications = new List<string?>();
+        harness.ViewModel.PropertyChanged += (_, args) => reconciliationNotifications.Add(args.PropertyName);
+        await harness.ViewModel.RescanBlackMythWukongSavesAsync();
+        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), reconciliationNotifications);
+        reconciliationNotifications.Clear();
+        harness.ViewModel.ApplyImportedCommittedState(WukongState(firstPath));
+        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), reconciliationNotifications);
+        harness.ViewModel.BeginBlackMythWukongChange();
+        harness.Repository.FailSaves = true;
+
+        await harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+
+        Assert.Equal(firstPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal(first, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
+        Assert.Equal("Save slot 1", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+
+        harness.Repository.FailSaves = false;
+        var notifications = new List<string?>();
+        harness.ViewModel.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+        await harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+
+        Assert.Equal(secondPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal(second, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
+        Assert.Equal("Save slot 2", harness.ViewModel.WukongSaveSourceIdentity);
+        Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.Contains(nameof(DesktopTrackerViewModel.WukongSaveSourceIdentity), notifications);
+        Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
     }
 
     [Fact]
@@ -1125,6 +1271,14 @@ public sealed class DesktopTrackerViewModelTests
         BossProgress.Empty,
         OverlayConfiguration.Default);
 
+    private static PersistentTrackerState WukongState(string localPath) => new(
+        PersistentTrackerState.CurrentSchemaVersion,
+        GameId.BlackMythWukong,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+        BossProgress.Empty,
+        OverlayConfiguration.Default,
+        blackMythWukongSave: new BlackMythWukongSaveConfiguration(localPath));
+
     private sealed class TestHarness : IAsyncDisposable
     {
         private readonly SerializedTrackerCoordinator coordinator;
@@ -1179,5 +1333,56 @@ public sealed class DesktopTrackerViewModelTests
     private sealed class FixedSaveDiscovery(params DiscoveredLocalSave[] saves) : ILocalSaveDiscovery
     {
         public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) => ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>(saves);
+    }
+
+    private sealed class MutableSaveDiscovery(Func<CancellationToken, ValueTask<IReadOnlyList<DiscoveredLocalSave>>> handler) : ILocalSaveDiscovery
+    {
+        public Func<CancellationToken, ValueTask<IReadOnlyList<DiscoveredLocalSave>>> Handler { get; set; } = handler;
+        public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) => Handler(cancellationToken);
+    }
+
+    private sealed class TemporaryWukongSaves : IDisposable
+    {
+        private readonly string root = Path.Combine(Path.GetTempPath(), "SoulsTracker.Desktop.Wukong", Guid.NewGuid().ToString("N"));
+
+        public string Add(int slot, int deaths)
+        {
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, $"ArchiveSaveFile.{slot}.sav");
+            File.WriteAllBytes(path, CreateArchive(deaths));
+            return path;
+        }
+
+        public string AddInvalid(int slot)
+        {
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, $"ArchiveSaveFile.{slot}.sav");
+            File.WriteAllBytes(path, [1]);
+            return path;
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+
+        private static byte[] CreateArchive(int deaths)
+        {
+            byte[] death = FieldVarint(1, (ulong)deaths);
+            byte[] decoded = FieldBytes(6, FieldBytes(1, FieldBytes(5, death)));
+            byte[] encrypted = decoded.ToArray();
+            byte[] key = [0x7B, 0x5C, 0xDA, 0x91, 0x3E, 0xFC, 0xDA, 0x37];
+            for (int index = 0; index < encrypted.Length; index++) encrypted[index] ^= key[index % key.Length];
+#pragma warning disable CA5351
+            byte[] checksum = Convert.ToHexStringLower(MD5.HashData(encrypted.Concat("lhx2tkh6lj1wj8jmrgs3k1xb2brusehx"u8.ToArray()).ToArray())).Select(static value => (byte)value).ToArray();
+#pragma warning restore CA5351
+            byte[] metadata = Concat(FieldBytes(1, checksum), FieldVarint(7, 14), FieldVarint(8, 1), FieldVarint(10, 23831), FieldVarint(11, 23831));
+            return Concat(FieldBytes(1, metadata), FieldBytes(2, encrypted));
+        }
+
+        private static byte[] FieldBytes(ulong field, byte[] value) { var result = new List<byte>(); Write(result, field << 3 | 2); Write(result, (ulong)value.Length); result.AddRange(value); return result.ToArray(); }
+        private static byte[] FieldVarint(ulong field, ulong value) { var result = new List<byte>(); Write(result, field << 3); Write(result, value); return result.ToArray(); }
+        private static byte[] Concat(params byte[][] values) => values.SelectMany(static value => value).ToArray();
+        private static void Write(List<byte> target, ulong value) { do { byte next = (byte)(value & 0x7F); value >>= 7; target.Add(value == 0 ? next : (byte)(next | 0x80)); } while (value != 0); }
     }
 }

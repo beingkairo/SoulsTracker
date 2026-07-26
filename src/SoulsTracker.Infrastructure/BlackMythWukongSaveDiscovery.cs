@@ -85,7 +85,9 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
         {
             canonical = Path.GetFullPath(path);
             FileAttributes attributes = File.GetAttributes(canonical);
-            return attributes.HasFlag(FileAttributes.Directory) && !attributes.HasFlag(FileAttributes.ReparsePoint);
+            return attributes.HasFlag(FileAttributes.Directory)
+                && !attributes.HasFlag(FileAttributes.ReparsePoint)
+                && !HasReparsePointInPath(canonical);
         }
         catch { return false; }
     }
@@ -102,7 +104,7 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
         catch { return false; }
     }
 
-    private static bool HasReparsePointBetween(string root, string path)
+    internal static bool HasReparsePointBetween(string root, string path)
     {
         try
         {
@@ -114,6 +116,25 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
             string current = canonicalRoot;
             foreach (string segment in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             {
+                current = Path.Combine(current, segment);
+                if (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint)) return true;
+            }
+            return false;
+        }
+        catch { return true; }
+    }
+
+    internal static bool HasReparsePointInPath(string path)
+    {
+        try
+        {
+            string canonical = Path.GetFullPath(path);
+            string? pathRoot = Path.GetPathRoot(canonical);
+            if (string.IsNullOrEmpty(pathRoot)) return true;
+            string current = pathRoot;
+            foreach (string segment in canonical[pathRoot.Length..].Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            {
+                if (segment.Length == 0) continue;
                 current = Path.Combine(current, segment);
                 if (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint)) return true;
             }
@@ -155,12 +176,14 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
         foreach (string root in libraries.ToArray())
         {
             string folders = Path.Combine(root, "steamapps", "libraryfolders.vdf");
-            foreach (string library in ReadVdfPaths(folders)) libraries.Add(library);
+            if (!BlackMythWukongSaveDiscovery.HasReparsePointBetween(root, folders))
+                foreach (string library in ReadVdfPaths(folders)) libraries.Add(library);
         }
         foreach (string library in libraries)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string manifest = Path.Combine(library, "steamapps", "appmanifest_2358720.acf");
+            if (BlackMythWukongSaveDiscovery.HasReparsePointBetween(library, manifest)) continue;
             string? installDirectory = ReadVdfValue(manifest, "installdir");
             if (!IsSingleDirectoryName(installDirectory)) continue;
             string candidate = Path.Combine(library, "steamapps", "common", installDirectory!);
@@ -178,8 +201,9 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                if (new FileInfo(manifest).Length > MaximumMetadataBytes) continue;
-                using JsonDocument document = JsonDocument.Parse(File.ReadAllText(manifest));
+                string? manifestText = ReadBoundedText(manifest);
+                if (manifestText is null || BlackMythWukongSaveDiscovery.HasReparsePointBetween(root, manifest)) continue;
+                using JsonDocument document = JsonDocument.Parse(manifestText);
                 JsonElement value = document.RootElement;
                 string? install = value.TryGetProperty("InstallLocation", out JsonElement location) ? location.GetString() : null;
                 if (TryLocalDirectory(install, out string canonical) && HasParserValidWukongSave(canonical)) results.Add(canonical);
@@ -220,7 +244,15 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
 
     private static string? ReadBoundedText(string path)
     {
-        try { return new FileInfo(path).Length <= MaximumMetadataBytes ? File.ReadAllText(path) : null; }
+        try
+        {
+            FileAttributes attributes = File.GetAttributes(path);
+            return !attributes.HasFlag(FileAttributes.Directory)
+                && !attributes.HasFlag(FileAttributes.ReparsePoint)
+                && new FileInfo(path).Length <= MaximumMetadataBytes
+                ? File.ReadAllText(path)
+                : null;
+        }
         catch { return null; }
     }
 
@@ -238,7 +270,9 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
         {
             canonical = Path.GetFullPath(path);
             FileAttributes attributes = File.GetAttributes(canonical);
-            return attributes.HasFlag(FileAttributes.Directory) && !attributes.HasFlag(FileAttributes.ReparsePoint);
+            return attributes.HasFlag(FileAttributes.Directory)
+                && !attributes.HasFlag(FileAttributes.ReparsePoint)
+                && !BlackMythWukongSaveDiscovery.HasReparsePointInPath(canonical);
         }
         catch { return false; }
     }
@@ -248,10 +282,26 @@ public sealed class LocalBlackMythWukongInstallRootSource : IBlackMythWukongInst
         try
         {
             string saves = Path.Combine(root, "b1", "Saved", "SaveGames");
-            if (!TryLocalDirectory(saves, out string saveRoot)) return false;
-            return Directory.EnumerateDirectories(saveRoot).Take(64).SelectMany(account => Directory.EnumerateFiles(account, "ArchiveSaveFile.*.sav", SearchOption.TopDirectoryOnly).Take(64)).Any(BlackMythWukongSaveDiscovery.IsRegularBoundedSave);
+            if (!TryLocalDirectory(saves, out string saveRoot) || BlackMythWukongSaveDiscovery.HasReparsePointBetween(root, saveRoot)) return false;
+            foreach (string account in SafeDirectories(saveRoot, 64))
+            {
+                if (BlackMythWukongSaveDiscovery.HasReparsePointBetween(saveRoot, account)) continue;
+                foreach (string save in SafeFiles(account, "ArchiveSaveFile.*.sav", 64))
+                {
+                    if (BlackMythWukongSaveDiscovery.HasReparsePointBetween(account, save)) continue;
+                    if (!BlackMythWukongSaveConfiguration.IsArchiveSaveFileName(Path.GetFileName(save))) continue;
+                    if (BlackMythWukongSaveDiscovery.IsRegularBoundedSave(save)) return true;
+                }
+            }
+            return false;
         }
         catch { return false; }
+    }
+
+    private static string[] SafeDirectories(string root, int maximum)
+    {
+        try { return Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly).Take(maximum).ToArray(); }
+        catch { return []; }
     }
 }
 
