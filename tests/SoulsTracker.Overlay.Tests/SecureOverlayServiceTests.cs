@@ -191,15 +191,14 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
-    public async Task WukongWithoutAConfiguredSavePublishesItsManualFallbackAfterCommittedChanges()
+    public async Task WukongWithoutAConfiguredSavePublishesNoNumericFallback()
     {
         PersistentTrackerState state = new(
             PersistentTrackerState.CurrentSchemaVersion,
             GameId.BlackMythWukong,
             ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
             BossProgress.Empty,
-            OverlayConfiguration.Default,
-            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
+            OverlayConfiguration.Default);
         var repository = new MemoryRepository(state);
         var publisher = new OverlayStateChangePublisher();
         await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
@@ -207,18 +206,17 @@ public sealed class SecureOverlayServiceTests
         publisher.Attach(service);
         await service.StartAsync();
 
-        // A stale observation cannot override the manual fallback when no save is configured.
+        // A stale observation cannot create a total when no save is configured.
         service.PublishRuntimeObservation(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow));
-        await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
 
         using JsonDocument document = JsonDocument.Parse(await ReceiveSnapshotAsync(service));
         JsonElement deaths = document.RootElement.GetProperty("TotalDeaths");
-        Assert.Equal("ManualBloodborne", deaths.GetProperty("Source").GetString());
-        Assert.Equal(1, deaths.GetProperty("Value").GetInt64());
+        Assert.Equal("Unavailable", deaths.GetProperty("Source").GetString());
+        Assert.Equal(JsonValueKind.Null, deaths.GetProperty("Value").ValueKind);
     }
 
     [Fact]
-    public async Task ConnectedWukongOverlayReceivesTheNextManualFallbackSnapshot()
+    public async Task ConnectedWukongOverlayReceivesTheFirstValidatedSaveSnapshot()
     {
         PersistentTrackerState state = new(
             PersistentTrackerState.CurrentSchemaVersion,
@@ -226,7 +224,7 @@ public sealed class SecureOverlayServiceTests
             ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
             BossProgress.Empty,
             OverlayConfiguration.Default,
-            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong));
+            blackMythWukongSave: new BlackMythWukongSaveConfiguration(@"C:\\Tracker\\ArchiveSaveFile.1.sav"));
         var repository = new MemoryRepository(state);
         var publisher = new OverlayStateChangePublisher();
         await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
@@ -239,13 +237,13 @@ public sealed class SecureOverlayServiceTests
         await socket.ConnectAsync(socketUrl, CancellationToken.None);
         using JsonDocument initial = JsonDocument.Parse(await ReceiveSnapshotAsync(socket));
         long initialSequence = initial.RootElement.GetProperty("SequenceNumber").GetInt64();
-        Assert.Equal(0, initial.RootElement.GetProperty("TotalDeaths").GetProperty("Value").GetInt64());
+        Assert.Equal(JsonValueKind.Null, initial.RootElement.GetProperty("TotalDeaths").GetProperty("Value").ValueKind);
 
-        await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
+        service.PublishRuntimeObservation(new RuntimeGameObservation(GameId.BlackMythWukong, 1, DateTimeOffset.UtcNow));
 
         using JsonDocument updated = JsonDocument.Parse(await ReceiveSnapshotAsync(socket));
         Assert.True(updated.RootElement.GetProperty("SequenceNumber").GetInt64() > initialSequence);
-        Assert.Equal("ManualBloodborne", updated.RootElement.GetProperty("TotalDeaths").GetProperty("Source").GetString());
+        Assert.Equal("GameLifetimeReader", updated.RootElement.GetProperty("TotalDeaths").GetProperty("Source").GetString());
         Assert.Equal(1, updated.RootElement.GetProperty("TotalDeaths").GetProperty("Value").GetInt64());
     }
 

@@ -23,13 +23,11 @@ public sealed class DeathCounterTests
     [Fact]
     public void ManualCounterSupportsEachApprovedManualProfileOnly()
     {
-        foreach (GameId gameId in GameId.All.Where(static gameId => gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls && gameId != GameId.BlackMythWukong))
+        foreach (GameId gameId in GameId.All.Where(static gameId => gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls))
         {
             Assert.Throws<InvalidOperationException>(() =>
                 ManualBloodborneDeathCounter.CreateFor(gameId));
         }
-
-        Assert.Equal(0, ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong).Value);
     }
 
     [Fact]

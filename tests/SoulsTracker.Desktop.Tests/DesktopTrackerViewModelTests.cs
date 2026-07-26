@@ -778,9 +778,10 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task BlackMythWukongUsesAutomaticTrackingWithItsManualFallbackAndBaseGameCatalog()
+    public async Task BlackMythWukongDiscoversAndSelectsOneSaveWithoutManualControls()
     {
-        await using TestHarness harness = new(PersistentTrackerState.Default);
+        DiscoveredLocalSave save = new(@"C:\\Tracker\\ArchiveSaveFile.1.sav", "Save slot 1");
+        await using TestHarness harness = new(PersistentTrackerState.Default, saveDiscovery: new FixedSaveDiscovery(save));
         await harness.ViewModel.InitializeAsync();
 
         GameChoice wukong = harness.Game(GameId.BlackMythWukong);
@@ -791,15 +792,54 @@ public sealed class DesktopTrackerViewModelTests
 
         Assert.Equal(GameId.BlackMythWukong, harness.Repository.State.SelectedGameId);
         Assert.Equal("Black Myth: Wukong", harness.ViewModel.SelectedGame!.DisplayName);
-        Assert.True(harness.ViewModel.IsManualGameSelected);
-        Assert.Equal("0", harness.ViewModel.TotalDeathsText);
-        Assert.Equal(DesktopTrackerViewModel.BlackMythWukongWaitingForSaveFileMessage, harness.ViewModel.RuntimeReaderStatusText);
-        Assert.Equal("0", harness.ViewModel.TotalDeathsText);
-        await harness.ViewModel.SetBlackMythWukongSaveFileAsync(@"C:\Tracker\ArchiveSaveFile.1.sav");
+        Assert.False(harness.ViewModel.IsManualGameSelected);
+        Assert.Equal(save.LocalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal(save, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
+        Assert.Equal("Tracking Save slot 1", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow)));
         Assert.Equal("12", harness.ViewModel.TotalDeathsText);
         Assert.Equal(96, harness.ViewModel.Bosses.Count);
         Assert.Equal("Track boss progress for Black Myth: Wukong.", harness.ViewModel.BossDescription);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongRequiresAnExplicitChoiceWhenDiscoveryFindsMultipleSaves()
+    {
+        DiscoveredLocalSave first = new(@"C:\\Tracker\\ArchiveSaveFile.1.sav", "Save slot 1");
+        DiscoveredLocalSave second = new(@"C:\\Tracker\\ArchiveSaveFile.2.sav", "Save slot 2");
+        await using TestHarness harness = new(PersistentTrackerState.Default, saveDiscovery: new FixedSaveDiscovery(first, second));
+        await harness.ViewModel.InitializeAsync();
+
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
+
+        Assert.Null(harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.True(harness.ViewModel.HasMultipleBlackMythWukongSaveChoices);
+        Assert.Equal("Choose the save slot you’re streaming.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+
+        await harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(second);
+
+        Assert.Equal(second.LocalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal(second, harness.ViewModel.SelectedBlackMythWukongSaveChoice);
+    }
+
+    [Fact]
+    public async Task BlackMythWukongRescanPreservesAnUnavailableSavedChoice()
+    {
+        string savedPath = @"C:\\Tracker\\ArchiveSaveFile.7.sav";
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.BlackMythWukong,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            blackMythWukongSave: new BlackMythWukongSaveConfiguration(savedPath));
+        await using TestHarness harness = new(state, saveDiscovery: new FixedSaveDiscovery(new DiscoveredLocalSave(@"C:\\Tracker\\ArchiveSaveFile.1.sav", "Save slot 1")));
+
+        await harness.ViewModel.InitializeAsync();
+
+        Assert.Equal(savedPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.Equal("Selected save is unavailable.", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+        Assert.Null(harness.ViewModel.SelectedBlackMythWukongSaveChoice);
     }
 
     [Fact]
@@ -1074,14 +1114,14 @@ public sealed class DesktopTrackerViewModelTests
     {
         private readonly SerializedTrackerCoordinator coordinator;
 
-        public TestHarness(PersistentTrackerState state, IEldenRingSaveProfileReader? profileReader = null)
-            : this(TrackerStateLoadResult.Loaded(state), profileReader) { }
+        public TestHarness(PersistentTrackerState state, IEldenRingSaveProfileReader? profileReader = null, ILocalSaveDiscovery? saveDiscovery = null)
+            : this(TrackerStateLoadResult.Loaded(state), profileReader, saveDiscovery) { }
 
-        public TestHarness(TrackerStateLoadResult loadResult, IEldenRingSaveProfileReader? profileReader = null)
+        public TestHarness(TrackerStateLoadResult loadResult, IEldenRingSaveProfileReader? profileReader = null, ILocalSaveDiscovery? saveDiscovery = null)
         {
             Repository = new FakeRepository(loadResult);
             coordinator = new SerializedTrackerCoordinator(Repository, new NullPublisher());
-            ViewModel = new DesktopTrackerViewModel(coordinator, profileReader);
+            ViewModel = new DesktopTrackerViewModel(coordinator, profileReader, saveDiscovery);
         }
 
         public FakeRepository Repository { get; }
@@ -1119,5 +1159,10 @@ public sealed class DesktopTrackerViewModelTests
     private sealed class FixedProfileReader(IReadOnlyList<EldenRingCharacterSlotMetadata> slots) : IEldenRingSaveProfileReader
     {
         public ValueTask<IReadOnlyList<EldenRingCharacterSlotMetadata>> ReadAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken) => ValueTask.FromResult(slots);
+    }
+
+    private sealed class FixedSaveDiscovery(params DiscoveredLocalSave[] saves) : ILocalSaveDiscovery
+    {
+        public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) => ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>(saves);
     }
 }

@@ -104,16 +104,11 @@ public sealed class TrackerStateTransitionServiceTests
     }
 
     [Fact]
-    public void ManualWukongCounterIsIndependentFromEveryOtherManualProfile()
+    public void ManualCommandsRejectWukongNowThatItUsesSaveOnlyTracking()
     {
         PersistentTrackerState wukong = Select(PersistentTrackerState.Default, GameId.BlackMythWukong);
-        PersistentTrackerState incremented = TrackerStateTransitionService.Apply(wukong, new IncrementManualBloodborneDeathsCommand()).State;
-        PersistentTrackerState restoredDemonsSouls = Select(incremented, GameId.DemonsSouls);
-
-        Assert.Equal(1, incremented.ManualBlackMythWukongDeathCounter.Value);
-        Assert.Equal(0, incremented.ManualBloodborneDeathCounter.Value);
-        Assert.Equal(0, incremented.ManualDemonsSoulsDeathCounter.Value);
-        Assert.Equal(1, restoredDemonsSouls.GetManualDeathCounter(GameId.BlackMythWukong).Value);
+        Assert.Throws<ArgumentException>(() => TrackerStateTransitionService.Apply(wukong, new IncrementManualBloodborneDeathsCommand()));
+        Assert.Throws<ArgumentException>(() => TrackerStateTransitionService.Apply(wukong, new DecrementManualBloodborneDeathsCommand()));
     }
 
     [Fact]

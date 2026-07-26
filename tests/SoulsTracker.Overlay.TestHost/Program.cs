@@ -5,21 +5,20 @@ using SoulsTracker.Domain;
 using SoulsTracker.Overlay;
 
 const string Token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-bool publishWukongManualIncrement = args.Contains("--wukong-manual-increment", StringComparer.Ordinal);
+bool publishManualIncrement = args.Contains("--manual-increment", StringComparer.Ordinal);
 int port = FindAvailablePort();
 OverlayConfiguration configuration = new(
     OverlayConfiguration.CurrentSchemaVersion,
     new OverlayEndpointConfiguration(port, OverlayAccessToken.Parse(Token)),
     new TotalDeathsOverlayOptions(isEnabled: true, showGameName: false),
     new BossListOverlayOptions(isEnabled: true, BossListVisibilityMode.Defeated));
-PersistentTrackerState state = publishWukongManualIncrement
+PersistentTrackerState state = publishManualIncrement
     ? new(
         PersistentTrackerState.CurrentSchemaVersion,
-        GameId.BlackMythWukong,
+        GameId.Bloodborne,
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
         BossProgress.Empty,
-        configuration,
-        manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong))
+        configuration)
     : new(
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.Bloodborne,
@@ -32,13 +31,13 @@ await using var service = new SecureOverlayService(coordinator, new EndpointAcce
 publisher.Attach(service);
 await service.StartAsync();
 Console.WriteLine($"READY {service.TotalDeathsUrl} {service.BossListUrl}");
-if (publishWukongManualIncrement)
+if (publishManualIncrement)
 {
-    _ = PublishWukongManualIncrementAsync(coordinator);
+    _ = PublishManualIncrementAsync(coordinator);
 }
 await Task.Delay(Timeout.InfiniteTimeSpan);
 
-static async Task PublishWukongManualIncrementAsync(SerializedTrackerCoordinator coordinator)
+static async Task PublishManualIncrementAsync(SerializedTrackerCoordinator coordinator)
 {
     await Task.Delay(TimeSpan.FromSeconds(2));
     await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());

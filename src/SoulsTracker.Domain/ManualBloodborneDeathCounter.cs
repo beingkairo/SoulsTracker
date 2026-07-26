@@ -26,7 +26,7 @@ public sealed class ManualBloodborneDeathCounter
     {
         ArgumentNullException.ThrowIfNull(gameId);
 
-        if (gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls && gameId != GameId.BlackMythWukong)
+        if (gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls)
         {
             throw new InvalidOperationException("A manual death counter is available only for approved manual profiles.");
         }

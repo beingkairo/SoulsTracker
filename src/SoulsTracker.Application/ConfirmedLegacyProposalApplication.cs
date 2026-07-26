@@ -37,8 +37,7 @@ public static class ConfirmedLegacyProposalApplication
         }
 
         if (destination.ManualBloodborneDeathCounter.Value != 0 ||
-            destination.ManualDemonsSoulsDeathCounter.Value != 0 ||
-            destination.ManualBlackMythWukongDeathCounter.Value != 0)
+            destination.ManualDemonsSoulsDeathCounter.Value != 0)
         {
             return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.DestinationHasManualBloodborneDeaths);
         }
@@ -110,7 +109,7 @@ public static class ConfirmedLegacyProposalApplication
             overlay,
             destination.ManualBloodborneHotkeys,
             destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave,
-            destination.BossListScope, ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong), destination.BlackMythWukongSave);
+            destination.BossListScope, destination.BlackMythWukongSave);
         return true;
     }
 

@@ -10,3 +10,7 @@ SoulsTracker is a .NET 10 WPF desktop application with a static TypeScript brows
 - `web_overlay`: OBS browser renderer and Playwright tests.
 
 The overlay is display-only. Game readers are optional and must remain read-only.
+For save-file games, Infrastructure may also provide bounded local discovery: it
+resolves only launcher metadata and approved save subtrees, returns safe labels
+and canonical local paths, and never scans drives, writes saves, or chooses
+between multiple candidates. The desktop layer owns selection and persistence.

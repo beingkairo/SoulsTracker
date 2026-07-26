@@ -589,8 +589,8 @@ test("real loopback host loads the token-gated browser assets and applies its pr
   }
 });
 
-test("connected Wukong browser overlay renders a committed manual fallback increment", async ({ browser }) => {
-  const host = await startRealOverlayHost(["--wukong-manual-increment"]);
+test("connected browser overlay renders a committed manual increment", async ({ browser }) => {
+  const host = await startRealOverlayHost(["--manual-increment"]);
   try {
     const page = await browser.newPage();
     await page.goto(host.totalDeathsUrl);

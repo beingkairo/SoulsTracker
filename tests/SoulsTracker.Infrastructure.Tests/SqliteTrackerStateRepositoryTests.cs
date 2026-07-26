@@ -180,8 +180,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
             BossProgress.Empty.MarkDefeated(GameId.Ds1, boss),
             OverlayConfiguration.Default,
             manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 3),
-            bossListScope: BossListScope.MainGame,
-            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 11));
+            bossListScope: BossListScope.MainGame);
 
         await using (var repository = new SqliteTrackerStateRepository(root, database, new ReversingProtector()))
         {
@@ -193,7 +192,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
-            command.CommandText = "UPDATE tracker_state SET payload=json_set(payload, '$.SelectedGameId', null) WHERE id=1";
+            command.CommandText = "UPDATE tracker_state SET payload=json_set(payload, '$.SelectedGameId', null, '$.ManualBlackMythWukongDeaths', 11) WHERE id=1";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -203,7 +202,6 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
             Assert.Equal(GameId.DemonsSouls, loaded.SelectedGameId);
             Assert.Equal(7, loaded.ManualBloodborneDeathCounter.Value);
             Assert.Equal(3, loaded.ManualDemonsSoulsDeathCounter.Value);
-            Assert.Equal(11, loaded.ManualBlackMythWukongDeathCounter.Value);
             Assert.True(loaded.BossProgress.IsDefeated(GameId.Ds1, boss));
             Assert.Equal(BossListScope.MainGame, loaded.BossListScope);
             await reopened.SaveAsync(loaded);
@@ -216,6 +214,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         string payload = (string)(await query.ExecuteScalarAsync())!;
         Assert.Contains("\"SelectedGameId\":\"demons_souls\"", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("EldenRingBossListScope", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("ManualBlackMythWukongDeaths", payload, StringComparison.Ordinal);
     }
 
     [Fact]

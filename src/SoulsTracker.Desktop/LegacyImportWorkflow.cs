@@ -66,7 +66,6 @@ public sealed class LegacyImportWorkflow
         state.SelectedGameId == GameId.DemonsSouls &&
         state.ManualBloodborneDeathCounter.Value == 0 &&
         state.ManualDemonsSoulsDeathCounter.Value == 0 &&
-        state.ManualBlackMythWukongDeathCounter.Value == 0 &&
         !GameCatalog.All.Any(game => game.BossCatalog.Any(boss => state.BossProgress.IsDefeated(game.Id, boss.Id)));
 
     private static LegacyImportReviewResult CreateReviewResult(LegacyImportCandidate candidate, LegacyImportPreflightReview result)

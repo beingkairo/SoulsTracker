@@ -46,11 +46,15 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
     {
         TextExportConfiguration config = state.TextExports;
         bool succeeded = true;
-        bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || state.SelectedGameId == GameId.BlackMythWukong || displayedTotal.HasValue;
+        bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || displayedTotal.HasValue;
         if (config.DeathsEnabled && config.DeathsPath is not null && hasDisplayedDeathTotal)
         {
             long total = displayedTotal ?? state.GetManualDeathCounter(state.SelectedGameId).Value;
             succeeded &= await AtomicWriteAsync(config.DeathsPath, $"Total Deaths: {total}").ConfigureAwait(false);
+        }
+        else if (config.DeathsEnabled && config.DeathsPath is not null && state.SelectedGameId == GameId.BlackMythWukong)
+        {
+            succeeded &= await AtomicWriteAsync(config.DeathsPath, string.Empty).ConfigureAwait(false);
         }
         if (config.BossListEnabled && config.BossListPath is not null)
         {

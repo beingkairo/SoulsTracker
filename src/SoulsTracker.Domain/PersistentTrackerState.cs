@@ -27,7 +27,6 @@ public sealed class PersistentTrackerState
         eldenRingNoticeAcknowledged: false,
         EldenRingSaveConfiguration.Default,
         BossListScope.AllBosses,
-        ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong),
         BlackMythWukongSaveConfiguration.Default);
 
     /// <summary>
@@ -48,7 +47,6 @@ public sealed class PersistentTrackerState
         bool eldenRingNoticeAcknowledged = false,
         EldenRingSaveConfiguration? eldenRingSave = null,
         BossListScope bossListScope = BossListScope.AllBosses,
-        ManualBloodborneDeathCounter? manualBlackMythWukongDeathCounter = null,
         BlackMythWukongSaveConfiguration? blackMythWukongSave = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
@@ -69,7 +67,6 @@ public sealed class PersistentTrackerState
         SelectedGameId = selectedGameId;
         ManualBloodborneDeathCounter = manualBloodborneDeathCounter;
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
-        ManualBlackMythWukongDeathCounter = manualBlackMythWukongDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong);
         BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
         BossProgress = bossProgress;
         OverlayConfiguration = overlayConfiguration;
@@ -101,9 +98,6 @@ public sealed class PersistentTrackerState
     /// <summary>Gets the persisted Demon’s Souls manual death counter.</summary>
     public ManualBloodborneDeathCounter ManualDemonsSoulsDeathCounter { get; }
 
-    /// <summary>Gets the persisted Black Myth: Wukong manual death counter.</summary>
-    public ManualBloodborneDeathCounter ManualBlackMythWukongDeathCounter { get; }
-
     /// <summary>Local configuration for the separate read-only Black Myth: Wukong save reader.</summary>
     public BlackMythWukongSaveConfiguration BlackMythWukongSave { get; }
 
@@ -112,8 +106,6 @@ public sealed class PersistentTrackerState
         ? ManualBloodborneDeathCounter
         : gameId == GameId.DemonsSouls
             ? ManualDemonsSoulsDeathCounter
-            : gameId == GameId.BlackMythWukong
-                ? ManualBlackMythWukongDeathCounter
             : throw new InvalidOperationException("The selected game does not use a manual death counter.");
 
     /// <summary>

@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using SoulsTracker.Domain;
+using SoulsTracker.Infrastructure;
 
 namespace SoulsTracker.Desktop;
 
@@ -160,6 +161,19 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
         {
             await viewModel.SetBlackMythWukongSaveFileAsync(dialog.FileName);
+        }
+    }
+
+    private async void RescanBlackMythWukongSaves_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.RescanBlackMythWukongSavesAsync();
+    }
+
+    private async void BlackMythWukongSave_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice && DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.SelectBlackMythWukongSaveChoiceAsync(choice);
         }
     }
 

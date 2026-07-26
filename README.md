@@ -12,7 +12,7 @@ SoulsTracker tracks deaths automatically for Dark Souls Remastered, Dark Souls I
 
 Elden Ring uses a save file instead: after accepting the Elden Ring notice, choose your local `ER0000.sl2` file and character slot. When the save supports it, the picker shows each character's name and level. SoulsTracker only reads the file after the game saves, so the number can take a moment to update.
 
-Black Myth: Wukong also reads a save file. Choose your local `ArchiveSaveFile.<slot>.sav` file from the Main tab. SoulsTracker reads it only after the game saves, so updates can take a moment. If the selected save is unavailable, the manual controls remain available.
+Black Myth: Wukong reads a local save file. SoulsTracker looks for supported Steam and Epic PC save slots when you select the game. It selects one unambiguous slot automatically; if more than one is found, choose the slot you are streaming. You can always Browse or Rescan from the Main tab. SoulsTracker reads saves only after the game saves, so updates can take a moment.
 
 Bloodborne and Demon Souls are supported too, but their death counters are manual. Hit `+1` when you die, use `-1` for a correction, or set hotkeys if you would rather not click the buttons during a stream.
 
@@ -42,7 +42,7 @@ Automatic tracking is version-sensitive. A game update can change enough that tr
 
 - Read-only game Total Deaths readers for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
 - Read-only Elden Ring Total Deaths from a user-selected `ER0000.sl2` save file and character slot.
-- Read-only Black Myth: Wukong Total Deaths from a user-selected `ArchiveSaveFile.<slot>.sav` file, with manual fallback.
+- Read-only Black Myth: Wukong Total Deaths from discovered or user-selected `ArchiveSaveFile.<slot>.sav` files.
 - Independent manual death counters for Bloodborne and Demon Souls.
 - Game-specific boss checklists with local persistence.
 - Total Deaths and Boss List OBS browser overlays, hosted only on the local machine.

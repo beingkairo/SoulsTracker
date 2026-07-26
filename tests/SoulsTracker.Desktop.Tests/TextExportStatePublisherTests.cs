@@ -91,7 +91,7 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WukongExportUsesItsManualFallbackAfterAnUnavailableReadAndRetainsAValidRuntimeTotal()
+    public async Task WukongExportWritesOnlyValidatedSaveTotals()
     {
         string deathsPath = Path.Combine(root, "wukong-deaths.txt");
         PersistentTrackerState state = new(
@@ -101,7 +101,6 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
             BossProgress.Empty,
             OverlayConfiguration.Default,
             textExports: new TextExportConfiguration(deathsPath, true, null, false),
-            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 1),
             blackMythWukongSave: new BlackMythWukongSaveConfiguration(@"C:\Tracker\ArchiveSaveFile.1.sav"));
         var publisher = new TextExportStatePublisher();
 
@@ -110,36 +109,18 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
         Assert.True(await runtimeWrite.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
 
-        Task<bool> stateWrite = NextWriteAsync(publisher);
-        await publisher.PublishAsync(new TrackerStateChanged(state, TrackerCommandType.IncrementManualBloodborneDeaths));
-        Assert.True(await stateWrite.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
-
-        PersistentTrackerState fallbackState = new(
+        PersistentTrackerState noSaveState = new(
             PersistentTrackerState.CurrentSchemaVersion,
             GameId.BlackMythWukong,
             ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
             BossProgress.Empty,
             OverlayConfiguration.Default,
-            textExports: new TextExportConfiguration(deathsPath, true, null, false),
-            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 1));
-        Task<bool> fallbackWrite = NextWriteAsync(publisher);
-        publisher.PublishRuntimeObservation(fallbackState, RuntimeGameReadResult.WaitingForSaveFile(GameId.BlackMythWukong));
-        Assert.True(await fallbackWrite.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal("Total Deaths: 1", await File.ReadAllTextAsync(deathsPath));
-
-        PersistentTrackerState incrementedFallbackState = new(
-            PersistentTrackerState.CurrentSchemaVersion,
-            GameId.BlackMythWukong,
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-            BossProgress.Empty,
-            OverlayConfiguration.Default,
-            textExports: new TextExportConfiguration(deathsPath, true, null, false),
-            manualBlackMythWukongDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.BlackMythWukong, 2));
-        Task<bool> manualUpdateWrite = NextWriteAsync(publisher);
-        await publisher.PublishAsync(new TrackerStateChanged(incrementedFallbackState, TrackerCommandType.IncrementManualBloodborneDeaths));
-        Assert.True(await manualUpdateWrite.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal("Total Deaths: 2", await File.ReadAllTextAsync(deathsPath));
+            textExports: new TextExportConfiguration(deathsPath, true, null, false));
+        File.Delete(deathsPath);
+        Task<bool> noSaveWrite = NextWriteAsync(publisher);
+        publisher.PublishRuntimeObservation(noSaveState, RuntimeGameReadResult.WaitingForSaveFile(GameId.BlackMythWukong));
+        Assert.True(await noSaveWrite.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(string.Empty, await File.ReadAllTextAsync(deathsPath));
     }
 
     [Fact]

@@ -29,6 +29,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private readonly SerializedTrackerCoordinator coordinator;
     private readonly IEldenRingSaveProfileReader eldenRingSaveProfileReader;
+    private readonly ILocalSaveDiscovery blackMythWukongSaveDiscovery;
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
     private RuntimeGameReaderStatus runtimeReaderStatus;
@@ -82,17 +83,22 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly object bossesSynchronization = new();
     private readonly object filteredBossesSynchronization = new();
     private readonly object eldenRingProfileSlotsSynchronization = new();
+    private readonly object blackMythWukongSaveChoicesSynchronization = new();
+    private long blackMythWukongDiscoveryVersion;
 
-    public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null)
+    public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null, ILocalSaveDiscovery? blackMythWukongSaveDiscovery = null)
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
+        this.blackMythWukongSaveDiscovery = blackMythWukongSaveDiscovery ?? new BlackMythWukongSaveDiscovery();
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
         Bosses.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsBossListEmpty));
         EldenRingProfileSlots = [];
+        BlackMythWukongSaveChoices = [];
         BindingOperations.EnableCollectionSynchronization(Bosses, bossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(FilteredBosses, filteredBossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(EldenRingProfileSlots, eldenRingProfileSlotsSynchronization);
+        BindingOperations.EnableCollectionSynchronization(BlackMythWukongSaveChoices, blackMythWukongSaveChoicesSynchronization);
         BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
     }
 
@@ -299,6 +305,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? EldenRingSaveFileName => state?.EldenRingSave.FileName;
     public bool IsBlackMythWukongSelected => state?.SelectedGameId == GameId.BlackMythWukong;
     public string? BlackMythWukongSaveFileName => state?.BlackMythWukongSave.FileName;
+    public ObservableCollection<DiscoveredLocalSave> BlackMythWukongSaveChoices { get; }
+    public DiscoveredLocalSave? SelectedBlackMythWukongSaveChoice { get; private set; }
+    public string? BlackMythWukongSaveDiscoveryStatus { get; private set; }
+    public bool HasMultipleBlackMythWukongSaveChoices => BlackMythWukongSaveChoices.Count > 1;
     /// <summary>True only when the selected local Elden Ring save is still available for slot selection.</summary>
     public bool CanSelectEldenRingProfile => ControlsEnabled
         && IsEldenRingSelected
@@ -527,8 +537,93 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (!CanSelectEldenRingProfile || !EldenRingProfileSlots.Any(choice => choice.Index == slot.Index)) return;
         await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index), cancellationToken);
     }
-    public Task SetBlackMythWukongSaveFileAsync(string localPath, CancellationToken cancellationToken = default) =>
-        !ControlsEnabled ? Task.CompletedTask : SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
+    public async Task SetBlackMythWukongSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled) return;
+        var reader = new BlackMythWukongSaveDeathReader();
+        reader.Configure(new BlackMythWukongSaveConfiguration(localPath));
+        RuntimeGameReadResult? read = await Task.Run(async () => await reader.ReadAsync(cancellationToken), cancellationToken);
+        if (read?.Status != RuntimeGameReaderStatus.Synced)
+        {
+            BlackMythWukongSaveDiscoveryStatus = "Selected save is unavailable or unsupported.";
+            OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+            return;
+        }
+        await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
+        BlackMythWukongSaveDiscoveryStatus = "Tracking selected save.";
+        OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+    }
+
+    public async Task SelectBlackMythWukongSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled || choice is null || !BlackMythWukongSaveChoices.Contains(choice)) return;
+        await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(choice.LocalPath), cancellationToken);
+        SelectedBlackMythWukongSaveChoice = choice;
+        BlackMythWukongSaveDiscoveryStatus = $"Tracking {choice.Label}";
+        OnPropertyChanged(nameof(SelectedBlackMythWukongSaveChoice));
+        OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+    }
+
+    public async Task RescanBlackMythWukongSavesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsBlackMythWukongSelected) return;
+        long version = Interlocked.Increment(ref blackMythWukongDiscoveryVersion);
+        BlackMythWukongSaveDiscoveryStatus = "Looking for local saves…";
+        OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+        IReadOnlyList<DiscoveredLocalSave> candidates;
+        try
+        {
+            candidates = await Task.Run(async () => await blackMythWukongSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+        catch
+        {
+            if (version == Interlocked.Read(ref blackMythWukongDiscoveryVersion))
+            {
+                BlackMythWukongSaveDiscoveryStatus = "Could not search for local saves. Try Rescan or Browse…";
+                OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+            }
+            return;
+        }
+        if (version != Interlocked.Read(ref blackMythWukongDiscoveryVersion) || !IsBlackMythWukongSelected) return;
+        BlackMythWukongSaveChoices.Clear();
+        foreach (DiscoveredLocalSave candidate in candidates) BlackMythWukongSaveChoices.Add(candidate);
+        OnPropertyChanged(nameof(HasMultipleBlackMythWukongSaveChoices));
+
+        string? configured = state?.BlackMythWukongSave.LocalPath;
+        SelectedBlackMythWukongSaveChoice = candidates.SingleOrDefault(candidate => string.Equals(candidate.LocalPath, configured, StringComparison.OrdinalIgnoreCase));
+        if (configured is not null && !File.Exists(configured))
+        {
+            BlackMythWukongSaveDiscoveryStatus = "Selected save is unavailable.";
+        }
+        else if (SelectedBlackMythWukongSaveChoice is { } selected)
+        {
+            BlackMythWukongSaveDiscoveryStatus = $"Tracking {selected.Label}";
+        }
+        else if (configured is null && candidates.Count == 1)
+        {
+            await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(candidates[0].LocalPath), cancellationToken);
+            if (state?.BlackMythWukongSave.LocalPath is not null)
+            {
+                SelectedBlackMythWukongSaveChoice = candidates[0];
+                BlackMythWukongSaveDiscoveryStatus = $"Tracking {candidates[0].Label}";
+            }
+        }
+        else if (configured is null && candidates.Count > 1)
+        {
+            BlackMythWukongSaveDiscoveryStatus = "Choose the save slot you’re streaming.";
+        }
+        else if (configured is not null)
+        {
+            BlackMythWukongSaveDiscoveryStatus = "Tracking selected save.";
+        }
+        else
+        {
+            BlackMythWukongSaveDiscoveryStatus = "No save found automatically.";
+        }
+        OnPropertyChanged(nameof(SelectedBlackMythWukongSaveChoice));
+        OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+    }
 
     public async Task SetBossListScopeAsync(BossListScopeChoice? scope, CancellationToken cancellationToken = default)
     {
@@ -554,6 +649,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             if (state?.SelectedGameId == GameId.EldenRing)
             {
                 await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+            }
+            if (state?.SelectedGameId == GameId.BlackMythWukong)
+            {
+                await RescanBlackMythWukongSavesAsync(cancellationToken);
             }
             LocalTrackerStateStatus = LocalTrackerStateReadyMessage;
         }
@@ -688,6 +787,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (state?.SelectedGameId == SoulsTracker.Domain.GameId.EldenRing)
         {
             await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+        }
+        if (state?.SelectedGameId == SoulsTracker.Domain.GameId.BlackMythWukong)
+        {
+            await RescanBlackMythWukongSavesAsync(cancellationToken);
         }
     }
 
@@ -1087,7 +1190,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ? BlackMythWukongWaitingForSaveFileMessage
         : GameWaitingForSaveFileMessage;
 
-    private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls || gameId == GameId.BlackMythWukong;
+    private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
 
     private async Task PersistDeathSoundVolumeTextAsync(long version, CancellationToken cancellationToken)
     {
