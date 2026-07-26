@@ -13,11 +13,68 @@ using System.Windows.Media;
 using SoulsTracker.Application;
 using SoulsTracker.Desktop;
 using SoulsTracker.Domain;
+using SoulsTracker.Infrastructure;
 
 namespace SoulsTracker.Desktop.Tests;
 
 public sealed class MainWindowBindingTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedWukongSelectionRestoresTheOneWayBoundCommittedChoice(bool hasCommittedChoice)
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "SoulsTracker.WukongSelection", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        string firstPath = Path.Combine(tempRoot, "ArchiveSaveFile.1.sav");
+        string secondPath = Path.Combine(tempRoot, "ArchiveSaveFile.2.sav");
+        File.WriteAllBytes(firstPath, [1]);
+        File.WriteAllBytes(secondPath, [2]);
+        var first = new DiscoveredLocalSave(firstPath, "Save slot 1");
+        var second = new DiscoveredLocalSave(secondPath, "Save slot 2");
+        string? committedPath = hasCommittedChoice ? firstPath : null;
+        var repository = new FailingSelectionRepository(WukongState(committedPath));
+
+        try
+        {
+            RunOnStaThread(() =>
+            {
+                MainWindow? window = null;
+                var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+                try
+                {
+                    var viewModel = new DesktopTrackerViewModel(coordinator, blackMythWukongSaveDiscovery: new FixedWukongDiscovery(first, second));
+                    viewModel.InitializeAsync().GetAwaiter().GetResult();
+                    window = new MainWindow { DataContext = viewModel };
+                    window.Show();
+                    window.UpdateLayout();
+                    ComboBox selector = Assert.IsType<ComboBox>(window.FindName("BlackMythWukongSaveSelector"));
+                    WaitForDispatcher(() => ReferenceEquals(selector.SelectedItem, hasCommittedChoice ? first : null));
+                    if (hasCommittedChoice) viewModel.BeginBlackMythWukongChange();
+                    repository.FailSaves = true;
+
+                    selector.SelectedItem = second;
+
+                    WaitForDispatcher(
+                        () => ReferenceEquals(selector.SelectedItem, hasCommittedChoice ? first : null) && viewModel.ErrorMessage is not null,
+                        () => $"Rendered: {(selector.SelectedItem as DiscoveredLocalSave)?.Label ?? "<none>"}; committed: {viewModel.SelectedBlackMythWukongSaveChoice?.Label ?? "<none>"}; error: {viewModel.ErrorMessage ?? "<none>"}");
+                    Assert.Equal(committedPath, repository.State.BlackMythWukongSave.LocalPath);
+                    Assert.Same(hasCommittedChoice ? first : null, viewModel.SelectedBlackMythWukongSaveChoice);
+                    Assert.Equal(hasCommittedChoice, viewModel.IsBlackMythWukongChangeMode);
+                }
+                finally
+                {
+                    window?.Close();
+                    coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+            });
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
     [Fact]
     public void WorkspaceTabsSeparateOperationalAndOverlayConfigurationSurfaces()
     {
@@ -1497,6 +1554,38 @@ public sealed class MainWindowBindingTests
         }
 
         throw new InvalidOperationException("Repository root was not found.");
+    }
+
+    private static PersistentTrackerState WukongState(string? localPath) => new(
+        PersistentTrackerState.CurrentSchemaVersion,
+        GameId.BlackMythWukong,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+        BossProgress.Empty,
+        OverlayConfiguration.Default,
+        blackMythWukongSave: new BlackMythWukongSaveConfiguration(localPath));
+
+    private sealed class FixedWukongDiscovery(params DiscoveredLocalSave[] saves) : ILocalSaveDiscovery
+    {
+        public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>(saves);
+    }
+
+    private sealed class FailingSelectionRepository(PersistentTrackerState initialState) : ITrackerStateRepository
+    {
+        public PersistentTrackerState State { get; private set; } = initialState;
+        public bool FailSaves { get; set; }
+
+        public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(TrackerStateLoadResult.Loaded(State));
+
+        public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
+        {
+            if (FailSaves) throw new IOException("fixture persistence failure");
+            State = state;
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class SelectedDs1Repository : ITrackerStateRepository

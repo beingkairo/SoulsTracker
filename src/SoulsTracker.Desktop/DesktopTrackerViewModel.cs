@@ -318,7 +318,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? BlackMythWukongSaveDiscoveryStatus => blackMythWukongSaveDiscoveryStatus;
     public WukongSaveSourceState WukongSaveSourceState { get => wukongSaveSourceState; private set { if (SetField(ref wukongSaveSourceState, value)) NotifyWukongSaveSourceProperties(); } }
     public bool IsBlackMythWukongChangeMode { get => isBlackMythWukongChangeMode; private set { if (SetField(ref isBlackMythWukongChangeMode, value)) NotifyWukongSaveSourceProperties(); } }
-    public bool IsWukongSaveSelectorVisible => IsBlackMythWukongChangeMode || WukongSaveSourceState == WukongSaveSourceState.MultipleCandidates;
+    public bool IsWukongSaveSelectorVisible =>
+        BlackMythWukongSaveChoices.Count > 0
+        && (IsBlackMythWukongChangeMode || WukongSaveSourceState == WukongSaveSourceState.MultipleCandidates);
     public bool IsWukongBrowseVisible => WukongSaveSourceState is WukongSaveSourceState.Scanning or WukongSaveSourceState.NoCandidate or WukongSaveSourceState.MultipleCandidates || IsBlackMythWukongChangeMode;
     public bool IsWukongChangeVisible => !IsBlackMythWukongChangeMode && WukongSaveSourceState is WukongSaveSourceState.AutomaticallySelected or WukongSaveSourceState.PersistedDiscovered or WukongSaveSourceState.CustomSelection or WukongSaveSourceState.UnavailableSelection;
     public bool IsWukongCancelVisible => IsBlackMythWukongChangeMode;

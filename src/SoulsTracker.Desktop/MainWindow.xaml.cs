@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Navigation;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -15,6 +16,7 @@ namespace SoulsTracker.Desktop;
 public partial class MainWindow : Window
 {
     private bool deathSoundVolumeEditorIsActive;
+    private bool isRestoringBlackMythWukongSaveSelection;
 
     public MainWindow()
     {
@@ -181,9 +183,31 @@ public partial class MainWindow : Window
 
     private async void BlackMythWukongSave_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice && DataContext is DesktopTrackerViewModel viewModel)
+        if (isRestoringBlackMythWukongSaveSelection) return;
+        if (sender is System.Windows.Controls.ComboBox selector
+            && e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice
+            && DataContext is DesktopTrackerViewModel viewModel)
         {
             await viewModel.SelectBlackMythWukongSaveChoiceAsync(choice);
+            DiscoveredLocalSave? committedChoice = viewModel.SelectedBlackMythWukongSaveChoice;
+            if (selector.Dispatcher.HasShutdownStarted) return;
+            await selector.Dispatcher.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(selector.SelectedItem, committedChoice)) return;
+                try
+                {
+                    isRestoringBlackMythWukongSaveSelection = true;
+                    BindingOperations.GetBindingExpression(selector, System.Windows.Controls.ComboBox.SelectedItemProperty)?.UpdateTarget();
+                    if (!ReferenceEquals(selector.SelectedItem, committedChoice))
+                    {
+                        selector.SetCurrentValue(System.Windows.Controls.ComboBox.SelectedItemProperty, committedChoice);
+                    }
+                }
+                finally
+                {
+                    isRestoringBlackMythWukongSaveSelection = false;
+                }
+            });
         }
     }
 

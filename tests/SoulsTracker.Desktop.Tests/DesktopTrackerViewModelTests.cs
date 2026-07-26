@@ -858,6 +858,31 @@ public sealed class DesktopTrackerViewModelTests
         Assert.False(harness.ViewModel.IsBlackMythWukongChangeMode);
     }
 
+    [Theory]
+    [InlineData(0, false, false)]
+    [InlineData(1, true, true)]
+    [InlineData(2, true, true)]
+    public async Task BlackMythWukongChangeModeShowsSelectorOnlyForAvailableReplacements(int candidateCount, bool selectorVisible, bool selectorEnabled)
+    {
+        DiscoveredLocalSave[] candidates = Enumerable.Range(1, candidateCount)
+            .Select(index => new DiscoveredLocalSave($@"C:\Tracker\ArchiveSaveFile.{index}.sav", $"Save slot {index}"))
+            .ToArray();
+        await using TestHarness harness = new(
+            WukongState(@"C:\Tracker\ArchiveSaveFile.99.sav"),
+            saveDiscovery: new FixedSaveDiscovery(candidates));
+        await harness.ViewModel.InitializeAsync();
+
+        harness.ViewModel.BeginBlackMythWukongChange();
+
+        Assert.True(harness.ViewModel.IsBlackMythWukongChangeMode);
+        Assert.Equal(selectorVisible, harness.ViewModel.IsWukongSaveSelectorVisible);
+        Assert.Equal(selectorEnabled, harness.ViewModel.IsWukongSaveSelectorEnabled);
+        Assert.True(harness.ViewModel.IsWukongBrowseVisible);
+        Assert.True(harness.ViewModel.IsWukongCancelVisible);
+        Assert.True(harness.ViewModel.ControlsEnabled);
+        Assert.False(harness.ViewModel.IsWukongChangeVisible);
+    }
+
     [Fact]
     public async Task BlackMythWukongChangeModeScanDisablesSelectorAndCancellationRestoresAllVisibleState()
     {
