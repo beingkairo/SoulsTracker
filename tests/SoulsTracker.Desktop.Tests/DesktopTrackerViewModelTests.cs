@@ -154,17 +154,18 @@ public sealed class DesktopTrackerViewModelTests
             eldenRingNoticeAcknowledged: true,
             eldenRingSave: new EldenRingSaveConfiguration("C:\\local-only\\ER0000.sl2", 0));
         var profileReader = new FixedProfileReader([
-            new EldenRingCharacterSlotMetadata(0, IsEmpty: false, "Kairo", 125),
-            new EldenRingCharacterSlotMetadata(1, IsEmpty: true, null, null),
             new EldenRingCharacterSlotMetadata(2, IsEmpty: false, null, 50),
+            new EldenRingCharacterSlotMetadata(1, IsEmpty: true, null, null),
+            new EldenRingCharacterSlotMetadata(0, IsEmpty: false, "Kairo", 125),
         ]);
         await using TestHarness harness = new(state, profileReader);
 
         await harness.ViewModel.InitializeAsync();
 
-        Assert.Equal("Kairo \u00B7 Level 125", harness.ViewModel.EldenRingProfileSlots[0].Label);
-        Assert.Equal("Character 2 \u00B7 Empty", harness.ViewModel.EldenRingProfileSlots[1].Label);
-        Assert.Equal("Character 3 \u00B7 Level 50", harness.ViewModel.EldenRingProfileSlots[2].Label);
+        Assert.Collection(
+            harness.ViewModel.EldenRingProfileSlots,
+            slot => Assert.Equal((2, "Character 3 \u00B7 Level 50"), (slot.Index, slot.Label)),
+            slot => Assert.Equal((0, "Kairo \u00B7 Level 125"), (slot.Index, slot.Label)));
     }
 
     [Fact]
@@ -184,7 +185,9 @@ public sealed class DesktopTrackerViewModelTests
                 OverlayConfiguration.Default,
                 eldenRingNoticeAcknowledged: true,
                 eldenRingSave: new EldenRingSaveConfiguration(savePath, 2));
-            await using TestHarness harness = new(state);
+            await using TestHarness harness = new(state, new FixedProfileReader([
+                new EldenRingCharacterSlotMetadata(2, IsEmpty: false, "Kairo", 125),
+            ]));
 
             Assert.False(harness.ViewModel.ControlsEnabled);
             Assert.False(harness.ViewModel.CanSelectEldenRingProfile);
@@ -217,6 +220,80 @@ public sealed class DesktopTrackerViewModelTests
 
         Assert.True(harness.ViewModel.ControlsEnabled);
         Assert.False(harness.ViewModel.CanSelectEldenRingProfile);
+        Assert.Empty(harness.ViewModel.EldenRingProfileSlots);
+        Assert.Null(harness.ViewModel.SelectedEldenRingProfileSlot);
+    }
+
+    [Fact]
+    public async Task EldenRingCharacterSelectorDoesNotCreateASelectionForEmptyOrStaleSlots()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "SoulsTracker.EldenRingEmptyProfiles", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string savePath = Path.Combine(directory, "ER0000.sl2");
+        await File.WriteAllTextAsync(savePath, "local test file");
+        try
+        {
+            PersistentTrackerState state = new(
+                PersistentTrackerState.CurrentSchemaVersion,
+                GameId.EldenRing,
+                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+                BossProgress.Empty,
+                OverlayConfiguration.Default,
+                eldenRingNoticeAcknowledged: true,
+                eldenRingSave: new EldenRingSaveConfiguration(savePath, 7));
+            await using TestHarness harness = new(state, new FixedProfileReader([
+                new EldenRingCharacterSlotMetadata(0, IsEmpty: true, null, null),
+                new EldenRingCharacterSlotMetadata(1, IsEmpty: true, null, null),
+            ]));
+
+            await harness.ViewModel.InitializeAsync();
+
+            Assert.Empty(harness.ViewModel.EldenRingProfileSlots);
+            Assert.Null(harness.ViewModel.SelectedEldenRingProfileSlot);
+            Assert.False(harness.ViewModel.CanSelectEldenRingProfile);
+            await harness.ViewModel.SetEldenRingProfileSlotAsync(new EldenRingProfileSlotChoice(0));
+            Assert.Equal(7, harness.Repository.State.EldenRingSave.SlotIndex);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task EldenRingCharacterSelectorHandlesAStaleSavedSlotWithoutCreatingAPlaceholder()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "SoulsTracker.EldenRingStaleProfile", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string savePath = Path.Combine(directory, "ER0000.sl2");
+        await File.WriteAllTextAsync(savePath, "local test file");
+        try
+        {
+            PersistentTrackerState state = new(
+                PersistentTrackerState.CurrentSchemaVersion,
+                GameId.EldenRing,
+                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+                BossProgress.Empty,
+                OverlayConfiguration.Default,
+                eldenRingNoticeAcknowledged: true,
+                eldenRingSave: new EldenRingSaveConfiguration(savePath, 7));
+            await using TestHarness harness = new(state, new FixedProfileReader([
+                new EldenRingCharacterSlotMetadata(2, IsEmpty: false, "Kairo", 125),
+            ]));
+
+            await harness.ViewModel.InitializeAsync();
+
+            EldenRingProfileSlotChoice existingSlot = Assert.Single(harness.ViewModel.EldenRingProfileSlots);
+            Assert.Equal(2, existingSlot.Index);
+            Assert.Null(harness.ViewModel.SelectedEldenRingProfileSlot);
+            Assert.True(harness.ViewModel.CanSelectEldenRingProfile);
+            await harness.ViewModel.SetEldenRingProfileSlotAsync(existingSlot);
+            Assert.Equal(2, harness.Repository.State.EldenRingSave.SlotIndex);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]

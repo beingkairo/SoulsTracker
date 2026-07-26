@@ -79,7 +79,7 @@ public sealed record EldenRingCharacterSlotMetadata(int Index, bool IsEmpty, str
     public static IReadOnlyList<EldenRingCharacterSlotMetadata> UnavailableSlots { get; } = CreateUnavailableSlots();
 
     private static EldenRingCharacterSlotMetadata[] CreateUnavailableSlots() =>
-        Enumerable.Range(0, SlotCount).Select(static index => new EldenRingCharacterSlotMetadata(index, IsEmpty: false, Name: null, Level: null)).ToArray();
+        Enumerable.Range(0, SlotCount).Select(static index => new EldenRingCharacterSlotMetadata(index, IsEmpty: true, Name: null, Level: null)).ToArray();
 }
 
 /// <summary>

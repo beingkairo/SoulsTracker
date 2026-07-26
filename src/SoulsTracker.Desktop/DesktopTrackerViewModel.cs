@@ -88,7 +88,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
         Bosses.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsBossListEmpty));
-        EldenRingProfileSlots = new ObservableCollection<EldenRingProfileSlotChoice>(CreateUnavailableEldenRingProfileSlots());
+        EldenRingProfileSlots = [];
         BindingOperations.EnableCollectionSynchronization(Bosses, bossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(FilteredBosses, filteredBossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(EldenRingProfileSlots, eldenRingProfileSlotsSynchronization);
@@ -299,7 +299,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     /// <summary>True only when the selected local Elden Ring save is still available for slot selection.</summary>
     public bool CanSelectEldenRingProfile => ControlsEnabled
         && IsEldenRingSelected
-        && IsAvailableEldenRingSaveFile(state?.EldenRingSave.LocalPath);
+        && IsAvailableEldenRingSaveFile(state?.EldenRingSave.LocalPath)
+        && EldenRingProfileSlots.Count > 0;
     public EldenRingProfileSlotChoice? SelectedEldenRingProfileSlot { get; private set; }
     public bool IsManualGameSelected => state?.SelectedGameId is GameId id && IsManualGame(id);
 
@@ -513,7 +514,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(slot);
-        if (!CanSelectEldenRingProfile) return;
+        if (!CanSelectEldenRingProfile || !EldenRingProfileSlots.Any(choice => choice.Index == slot.Index)) return;
         await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index), cancellationToken);
     }
 
@@ -861,7 +862,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         RefreshDeathSoundStatus();
         GameId? selectedId = state.SelectedGameId;
         SelectedGame = GameChoices.Single(choice => choice.GameId == selectedId);
-        SelectedEldenRingProfileSlot = EldenRingProfileSlots.Single(slot => slot.Index == state.EldenRingSave.SlotIndex);
+        SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == state.EldenRingSave.SlotIndex);
         BossListScopes = BossListScopeChoice.For(GameCatalog.GetRequired(selectedId));
         SelectedBossListScope = BossListScopes.Single(scope => scope.Value == state.BossListScope);
         OnPropertyChanged(nameof(SelectedGame));
@@ -1155,21 +1156,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         EldenRingProfileSlots.Clear();
-        foreach (EldenRingCharacterSlotMetadata slot in metadata.OrderBy(static item => item.Index))
+        foreach (EldenRingCharacterSlotMetadata slot in metadata.Where(static item => !item.IsEmpty))
         {
             EldenRingProfileSlots.Add(EldenRingProfileSlotChoice.FromMetadata(slot));
         }
 
         int selectedIndex = state?.EldenRingSave.SlotIndex ?? EldenRingSaveConfiguration.MinimumSlotIndex;
-        SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == selectedIndex)
-            ?? new EldenRingProfileSlotChoice(selectedIndex);
+        SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == selectedIndex);
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
+        OnPropertyChanged(nameof(CanSelectEldenRingProfile));
     }
-
-    private static EldenRingProfileSlotChoice[] CreateUnavailableEldenRingProfileSlots() =>
-        Enumerable.Range(EldenRingSaveConfiguration.MinimumSlotIndex, EldenRingSaveConfiguration.MaximumSlotIndex + 1)
-            .Select(static index => new EldenRingProfileSlotChoice(index))
-            .ToArray();
 
     private static bool IsAvailableEldenRingSaveFile(string? localPath) =>
         localPath is not null

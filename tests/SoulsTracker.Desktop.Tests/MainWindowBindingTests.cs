@@ -623,6 +623,10 @@ public sealed class MainWindowBindingTests
                 Assert.Contains("Text=\"%\"", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
                 TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
                 Assert.Equal(System.Windows.Automation.AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(status));
+                DataTrigger hiddenWhenEmptyTrigger = Assert.Single(status.Style.Triggers.OfType<DataTrigger>(), trigger => Assert.IsType<Binding>(trigger.Binding).Path?.Path == nameof(DesktopTrackerViewModel.DeathSoundStatus) && trigger.Value is null);
+                Setter hiddenWhenEmptySetter = Assert.Single(hiddenWhenEmptyTrigger.Setters.OfType<Setter>());
+                Assert.Equal(UIElement.VisibilityProperty, hiddenWhenEmptySetter.Property);
+                Assert.Equal(Visibility.Collapsed, hiddenWhenEmptySetter.Value);
                 DataTrigger successTrigger = Assert.Single(status.Style.Triggers.OfType<DataTrigger>(), trigger => Assert.IsType<Binding>(trigger.Binding).Path?.Path == nameof(DesktopTrackerViewModel.IsDeathSoundVolumeUpdateSuccessful) && string.Equals(trigger.Value?.ToString(), "True", StringComparison.OrdinalIgnoreCase));
                 Binding successBinding = Assert.IsType<Binding>(successTrigger.Binding);
                 Assert.Equal(nameof(DesktopTrackerViewModel.IsDeathSoundVolumeUpdateSuccessful), successBinding.Path?.Path);
@@ -660,6 +664,7 @@ public sealed class MainWindowBindingTests
 
                 TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
                 TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
+                Assert.Equal(Visibility.Collapsed, status.Visibility);
                 int savesBeforeVolumeEdit = repository.SaveCount;
                 volume.Focus();
                 volume.Text = "37";
@@ -667,6 +672,7 @@ public sealed class MainWindowBindingTests
                 WaitForDispatcher(() => string.Equals(status.Text, "Volume changed to 37%", StringComparison.Ordinal));
 
                 Assert.Equal("Volume changed to 37%", status.Text);
+                Assert.Equal(Visibility.Visible, status.Visibility);
                 Assert.True(viewModel.IsDeathSoundVolumeUpdateSuccessful);
                 Assert.Equal("#FF70D6A7", ((SolidColorBrush)status.Foreground).Color.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 Assert.Equal("Volume changed to 37%", AutomationProperties.GetName(status));
@@ -676,6 +682,7 @@ public sealed class MainWindowBindingTests
                 WaitForDispatcher(() => string.Equals(status.Text, DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, StringComparison.Ordinal));
 
                 Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, status.Text);
+                Assert.Equal(Visibility.Visible, status.Visibility);
                 Assert.True(viewModel.IsDeathSoundVolumeValidationError);
                 Assert.Equal("#FFFF8C8C", ((SolidColorBrush)status.Foreground).Color.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, AutomationProperties.GetName(status));

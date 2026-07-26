@@ -620,6 +620,9 @@
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
                                         <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DeathSoundStatus}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
                                             <DataTrigger Binding="{Binding IsDeathSoundVolumeUpdateSuccessful}" Value="False">
                                                 <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
                                             </DataTrigger>

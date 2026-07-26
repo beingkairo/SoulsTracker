@@ -72,6 +72,12 @@ public sealed class EldenRingSaveProfileReaderTests : IDisposable
     }
 
     [Fact]
+    public void UnavailableSlotsAreMarkedEmpty()
+    {
+        Assert.All(EldenRingCharacterSlotMetadata.UnavailableSlots, slot => Assert.True(slot.IsEmpty));
+    }
+
+    [Fact]
     public async Task ReaderReadsSharedFixtureWithoutWritingIt()
     {
         string path = WriteFixture(EldenRingProfileFixture.Create(new SlotFixture(0, Active: true, "Seluvis", 80)));
