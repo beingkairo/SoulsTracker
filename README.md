@@ -10,7 +10,7 @@ Install SoulsTracker, then open it before you open OBS. On the **Main** tab, pic
 
 SoulsTracker tracks deaths automatically for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
 
-Elden Ring uses a save file instead: after accepting the Elden Ring notice, choose your local `ER0000.sl2` file and character slot. When the save supports it, the picker shows each character's name and level. SoulsTracker only reads the file after the game saves, so the number can take a moment to update.
+Elden Ring uses a save file instead. After accepting the Elden Ring notice, SoulsTracker looks for local `ER0000.sl2` files automatically. Choose a save only when more than one is found, then select the character you are playing. The character picker shows each available character's name and level. Browse and Rescan remain available for nonstandard locations. SoulsTracker only reads the file after the game saves, so the number can take a moment to update.
 
 Black Myth: Wukong reads a local save file. SoulsTracker looks for supported Steam and Epic PC save slots when you select the game. It selects one unambiguous slot automatically; if more than one is found, choose the slot you are streaming. You can always Browse or Rescan from the Main tab. SoulsTracker reads saves only after the game saves, so updates can take a moment.
 
@@ -41,7 +41,7 @@ Automatic tracking is version-sensitive. A game update can change enough that tr
 ## Features
 
 - Read-only game Total Deaths readers for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, and Sekiro.
-- Read-only Elden Ring Total Deaths from a user-selected `ER0000.sl2` save file and character slot.
+- Read-only Elden Ring Total Deaths from a discovered or user-selected `ER0000.sl2` save file and character slot.
 - Read-only Black Myth: Wukong Total Deaths from discovered or user-selected `ArchiveSaveFile.<slot>.sav` files.
 - Independent manual death counters for Bloodborne and Demon Souls.
 - Game-specific boss checklists with local persistence.

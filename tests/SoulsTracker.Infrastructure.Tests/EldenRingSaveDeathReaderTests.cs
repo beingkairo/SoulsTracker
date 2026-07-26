@@ -38,6 +38,8 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
 
         string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 22)));
         byte[] before = await File.ReadAllBytesAsync(path);
+        reader.Configure(new EldenRingSaveConfiguration(path, EldenRingSaveConfiguration.NoSlotIndex));
+        Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, (await reader.ReadAsync(default))!.Status);
         reader.Configure(new EldenRingSaveConfiguration(path, 0));
 
         RuntimeGameReadResult result = (await reader.ReadAsync(default))!;

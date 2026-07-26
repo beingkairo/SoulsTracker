@@ -362,31 +362,23 @@
                             </ComboBox>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="ELDEN RING SAVE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Set up the local save file and character to track." />
-                                <StackPanel>
-                                    <TextBlock FontWeight="SemiBold" Text="1. Choose save file" />
-                                    <StackPanel Margin="0,5,0,0" Orientation="Horizontal">
-                                        <Button Content="Choose save..." Click="BrowseEldenRingSave_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Elden Ring save file" />
-                                        <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Text="{Binding EldenRingSaveFileName, TargetNullValue=No save file selected.}" AutomationProperties.Name="Selected Elden Ring save file" />
-                                    </StackPanel>
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="SoulsTracker looks for local saves, then lets you choose the character to track." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,6" Text="{Binding EldenRingSaveSourceIdentity}" Visibility="{Binding IsEldenRingChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring selected save" />
+                                <TextBlock Margin="0,0,0,5" FontWeight="SemiBold" Text="1. Choose save" />
+                                <StackPanel Orientation="Horizontal">
+                                    <ComboBox x:Name="EldenRingSaveSelector" Width="190" ItemsSource="{Binding EldenRingSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingSaveChoice, Mode=OneWay}" SelectionChanged="EldenRingSave_SelectionChanged" IsEnabled="{Binding IsEldenRingSaveSelectorEnabled}" Visibility="{Binding IsEldenRingSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save" />
+                                    <Button Margin="8,0,0,0" Content="Browse…" Click="BrowseEldenRingSave_Click" Visibility="{Binding IsEldenRingBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Elden Ring save file" />
+                                    <Button Margin="8,0,0,0" Content="Rescan" Click="RescanEldenRingSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Rescan Elden Ring saves" />
+                                    <Button Margin="8,0,0,0" Content="Change…" Click="ChangeEldenRingSave_Click" Visibility="{Binding IsEldenRingChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Elden Ring save" />
+                                    <Button Margin="8,0,0,0" Content="Cancel" Click="CancelEldenRingChange_Click" Visibility="{Binding IsEldenRingCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Elden Ring save change" />
                                 </StackPanel>
-                                <TextBlock Margin="0,6,0,0" Text="Can't find it? Most saves are here: %APPDATA%\EldenRing\&lt;your Steam ID&gt;\ER0000.sl2">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding EldenRingSaveFileName}" Value="{x:Null}">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" MinHeight="18" Text="{Binding EldenRingSaveDiscoveryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring save discovery status" />
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock FontWeight="SemiBold" Text="2. Choose character" />
                                     <StackPanel Margin="0,5,0,0" Orientation="Horizontal">
                                         <ComboBox Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding CanSelectEldenRingProfile}" AutomationProperties.Name="Elden Ring character slot" />
                                     </StackPanel>
+                                    <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,0" Text="{Binding EldenRingCharacterStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring character selection status" />
                                 </StackPanel>
                             </StackPanel>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsBlackMythWukongSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong save reader setup">

@@ -21,6 +21,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string GameWaitingForActiveCharacterMessage = "Game detected — waiting for active character";
     internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save file";
     internal const string BlackMythWukongWaitingForSaveFileMessage = "Choose a Black Myth: Wukong save file";
+    internal const string EldenRingChooseCharacterMessage = "Choose a character to continue.";
     internal const string GameSyncedMessage = "Synced";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
     internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable — waiting for active character.";
@@ -29,6 +30,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private readonly SerializedTrackerCoordinator coordinator;
     private readonly IEldenRingSaveProfileReader eldenRingSaveProfileReader;
+    private readonly ILocalSaveDiscovery eldenRingSaveDiscovery;
     private readonly ILocalSaveDiscovery blackMythWukongSaveDiscovery;
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
@@ -83,24 +85,32 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly object bossesSynchronization = new();
     private readonly object filteredBossesSynchronization = new();
     private readonly object eldenRingProfileSlotsSynchronization = new();
+    private readonly object eldenRingSaveChoicesSynchronization = new();
     private readonly object blackMythWukongSaveChoicesSynchronization = new();
     private long blackMythWukongDiscoveryVersion;
     private WukongSaveSourceState wukongSaveSourceState;
     private bool isBlackMythWukongChangeMode;
     private string? blackMythWukongSaveDiscoveryStatus;
+    private long eldenRingDiscoveryVersion;
+    private WukongSaveSourceState eldenRingSaveSourceState;
+    private bool isEldenRingChangeMode;
+    private string? eldenRingSaveDiscoveryStatus;
 
-    public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null, ILocalSaveDiscovery? blackMythWukongSaveDiscovery = null)
+    public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null, ILocalSaveDiscovery? blackMythWukongSaveDiscovery = null, ILocalSaveDiscovery? eldenRingSaveDiscovery = null)
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
+        this.eldenRingSaveDiscovery = eldenRingSaveDiscovery ?? new EldenRingSaveDiscovery();
         this.blackMythWukongSaveDiscovery = blackMythWukongSaveDiscovery ?? new BlackMythWukongSaveDiscovery();
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
         Bosses.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsBossListEmpty));
         EldenRingProfileSlots = [];
+        EldenRingSaveChoices = [];
         BlackMythWukongSaveChoices = [];
         BindingOperations.EnableCollectionSynchronization(Bosses, bossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(FilteredBosses, filteredBossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(EldenRingProfileSlots, eldenRingProfileSlotsSynchronization);
+        BindingOperations.EnableCollectionSynchronization(EldenRingSaveChoices, eldenRingSaveChoicesSynchronization);
         BindingOperations.EnableCollectionSynchronization(BlackMythWukongSaveChoices, blackMythWukongSaveChoicesSynchronization);
         BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
     }
@@ -293,6 +303,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 return BlackMythWukongSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
             }
+            if (selectedGameId == GameId.EldenRing && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
+            {
+                if (state?.EldenRingSave.LocalPath is null) return EldenRingSaveDiscoveryStatus ?? GameWaitingForSaveFileMessage;
+                if (state.EldenRingSave.SlotIndex == EldenRingSaveConfiguration.NoSlotIndex) return EldenRingChooseCharacterMessage;
+                return EldenRingSaveDiscoveryStatus ?? GameUnavailableMessage;
+            }
 
             return runtimeReaderStatus switch
             {
@@ -311,6 +327,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsBloodborneSelected => state?.SelectedGameId == GameId.Bloodborne;
     public bool IsEldenRingSelected => state?.SelectedGameId == GameId.EldenRing;
     public string? EldenRingSaveFileName => state?.EldenRingSave.FileName;
+    public ObservableCollection<DiscoveredLocalSave> EldenRingSaveChoices { get; }
+    public DiscoveredLocalSave? SelectedEldenRingSaveChoice { get; private set; }
+    public string? EldenRingSaveDiscoveryStatus => eldenRingSaveDiscoveryStatus;
+    public WukongSaveSourceState EldenRingSaveSourceState { get => eldenRingSaveSourceState; private set { if (SetField(ref eldenRingSaveSourceState, value)) NotifyEldenRingSaveSourceProperties(); } }
+    public bool IsEldenRingChangeMode { get => isEldenRingChangeMode; private set { if (SetField(ref isEldenRingChangeMode, value)) NotifyEldenRingSaveSourceProperties(); } }
+    public bool IsEldenRingSaveSelectorVisible => EldenRingSaveChoices.Count > 0 && (IsEldenRingChangeMode || EldenRingSaveSourceState == WukongSaveSourceState.MultipleCandidates);
+    public bool IsEldenRingSaveSelectorEnabled => ControlsEnabled && EldenRingSaveSourceState != WukongSaveSourceState.Scanning && IsEldenRingSaveSelectorVisible;
+    public bool IsEldenRingBrowseVisible => EldenRingSaveSourceState is WukongSaveSourceState.Scanning or WukongSaveSourceState.NoCandidate or WukongSaveSourceState.MultipleCandidates || IsEldenRingChangeMode;
+    public bool IsEldenRingChangeVisible => !IsEldenRingChangeMode && EldenRingSaveSourceState is WukongSaveSourceState.AutomaticallySelected or WukongSaveSourceState.PersistedDiscovered or WukongSaveSourceState.CustomSelection or WukongSaveSourceState.UnavailableSelection;
+    public bool IsEldenRingCancelVisible => IsEldenRingChangeMode;
+    public string? EldenRingSaveSourceIdentity => EldenRingSaveSourceState == WukongSaveSourceState.CustomSelection && EldenRingSaveFileName is { } custom ? $"Custom save: {custom}" : SelectedEldenRingSaveChoice?.Label;
+    public string? EldenRingCharacterStatus => IsEldenRingSelected && state?.EldenRingSave.LocalPath is not null && SelectedEldenRingProfileSlot is null ? EldenRingChooseCharacterMessage : null;
     public bool IsBlackMythWukongSelected => state?.SelectedGameId == GameId.BlackMythWukong;
     public string? BlackMythWukongSaveFileName => state?.BlackMythWukongSave.FileName;
     public ObservableCollection<DiscoveredLocalSave> BlackMythWukongSaveChoices { get; }
@@ -545,8 +573,100 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task SetEldenRingSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, state?.EldenRingSave.SlotIndex ?? 0), cancellationToken);
-        await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+        if (!await Task.Run(() => EldenRingSaveDiscovery.IsParserValidSave(localPath), cancellationToken))
+        {
+            SetEldenRingSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
+            return;
+        }
+        await CommitEldenRingSaveAsync(localPath, discoveredChoice: null, WukongSaveSourceState.CustomSelection, cancellationToken);
+    }
+
+    public async Task SelectEldenRingSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled || choice is null || !EldenRingSaveChoices.Contains(choice)) return;
+        await CommitEldenRingSaveAsync(choice.LocalPath, choice, WukongSaveSourceState.PersistedDiscovered, cancellationToken);
+    }
+
+    public void BeginEldenRingChange() { if (IsEldenRingSelected) IsEldenRingChangeMode = true; }
+    public void CancelEldenRingChange() => IsEldenRingChangeMode = false;
+
+    public async Task RescanEldenRingSavesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsEldenRingSelected) return;
+        long version = Interlocked.Increment(ref eldenRingDiscoveryVersion);
+        WukongSaveSourceState stableState = EldenRingSaveSourceState;
+        bool stableChangeMode = IsEldenRingChangeMode;
+        string? stableStatus = EldenRingSaveDiscoveryStatus;
+        EldenRingSaveSourceState = WukongSaveSourceState.Scanning;
+        SetEldenRingSaveDiscoveryStatus("Looking for local saves…");
+        IReadOnlyList<DiscoveredLocalSave> candidates;
+        try
+        {
+            candidates = await Task.Run(async () => await eldenRingSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (version == Interlocked.Read(ref eldenRingDiscoveryVersion))
+            {
+                SetEldenRingSaveDiscoveryStatus(stableStatus);
+                EldenRingSaveSourceState = stableState;
+                IsEldenRingChangeMode = stableChangeMode;
+            }
+            return;
+        }
+        catch
+        {
+            if (version == Interlocked.Read(ref eldenRingDiscoveryVersion))
+            {
+                EldenRingSaveSourceState = stableState;
+                IsEldenRingChangeMode = stableChangeMode;
+                SetEldenRingSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…");
+            }
+            return;
+        }
+        if (version != Interlocked.Read(ref eldenRingDiscoveryVersion) || !IsEldenRingSelected) return;
+
+        EldenRingSaveChoices.Clear();
+        foreach (DiscoveredLocalSave candidate in candidates) EldenRingSaveChoices.Add(candidate);
+        string? configured = state?.EldenRingSave.LocalPath;
+        SelectedEldenRingSaveChoice = candidates.SingleOrDefault(candidate => string.Equals(candidate.LocalPath, configured, StringComparison.OrdinalIgnoreCase));
+
+        if (configured is not null && !File.Exists(configured))
+        {
+            SetEldenRingSaveDiscoveryStatus("Selected save is unavailable.");
+            EldenRingSaveSourceState = WukongSaveSourceState.UnavailableSelection;
+            ApplyEldenRingProfileChoices([]);
+        }
+        else if (SelectedEldenRingSaveChoice is not null)
+        {
+            SetEldenRingSaveDiscoveryStatus("Save found automatically");
+            EldenRingSaveSourceState = WukongSaveSourceState.PersistedDiscovered;
+            await RefreshEldenRingProfileSlotsAsync(cancellationToken, clearStaleSelection: true);
+        }
+        else if (configured is null && candidates.Count == 1)
+        {
+            await CommitEldenRingSaveAsync(candidates[0].LocalPath, candidates[0], WukongSaveSourceState.AutomaticallySelected, cancellationToken);
+        }
+        else if (configured is null && candidates.Count > 1)
+        {
+            SetEldenRingSaveDiscoveryStatus("Choose a save to track");
+            EldenRingSaveSourceState = WukongSaveSourceState.MultipleCandidates;
+            ApplyEldenRingProfileChoices([]);
+        }
+        else if (configured is not null && EldenRingSaveDiscovery.IsParserValidSave(configured))
+        {
+            SetEldenRingSaveDiscoveryStatus("Tracking selected save.");
+            EldenRingSaveSourceState = WukongSaveSourceState.CustomSelection;
+            await RefreshEldenRingProfileSlotsAsync(cancellationToken, clearStaleSelection: true);
+        }
+        else
+        {
+            SetEldenRingSaveDiscoveryStatus(configured is null ? "No save found automatically." : "Selected save is unavailable.");
+            EldenRingSaveSourceState = configured is null ? WukongSaveSourceState.NoCandidate : WukongSaveSourceState.UnavailableSelection;
+            ApplyEldenRingProfileChoices([]);
+        }
+        OnPropertyChanged(nameof(SelectedEldenRingSaveChoice));
+        NotifyEldenRingSaveSourceProperties();
     }
     public async Task SetEldenRingProfileSlotAsync(EldenRingProfileSlotChoice slot, CancellationToken cancellationToken = default)
     {
@@ -704,7 +824,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ApplyCommittedState(result.State!);
             if (state?.SelectedGameId == GameId.EldenRing)
             {
-                await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+                await RescanEldenRingSavesAsync(cancellationToken);
             }
             if (state?.SelectedGameId == GameId.BlackMythWukong)
             {
@@ -842,7 +962,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
         if (state?.SelectedGameId == SoulsTracker.Domain.GameId.EldenRing)
         {
-            await RefreshEldenRingProfileSlotsAsync(cancellationToken);
+            await RescanEldenRingSavesAsync(cancellationToken);
         }
         if (state?.SelectedGameId == SoulsTracker.Domain.GameId.BlackMythWukong)
         {
@@ -1058,6 +1178,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         UpdateTotalDeathsText();
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
         NotifyTrackerProperties();
+        NotifyEldenRingSaveSourceProperties();
         NotifyWukongSaveSourceProperties();
         OnPropertyChanged(nameof(TotalDeathsSceneUrl));
         OnPropertyChanged(nameof(BossListSceneUrl));
@@ -1199,6 +1320,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBlackMythWukongSelected));
         OnPropertyChanged(nameof(BlackMythWukongSaveFileName));
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
+        OnPropertyChanged(nameof(EldenRingCharacterStatus));
         OnPropertyChanged(nameof(IsManualGameSelected));
         OnPropertyChanged(nameof(IsCenterBossAlignment));
         OnPropertyChanged(nameof(AreBossMarkerControlsVisible));
@@ -1323,6 +1445,52 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
 
+    private async Task CommitEldenRingSaveAsync(string localPath, DiscoveredLocalSave? discoveredChoice, WukongSaveSourceState sourceState, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<EldenRingProfileSlotChoice> choices = await ReadEldenRingProfileChoicesAsync(localPath, cancellationToken);
+        bool sameFile = string.Equals(state?.EldenRingSave.LocalPath, localPath, StringComparison.OrdinalIgnoreCase);
+        int currentSlot = state?.EldenRingSave.SlotIndex ?? EldenRingSaveConfiguration.NoSlotIndex;
+        int selectedSlot = sameFile && choices.Any(choice => choice.Index == currentSlot)
+            ? currentSlot
+            : choices.Count == 1
+                ? choices[0].Index
+                : EldenRingSaveConfiguration.NoSlotIndex;
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, selectedSlot), cancellationToken);
+        EldenRingSaveConfiguration? committed = state?.EldenRingSave;
+        if (committed is null || !string.Equals(committed.LocalPath, localPath, StringComparison.OrdinalIgnoreCase) || committed.SlotIndex != selectedSlot) return;
+
+        SelectedEldenRingSaveChoice = discoveredChoice;
+        IsEldenRingChangeMode = false;
+        EldenRingSaveSourceState = sourceState;
+        SetEldenRingSaveDiscoveryStatus(sourceState == WukongSaveSourceState.AutomaticallySelected ? "Save found automatically" : discoveredChoice is null ? "Tracking selected save." : $"Tracking {discoveredChoice.Label}");
+        ApplyEldenRingProfileChoices(choices);
+        OnPropertyChanged(nameof(SelectedEldenRingSaveChoice));
+        NotifyEldenRingSaveSourceProperties();
+    }
+
+    private async Task<IReadOnlyList<EldenRingProfileSlotChoice>> ReadEldenRingProfileChoicesAsync(string localPath, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<EldenRingCharacterSlotMetadata> metadata;
+        try
+        {
+            metadata = await eldenRingSaveProfileReader.ReadAsync(new EldenRingSaveConfiguration(localPath, EldenRingSaveConfiguration.NoSlotIndex), cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { metadata = EldenRingCharacterSlotMetadata.UnavailableSlots; }
+        return metadata.Where(static item => !item.IsEmpty).Select(EldenRingProfileSlotChoice.FromMetadata).ToArray();
+    }
+
+    private void ApplyEldenRingProfileChoices(IEnumerable<EldenRingProfileSlotChoice> choices)
+    {
+        EldenRingProfileSlots.Clear();
+        foreach (EldenRingProfileSlotChoice choice in choices) EldenRingProfileSlots.Add(choice);
+        int selectedIndex = state?.EldenRingSave.SlotIndex ?? EldenRingSaveConfiguration.NoSlotIndex;
+        SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == selectedIndex);
+        OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
+        OnPropertyChanged(nameof(CanSelectEldenRingProfile));
+        OnPropertyChanged(nameof(EldenRingCharacterStatus));
+    }
+
     private async Task SaveBlackMythWukongSaveAsync(BlackMythWukongSaveConfiguration configuration, CancellationToken cancellationToken)
     {
         IsBusy = true;
@@ -1331,35 +1499,45 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
 
-    private async Task RefreshEldenRingProfileSlotsAsync(CancellationToken cancellationToken)
+    private async Task RefreshEldenRingProfileSlotsAsync(CancellationToken cancellationToken, bool clearStaleSelection = false)
     {
-        IReadOnlyList<EldenRingCharacterSlotMetadata> metadata;
-        try
+        string? localPath = state?.EldenRingSave.LocalPath;
+        IReadOnlyList<EldenRingProfileSlotChoice> choices = localPath is null ? [] : await ReadEldenRingProfileChoicesAsync(localPath, cancellationToken);
+        ApplyEldenRingProfileChoices(choices);
+        if (clearStaleSelection
+            && localPath is not null
+            && state!.EldenRingSave.SlotIndex != EldenRingSaveConfiguration.NoSlotIndex
+            && SelectedEldenRingProfileSlot is null)
         {
-            metadata = await eldenRingSaveProfileReader.ReadAsync(state?.EldenRingSave ?? EldenRingSaveConfiguration.Default, cancellationToken);
+            await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, EldenRingSaveConfiguration.NoSlotIndex), cancellationToken);
+            ApplyEldenRingProfileChoices(choices);
         }
-        catch (OperationCanceledException) { throw; }
-        catch
-        {
-            metadata = EldenRingCharacterSlotMetadata.UnavailableSlots;
-        }
-
-        EldenRingProfileSlots.Clear();
-        foreach (EldenRingCharacterSlotMetadata slot in metadata.Where(static item => !item.IsEmpty))
-        {
-            EldenRingProfileSlots.Add(EldenRingProfileSlotChoice.FromMetadata(slot));
-        }
-
-        int selectedIndex = state?.EldenRingSave.SlotIndex ?? EldenRingSaveConfiguration.MinimumSlotIndex;
-        SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == selectedIndex);
-        OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
-        OnPropertyChanged(nameof(CanSelectEldenRingProfile));
     }
 
     private static bool IsAvailableEldenRingSaveFile(string? localPath) =>
         localPath is not null
         && string.Equals(Path.GetFileName(localPath), "ER0000.sl2", StringComparison.OrdinalIgnoreCase)
         && File.Exists(localPath);
+
+    private void NotifyEldenRingSaveSourceProperties()
+    {
+        OnPropertyChanged(nameof(IsEldenRingSaveSelectorVisible));
+        OnPropertyChanged(nameof(IsEldenRingSaveSelectorEnabled));
+        OnPropertyChanged(nameof(IsEldenRingBrowseVisible));
+        OnPropertyChanged(nameof(IsEldenRingChangeVisible));
+        OnPropertyChanged(nameof(IsEldenRingCancelVisible));
+        OnPropertyChanged(nameof(EldenRingSaveSourceIdentity));
+        OnPropertyChanged(nameof(EldenRingCharacterStatus));
+        OnPropertyChanged(nameof(RuntimeReaderStatusText));
+    }
+
+    private void SetEldenRingSaveDiscoveryStatus(string? value)
+    {
+        if (string.Equals(eldenRingSaveDiscoveryStatus, value, StringComparison.Ordinal)) return;
+        eldenRingSaveDiscoveryStatus = value;
+        OnPropertyChanged(nameof(EldenRingSaveDiscoveryStatus));
+        OnPropertyChanged(nameof(RuntimeReaderStatusText));
+    }
 
     private void NotifyWukongSaveSourceProperties()
     {

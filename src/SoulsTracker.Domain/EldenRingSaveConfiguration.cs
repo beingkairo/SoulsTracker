@@ -3,18 +3,19 @@ namespace SoulsTracker.Domain;
 /// <summary>Validated, local-only selection for Elden Ring's read-only save reader.</summary>
 public sealed record EldenRingSaveConfiguration
 {
+    public const int NoSlotIndex = -1;
     public const int MinimumSlotIndex = 0;
     public const int MaximumSlotIndex = 9;
 
-    public static EldenRingSaveConfiguration Default { get; } = new(null, MinimumSlotIndex);
+    public static EldenRingSaveConfiguration Default { get; } = new(null, NoSlotIndex);
 
     public EldenRingSaveConfiguration(
         string? localPath,
         int slotIndex)
     {
-        if (slotIndex is < MinimumSlotIndex or > MaximumSlotIndex)
+        if (slotIndex is < NoSlotIndex or > MaximumSlotIndex)
         {
-            throw new ArgumentOutOfRangeException(nameof(slotIndex), "Elden Ring save slots must be between 1 and 10.");
+            throw new ArgumentOutOfRangeException(nameof(slotIndex), "Choose an Elden Ring character slot between 1 and 10, or leave the character unselected.");
         }
 
         if (!string.IsNullOrWhiteSpace(localPath) &&

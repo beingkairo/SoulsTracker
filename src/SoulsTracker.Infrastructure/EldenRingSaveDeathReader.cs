@@ -36,6 +36,10 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
         {
             return RuntimeGameReadResult.WaitingForSaveFile(GameId);
         }
+        if (configuration.SlotIndex == EldenRingSaveConfiguration.NoSlotIndex)
+        {
+            return RuntimeGameReadResult.WaitingForActiveCharacter(GameId);
+        }
 
         SaveFingerprint fingerprint;
         try

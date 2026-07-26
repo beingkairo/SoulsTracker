@@ -16,6 +16,7 @@ namespace SoulsTracker.Desktop;
 public partial class MainWindow : Window
 {
     private bool deathSoundVolumeEditorIsActive;
+    private bool isRestoringEldenRingSaveSelection;
     private bool isRestoringBlackMythWukongSaveSelection;
 
     public MainWindow()
@@ -154,6 +155,51 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
         {
             await viewModel.SetEldenRingSaveFileAsync(dialog.FileName);
+        }
+    }
+
+    private async void RescanEldenRingSaves_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.RescanEldenRingSavesAsync();
+    }
+
+    private void ChangeEldenRingSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.BeginEldenRingChange();
+    }
+
+    private void CancelEldenRingChange_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.CancelEldenRingChange();
+    }
+
+    private async void EldenRingSave_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isRestoringEldenRingSaveSelection) return;
+        if (sender is System.Windows.Controls.ComboBox selector
+            && e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice
+            && DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.SelectEldenRingSaveChoiceAsync(choice);
+            DiscoveredLocalSave? committedChoice = viewModel.SelectedEldenRingSaveChoice;
+            if (selector.Dispatcher.HasShutdownStarted) return;
+            await selector.Dispatcher.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(selector.SelectedItem, committedChoice)) return;
+                try
+                {
+                    isRestoringEldenRingSaveSelection = true;
+                    BindingOperations.GetBindingExpression(selector, System.Windows.Controls.ComboBox.SelectedItemProperty)?.UpdateTarget();
+                    if (!ReferenceEquals(selector.SelectedItem, committedChoice))
+                    {
+                        selector.SetCurrentValue(System.Windows.Controls.ComboBox.SelectedItemProperty, committedChoice);
+                    }
+                }
+                finally
+                {
+                    isRestoringEldenRingSaveSelection = false;
+                }
+            });
         }
     }
 

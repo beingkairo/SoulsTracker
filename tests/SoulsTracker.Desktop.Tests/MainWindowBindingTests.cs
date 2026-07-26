@@ -124,7 +124,7 @@ public sealed class MainWindowBindingTests
             var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
             try
             {
-                var viewModel = new DesktopTrackerViewModel(coordinator);
+                var viewModel = new DesktopTrackerViewModel(coordinator, eldenRingSaveDiscovery: new FixedWukongDiscovery());
                 viewModel.InitializeAsync().GetAwaiter().GetResult();
                 window = new MainWindow { DataContext = viewModel };
                 window.Show();
@@ -200,13 +200,13 @@ public sealed class MainWindowBindingTests
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
-        Assert.Contains("Set up the local save file and character to track.", xaml, StringComparison.Ordinal);
-        Assert.Contains("1. Choose save file", xaml, StringComparison.Ordinal);
+        Assert.Contains("SoulsTracker looks for local saves, then lets you choose the character to track.", xaml, StringComparison.Ordinal);
+        Assert.Contains("1. Choose save", xaml, StringComparison.Ordinal);
         Assert.Contains("2. Choose character", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"Character\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Elden Ring character slot\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Can't find it? Most saves are here: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
-        Assert.Contains("DataTrigger Binding=\"{Binding EldenRingSaveFileName}\" Value=\"{x:Null}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Rescan Elden Ring saves\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Choose Elden Ring save file\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
