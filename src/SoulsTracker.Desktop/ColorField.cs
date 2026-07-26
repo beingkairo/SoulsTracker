@@ -155,7 +155,7 @@ public sealed class ColorField : Grid
 
         ControlTemplate template = new(typeof(System.Windows.Controls.Button)) { VisualTree = border };
         var style = new Style(typeof(System.Windows.Controls.Button));
-        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        style.Setters.Add(new Setter(System.Windows.Controls.Control.TemplateProperty, template));
         return style;
     }
 

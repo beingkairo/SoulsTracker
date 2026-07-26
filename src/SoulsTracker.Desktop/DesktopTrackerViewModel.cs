@@ -639,21 +639,21 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return;
         }
 
-        GameId? selectedGameBeforeSelection = state?.SelectedGameId;
+        SoulsTracker.Domain.GameId? selectedGameBeforeSelection = state?.SelectedGameId;
         if (choice.IsNoGameSelected)
         {
             await SubmitAsync(new ClearSelectedGameCommand(), cancellationToken);
         }
         else
         {
-            await SubmitAsync(new SelectGameCommand(choice.GameId!.Value), cancellationToken);
+            await SubmitAsync(new SelectGameCommand(choice.GameId!), cancellationToken);
         }
         if (state?.SelectedGameId != selectedGameBeforeSelection)
         {
             BossSearchQuery = string.Empty;
         }
 
-        if (state?.SelectedGameId == GameId.EldenRing)
+        if (state?.SelectedGameId == SoulsTracker.Domain.GameId.EldenRing)
         {
             await RefreshEldenRingProfileSlotsAsync(cancellationToken);
         }
