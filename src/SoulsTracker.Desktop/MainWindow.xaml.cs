@@ -169,6 +169,16 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.RescanBlackMythWukongSavesAsync();
     }
 
+    private void ChangeBlackMythWukongSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.BeginBlackMythWukongChange();
+    }
+
+    private void CancelBlackMythWukongChange_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.CancelBlackMythWukongChange();
+    }
+
     private async void BlackMythWukongSave_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice && DataContext is DesktopTrackerViewModel viewModel)

@@ -85,6 +85,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly object eldenRingProfileSlotsSynchronization = new();
     private readonly object blackMythWukongSaveChoicesSynchronization = new();
     private long blackMythWukongDiscoveryVersion;
+    private WukongSaveSourceState wukongSaveSourceState;
+    private bool isBlackMythWukongChangeMode;
 
     public DesktopTrackerViewModel(SerializedTrackerCoordinator coordinator, IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null, ILocalSaveDiscovery? blackMythWukongSaveDiscovery = null)
     {
@@ -286,6 +288,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 return null;
             }
 
+            if (selectedGameId == GameId.BlackMythWukong && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
+            {
+                return BlackMythWukongSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
+            }
+
             return runtimeReaderStatus switch
             {
                 RuntimeGameReaderStatus.WaitingForActiveCharacter => GameWaitingForActiveCharacterMessage,
@@ -309,6 +316,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public DiscoveredLocalSave? SelectedBlackMythWukongSaveChoice { get; private set; }
     public string? BlackMythWukongSaveDiscoveryStatus { get; private set; }
     public bool HasMultipleBlackMythWukongSaveChoices => BlackMythWukongSaveChoices.Count > 1;
+    public WukongSaveSourceState WukongSaveSourceState { get => wukongSaveSourceState; private set { if (SetField(ref wukongSaveSourceState, value)) NotifyWukongSaveSourceProperties(); } }
+    public bool IsBlackMythWukongChangeMode { get => isBlackMythWukongChangeMode; private set { if (SetField(ref isBlackMythWukongChangeMode, value)) NotifyWukongSaveSourceProperties(); } }
+    public bool IsWukongSaveSelectorVisible => IsBlackMythWukongChangeMode || WukongSaveSourceState == WukongSaveSourceState.MultipleCandidates;
+    public bool IsWukongBrowseVisible => WukongSaveSourceState is WukongSaveSourceState.Scanning or WukongSaveSourceState.NoCandidate or WukongSaveSourceState.MultipleCandidates || IsBlackMythWukongChangeMode;
+    public bool IsWukongChangeVisible => !IsBlackMythWukongChangeMode && WukongSaveSourceState is WukongSaveSourceState.AutomaticallySelected or WukongSaveSourceState.PersistedDiscovered or WukongSaveSourceState.CustomSelection or WukongSaveSourceState.UnavailableSelection;
+    public bool IsWukongCancelVisible => IsBlackMythWukongChangeMode;
+    public bool IsWukongSaveSelectorEnabled => ControlsEnabled && IsWukongSaveSelectorVisible && BlackMythWukongSaveChoices.Count > 0;
+    public string? WukongSaveSourceIdentity => WukongSaveSourceState == WukongSaveSourceState.CustomSelection && BlackMythWukongSaveFileName is { } custom ? $"Custom save: {custom}" : SelectedBlackMythWukongSaveChoice?.Label;
     /// <summary>True only when the selected local Elden Ring save is still available for slot selection.</summary>
     public bool CanSelectEldenRingProfile => ControlsEnabled
         && IsEldenRingSelected
@@ -551,6 +566,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
         BlackMythWukongSaveDiscoveryStatus = "Tracking selected save.";
+        IsBlackMythWukongChangeMode = false;
+        WukongSaveSourceState = WukongSaveSourceState.CustomSelection;
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
     }
 
@@ -559,15 +576,19 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (!ControlsEnabled || choice is null || !BlackMythWukongSaveChoices.Contains(choice)) return;
         await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(choice.LocalPath), cancellationToken);
         SelectedBlackMythWukongSaveChoice = choice;
+        IsBlackMythWukongChangeMode = false;
+        WukongSaveSourceState = WukongSaveSourceState.PersistedDiscovered;
         BlackMythWukongSaveDiscoveryStatus = $"Tracking {choice.Label}";
         OnPropertyChanged(nameof(SelectedBlackMythWukongSaveChoice));
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+        OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 
     public async Task RescanBlackMythWukongSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsBlackMythWukongSelected) return;
         long version = Interlocked.Increment(ref blackMythWukongDiscoveryVersion);
+        WukongSaveSourceState = WukongSaveSourceState.Scanning;
         BlackMythWukongSaveDiscoveryStatus = "Looking for local saves…";
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
         IReadOnlyList<DiscoveredLocalSave> candidates;
@@ -595,10 +616,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (configured is not null && !File.Exists(configured))
         {
             BlackMythWukongSaveDiscoveryStatus = "Selected save is unavailable.";
+            WukongSaveSourceState = WukongSaveSourceState.UnavailableSelection;
         }
         else if (SelectedBlackMythWukongSaveChoice is { } selected)
         {
             BlackMythWukongSaveDiscoveryStatus = $"Tracking {selected.Label}";
+            WukongSaveSourceState = WukongSaveSourceState.PersistedDiscovered;
         }
         else if (configured is null && candidates.Count == 1)
         {
@@ -607,23 +630,42 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 SelectedBlackMythWukongSaveChoice = candidates[0];
                 BlackMythWukongSaveDiscoveryStatus = $"Tracking {candidates[0].Label}";
+                WukongSaveSourceState = WukongSaveSourceState.AutomaticallySelected;
             }
         }
         else if (configured is null && candidates.Count > 1)
         {
+            WukongSaveSourceState = WukongSaveSourceState.MultipleCandidates;
             BlackMythWukongSaveDiscoveryStatus = "Choose the save slot you’re streaming.";
         }
         else if (configured is not null)
         {
-            BlackMythWukongSaveDiscoveryStatus = "Tracking selected save.";
+            var reader = new BlackMythWukongSaveDeathReader();
+            reader.Configure(new BlackMythWukongSaveConfiguration(configured));
+            RuntimeGameReadResult? read = await Task.Run(async () => await reader.ReadAsync(cancellationToken), cancellationToken);
+            if (read?.Status == RuntimeGameReaderStatus.Synced)
+            {
+                BlackMythWukongSaveDiscoveryStatus = "Tracking selected save.";
+                WukongSaveSourceState = WukongSaveSourceState.CustomSelection;
+            }
+            else
+            {
+                BlackMythWukongSaveDiscoveryStatus = "Unable to read the selected save.";
+                WukongSaveSourceState = WukongSaveSourceState.UnavailableSelection;
+            }
         }
         else
         {
             BlackMythWukongSaveDiscoveryStatus = "No save found automatically.";
+            WukongSaveSourceState = WukongSaveSourceState.NoCandidate;
         }
         OnPropertyChanged(nameof(SelectedBlackMythWukongSaveChoice));
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+        OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
+
+    public void BeginBlackMythWukongChange() { if (IsBlackMythWukongSelected) IsBlackMythWukongChangeMode = true; }
+    public void CancelBlackMythWukongChange() => IsBlackMythWukongChangeMode = false;
 
     public async Task SetBossListScopeAsync(BossListScopeChoice? scope, CancellationToken cancellationToken = default)
     {
@@ -1304,6 +1346,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         && string.Equals(Path.GetFileName(localPath), "ER0000.sl2", StringComparison.OrdinalIgnoreCase)
         && File.Exists(localPath);
 
+    private void NotifyWukongSaveSourceProperties()
+    {
+        OnPropertyChanged(nameof(IsWukongSaveSelectorVisible));
+        OnPropertyChanged(nameof(IsWukongBrowseVisible));
+        OnPropertyChanged(nameof(IsWukongChangeVisible));
+        OnPropertyChanged(nameof(IsWukongCancelVisible));
+        OnPropertyChanged(nameof(IsWukongSaveSelectorEnabled));
+        OnPropertyChanged(nameof(WukongSaveSourceIdentity));
+    }
+
     private void RefreshDeathSoundStatus()
     {
         // A committed-state refresh can arrive after a routed Save/Enter action. Do not
@@ -1335,6 +1387,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasActiveLegacyImport));
         }
     }
+}
+
+public enum WukongSaveSourceState
+{
+    Scanning,
+    NoCandidate,
+    AutomaticallySelected,
+    MultipleCandidates,
+    PersistedDiscovered,
+    CustomSelection,
+    UnavailableSelection,
 }
 
 public sealed class GameChoice
