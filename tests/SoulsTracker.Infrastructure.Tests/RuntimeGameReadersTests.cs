@@ -26,7 +26,7 @@ public sealed class RuntimeGameReadersTests
     }
 
     [Fact]
-    public async Task CoordinatorClearsPriorObservationWhenSelectionChangesOrReaderIsUnavailable()
+    public async Task CoordinatorRetainsRecentObservationForLoadingGapAndClearsOnSelectionChange()
     {
         var reader = new StubReader(GameId.Ds1, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Ds1, 3, DateTimeOffset.UtcNow)));
         var coordinator = new RuntimeGameReaderCoordinator([reader]);
@@ -35,8 +35,30 @@ public sealed class RuntimeGameReadersTests
         Assert.NotNull(coordinator.CurrentObservation);
         await coordinator.PollAsync(GameId.Ds2, default);
         Assert.Null(coordinator.CurrentObservation);
-        reader.Result = null;
         await coordinator.PollAsync(GameId.Ds1, default);
+        reader.Result = null;
+        RuntimeGameReadResult? unavailable = await coordinator.PollAsync(GameId.Ds1, default);
+        Assert.Equal(RuntimeGameReaderStatus.Unavailable, unavailable!.Status);
+        Assert.Equal(3, unavailable.Observation!.TotalDeaths.Value);
+
+        await coordinator.PollAsync(GameId.Ds2, default);
+        Assert.Null(coordinator.CurrentObservation);
+    }
+
+    [Fact]
+    public async Task CoordinatorClearsExpiredObservationAfterLoadingGracePeriod()
+    {
+        var reader = new StubReader(
+            GameId.Ds1,
+            RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Ds1, 3, DateTimeOffset.UtcNow - TimeSpan.FromSeconds(31))));
+        var coordinator = new RuntimeGameReaderCoordinator([reader]);
+
+        await coordinator.PollAsync(GameId.Ds1, default);
+        reader.Result = null;
+
+        RuntimeGameReadResult? unavailable = await coordinator.PollAsync(GameId.Ds1, default);
+
+        Assert.Null(unavailable);
         Assert.Null(coordinator.CurrentObservation);
     }
 
@@ -321,7 +343,7 @@ public sealed class RuntimeGameReadersTests
     }
 
     [Fact]
-    public async Task SekiroCoordinatorProjectsOnlySelectedObservationAndClearsWhenUnavailable()
+    public async Task SekiroCoordinatorProjectsOnlySelectedObservationDuringShortLoadingGap()
     {
         var reader = new StubReader(GameId.Sekiro, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Sekiro, 10, DateTimeOffset.UtcNow)));
         var coordinator = new RuntimeGameReaderCoordinator([reader]);
@@ -332,7 +354,7 @@ public sealed class RuntimeGameReadersTests
         reader.Result = null;
         await coordinator.PollAsync(GameId.Sekiro, default);
 
-        Assert.Null(coordinator.CurrentObservation);
+        Assert.Equal(GameId.Sekiro, coordinator.CurrentObservation!.GameId);
     }
 
     [Fact]

@@ -66,6 +66,14 @@ public sealed record RuntimeGameReadResult
             observation,
             blackMythWukongSaveMetadata,
             blackMythWukongSavePath);
+
+    /// <summary>
+    /// Reports an unavailable reader while carrying a same-game, presentation-
+    /// only value that was confirmed moments earlier.
+    /// </summary>
+    public static RuntimeGameReadResult Unavailable(GameId gameId, RuntimeGameObservation? lastObservation = null) =>
+        new(gameId, RuntimeGameReaderStatus.Unavailable,
+            lastObservation?.GameId == gameId ? lastObservation : null);
 }
 
 /// <summary>Optional character-identifying details decoded from one validated Wukong archive.</summary>
@@ -77,6 +85,7 @@ public sealed record BlackMythWukongSaveMetadata(
 /// <summary>Coordinates the small set of approved runtime-only game readers.</summary>
 public sealed class RuntimeGameReaderCoordinator
 {
+    private static readonly TimeSpan TransientUnavailableRetention = TimeSpan.FromSeconds(30);
     private readonly Dictionary<GameId, IRuntimeGameDeathReader> readers;
 
     public RuntimeGameReaderCoordinator(IEnumerable<IRuntimeGameDeathReader> readers)
@@ -100,13 +109,27 @@ public sealed class RuntimeGameReaderCoordinator
 
     public event EventHandler<RuntimeGameReadResult?>? ObservationChanged;
 
-    /// <summary>Polls only the selected approved reader and clears stale observations on every unavailable or selection change.</summary>
+    /// <summary>
+    /// Polls only the selected approved reader. A confirmed value remains
+    /// available for a short loading-screen grace period, but never crosses a
+    /// game selection boundary or survives after that bounded period.
+    /// </summary>
     public async ValueTask<RuntimeGameReadResult?> PollAsync(GameId? selectedGameId, CancellationToken cancellationToken)
     {
         RuntimeGameReadResult? result = null;
         if (selectedGameId is not null && readers.TryGetValue(selectedGameId, out IRuntimeGameDeathReader? reader))
         {
             result = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (result is null &&
+            selectedGameId is not null &&
+            CurrentResult is { GameId: var previousGameId, Observation: { } previousObservation } &&
+            previousGameId == selectedGameId &&
+            previousObservation.GameId == selectedGameId &&
+            DateTimeOffset.UtcNow - previousObservation.ObservedAtUtc <= TransientUnavailableRetention)
+        {
+            result = RuntimeGameReadResult.Unavailable(selectedGameId, previousObservation);
         }
 
         if (!Equals(CurrentResult, result))

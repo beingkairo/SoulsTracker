@@ -109,6 +109,13 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
         Assert.True(await runtimeWrite.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
 
+        Task<bool> retainedWrite = NextWriteAsync(publisher);
+        publisher.PublishRuntimeObservation(state, RuntimeGameReadResult.Unavailable(
+            GameId.BlackMythWukong,
+            new RuntimeGameObservation(GameId.BlackMythWukong, 9, DateTimeOffset.UtcNow)));
+        Assert.True(await retainedWrite.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
+
         PersistentTrackerState noSaveState = new(
             PersistentTrackerState.CurrentSchemaVersion,
             GameId.BlackMythWukong,
@@ -139,7 +146,7 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
 
         Assert.True(await TextExportStatePublisher.WriteAsync(state));
         string export = await File.ReadAllTextAsync(bossPath);
-        Assert.Contains("Radahn (Promised Consort)", export, StringComparison.Ordinal);
+        Assert.Contains("Promised Consort Radahn", export, StringComparison.Ordinal);
         Assert.Contains("Blackgaol Knight", export, StringComparison.Ordinal);
         Assert.Equal(43, export.Split(Environment.NewLine, StringSplitOptions.None).Length);
     }

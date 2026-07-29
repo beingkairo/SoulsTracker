@@ -391,6 +391,36 @@ test("total deaths title icon modes and selected game name render safely", async
   await expect(page.getByRole("heading")).toHaveText("DEATHS: 9");
 });
 
+test("total deaths anchors to the fixed browser-source canvas", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 600 });
+  await openOverlay(page, "/overlay/total_deaths");
+  const base = { Title: "DEATHS", FontFamily: "Segoe UI", FontSize: 30, TextColor: "#FFFFFF", AccentColor: "#A78BFA", BackgroundColor: "#15171B", BackgroundOpacity: 88, Padding: 16, CornerRadius: 8, Alignment: "Left" as const };
+  const presentation = (alignment: "Left" | "Center" | "Right", title = "DEATHS") => ({ IsTotalDeathsEnabled: true, ShowGameName: false, IsBossListEnabled: true, BossListVisibilityMode: "All" as const, TotalDeathsCompactTitle: true, TotalDeathsAppearance: { ...base, Title: title, Alignment: alignment }, BossListAppearance: { ...base, Title: "BOSSES" }, BossListDefeatedColor: "#808080", BossListDefeatedTreatment: "Nothing" as const, BossListShowCheckmark: false, BossListCheckmarkAccent: "#A78BFA", BossListMaximumVisibleCount: 25 });
+  const emitCounter = async (sequence: number, alignment: "Left" | "Center" | "Right", title?: string) => emit(page, { SchemaVersion: 1, SequenceNumber: sequence, SelectedGame: { DisplayName: "Sekiro" }, TotalDeaths: { Source: "GameLifetimeReader", Value: 123456 }, Bosses: [], Presentation: presentation(alignment, title) });
+
+  await emitCounter(1, "Left");
+  let box = await page.getByTestId("total-deaths-overlay").boundingBox();
+  expect(box!.x).toBe(0);
+
+  await emitCounter(2, "Center");
+  box = await page.getByTestId("total-deaths-overlay").boundingBox();
+  expect(box).not.toBeNull();
+  const centeredBox = box!;
+  expect(Math.abs((centeredBox.x + centeredBox.width / 2) - 500)).toBeLessThan(1);
+
+  await emitCounter(3, "Right");
+  box = await page.getByTestId("total-deaths-overlay").boundingBox();
+  expect(box).not.toBeNull();
+  const rightBox = box!;
+  expect(Math.abs((rightBox.x + rightBox.width) - 1000)).toBeLessThan(1);
+
+  await emitCounter(4, "Right", "A MUCH LONGER TOTAL DEATHS TITLE");
+  box = await page.getByTestId("total-deaths-overlay").boundingBox();
+  expect(box).not.toBeNull();
+  const longTitleRightBox = box!;
+  expect(Math.abs((longTitleRightBox.x + longTitleRightBox.width) - 1000)).toBeLessThan(1);
+});
+
 test("skull-only Total Deaths keeps the count and inherits applied text effects without altering the skull asset", async ({ page }) => {
   await openOverlay(page, "/overlay/total_deaths?styleVersion=1&outline=true&outlineColor=%23112233&outlineWidth=2&shadow=true&shadowColor=%23445566&shadowX=3&shadowY=4&shadowBlur=5");
   const appearance = { Title: "DEATHS", FontFamily: "Segoe UI", FontSize: 42, TextColor: "#FFFFFF", AccentColor: "#A78BFA", BackgroundColor: "#15171B", BackgroundOpacity: 88, Padding: 16, CornerRadius: 8, Alignment: "Left" };
@@ -409,12 +439,13 @@ test("skull-only Total Deaths keeps the count and inherits applied text effects 
   expect(externalOutline).toBeTruthy();
 });
 
-test("blank overlay titles remove only the title row", async ({ page }) => {
+test("blank Total Deaths title keeps the selected skull-only treatment", async ({ page }) => {
   await openOverlay(page, "/overlay/total_deaths");
   const appearance = { Title: "", FontFamily: "Segoe UI", FontSize: 30, TextColor: "#FFFFFF", AccentColor: "#A78BFA", BackgroundColor: "#15171B", BackgroundOpacity: 88, Padding: 16, CornerRadius: 8, Alignment: "Left" };
   await emit(page, { SchemaVersion: 1, SequenceNumber: 1, SelectedGame: { DisplayName: "Sekiro" }, TotalDeaths: { Source: "GameLifetimeReader", Value: 9 }, Bosses: [], Presentation: { IsTotalDeathsEnabled: true, ShowGameName: false, IsBossListEnabled: true, BossListVisibilityMode: "All", TotalDeathsCompactTitle: true, TotalDeathsTitleIconMode: "SkullOnly", TotalDeathsAppearance: appearance, BossListAppearance: { ...appearance, Title: "" }, BossListDefeatedColor: "#808080", BossListDefeatedTreatment: "Nothing", BossListShowCheckmark: false, BossListCheckmarkAccent: "#A78BFA", BossListMaximumVisibleCount: 25, BossListShowDefeatedSkull: false } });
-  await expect(page.getByRole("heading")).toHaveCount(0);
-  await expect(page.getByTestId("total-deaths-value")).toHaveText("9");
+  await expect(page.getByRole("heading")).toHaveText("9");
+  await expect(page.locator(".overlay-title-skull")).toHaveCount(1);
+  await expect(page.getByTestId("total-deaths-value")).toHaveCount(0);
 
   await openOverlay(page, "/overlay/boss_list");
   await emit(page, { SchemaVersion: 1, SequenceNumber: 1, SelectedGame: { DisplayName: "Sekiro" }, TotalDeaths: { Source: "GameLifetimeReader", Value: 9 }, Bosses: [{ DisplayName: "Boss", DlcLabel: null, IsDefeated: false }], Presentation: { IsTotalDeathsEnabled: true, ShowGameName: false, IsBossListEnabled: true, BossListVisibilityMode: "All", TotalDeathsCompactTitle: true, TotalDeathsTitleIconMode: "Off", TotalDeathsAppearance: appearance, BossListAppearance: { ...appearance, Title: "" }, BossListDefeatedColor: "#808080", BossListDefeatedTreatment: "Nothing", BossListShowCheckmark: false, BossListCheckmarkAccent: "#A78BFA", BossListMaximumVisibleCount: 25, BossListShowDefeatedSkull: false } });

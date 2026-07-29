@@ -890,8 +890,8 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(harness.ViewModel.Bosses.Select(boss => boss.BossId), harness.ViewModel.FilteredBosses.Select(boss => boss.BossId));
 
         harness.ViewModel.BossSearchQuery = "gOdRiCk";
-        BossChoice godrick = Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick");
-        Assert.Equal("Godrick", godrick.DisplayName);
+        BossChoice godrick = Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick the Grafted");
+        Assert.Equal("Godrick the Grafted", godrick.DisplayName);
         Assert.False(harness.ViewModel.IsBossSearchNoResults);
 
         harness.ViewModel.BossSearchQuery = "sHaDoW oF tHe ErDtReE";
@@ -911,8 +911,8 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Same(progressBeforeSearch, harness.Repository.State.BossProgress);
 
         harness.ViewModel.BossSearchQuery = "gOdRiCk";
-        await harness.ViewModel.SetBossDefeatedAsync(Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick"), true);
-        Assert.True(Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick").IsDefeated);
+        await harness.ViewModel.SetBossDefeatedAsync(Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick the Grafted"), true);
+        Assert.True(Assert.Single(harness.ViewModel.FilteredBosses, boss => boss.DisplayName == "Godrick the Grafted").IsDefeated);
         Assert.Equal(savesBeforeSearch + 1, harness.Repository.SaveCount);
     }
 

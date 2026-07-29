@@ -10,6 +10,20 @@ body {
   font-family: "Segoe UI", sans-serif;
 }
 
+/* The counter uses the entire OBS browser-source viewport as its placement
+   canvas. Its panel remains anchored when its title or numeric value changes. */
+#souls-tracker-overlay.souls-tracker-total-deaths-canvas {
+  box-sizing: border-box;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  align-items: flex-start;
+}
+
+#souls-tracker-overlay.souls-tracker-total-deaths-canvas[data-alignment="left"] { justify-content: flex-start; }
+#souls-tracker-overlay.souls-tracker-total-deaths-canvas[data-alignment="center"] { justify-content: center; }
+#souls-tracker-overlay.souls-tracker-total-deaths-canvas[data-alignment="right"] { justify-content: flex-end; }
+
 .souls-tracker-overlay-panel {
   box-sizing: border-box;
   display: inline-flex;

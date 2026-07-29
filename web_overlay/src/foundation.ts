@@ -132,6 +132,10 @@ class OverlayClient {
     }
 
     const panel = panelFor("total-deaths-overlay", snapshot.Presentation.TotalDeathsAppearance);
+    // Alignment places the panel on the fixed browser-source canvas. Keep the
+    // counter copy left-aligned within its own panel for its existing compact
+    // reading behavior.
+    panel.style.textAlign = "left";
     // A selected reader-backed game may have no observation yet. The snapshot
     // represents that safe state as Unavailable with its numeric zero
     // placeholder, which must remain a number in the browser overlay.
@@ -139,9 +143,11 @@ class OverlayClient {
     const inlineTitle = true;
     const titleIcon = snapshot.Presentation.TotalDeathsTitleIconMode;
     const hasTitle = snapshot.Presentation.TotalDeathsAppearance.Title.trim().length > 0;
-    // A blank title intentionally means number-only, regardless of icon mode.
-    // Skull-only is also intentionally separator-free: skull followed by count.
-    if (hasTitle) {
+    const showSkullOnlyHeading = titleIcon === "SkullOnly";
+    // A blank title means number-only except for Skull-only, whose skull is
+    // itself the selected title treatment. Skull-only is separator-free:
+    // skull followed by count.
+    if (hasTitle || showSkullOnlyHeading) {
       const titleText = inlineTitle
         ? titleIcon === "SkullOnly" ? displayValue : `${snapshot.Presentation.TotalDeathsAppearance.Title}: ${displayValue}`
         : snapshot.Presentation.TotalDeathsAppearance.Title;
@@ -152,7 +158,9 @@ class OverlayClient {
     value.className = "overlay-total-deaths";
     value.dataset.testid = "total-deaths-value";
     value.textContent = displayValue;
-    if (!inlineTitle || !hasTitle) panel.append(value);
+    if (!inlineTitle || (!hasTitle && !showSkullOnlyHeading)) panel.append(value);
+    this.target.className = "souls-tracker-total-deaths-canvas";
+    this.target.dataset.alignment = snapshot.Presentation.TotalDeathsAppearance.Alignment.toLowerCase();
     replaceContent(this.target, panel);
   }
 
@@ -169,6 +177,8 @@ class OverlayClient {
     }
 
     const panel = panelFor("boss-list-overlay", snapshot.Presentation.BossListAppearance);
+    this.target.className = "";
+    delete this.target.dataset.alignment;
     if (snapshot.Presentation.BossListAppearance.Title.trim().length > 0) panel.append(heading(snapshot.Presentation.BossListAppearance.Title));
 
     {
@@ -391,7 +401,7 @@ function normalizePresentation(value: OverlayPresentationConfiguration): Overlay
   return { ...value,
     TotalDeathsCompactTitle: true,
     TotalDeathsTitleIconMode: candidate.TotalDeathsTitleIconMode === "PrefixSkull" || candidate.TotalDeathsTitleIconMode === "SkullOnly" ? candidate.TotalDeathsTitleIconMode : "Off",
-    TotalDeathsAppearance: isAppearance(candidate.TotalDeathsAppearance) ? { ...normalizeAppearance(candidate.TotalDeathsAppearance, defaultAppearance), Alignment: "Left" } : defaultAppearance,
+    TotalDeathsAppearance: isAppearance(candidate.TotalDeathsAppearance) ? normalizeAppearance(candidate.TotalDeathsAppearance, defaultAppearance) : defaultAppearance,
     BossListAppearance: isAppearance(candidate.BossListAppearance) ? normalizeAppearance(candidate.BossListAppearance, { ...defaultAppearance, Title: "BOSS LIST" }) : { ...defaultAppearance, Title: "BOSS LIST" },
     BossListDefeatedColor: typeof candidate.BossListDefeatedColor === "string" ? candidate.BossListDefeatedColor : "#8C8C96",
     BossListDefeatedTreatment: candidate.BossListDefeatedTreatment === "Nothing" || candidate.BossListDefeatedTreatment === "Dimmed" || candidate.BossListDefeatedTreatment === "Strikethrough" || candidate.BossListDefeatedTreatment === "Both" ? candidate.BossListDefeatedTreatment : "Nothing",
@@ -438,7 +448,7 @@ function applyStyleFields(presentation: OverlayPresentationConfiguration, route:
     FontSize: bounded("size", raw.FontSize, 12, 96), TextColor: color("textColor", raw.TextColor),
     BackgroundColor: color("backgroundColor", raw.BackgroundColor), BackgroundOpacity: bounded("backgroundOpacity", raw.BackgroundOpacity, 0, 100),
     Padding: route === "boss-list" ? bounded("bossRowSpacing", raw.Padding, 0, 48) : raw.Padding,
-    Alignment: route === "boss-list" && (alignment === "Left" || alignment === "Center" || alignment === "Right") ? alignment : raw.Alignment,
+    Alignment: (alignment === "Left" || alignment === "Center" || alignment === "Right") ? alignment : raw.Alignment,
     OutlineEnabled: boolean("outline", raw.OutlineEnabled), OutlineColor: color("outlineColor", raw.OutlineColor), OutlineWidth: bounded("outlineWidth", raw.OutlineWidth, 0, 8),
     ShadowEnabled: boolean("shadow", raw.ShadowEnabled), ShadowColor: color("shadowColor", raw.ShadowColor), ShadowOffsetX: bounded("shadowX", raw.ShadowOffsetX, -20, 20), ShadowOffsetY: bounded("shadowY", raw.ShadowOffsetY, -20, 20), ShadowBlur: bounded("shadowBlur", raw.ShadowBlur, 0, 20), TextOpacity: bounded("textOpacity", raw.TextOpacity ?? 100, 0, 100), IconColor: color("iconColor", raw.IconColor ?? raw.TextColor),
   };

@@ -24,7 +24,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
 
     internal void PublishRuntimeObservation(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
-        RuntimeGameObservation? observation = result is { Status: RuntimeGameReaderStatus.Synced, Observation: { } candidate }
+        RuntimeGameObservation? observation = result is { Observation: { } candidate }
             ? RuntimeObservationFor(state, candidate)
             : null;
         Volatile.Write(ref runtimeObservation, observation);
