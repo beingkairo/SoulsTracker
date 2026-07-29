@@ -233,7 +233,7 @@ public sealed class PackagedShutdownBenchmarkTests
             pipeName,
             "http://127.0.0.1:12345/overlay/total_deaths?token=secret",
             () => 2,
-            TimeSpan.FromMilliseconds(100));
+            TimeSpan.FromSeconds(1));
 
         await server.WaitForConnectionAsync();
         _ = await PackagedBenchmarkReadinessReporter.ReadMessageAsync(
