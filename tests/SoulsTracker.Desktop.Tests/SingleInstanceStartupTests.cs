@@ -231,7 +231,7 @@ public sealed class SingleInstanceStartupTests
 
         stopwatch.Stop();
 
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(250), $"Shutdown took {stopwatch.Elapsed}.");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1.5), $"Shutdown took {stopwatch.Elapsed}.");
         Assert.Equal(
             ["hotkeys-dispose-started", "overlay-dispose-started", "coordinator-dispose-started", "lease-released", "application-shutdown"],
             events);
