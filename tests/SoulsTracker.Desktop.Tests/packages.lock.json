@@ -128,16 +128,16 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[1.2.0, )"
+          "SoulsTracker.Domain": "[1.2.1, )"
         }
       },
       "soulstracker.desktop": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Web.WebView2": "[1.0.3065.39, )",
-          "SoulsTracker.Application": "[1.2.0, )",
-          "SoulsTracker.Infrastructure": "[1.2.0, )",
-          "SoulsTracker.Overlay": "[1.2.0, )"
+          "SoulsTracker.Application": "[1.2.1, )",
+          "SoulsTracker.Infrastructure": "[1.2.1, )",
+          "SoulsTracker.Overlay": "[1.2.1, )"
         }
       },
       "soulstracker.domain": {
@@ -148,14 +148,14 @@
         "dependencies": {
           "Microsoft.Data.Sqlite.Core": "[10.0.10, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
-          "SoulsTracker.Application": "[1.2.0, )",
-          "SoulsTracker.Domain": "[1.2.0, )"
+          "SoulsTracker.Application": "[1.2.1, )",
+          "SoulsTracker.Domain": "[1.2.1, )"
         }
       },
       "soulstracker.overlay": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Application": "[1.2.0, )"
+          "SoulsTracker.Application": "[1.2.1, )"
         }
       },
       "soulstracker.packagedappshutdownbenchmark": {

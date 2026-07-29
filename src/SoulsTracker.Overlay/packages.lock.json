@@ -5,7 +5,7 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[1.2.0, )"
+          "SoulsTracker.Domain": "[1.2.1, )"
         }
       },
       "soulstracker.domain": {

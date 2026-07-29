@@ -2,6 +2,13 @@
 
 All notable changes to SoulsTracker are documented here.
 
+## 1.2.1 - 2026-07-29
+
+* Fixed the Skull-only Total Deaths icon so it remains visible when the title is blank.
+* Made the Total Deaths browser overlay anchor inside the OBS Browser Source canvas for reliable left, center, and right placement.
+* Kept automatic memory-based death totals visible through brief game loading transitions.
+* Restored Elden Ring boss display names to their canonical forms.
+
 ## 1.2.0 - 2026-07-26
 
 * Added automatic, read-only Elden Ring save discovery, character selection, and lifetime death totals.
