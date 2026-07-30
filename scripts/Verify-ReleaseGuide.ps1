@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $readmePath = Join-Path $root "README.md"
 $releaseGuidePath = Join-Path $root "docs\RELEASE-GETTING-STARTED.md"
-$releaseBodyPath = Join-Path $root "docs\releases\v1.2.1.md"
+$releaseBodyPath = Join-Path $root "docs\releases\v1.2.2.md"
 $releaseWorkflowPath = Join-Path $root ".github\workflows\release.yml"
 
 $readme = Get-Content -Raw -Encoding utf8 $readmePath
@@ -18,9 +18,9 @@ $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "Install SoulsTracker and open it before opening OBS" },
     @{ Path = $readmePath; Content = $readme; Text = "## Disclaimer" },
     @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "Open SoulsTracker before OBS" },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "SoulsTracker v1.2.1" },
+    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "SoulsTracker v1.2.2" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "SoulsTracker is read-only" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "body_path: docs/releases/v1.2.1.md" },
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "body_path: docs/releases/v1.2.2.md" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "installer/Output/SoulsTrackerV1.2.exe" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "artifacts/SoulsTrackerV1.2-portable.zip" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "artifacts/SoulsTrackerV1.2.sbom.spdx.json" },

@@ -2,6 +2,12 @@
 
 All notable changes to SoulsTracker are documented here.
 
+## 1.2.2 - 2026-07-30
+
+* Added missed-death adjustments for Elden Ring, so you can correct the displayed total when the game save omits certain PvP or invasion-style deaths.
+* Shared global hotkeys now work with Elden Ring missed-death adjustments as well as the existing manual counters.
+* Clarified that PvP, invasion-style deaths, and the Great Jar challenge may be omitted from Elden Ring's saved death total.
+
 ## 1.2.1 - 2026-07-29
 
 * Fixed the Skull-only Total Deaths icon so it remains visible when the title is blank.

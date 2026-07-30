@@ -102,7 +102,7 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[1.2.1, )"
+          "SoulsTracker.Domain": "[1.2.2, )"
         }
       },
       "soulstracker.domain": {
@@ -111,7 +111,7 @@
       "soulstracker.overlay": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Application": "[1.2.1, )"
+          "SoulsTracker.Application": "[1.2.2, )"
         }
       }
     }
