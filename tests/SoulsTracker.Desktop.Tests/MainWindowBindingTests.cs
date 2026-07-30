@@ -741,16 +741,65 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void ManualHotkeyGuidanceAndInAppRecorderUseTheApprovedWording()
+    public void GlobalHotkeyGuidanceAndInAppRecorderUseTheApprovedWording()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
         Assert.Contains("Choose a field to record. Enter saves and returns to the main menu; Esc cancels.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Ctrl+Alt plus a key", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageBox.Show", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml.cs")), StringComparison.Ordinal);
-        Assert.Contains("Currently recording input", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Global hotkey recording\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Press the input that you want to use as a hotkey then click enter to save.", xaml, StringComparison.Ordinal);
         Assert.Contains("Press ESC to exit without saving", xaml, StringComparison.Ordinal);
         Assert.Contains("HotkeyRecordingOverlay", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Global hotkey recording\"", xaml, StringComparison.Ordinal);
+        string recordingOverlay = Between(xaml, "x:Name=\"HotkeyRecordingOverlay\"", "x:Name=\"EldenRingNoticeOverlay\"");
+        Assert.DoesNotContain("manual", recordingOverlay, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("elden_ring", "IncrementHotkeyTextBox", "Increment global hotkey")]
+    [InlineData("elden_ring", "DecrementHotkeyTextBox", "Decrement global hotkey")]
+    [InlineData("bloodborne", "IncrementHotkeyTextBox", "Increment global hotkey")]
+    [InlineData("bloodborne", "DecrementHotkeyTextBox", "Decrement global hotkey")]
+    public void SharedGlobalHotkeyRecorderUsesTheSameNeutralAccessibleIdentityForEverySupportedGame(
+        string gameIdValue,
+        string triggerName,
+        string triggerAccessibleName)
+    {
+        GameId gameId = GameId.Parse(gameIdValue);
+        PersistentTrackerState initialState = StateForSelectedGame(gameId);
+
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var coordinator = new SerializedTrackerCoordinator(new TextExportPersistenceRepository(initialState), new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                TextBox trigger = Assert.IsType<TextBox>(window.FindName(triggerName));
+                Grid recorder = Assert.IsType<Grid>(window.FindName("HotkeyRecordingOverlay"));
+                Assert.Equal(triggerAccessibleName, AutomationProperties.GetName(trigger));
+                Assert.DoesNotContain("manual", AutomationProperties.GetName(trigger), StringComparison.OrdinalIgnoreCase);
+
+                Keyboard.Focus(trigger);
+                WaitForDispatcher(() => viewModel.IsHotkeyRecording && recorder.Visibility == Visibility.Visible);
+
+                Assert.Equal("Global hotkey recording", AutomationProperties.GetName(recorder));
+                Assert.DoesNotContain("manual", AutomationProperties.GetName(recorder), StringComparison.OrdinalIgnoreCase);
+                Assert.Contains(FindVisualDescendants<TextBlock>(recorder),
+                    textBlock => string.Equals(textBlock.Text, "Global hotkey recording", StringComparison.Ordinal));
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
     }
 
     [Fact]

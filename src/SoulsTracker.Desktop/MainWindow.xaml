@@ -710,12 +710,12 @@
               Background="#A8000000"
               Visibility="{Binding IsHotkeyRecording, Converter={StaticResource BooleanToVisibilityConverter}}"
               Focusable="True"
-              AutomationProperties.Name="Manual hotkey recording">
+              AutomationProperties.Name="Global hotkey recording">
             <Border Width="430" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="#A78BFA" BorderThickness="1" CornerRadius="8">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="10" Height="10" Margin="0,0,9,0" Fill="#FF4D4D" />
-                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Currently recording input" />
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Global hotkey recording" />
                     </StackPanel>
                     <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="Press the input that you want to use as a hotkey then click enter to save." />
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Press ESC to exit without saving" />
