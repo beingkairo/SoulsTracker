@@ -400,6 +400,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsManualGameSelected => state?.SelectedGameId is GameId id && IsManualGame(id);
 
     public bool CanDecrementManualDeaths => IsManualGameSelected && ManualDeaths > 0 && ControlsEnabled;
+    public bool IsEldenRingMissedDeathAdjustmentAvailable => IsEldenRingSelected
+        && state is not null
+        && state.EldenRingSave.LocalPath is not null
+        && SelectedEldenRingProfileSlot is not null;
+    public bool CanAdjustEldenRingMissedDeaths => IsEldenRingMissedDeathAdjustmentAvailable && ControlsEnabled;
+    public bool CanDecrementEldenRingMissedDeaths => CanAdjustEldenRingMissedDeaths && EldenRingMissedDeaths > 0;
+    public long EldenRingMissedDeaths => state is not null && IsEldenRingMissedDeathAdjustmentAvailable
+        ? state.EldenRingMissedDeathAdjustments.Get(state.EldenRingSave)
+        : 0;
+    public string EldenRingSavedDeathsText => runtimeObservation?.GameId == GameId.EldenRing
+        ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        : "Unavailable";
     public string? TotalDeathsOverlayUrl { get => totalDeathsOverlayUrl; private set { if (SetField(ref totalDeathsOverlayUrl, value)) { OnPropertyChanged(nameof(TotalDeathsSceneUrl)); OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay)); OnPropertyChanged(nameof(TotalDeathsPreviewUri)); } } }
     public string? BossListOverlayUrl { get => bossListOverlayUrl; private set { if (SetField(ref bossListOverlayUrl, value)) { OnPropertyChanged(nameof(BossListSceneUrl)); OnPropertyChanged(nameof(BossListSceneUrlDisplay)); OnPropertyChanged(nameof(BossListPreviewUri)); } } }
     /// <summary>Each generated URL contains only its own bounded, applied presentation values.</summary>
@@ -531,6 +543,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         UpdateTotalDeathsText();
+        OnPropertyChanged(nameof(EldenRingSavedDeathsText));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 
@@ -1126,6 +1139,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ? Task.CompletedTask
             : SubmitAsync(new DecrementManualBloodborneDeathsCommand(), cancellationToken);
 
+    public Task IncrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
+        !CanAdjustEldenRingMissedDeaths
+            ? Task.CompletedTask
+            : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: true), cancellationToken);
+
+    public Task DecrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
+        !CanDecrementEldenRingMissedDeaths
+            ? Task.CompletedTask
+            : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: false), cancellationToken);
+
     public Task SetBossDefeatedAsync(BossChoice? boss, bool isDefeated, CancellationToken cancellationToken = default) =>
         boss is null || state is null || !ControlsEnabled
             ? Task.CompletedTask
@@ -1202,7 +1225,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 ApplyCommittedState(result.CommittedState);
             }
 
-            if (command is IncrementManualBloodborneDeathsCommand && result.Status is TrackerCommandExecutionStatus.Applied or TrackerCommandExecutionStatus.DeliveryFailed)
+            bool isConfirmedIncrement = command is IncrementManualBloodborneDeathsCommand ||
+                command is AdjustEldenRingMissedDeathsCommand { Increment: true };
+            bool wasPersisted = result.Status is TrackerCommandExecutionStatus.Applied or TrackerCommandExecutionStatus.DeliveryFailed;
+            if (isConfirmedIncrement && wasPersisted)
             {
                 deathSoundPlayer?.Play(state!.DeathSound);
             }
@@ -1236,6 +1262,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             InvalidateWukongOperations();
         }
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
+        EldenRingSaveConfiguration? previousEldenRingSave = state?.EldenRingSave;
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
         if (state.SelectedGameId != GameId.BlackMythWukong ||
             !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase))
@@ -1250,6 +1277,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 ? RuntimeGameReaderStatus.WaitingForSaveFile
                 : RuntimeGameReaderStatus.Unavailable;
             runtimeReaderGameId = blackMythWukongSaveIsUnconfigured ? GameId.BlackMythWukong : null;
+        }
+        else if (state.SelectedGameId == GameId.EldenRing && previousEldenRingSave != state.EldenRingSave)
+        {
+            runtimeObservation = null;
+            runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
+            runtimeReaderGameId = GameId.EldenRing;
         }
         IsTotalDeathsOverlayEnabled = state.OverlayConfiguration.TotalDeaths.IsEnabled;
         ShowTotalDeathsGameName = state.OverlayConfiguration.TotalDeaths.ShowGameName;
@@ -1313,8 +1346,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         GameId selectedId = state.SelectedGameId;
-        TotalDeathsText = runtimeObservation?.GameId == selectedId
-            ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        long? combined = TotalDeathsDisplayProjection.Combine(state, runtimeObservation?.GameId == selectedId ? runtimeObservation : null);
+        TotalDeathsText = combined.HasValue
+            ? combined.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : IsManualGame(selectedId)
                 ? ManualDeaths.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForActiveCharacter
@@ -1442,6 +1476,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBossMarkerSelected));
         OnPropertyChanged(nameof(ShowBossMarkerColor));
         OnPropertyChanged(nameof(CanDecrementManualDeaths));
+        OnPropertyChanged(nameof(IsEldenRingMissedDeathAdjustmentAvailable));
+        OnPropertyChanged(nameof(CanAdjustEldenRingMissedDeaths));
+        OnPropertyChanged(nameof(CanDecrementEldenRingMissedDeaths));
+        OnPropertyChanged(nameof(EldenRingMissedDeaths));
+        OnPropertyChanged(nameof(EldenRingSavedDeathsText));
         OnPropertyChanged(nameof(PresentationControlsEnabled));
         OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
         OnPropertyChanged(nameof(DeathSoundFileName));

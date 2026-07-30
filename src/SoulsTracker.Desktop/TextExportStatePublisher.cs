@@ -15,9 +15,13 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
 
     public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
     {
+        if (notification.CommandType == TrackerCommandType.UpdateEldenRingSaveConfiguration)
+        {
+            Volatile.Write(ref runtimeObservation, null);
+        }
         RuntimeGameObservation? observation = RuntimeObservationFor(notification.State, Volatile.Read(ref runtimeObservation));
         if (observation is null) Volatile.Write(ref runtimeObservation, null);
-        long? displayedTotal = observation?.TotalDeaths.Value;
+        long? displayedTotal = TotalDeathsDisplayProjection.Combine(notification.State, observation);
         QueueWrite(notification.State, displayedTotal);
         return Task.CompletedTask;
     }
@@ -28,7 +32,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
             ? RuntimeObservationFor(state, candidate)
             : null;
         Volatile.Write(ref runtimeObservation, observation);
-        QueueWrite(state, observation?.TotalDeaths.Value);
+        QueueWrite(state, TotalDeathsDisplayProjection.Combine(state, observation));
     }
 
     private static RuntimeGameObservation? RuntimeObservationFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
@@ -44,6 +48,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
 
     internal static async Task<bool> WriteAsync(PersistentTrackerState state, long? displayedTotal)
     {
+        displayedTotal ??= TotalDeathsDisplayProjection.Combine(state, observation: null);
         TextExportConfiguration config = state.TextExports;
         bool succeeded = true;
         bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || displayedTotal.HasValue;

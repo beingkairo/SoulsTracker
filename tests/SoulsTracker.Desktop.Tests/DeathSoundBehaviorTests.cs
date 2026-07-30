@@ -1,7 +1,9 @@
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
+using System.Buffers.Binary;
 using System.IO;
+using System.Text;
 
 namespace SoulsTracker.Desktop.Tests;
 
@@ -30,6 +32,40 @@ public sealed class DeathSoundBehaviorTests
             Assert.Equal(1, player.Count);
         }
         finally { File.Delete(sound); }
+    }
+
+    [Fact]
+    public async Task EldenRingMissedDeathSoundPlaysOnlyAfterAPersistedAddition()
+    {
+        string sound = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        string saveDirectory = Path.Combine(Path.GetTempPath(), "SoulsTrackerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(saveDirectory);
+        string savePath = Path.Combine(saveDirectory, "ER0000.sl2");
+        await File.WriteAllBytesAsync(sound, []);
+        await File.WriteAllBytesAsync(savePath, CreateEldenRingSave(1, "Kairo", 40));
+        try
+        {
+            var save = new EldenRingSaveConfiguration(savePath, 1);
+            PersistentTrackerState state = new(1, GameId.EldenRing, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty,
+                OverlayConfiguration.Default, deathSound: new DeathSoundConfiguration(sound, true, 100), eldenRingNoticeAcknowledged: true, eldenRingSave: save);
+            var repository = new MemoryRepository(state);
+            await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            var viewModel = new DesktopTrackerViewModel(coordinator, new FixedProfileReader([new EldenRingCharacterSlotMetadata(1, false, "Kairo", 40)]));
+            var player = new RecordingPlayer();
+            viewModel.ConfigureDeathSoundPlayback(player);
+            await viewModel.InitializeAsync();
+            Assert.True(viewModel.CanAdjustEldenRingMissedDeaths);
+
+            repository.FailSaves = true;
+            await viewModel.IncrementEldenRingMissedDeathsAsync();
+            Assert.Equal(0, player.Count);
+            repository.FailSaves = false;
+            Assert.True(viewModel.CanAdjustEldenRingMissedDeaths);
+            await viewModel.IncrementEldenRingMissedDeathsAsync();
+            await viewModel.DecrementEldenRingMissedDeathsAsync();
+            Assert.Equal(1, player.Count);
+        }
+        finally { File.Delete(sound); Directory.Delete(saveDirectory, recursive: true); }
     }
 
     [Fact]
@@ -126,6 +162,25 @@ public sealed class DeathSoundBehaviorTests
         public void Play(DeathSoundConfiguration configuration) { Count++; LastConfiguration = configuration; }
         public void RaiseEnded() => PlaybackEnded?.Invoke(this, EventArgs.Empty);
         public void RaiseFailed() => PlaybackFailed?.Invoke(this, EventArgs.Empty);
+    }
+    private sealed class FixedProfileReader(IReadOnlyList<EldenRingCharacterSlotMetadata> slots) : IEldenRingSaveProfileReader
+    {
+        public ValueTask<IReadOnlyList<EldenRingCharacterSlotMetadata>> ReadAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken) => ValueTask.FromResult(slots);
+    }
+    private static byte[] CreateEldenRingSave(int index, string name, int level)
+    {
+        const int headerSize = 0x40, entryHeaderSize = 0x20, entryIndex = 10, dataOffset = 0x1000, entrySize = 0x5000, summaryOffset = 0x1964, profileSize = 0x24C;
+        byte[] file = new byte[dataOffset + entrySize];
+        "BND4"u8.CopyTo(file);
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(0x0C), 11);
+        int header = headerSize + entryIndex * entryHeaderSize;
+        BinaryPrimitives.WriteUInt64LittleEndian(file.AsSpan(header + 0x08), entrySize);
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(header + 0x10), dataOffset);
+        file[dataOffset + summaryOffset + index] = 1;
+        int profile = dataOffset + summaryOffset + 10 + index * profileSize;
+        Encoding.Unicode.GetBytes(name).AsSpan().CopyTo(file.AsSpan(profile, 32));
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(profile + 0x22), (uint)level);
+        return file;
     }
     private sealed class RecordingMediaFactory : ILocalDeathSoundMediaFactory { public List<RecordingMedia> Created { get; } = []; public ILocalDeathSoundMedia Create() { var media = new RecordingMedia(); Created.Add(media); return media; } }
     private sealed class RecordingMedia : ILocalDeathSoundMedia

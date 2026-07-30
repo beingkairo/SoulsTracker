@@ -12,6 +12,10 @@ public sealed class OverlayStateChangePublisher : ITrackerStateChangePublisher
     public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
     {
         service?.Publish(notification.State);
+        if (notification.CommandType == TrackerCommandType.UpdateEldenRingSaveConfiguration)
+        {
+            service?.PublishRuntimeObservation(null);
+        }
         return Task.CompletedTask;
     }
 }

@@ -91,6 +91,24 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EldenRingExportUsesTheCombinedSavedAndMissedDeaths()
+    {
+        string deathsPath = Path.Combine(root, "elden-ring-adjusted-deaths.txt");
+        var save = new EldenRingSaveConfiguration("C:\\local-only\\ER0000.sl2", 1);
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion, GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(deathsPath, true, null, false), eldenRingNoticeAcknowledged: true,
+            eldenRingSave: save, eldenRingMissedDeathAdjustments: EldenRingMissedDeathAdjustments.Empty.Increment(save));
+
+        var publisher = new TextExportStatePublisher();
+        Task<bool> write = NextWriteAsync(publisher);
+        publisher.PublishRuntimeObservation(state, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.EldenRing, 203, DateTimeOffset.UtcNow)));
+        Assert.True(await write.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 204", await File.ReadAllTextAsync(deathsPath));
+    }
+
+    [Fact]
     public async Task WukongExportWritesOnlyValidatedSaveTotals()
     {
         string deathsPath = Path.Combine(root, "wukong-deaths.txt");

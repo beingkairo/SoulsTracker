@@ -170,6 +170,16 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.IncrementManualDeathsAsync();
     }
 
+    private async void IncrementEldenRingMissedDeaths_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.IncrementEldenRingMissedDeathsAsync();
+    }
+
+    private async void DecrementEldenRingMissedDeaths_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.DecrementEldenRingMissedDeathsAsync();
+    }
+
     private async void DecrementDeaths_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.DecrementManualDeathsAsync();

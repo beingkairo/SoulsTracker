@@ -27,7 +27,8 @@ public sealed class PersistentTrackerState
         eldenRingNoticeAcknowledged: false,
         EldenRingSaveConfiguration.Default,
         BossListScope.AllBosses,
-        BlackMythWukongSaveConfiguration.Default);
+        BlackMythWukongSaveConfiguration.Default,
+        EldenRingMissedDeathAdjustments.Empty);
 
     /// <summary>
     /// Initializes validated persisted tracker state.
@@ -47,7 +48,8 @@ public sealed class PersistentTrackerState
         bool eldenRingNoticeAcknowledged = false,
         EldenRingSaveConfiguration? eldenRingSave = null,
         BossListScope bossListScope = BossListScope.AllBosses,
-        BlackMythWukongSaveConfiguration? blackMythWukongSave = null)
+        BlackMythWukongSaveConfiguration? blackMythWukongSave = null,
+        EldenRingMissedDeathAdjustments? eldenRingMissedDeathAdjustments = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -77,6 +79,7 @@ public sealed class PersistentTrackerState
         TextExports = textExports ?? TextExportConfiguration.Default;
         EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
         EldenRingSave = eldenRingSave ?? EldenRingSaveConfiguration.Default;
+        EldenRingMissedDeathAdjustments = eldenRingMissedDeathAdjustments ?? EldenRingMissedDeathAdjustments.Empty;
         BossListScope = BossCatalogDisplayFilter.NormalizeScope(GameCatalog.GetRequired(selectedGameId), bossListScope);
     }
 
@@ -128,6 +131,9 @@ public sealed class PersistentTrackerState
 
     /// <summary>Local configuration for the separate read-only Elden Ring save reader.</summary>
     public EldenRingSaveConfiguration EldenRingSave { get; }
+
+    /// <summary>Gets local, per-save and per-character Elden Ring missed-death additions.</summary>
+    public EldenRingMissedDeathAdjustments EldenRingMissedDeathAdjustments { get; }
 
     /// <summary>Gets the persisted scope shared by checklist, overlay, preview, and TXT export.</summary>
     public BossListScope BossListScope { get; }

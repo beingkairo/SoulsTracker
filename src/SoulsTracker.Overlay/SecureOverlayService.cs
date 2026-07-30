@@ -189,6 +189,11 @@ public sealed class SecureOverlayService : IAsyncDisposable
                 : state.SelectedGameId == GameId.BlackMythWukong
                     ? TotalDeathsDisplayValue.UnavailableForSelectedGame(state.SelectedGameId)
                 : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
+        long? combinedTotal = TotalDeathsDisplayProjection.Combine(state, CanUseRuntimeObservation(state, observation) ? observation : null);
+        if (combinedTotal.HasValue && deaths.GameId == GameId.EldenRing)
+        {
+            deaths = TotalDeathsDisplayValue.WithNumericValue(deaths, combinedTotal.Value);
+        }
         IEnumerable<OverlayBossEntry> bosses = BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.BossListScope)
                 .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
         return new OverlaySnapshot(

@@ -8,6 +8,29 @@ namespace SoulsTracker.Application.Tests;
 public sealed class TrackerStateTransitionServiceTests
 {
     private static readonly string[] TransitionSourceFiles = ["TrackerCommands.cs", "TrackerTransitionResult.cs", "TrackerStateTransitionService.cs"];
+
+    [Fact]
+    public void EldenRingMissedDeathAdjustmentPersistsAcrossReaderRefreshesAndCannotBecomeNegative()
+    {
+        var save = new EldenRingSaveConfiguration("C:\\Saves\\ER0000.sl2", 1);
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true,
+            eldenRingSave: save);
+
+        TrackerTransitionResult incremented = TrackerStateTransitionService.Apply(state, new AdjustEldenRingMissedDeathsCommand(Increment: true));
+        TrackerTransitionResult decremented = TrackerStateTransitionService.Apply(incremented.State, new AdjustEldenRingMissedDeathsCommand(Increment: false));
+        TrackerTransitionResult atZero = TrackerStateTransitionService.Apply(decremented.State, new AdjustEldenRingMissedDeathsCommand(Increment: false));
+
+        Assert.Equal(1, incremented.State.EldenRingMissedDeathAdjustments.Get(save));
+        Assert.Equal(205, TotalDeathsDisplayProjection.Combine(incremented.State, new RuntimeGameObservation(GameId.EldenRing, 204, DateTimeOffset.UtcNow)));
+        Assert.Equal(0, decremented.State.EldenRingMissedDeathAdjustments.Get(save));
+        Assert.False(atZero.StateChanged);
+    }
     [Theory]
     [InlineData("ds1")]
     [InlineData("ds2")]

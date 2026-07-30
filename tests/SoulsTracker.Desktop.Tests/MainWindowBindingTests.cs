@@ -341,6 +341,19 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void EldenRingMissedDeathControlsAreAccessibleAndExplainTheSavedAndAddedTotals()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+
+        Assert.Contains("Some special red-sign duels, such as the Great Jar challenge, may be excluded from Elden Ring's saved death total. Add any missed deaths here.", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Elden Ring saved deaths\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Elden Ring added deaths\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Add Elden Ring missed death\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Remove Elden Ring missed death\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanDecrementEldenRingMissedDeaths}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EldenRingChecklistFiltersLiveOnlyInTheBossesHeader()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));

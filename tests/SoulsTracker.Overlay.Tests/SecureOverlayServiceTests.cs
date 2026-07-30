@@ -193,6 +193,25 @@ public sealed class SecureOverlayServiceTests
     }
 
     [Fact]
+    public async Task EldenRingOverlayUsesTheCombinedSavedAndMissedDeaths()
+    {
+        var save = new EldenRingSaveConfiguration("C:\\local-only\\ER0000.sl2", 1);
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion, GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: save,
+            eldenRingMissedDeathAdjustments: EldenRingMissedDeathAdjustments.Empty.Increment(save));
+        var repository = new MemoryRepository(state);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        await using var service = new SecureOverlayService(coordinator, new TestEndpointAccessFactory());
+        await service.StartAsync();
+        service.PublishRuntimeObservation(new RuntimeGameObservation(GameId.EldenRing, 203, DateTimeOffset.UtcNow));
+
+        using JsonDocument document = JsonDocument.Parse(await ReceiveSnapshotAsync(service));
+        Assert.Equal(204, document.RootElement.GetProperty("TotalDeaths").GetProperty("Value").GetInt64());
+    }
+
+    [Fact]
     public async Task WukongWithoutAConfiguredSavePublishesNoNumericFallback()
     {
         PersistentTrackerState state = new(

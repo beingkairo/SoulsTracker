@@ -119,6 +119,14 @@ public sealed class TotalDeathsDisplayValue
             runtimeObservation.TotalDeaths.Value);
     }
 
+    /// <summary>Creates a display value with a locally combined numeric total.</summary>
+    public static TotalDeathsDisplayValue WithNumericValue(TotalDeathsDisplayValue value, long numericValue)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentOutOfRangeException.ThrowIfNegative(numericValue);
+        return new TotalDeathsDisplayValue(value.Source, value.GameId, numericValue);
+    }
+
     /// <summary>
     /// Gets the explicit availability and source status.
     /// </summary>
@@ -439,10 +447,12 @@ public sealed class OverlaySnapshot
         switch (totalDeaths.Source)
         {
             case TotalDeathsDisplaySource.Unavailable:
-                if (totalDeaths.GameId != selectedDefinition.Id || (totalDeaths.Value is not null && totalDeaths.Value != 0))
+                if (totalDeaths.GameId != selectedDefinition.Id ||
+                    totalDeaths.Value is < 0 ||
+                    (selectedDefinition.Id != GameId.EldenRing && totalDeaths.Value is not null && totalDeaths.Value != 0))
                 {
                     throw new ArgumentException(
-                        "Unavailable Total Deaths for a selected game must use its numeric zero placeholder.",
+                        "Unavailable Total Deaths for a selected game must use its numeric placeholder.",
                         nameof(totalDeaths));
                 }
 

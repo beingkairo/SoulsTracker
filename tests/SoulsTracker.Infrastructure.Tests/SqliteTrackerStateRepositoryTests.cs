@@ -111,6 +111,29 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EldenRingMissedDeathAdjustmentsRoundTripPerSaveAndCharacter()
+    {
+        var first = new EldenRingSaveConfiguration("C:\\local-only\\ER0000.sl2", 1);
+        var otherCharacter = new EldenRingSaveConfiguration("C:\\local-only\\ER0000.sl2", 2);
+        var adjustments = EldenRingMissedDeathAdjustments.Empty.Increment(first).Increment(first);
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion, GameId.EldenRing,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: first, eldenRingMissedDeathAdjustments: adjustments);
+
+        await using (var repository = new SqliteTrackerStateRepository(root, "elden-adjustments.db", new ReversingProtector()))
+        {
+            await repository.LoadAsync();
+            await repository.SaveAsync(configured);
+        }
+
+        await using var reopened = new SqliteTrackerStateRepository(root, "elden-adjustments.db", new ReversingProtector());
+        PersistentTrackerState restored = (await reopened.LoadAsync()).State!;
+        Assert.Equal(2, restored.EldenRingMissedDeathAdjustments.Get(first));
+        Assert.Equal(0, restored.EldenRingMissedDeathAdjustments.Get(otherCharacter));
+    }
+
+    [Fact]
     public async Task BlackMythWukongSaveSelectionRoundTripsLocally()
     {
         const string savePath = "C:\\local-only\\ArchiveSaveFile.1.sav";

@@ -454,6 +454,16 @@
                                 <Button Width="78" Click="IncrementDeaths_Click" IsEnabled="{Binding ControlsEnabled}" Content="+1" AutomationProperties.Name="Increase manual deaths" />
                                 <Button Width="78" Margin="8,0,0,0" Click="DecrementDeaths_Click" IsEnabled="{Binding CanDecrementManualDeaths}" Content="−1" AutomationProperties.Name="Decrease manual deaths" />
                             </StackPanel>
+                            <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingMissedDeathAdjustmentAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring missed deaths adjustment">
+                                <TextBlock Style="{StaticResource PanelTitle}" Text="MISSED DEATHS" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,0" Text="Some special red-sign duels, such as the Great Jar challenge, may be excluded from Elden Ring's saved death total. Add any missed deaths here." TextWrapping="Wrap" />
+                                <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Saved deaths"/><TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding EldenRingSavedDeathsText}" AutomationProperties.Name="Elden Ring saved deaths"/></Grid>
+                                <Grid Margin="0,3,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Added deaths"/><TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding EldenRingMissedDeaths}" AutomationProperties.Name="Elden Ring added deaths"/></Grid>
+                                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                                    <Button Width="78" Click="IncrementEldenRingMissedDeaths_Click" IsEnabled="{Binding CanAdjustEldenRingMissedDeaths}" Content="+1" AutomationProperties.Name="Add Elden Ring missed death" />
+                                    <Button Width="78" Margin="8,0,0,0" Click="DecrementEldenRingMissedDeaths_Click" IsEnabled="{Binding CanDecrementEldenRingMissedDeaths}" Content="−1" AutomationProperties.Name="Remove Elden Ring missed death" />
+                                </StackPanel>
+                            </StackPanel>
                             <TextBlock x:Name="GlobalHotkeyStatusTextBlock" Style="{StaticResource MutedText}" Margin="0,12,0,0" Visibility="{Binding IsManualGameSelected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" Text="{Binding GlobalHotkeyStatus, Mode=OneWay}" AutomationProperties.Name="{Binding GlobalHotkeyStatus, Mode=OneWay}" />
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="MANUAL HOTKEYS" />
