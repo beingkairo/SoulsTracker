@@ -345,7 +345,7 @@ public sealed class MainWindowBindingTests
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
-        Assert.Contains("Some special red-sign duels, such as the Great Jar challenge, may be excluded from Elden Ring's saved death total. Add any missed deaths here.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Some PvP and invasion-style deaths, including the Great Jar challenge, may be excluded from Elden Ring's saved death total. Add any missed deaths here.", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Elden Ring saved deaths\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Elden Ring added deaths\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Add Elden Ring missed death\"", xaml, StringComparison.Ordinal);
