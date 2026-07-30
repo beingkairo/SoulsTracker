@@ -398,6 +398,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         && EldenRingProfileSlots.Count > 0;
     public EldenRingProfileSlotChoice? SelectedEldenRingProfileSlot { get; private set; }
     public bool IsManualGameSelected => state?.SelectedGameId is GameId id && IsManualGame(id);
+    /// <summary>True when the shared global hotkey configuration applies to the current game view.</summary>
+    public bool IsGlobalHotkeyConfigurationAvailable => IsManualGameSelected || IsEldenRingSelected;
+    public string GlobalHotkeyUsageDescription => IsManualGameSelected
+        ? "Use these global hotkeys to adjust the active manual death total."
+        : IsEldenRingMissedDeathAdjustmentAvailable
+            ? "Use these global hotkeys to add or remove missed deaths for the selected character."
+            : "Choose a local save and character before global hotkeys can adjust missed deaths.";
 
     public bool CanDecrementManualDeaths => IsManualGameSelected && ManualDeaths > 0 && ControlsEnabled;
     public bool IsEldenRingMissedDeathAdjustmentAvailable => IsEldenRingSelected
@@ -993,7 +1000,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     /// <summary>Starts an in-app recording session without changing an active global binding.</summary>
     public void BeginHotkeyRecording(bool increment)
     {
-        if (!IsManualGameSelected || !ControlsEnabled) return;
+        if (!IsGlobalHotkeyConfigurationAvailable || !ControlsEnabled) return;
 
         recordingIncrementHotkey = increment;
         hotkeyBindingBeforeRecording = increment ? pendingIncrementBinding : pendingDecrementBinding;
@@ -1138,6 +1145,22 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         !CanDecrementManualDeaths
             ? Task.CompletedTask
             : SubmitAsync(new DecrementManualBloodborneDeathsCommand(), cancellationToken);
+
+    /// <summary>Routes the shared global increment binding to the active supported counter.</summary>
+    public Task IncrementGlobalTrackedDeathsAsync(CancellationToken cancellationToken = default) =>
+        IsManualGameSelected
+            ? IncrementManualDeathsAsync(cancellationToken)
+            : CanAdjustEldenRingMissedDeaths
+                ? IncrementEldenRingMissedDeathsAsync(cancellationToken)
+                : Task.CompletedTask;
+
+    /// <summary>Routes the shared global decrement binding to the active supported counter.</summary>
+    public Task DecrementGlobalTrackedDeathsAsync(CancellationToken cancellationToken = default) =>
+        IsManualGameSelected
+            ? DecrementManualDeathsAsync(cancellationToken)
+            : CanDecrementEldenRingMissedDeaths
+                ? DecrementEldenRingMissedDeathsAsync(cancellationToken)
+                : Task.CompletedTask;
 
     public Task IncrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanAdjustEldenRingMissedDeaths
@@ -1471,6 +1494,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
         OnPropertyChanged(nameof(EldenRingCharacterStatus));
         OnPropertyChanged(nameof(IsManualGameSelected));
+        OnPropertyChanged(nameof(IsGlobalHotkeyConfigurationAvailable));
+        OnPropertyChanged(nameof(GlobalHotkeyUsageDescription));
         OnPropertyChanged(nameof(IsCenterBossAlignment));
         OnPropertyChanged(nameof(AreBossMarkerControlsVisible));
         OnPropertyChanged(nameof(IsBossMarkerSelected));

@@ -152,13 +152,13 @@ internal sealed class GlobalHotkeyController : IDisposable
 
     private async Task<bool> IncrementAsync()
     {
-        await viewModel.IncrementManualDeathsAsync();
+        await viewModel.IncrementGlobalTrackedDeathsAsync();
         return true;
     }
 
     private async Task<bool> DecrementAsync()
     {
-        await viewModel.DecrementManualDeathsAsync();
+        await viewModel.DecrementGlobalTrackedDeathsAsync();
         return true;
     }
 
@@ -217,7 +217,7 @@ internal sealed record GlobalHotkeyRegistrationResult(GlobalHotkeyRegistrationSt
 {
     public static GlobalHotkeyRegistrationResult Registered { get; } = new(
         GlobalHotkeyRegistrationStatus.Registered,
-        "Manual hotkeys are active.");
+        "Global hotkeys are active.");
 
     public static GlobalHotkeyRegistrationResult Unavailable { get; } = new(
         GlobalHotkeyRegistrationStatus.Unavailable,

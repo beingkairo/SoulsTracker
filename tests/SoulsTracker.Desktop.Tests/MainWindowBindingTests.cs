@@ -1242,7 +1242,7 @@ public sealed class MainWindowBindingTests
                 Assert.Equal(BindingMode.OneWay, automationNameBinding.Mode);
 
                 Binding visibilityBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(status, UIElement.VisibilityProperty));
-                Assert.Equal(nameof(DesktopTrackerViewModel.IsManualGameSelected), visibilityBinding.Path?.Path);
+                Assert.Equal(nameof(DesktopTrackerViewModel.IsGlobalHotkeyConfigurationAvailable), visibilityBinding.Path?.Path);
                 Assert.Equal(BindingMode.OneWay, visibilityBinding.Mode);
             }
             finally
@@ -1250,6 +1250,18 @@ public sealed class MainWindowBindingTests
                 window?.Close();
             }
         });
+    }
+
+    [Fact]
+    public void GlobalHotkeyPanelUsesProductNeutralAccessibleCopy()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+
+        Assert.Contains("Text=\"GLOBAL HOTKEYS\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsGlobalHotkeyConfigurationAvailable", xaml, StringComparison.Ordinal);
+        Assert.Contains("GlobalHotkeyUsageDescription", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Increment global hotkey\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MANUAL HOTKEYS", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
