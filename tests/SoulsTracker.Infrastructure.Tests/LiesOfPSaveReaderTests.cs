@@ -86,6 +86,56 @@ public sealed class LiesOfPSaveReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task DiscoveryUsesUniqueNonSensitiveLabelsForDuplicateCharactersAcrossAccounts()
+    {
+        string firstAccount = Path.Combine(root, "LiesofP", "Saved", "SaveGames", "account-a");
+        string secondAccount = Path.Combine(root, "LiesofP", "Saved", "SaveGames", "account-z");
+        Directory.CreateDirectory(firstAccount);
+        Directory.CreateDirectory(secondAccount);
+        string first = Path.Combine(firstAccount, "SaveData-1_Character_2.sav");
+        string second = Path.Combine(secondAccount, "SaveData-1_Character_2.sav");
+        await File.WriteAllBytesAsync(first, Fixture.Create(4));
+        await File.WriteAllBytesAsync(second, Fixture.Create(5));
+
+        IReadOnlyList<DiscoveredLocalSave> candidates = await new LiesOfPSaveDiscovery(new TestRoots(root)).DiscoverAsync(default);
+
+        Assert.Equal(["Character 1 (1)", "Character 1 (2)"], candidates.Select(static candidate => candidate.Label));
+        Assert.Equal([first, second], candidates.Select(static candidate => candidate.LocalPath));
+        Assert.All(candidates, candidate =>
+        {
+            Assert.DoesNotContain("account", candidate.Label, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(root, candidate.Label, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public async Task ReaderRejectsReparsePointPairMemberAndUsesTheSafeSiblingWhenSupported()
+    {
+        string account = Path.Combine(root, "account");
+        string external = Path.Combine(root, "external.sav");
+        Directory.CreateDirectory(account);
+        string linked = Path.Combine(account, "SaveData-1_Character_1.sav");
+        string safe = Path.Combine(account, "SaveData-1_Character_2.sav");
+        await File.WriteAllBytesAsync(external, Fixture.Create(9));
+        await File.WriteAllBytesAsync(safe, Fixture.Create(7));
+        File.SetLastWriteTimeUtc(external, DateTime.UtcNow);
+
+        try { File.CreateSymbolicLink(linked, external); }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            Assert.True(exception is UnauthorizedAccessException or IOException or PlatformNotSupportedException);
+            return;
+        }
+
+        var reader = new LiesOfPSaveDeathReader();
+        reader.Configure(new LiesOfPSaveConfiguration(linked));
+        RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
+
+        Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
+        Assert.Equal(7, result.Observation!.TotalDeaths.Value);
+    }
+
+    [Fact]
     public async Task DiscoveryRejectsWrongNamedMalformedAndOversizedMembers()
     {
         string account = Path.Combine(root, "LiesofP", "Saved", "SaveGames", "6144");

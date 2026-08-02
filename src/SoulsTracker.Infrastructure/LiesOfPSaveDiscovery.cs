@@ -40,14 +40,20 @@ public sealed class LiesOfPSaveDiscovery(ILiesOfPSteamInstallRootSource? install
             }
         }
 
-        IReadOnlyList<DiscoveredLocalSave> candidates = members
+        var candidates = members
             .GroupBy(static candidate => CharacterKey(candidate.path, candidate.character), StringComparer.OrdinalIgnoreCase)
             .Select(static group => group.OrderByDescending(candidate => candidate.lastWriteUtc).ThenBy(candidate => candidate.path, StringComparer.OrdinalIgnoreCase).First())
             .OrderBy(static candidate => candidate.character)
             .ThenBy(static candidate => candidate.path, StringComparer.OrdinalIgnoreCase)
-            .Select(static candidate => new DiscoveredLocalSave(candidate.path, $"Character {candidate.character}"))
             .ToArray();
-        return ValueTask.FromResult(candidates);
+
+        IReadOnlyList<DiscoveredLocalSave> labeled = candidates
+            .GroupBy(static candidate => candidate.character)
+            .SelectMany(static group => group.Select((candidate, index) => new DiscoveredLocalSave(
+                candidate.path,
+                group.Count() == 1 ? $"Character {candidate.character}" : $"Character {candidate.character} ({index + 1})")))
+            .ToArray();
+        return ValueTask.FromResult(labeled);
     }
 
     public static bool IsRegularBoundedSave(string path)

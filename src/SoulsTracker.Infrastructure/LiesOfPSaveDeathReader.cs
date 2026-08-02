@@ -56,6 +56,7 @@ public sealed class LiesOfPSaveDeathReader : IRuntimeGameDeathReader
         foreach (string path in LiesOfPSaveMembers.ForSelectedPath(selectedPath))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!IsSafeRegularMember(path)) continue;
             FileInfo before = new(path);
             if (!before.Exists || before.Length is <= 0 or > LiesOfPSaveParser.MaximumSupportedFileBytes) continue;
 
@@ -73,6 +74,19 @@ public sealed class LiesOfPSaveDeathReader : IRuntimeGameDeathReader
             .ThenBy(static candidate => candidate.path, StringComparer.OrdinalIgnoreCase)
             .Select(static candidate => ((string path, byte[] bytes)?)(candidate.path, candidate.bytes))
             .FirstOrDefault();
+    }
+
+    private static bool IsSafeRegularMember(string path)
+    {
+        try
+        {
+            string canonical = Path.GetFullPath(path);
+            if (canonical.StartsWith("\\\\", StringComparison.Ordinal) || BlackMythWukongSaveDiscovery.HasReparsePointInPath(canonical)) return false;
+
+            FileAttributes attributes = File.GetAttributes(canonical);
+            return !attributes.HasFlag(FileAttributes.Directory) && !attributes.HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch { return false; }
     }
 
     private static async Task<byte[]> ReadSharedReadOnlyAsync(string path, int length, CancellationToken cancellationToken)
