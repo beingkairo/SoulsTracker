@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private bool isRestoringEldenRingProfileSelection;
     private bool isRestoringEldenRingSaveSelection;
     private bool isRestoringBlackMythWukongSaveSelection;
+    private bool isRestoringLiesOfPSaveSelection;
 
     public MainWindow()
     {
@@ -288,6 +289,56 @@ public partial class MainWindow : Window
                 finally
                 {
                     isRestoringBlackMythWukongSaveSelection = false;
+                }
+            });
+        }
+    }
+
+    private async void BrowseLiesOfPSave_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Lies of P character save (SaveData-*_Character_*.sav)|SaveData-*_Character_*.sav", CheckFileExists = true, Multiselect = false, Title = "Choose Lies of P character save" };
+        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.SetLiesOfPSaveFileAsync(dialog.FileName);
+        }
+    }
+
+    private async void RescanLiesOfPSaves_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.RescanLiesOfPSavesAsync();
+    }
+
+    private void ChangeLiesOfPSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.BeginLiesOfPChange();
+    }
+
+    private void CancelLiesOfPChange_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.CancelLiesOfPChange();
+    }
+
+    private async void LiesOfPSave_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isRestoringLiesOfPSaveSelection) return;
+        if (sender is System.Windows.Controls.ComboBox selector &&
+            e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice &&
+            DataContext is DesktopTrackerViewModel viewModel)
+        {
+            await viewModel.SelectLiesOfPSaveChoiceAsync(choice);
+            DiscoveredLocalSave? committedChoice = viewModel.SelectedLiesOfPSaveChoice;
+            if (selector.Dispatcher.HasShutdownStarted) return;
+            await selector.Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    isRestoringLiesOfPSaveSelection = true;
+                    BindingOperations.GetBindingExpression(selector, System.Windows.Controls.ComboBox.SelectedItemProperty)?.UpdateTarget();
+                    if (!ReferenceEquals(selector.SelectedItem, committedChoice)) selector.SelectedItem = committedChoice;
+                }
+                finally
+                {
+                    isRestoringLiesOfPSaveSelection = false;
                 }
             });
         }

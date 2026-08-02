@@ -15,7 +15,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
 
     public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
     {
-        if (notification.CommandType == TrackerCommandType.UpdateEldenRingSaveConfiguration)
+        if (notification.CommandType is TrackerCommandType.UpdateEldenRingSaveConfiguration or TrackerCommandType.UpdateLiesOfPSaveConfiguration)
         {
             Volatile.Write(ref runtimeObservation, null);
         }
@@ -37,7 +37,8 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
 
     private static RuntimeGameObservation? RuntimeObservationFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
         observation?.GameId == state.SelectedGameId &&
-        (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null)
+        (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
+        (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null)
             ? observation
             : null;
 
@@ -57,7 +58,8 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
             long total = displayedTotal ?? state.GetManualDeathCounter(state.SelectedGameId).Value;
             succeeded &= await AtomicWriteAsync(config.DeathsPath, $"Total Deaths: {total}").ConfigureAwait(false);
         }
-        else if (config.DeathsEnabled && config.DeathsPath is not null && state.SelectedGameId == GameId.BlackMythWukong)
+        else if (config.DeathsEnabled && config.DeathsPath is not null &&
+            (state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP))
         {
             succeeded &= await AtomicWriteAsync(config.DeathsPath, string.Empty).ConfigureAwait(false);
         }

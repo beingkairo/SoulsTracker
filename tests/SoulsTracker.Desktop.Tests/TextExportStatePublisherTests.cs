@@ -149,6 +149,27 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LiesOfPExportWritesTheValidatedSaveTotal()
+    {
+        string deathsPath = Path.Combine(root, "lies-of-p-deaths.txt");
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: new TextExportConfiguration(deathsPath, true, null, false),
+            liesOfPSave: new LiesOfPSaveConfiguration(@"C:\\Tracker\\SaveData-1_Character_2.sav"));
+        var publisher = new TextExportStatePublisher();
+
+        Task<bool> write = NextWriteAsync(publisher);
+        publisher.PublishRuntimeObservation(state, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.LiesOfP, 12, DateTimeOffset.UtcNow)));
+
+        Assert.True(await write.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Total Deaths: 12", await File.ReadAllTextAsync(deathsPath));
+    }
+
+    [Fact]
     public async Task EldenRingBossExportUsesTheSamePersistedScope()
     {
         string bossPath = Path.Combine(root, "elden-bosses.txt");

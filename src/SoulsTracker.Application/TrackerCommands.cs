@@ -73,6 +73,9 @@ public sealed record AdjustEldenRingMissedDeathsCommand(bool Increment) : ITrack
 /// <summary>Updates the locally selected, read-only Black Myth: Wukong save.</summary>
 public sealed record UpdateBlackMythWukongSaveConfigurationCommand(BlackMythWukongSaveConfiguration Configuration) : ITrackerCommand;
 
+/// <summary>Updates the locally selected, read-only Lies of P Steam save.</summary>
+public sealed record UpdateLiesOfPSaveConfigurationCommand(LiesOfPSaveConfiguration Configuration) : ITrackerCommand;
+
 /// <summary>
 /// Identifies the command whose transition was evaluated without carrying state or secrets.
 /// </summary>
@@ -91,6 +94,7 @@ public enum TrackerCommandType
     UpdateEldenRingSaveConfiguration,
     AdjustEldenRingMissedDeaths,
     UpdateBlackMythWukongSaveConfiguration,
+    UpdateLiesOfPSaveConfiguration,
     UpdateTextExports,
     LegacyImport,
 }

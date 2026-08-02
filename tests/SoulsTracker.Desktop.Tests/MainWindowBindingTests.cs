@@ -341,6 +341,18 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
+    public void LiesOfPSaveSetupUsesTheExistingAutomaticSaveReaderPattern()
+    {
+        string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
+
+        Assert.Contains("LIES OF P SAVE", xaml, StringComparison.Ordinal);
+        Assert.Contains("LiesOfPSaveSelector", xaml, StringComparison.Ordinal);
+        Assert.Contains("BrowseLiesOfPSave_Click", xaml, StringComparison.Ordinal);
+        Assert.Contains("RescanLiesOfPSaves_Click", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Lies of P character save\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EldenRingMissedDeathControlsAreAccessibleAndExplainTheSavedAndAddedTotals()
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));

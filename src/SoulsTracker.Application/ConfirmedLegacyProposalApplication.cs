@@ -109,7 +109,7 @@ public static class ConfirmedLegacyProposalApplication
             overlay,
             destination.ManualBloodborneHotkeys,
             destination.DeathSound, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave,
-            destination.BossListScope, destination.BlackMythWukongSave, destination.EldenRingMissedDeathAdjustments);
+            destination.BossListScope, destination.BlackMythWukongSave, destination.EldenRingMissedDeathAdjustments, destination.LiesOfPSave);
         return true;
     }
 

@@ -26,6 +26,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string GameWaitingForActiveCharacterMessage = "Game detected — waiting for active character";
     internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save file";
     internal const string BlackMythWukongWaitingForSaveFileMessage = "Choose a Black Myth: Wukong save file";
+    internal const string LiesOfPWaitingForSaveFileMessage = "Choose a Lies of P save file";
     internal const string EldenRingChooseCharacterMessage = "Choose a character to continue.";
     internal const string GameSyncedMessage = "Synced";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
@@ -37,6 +38,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly IEldenRingSaveProfileReader eldenRingSaveProfileReader;
     private readonly ILocalSaveDiscovery eldenRingSaveDiscovery;
     private readonly ILocalSaveDiscovery blackMythWukongSaveDiscovery;
+    private readonly ILocalSaveDiscovery liesOfPSaveDiscovery;
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
     private RuntimeGameReaderStatus runtimeReaderStatus;
@@ -92,10 +94,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly object eldenRingProfileSlotsSynchronization = new();
     private readonly object eldenRingSaveChoicesSynchronization = new();
     private readonly object blackMythWukongSaveChoicesSynchronization = new();
+    private readonly object liesOfPSaveChoicesSynchronization = new();
     private long blackMythWukongDiscoveryVersion;
     private LocalSaveSourceState wukongSaveSourceState;
     private bool isBlackMythWukongChangeMode;
     private string? blackMythWukongSaveDiscoveryStatus;
+    private string? liesOfPSaveDiscoveryStatus;
+    private LocalSaveSourceState liesOfPSaveSourceState;
+    private bool isLiesOfPChangeMode;
     private BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata;
     private readonly TimeProvider timeProvider;
     private readonly Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>> readWukongSaveMetadataAsync;
@@ -111,14 +117,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         IEldenRingSaveProfileReader? eldenRingSaveProfileReader = null,
         ILocalSaveDiscovery? blackMythWukongSaveDiscovery = null,
         ILocalSaveDiscovery? eldenRingSaveDiscovery = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILocalSaveDiscovery? liesOfPSaveDiscovery = null)
         : this(
             coordinator,
             eldenRingSaveProfileReader,
             blackMythWukongSaveDiscovery,
             eldenRingSaveDiscovery,
             timeProvider,
-            ReadBlackMythWukongSaveMetadataCoreAsync)
+            ReadBlackMythWukongSaveMetadataCoreAsync,
+            liesOfPSaveDiscovery)
     {
     }
 
@@ -128,12 +136,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ILocalSaveDiscovery? blackMythWukongSaveDiscovery,
         ILocalSaveDiscovery? eldenRingSaveDiscovery,
         TimeProvider? timeProvider,
-        Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>> readWukongSaveMetadataAsync)
+        Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>> readWukongSaveMetadataAsync,
+        ILocalSaveDiscovery? liesOfPSaveDiscovery = null)
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
         this.eldenRingSaveDiscovery = eldenRingSaveDiscovery ?? new EldenRingSaveDiscovery();
         this.blackMythWukongSaveDiscovery = blackMythWukongSaveDiscovery ?? new BlackMythWukongSaveDiscovery();
+        this.liesOfPSaveDiscovery = liesOfPSaveDiscovery ?? new LiesOfPSaveDiscovery();
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.readWukongSaveMetadataAsync = readWukongSaveMetadataAsync ?? throw new ArgumentNullException(nameof(readWukongSaveMetadataAsync));
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
@@ -141,11 +151,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         EldenRingProfileSlots = [];
         EldenRingSaveChoices = [];
         BlackMythWukongSaveChoices = [];
+        LiesOfPSaveChoices = [];
         BindingOperations.EnableCollectionSynchronization(Bosses, bossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(FilteredBosses, filteredBossesSynchronization);
         BindingOperations.EnableCollectionSynchronization(EldenRingProfileSlots, eldenRingProfileSlotsSynchronization);
         BindingOperations.EnableCollectionSynchronization(EldenRingSaveChoices, eldenRingSaveChoicesSynchronization);
         BindingOperations.EnableCollectionSynchronization(BlackMythWukongSaveChoices, blackMythWukongSaveChoicesSynchronization);
+        BindingOperations.EnableCollectionSynchronization(LiesOfPSaveChoices, liesOfPSaveChoicesSynchronization);
         BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
     }
 
@@ -340,6 +352,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 return BlackMythWukongSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
             }
+            if (selectedGameId == GameId.LiesOfP && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
+            {
+                return LiesOfPSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
+            }
             if (selectedGameId == GameId.EldenRing && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
             {
                 if (state?.EldenRingSave.LocalPath is null) return EldenRingSaveDiscoveryStatus ?? GameWaitingForSaveFileMessage;
@@ -391,6 +407,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         IsBlackMythWukongSelected
             ? FormatBlackMythWukongSaveMetadata(blackMythWukongSaveMetadata, CultureInfo.CurrentCulture, timeProvider)
             : null;
+    public bool IsLiesOfPSelected => state?.SelectedGameId == GameId.LiesOfP;
+    public ObservableCollection<DiscoveredLocalSave> LiesOfPSaveChoices { get; }
+    public DiscoveredLocalSave? SelectedLiesOfPSaveChoice { get; private set; }
+    public string? LiesOfPSaveDiscoveryStatus => liesOfPSaveDiscoveryStatus;
+    public LocalSaveSourceState LiesOfPSaveSourceState { get => liesOfPSaveSourceState; private set { if (SetField(ref liesOfPSaveSourceState, value)) NotifyLiesOfPSaveSourceProperties(); } }
+    public bool IsLiesOfPChangeMode { get => isLiesOfPChangeMode; private set { if (SetField(ref isLiesOfPChangeMode, value)) NotifyLiesOfPSaveSourceProperties(); } }
+    public bool IsLiesOfPSaveSelectorVisible => LiesOfPSaveChoices.Count > 0 && (IsLiesOfPChangeMode || LiesOfPSaveSourceState == LocalSaveSourceState.MultipleCandidates);
+    public bool IsLiesOfPSaveSelectorEnabled => ControlsEnabled && LiesOfPSaveSourceState != LocalSaveSourceState.Scanning && IsLiesOfPSaveSelectorVisible;
+    public bool IsLiesOfPBrowseVisible => LiesOfPSaveSourceState is LocalSaveSourceState.Scanning or LocalSaveSourceState.NoCandidate or LocalSaveSourceState.MultipleCandidates || IsLiesOfPChangeMode;
+    public bool IsLiesOfPChangeVisible => !IsLiesOfPChangeMode && LiesOfPSaveSourceState is LocalSaveSourceState.AutomaticallySelected or LocalSaveSourceState.PersistedDiscovered or LocalSaveSourceState.CustomSelection or LocalSaveSourceState.UnavailableSelection;
+    public bool IsLiesOfPCancelVisible => IsLiesOfPChangeMode;
     /// <summary>True only when the selected local Elden Ring save is still available for slot selection.</summary>
     public bool CanSelectEldenRingProfile => ControlsEnabled
         && IsEldenRingSelected
@@ -521,8 +548,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         bool blackMythWukongSaveIsUnconfigured = state.SelectedGameId == GameId.BlackMythWukong && state.BlackMythWukongSave.LocalPath is null;
+        bool liesOfPSaveIsUnconfigured = state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null;
         runtimeReaderGameId = result?.GameId;
-        if (result is not null && result.GameId == state.SelectedGameId && !blackMythWukongSaveIsUnconfigured)
+        if (result is not null && result.GameId == state.SelectedGameId && !blackMythWukongSaveIsUnconfigured && !liesOfPSaveIsUnconfigured)
         {
             runtimeReaderStatus = result.Status;
             runtimeObservation = result.Observation;
@@ -538,6 +566,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         else if (blackMythWukongSaveIsUnconfigured)
         {
             runtimeReaderGameId = GameId.BlackMythWukong;
+            runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
+            runtimeObservation = null;
+            SetBlackMythWukongSaveMetadata(null);
+        }
+        else if (liesOfPSaveIsUnconfigured)
+        {
+            runtimeReaderGameId = GameId.LiesOfP;
             runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
             runtimeObservation = null;
             SetBlackMythWukongSaveMetadata(null);
@@ -925,6 +960,87 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public void BeginBlackMythWukongChange() { if (IsBlackMythWukongSelected) IsBlackMythWukongChangeMode = true; }
     public void CancelBlackMythWukongChange() => IsBlackMythWukongChangeMode = false;
 
+    public async Task SetLiesOfPSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled || !LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) || !LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath))
+        {
+            SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
+            return;
+        }
+        await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken);
+        if (!IsLiesOfPSelected || !PathsEqual(localPath, state?.LiesOfPSave.LocalPath)) return;
+        IsLiesOfPChangeMode = false;
+        LiesOfPSaveSourceState = LocalSaveSourceState.CustomSelection;
+        SetLiesOfPSaveDiscoveryStatus(CustomSaveTrackingStatus(localPath));
+    }
+
+    public async Task SelectLiesOfPSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
+    {
+        if (!ControlsEnabled || choice is null || !LiesOfPSaveChoices.Contains(choice)) return;
+        await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(choice.LocalPath), cancellationToken);
+        if (!IsLiesOfPSelected || !PathsEqual(choice.LocalPath, state?.LiesOfPSave.LocalPath)) return;
+        SelectedLiesOfPSaveChoice = choice;
+        IsLiesOfPChangeMode = false;
+        LiesOfPSaveSourceState = LocalSaveSourceState.PersistedDiscovered;
+        SetLiesOfPSaveDiscoveryStatus($"Tracking {choice.Label}");
+        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
+    }
+
+    public async Task RescanLiesOfPSavesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsLiesOfPSelected) return;
+        LiesOfPSaveSourceState = LocalSaveSourceState.Scanning;
+        SetLiesOfPSaveDiscoveryStatus("Looking for local saves…");
+        IReadOnlyList<DiscoveredLocalSave> candidates;
+        try { candidates = await Task.Run(async () => await liesOfPSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+        catch { SetLiesOfPSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…"); LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate; return; }
+        if (!IsLiesOfPSelected) return;
+
+        LiesOfPSaveChoices.Clear();
+        foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
+        string? configured = state?.LiesOfPSave.LocalPath;
+        SelectedLiesOfPSaveChoice = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, configured));
+        if (configured is not null && !File.Exists(configured))
+        {
+            LiesOfPSaveSourceState = LocalSaveSourceState.UnavailableSelection;
+            SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable.");
+        }
+        else if (SelectedLiesOfPSaveChoice is { } selected)
+        {
+            LiesOfPSaveSourceState = LocalSaveSourceState.PersistedDiscovered;
+            SetLiesOfPSaveDiscoveryStatus($"Tracking {selected.Label}");
+        }
+        else if (configured is null && candidates.Count == 1)
+        {
+            await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(candidates[0].LocalPath), cancellationToken);
+            if (!IsLiesOfPSelected || !PathsEqual(candidates[0].LocalPath, state?.LiesOfPSave.LocalPath)) return;
+            SelectedLiesOfPSaveChoice = candidates[0];
+            LiesOfPSaveSourceState = LocalSaveSourceState.AutomaticallySelected;
+            SetLiesOfPSaveDiscoveryStatus($"Tracking {candidates[0].Label}");
+        }
+        else if (configured is null && candidates.Count > 1)
+        {
+            LiesOfPSaveSourceState = LocalSaveSourceState.MultipleCandidates;
+            SetLiesOfPSaveDiscoveryStatus("Choose the character you’re streaming.");
+        }
+        else if (configured is not null && LiesOfPSaveDiscovery.IsRegularBoundedSave(configured!))
+        {
+            LiesOfPSaveSourceState = LocalSaveSourceState.CustomSelection;
+            SetLiesOfPSaveDiscoveryStatus(CustomSaveTrackingStatus(configured));
+        }
+        else
+        {
+            LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate;
+            SetLiesOfPSaveDiscoveryStatus("No save found automatically.");
+        }
+        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
+        NotifyLiesOfPSaveSourceProperties();
+    }
+
+    public void BeginLiesOfPChange() { if (IsLiesOfPSelected) IsLiesOfPChangeMode = true; }
+    public void CancelLiesOfPChange() => IsLiesOfPChangeMode = false;
+
     public async Task SetBossListScopeAsync(BossListScopeChoice? scope, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || scope is null || !scope.IsAvailable || scope.Value == state?.BossListScope) return;
@@ -953,6 +1069,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             if (state?.SelectedGameId == GameId.BlackMythWukong)
             {
                 await RescanBlackMythWukongSavesAsync(cancellationToken);
+            }
+            if (state?.SelectedGameId == GameId.LiesOfP)
+            {
+                await RescanLiesOfPSavesAsync(cancellationToken);
             }
             LocalTrackerStateStatus = LocalTrackerStateReadyMessage;
         }
@@ -1091,6 +1211,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (state?.SelectedGameId == SoulsTracker.Domain.GameId.BlackMythWukong)
         {
             await RescanBlackMythWukongSavesAsync(cancellationToken);
+        }
+        if (state?.SelectedGameId == SoulsTracker.Domain.GameId.LiesOfP)
+        {
+            await RescanLiesOfPSavesAsync(cancellationToken);
         }
     }
 
@@ -1293,13 +1417,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             SetBlackMythWukongSaveMetadata(null);
         }
         bool blackMythWukongSaveIsUnconfigured = state.SelectedGameId == GameId.BlackMythWukong && state.BlackMythWukongSave.LocalPath is null;
-        if (runtimeReaderGameId != state.SelectedGameId || blackMythWukongSaveIsUnconfigured)
+        bool liesOfPSaveIsUnconfigured = state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null;
+        if (runtimeReaderGameId != state.SelectedGameId || blackMythWukongSaveIsUnconfigured || liesOfPSaveIsUnconfigured)
         {
             runtimeObservation = null;
-            runtimeReaderStatus = blackMythWukongSaveIsUnconfigured
+            runtimeReaderStatus = blackMythWukongSaveIsUnconfigured || liesOfPSaveIsUnconfigured
                 ? RuntimeGameReaderStatus.WaitingForSaveFile
                 : RuntimeGameReaderStatus.Unavailable;
-            runtimeReaderGameId = blackMythWukongSaveIsUnconfigured ? GameId.BlackMythWukong : null;
+            runtimeReaderGameId = blackMythWukongSaveIsUnconfigured ? GameId.BlackMythWukong : liesOfPSaveIsUnconfigured ? GameId.LiesOfP : null;
         }
         else if (state.SelectedGameId == GameId.EldenRing && previousEldenRingSave != state.EldenRingSave)
         {
@@ -1353,6 +1478,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         NotifyTrackerProperties();
         NotifyEldenRingSaveSourceProperties();
         NotifyWukongSaveSourceProperties();
+        NotifyLiesOfPSaveSourceProperties();
         OnPropertyChanged(nameof(TotalDeathsSceneUrl));
         OnPropertyChanged(nameof(BossListSceneUrl));
         OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay));
@@ -1491,6 +1617,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBloodborneSelected));
         OnPropertyChanged(nameof(IsEldenRingSelected));
         OnPropertyChanged(nameof(IsBlackMythWukongSelected));
+        OnPropertyChanged(nameof(IsLiesOfPSelected));
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
         OnPropertyChanged(nameof(EldenRingCharacterStatus));
         OnPropertyChanged(nameof(IsManualGameSelected));
@@ -1546,7 +1673,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private static string WaitingForSaveFileMessage(GameId gameId) => gameId == GameId.BlackMythWukong
         ? BlackMythWukongWaitingForSaveFileMessage
-        : GameWaitingForSaveFileMessage;
+        : gameId == GameId.LiesOfP
+            ? LiesOfPWaitingForSaveFileMessage
+            : GameWaitingForSaveFileMessage;
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
 
@@ -1685,6 +1814,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 preserveWukongMetadataOperation: true);
         }
         catch { ErrorMessage = "The Black Myth: Wukong save selection could not be saved."; }
+        finally { IsBusy = false; NotifyTrackerProperties(); }
+    }
+
+    private async Task SaveLiesOfPSaveAsync(LiesOfPSaveConfiguration configuration, CancellationToken cancellationToken)
+    {
+        IsBusy = true;
+        try { ApplyCommittedState(await coordinator.SetLiesOfPSaveConfigurationAsync(configuration, cancellationToken)); }
+        catch { ErrorMessage = "The Lies of P save selection could not be saved."; }
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
 
@@ -1892,6 +2029,24 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (string.Equals(blackMythWukongSaveDiscoveryStatus, value, StringComparison.Ordinal)) return;
         blackMythWukongSaveDiscoveryStatus = value;
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
+        OnPropertyChanged(nameof(RuntimeReaderStatusText));
+    }
+
+    private void NotifyLiesOfPSaveSourceProperties()
+    {
+        OnPropertyChanged(nameof(IsLiesOfPSaveSelectorVisible));
+        OnPropertyChanged(nameof(IsLiesOfPBrowseVisible));
+        OnPropertyChanged(nameof(IsLiesOfPChangeVisible));
+        OnPropertyChanged(nameof(IsLiesOfPCancelVisible));
+        OnPropertyChanged(nameof(IsLiesOfPSaveSelectorEnabled));
+        OnPropertyChanged(nameof(RuntimeReaderStatusText));
+    }
+
+    private void SetLiesOfPSaveDiscoveryStatus(string? value)
+    {
+        if (string.Equals(liesOfPSaveDiscoveryStatus, value, StringComparison.Ordinal)) return;
+        liesOfPSaveDiscoveryStatus = value;
+        OnPropertyChanged(nameof(LiesOfPSaveDiscoveryStatus));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 

@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application, IDisposable
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private EldenRingSaveDeathReader? eldenRingSaveReader;
     private BlackMythWukongSaveDeathReader? blackMythWukongSaveReader;
+    private LiesOfPSaveDeathReader? liesOfPSaveReader;
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
     private AutomatedDeathSoundNotifier? automatedDeathSoundNotifier;
@@ -121,6 +122,7 @@ public partial class App : System.Windows.Application, IDisposable
         {
             eldenRingSaveReader = new EldenRingSaveDeathReader();
             blackMythWukongSaveReader = new BlackMythWukongSaveDeathReader();
+            liesOfPSaveReader = new LiesOfPSaveDeathReader();
             runtimeReaders = new RuntimeGameReaderCoordinator([
                 new DarkSoulsRemasteredActiveCharacterDeathReader(
                     new ExactNameDarkSoulsRemasteredProcessEnumerator(),
@@ -151,6 +153,7 @@ public partial class App : System.Windows.Application, IDisposable
                         "637ACA527538C0EC6E1F136C8ED66046E95DFBDBB1F51926E134D9916398B856"))),
                 eldenRingSaveReader,
                 blackMythWukongSaveReader,
+                liesOfPSaveReader,
             ]);
             runtimeReaderCancellation = new CancellationTokenSource();
             runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
@@ -353,6 +356,7 @@ public partial class App : System.Windows.Application, IDisposable
                 {
                     eldenRingSaveReader?.Configure(currentState.EldenRingSave);
                     blackMythWukongSaveReader?.Configure(currentState.BlackMythWukongSave);
+                    liesOfPSaveReader?.Configure(currentState.LiesOfPSave);
                 }
                 RuntimeGameReadResult? result = await runtimeReaders!
                     .PollAsync(viewModel.CurrentState?.SelectedGameId, cancellationToken)

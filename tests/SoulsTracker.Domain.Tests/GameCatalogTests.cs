@@ -65,6 +65,13 @@ public sealed class GameCatalogTests
                 GameTrackingMode.GameLifetimeReadOnly,
                 ReaderBindingState.PendingVerification,
                 96),
+            new(
+                GameId.LiesOfP,
+                "Lies of P",
+                GameUiAvailability.Selectable,
+                GameTrackingMode.GameLifetimeReadOnly,
+                ReaderBindingState.PendingVerification,
+                0),
         ];
 
         ExpectedGameDefinition[] actual = GameCatalog.All
@@ -78,7 +85,7 @@ public sealed class GameCatalogTests
             .ToArray();
 
         Assert.Equal(expected, actual);
-        Assert.Equal(8, actual.Select(static definition => definition.Id).Distinct().Count());
+        Assert.Equal(9, actual.Select(static definition => definition.Id).Distinct().Count());
         Assert.Equal(GameId.All, actual.Select(static definition => definition.Id));
     }
 
@@ -91,6 +98,7 @@ public sealed class GameCatalogTests
     [InlineData("elden_ring")]
     [InlineData("demons_souls")]
     [InlineData("black_myth_wukong")]
+    [InlineData("lies_of_p")]
     public void CanonicalGameIdsParseExactly(string value)
     {
         Assert.True(GameId.TryParse(value, out GameId? gameId));

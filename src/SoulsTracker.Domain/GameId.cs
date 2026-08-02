@@ -29,6 +29,8 @@ public sealed record GameId
 
     public static GameId BlackMythWukong { get; } = new("black_myth_wukong");
 
+    public static GameId LiesOfP { get; } = new("lies_of_p");
+
     private static readonly ReadOnlyCollection<GameId> AllGameIds = Array.AsReadOnly(
     [
         DemonsSouls,
@@ -39,6 +41,7 @@ public sealed record GameId
         Sekiro,
         EldenRing,
         BlackMythWukong,
+        LiesOfP,
     ]);
 
     private static readonly ReadOnlyDictionary<string, GameId> KnownGameIds =
@@ -52,6 +55,7 @@ public sealed record GameId
             [EldenRing.Value] = EldenRing,
             [DemonsSouls.Value] = DemonsSouls,
             [BlackMythWukong.Value] = BlackMythWukong,
+            [LiesOfP.Value] = LiesOfP,
         });
 
     /// <summary>

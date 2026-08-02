@@ -158,6 +158,29 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LiesOfPSaveSelectionRoundTripsLocally()
+    {
+        const string savePath = "C:\\local-only\\SaveData-1_Character_2.sav";
+        PersistentTrackerState configured = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            liesOfPSave: new LiesOfPSaveConfiguration(savePath));
+
+        await using (var repository = new SqliteTrackerStateRepository(root, "lies-of-p-save.db", new ReversingProtector()))
+        {
+            await repository.SaveAsync(configured);
+        }
+
+        await using var reopened = new SqliteTrackerStateRepository(root, "lies-of-p-save.db", new ReversingProtector());
+        PersistentTrackerState restored = (await reopened.LoadAsync()).State!;
+        Assert.Equal(GameId.LiesOfP, restored.SelectedGameId);
+        Assert.Equal(savePath, restored.LiesOfPSave.LocalPath);
+    }
+
+    [Fact]
     public async Task LegacyEldenRingRequiredBossFieldLoadsSafelyAndIsRemovedOnNextWrite()
     {
         const string database = "elden-legacy-filter.db";

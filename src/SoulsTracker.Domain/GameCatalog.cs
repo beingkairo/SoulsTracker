@@ -187,6 +187,13 @@ public static class GameCatalog
             GameTrackingMode.GameLifetimeReadOnly,
             ReaderBindingState.PendingVerification,
             BlackMythWukongBossCatalog.Create()),
+        new GameDefinition(
+            GameId.LiesOfP,
+            "Lies of P",
+            GameUiAvailability.Selectable,
+            GameTrackingMode.GameLifetimeReadOnly,
+            ReaderBindingState.PendingVerification,
+            []),
     ]);
 
     private static readonly ReadOnlyDictionary<GameId, GameDefinition> DefinitionsById =

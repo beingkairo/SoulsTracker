@@ -7,6 +7,24 @@ namespace SoulsTracker.Application.Tests;
 
 public sealed class TrackerStateTransitionServiceTests
 {
+    [Fact]
+    public void LiesOfPSaveSelectionIsAValidatedStateTransition()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default);
+
+        TrackerTransitionResult result = TrackerStateTransitionService.Apply(
+            state,
+            new UpdateLiesOfPSaveConfigurationCommand(new LiesOfPSaveConfiguration("C:\\saves\\SaveData-1_Character_1.sav")));
+
+        Assert.True(result.StateChanged);
+        Assert.Equal("C:\\saves\\SaveData-1_Character_1.sav", result.State.LiesOfPSave.LocalPath);
+    }
+
     private static readonly string[] TransitionSourceFiles = ["TrackerCommands.cs", "TrackerTransitionResult.cs", "TrackerStateTransitionService.cs"];
 
     [Fact]

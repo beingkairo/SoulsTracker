@@ -415,6 +415,18 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                             </StackPanel>
+                            <StackPanel Margin="0,12,0,0" Visibility="{Binding IsLiesOfPSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P save reader setup">
+                                <TextBlock Style="{StaticResource PanelTitle}" Text="LIES OF P SAVE" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="SoulsTracker looks for local Steam character saves. Death totals update after the game saves, so they can take a moment." />
+                                <StackPanel Orientation="Horizontal">
+                                    <ComboBox x:Name="LiesOfPSaveSelector" Width="190" ItemsSource="{Binding LiesOfPSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedLiesOfPSaveChoice, Mode=OneWay}" SelectionChanged="LiesOfPSave_SelectionChanged" IsEnabled="{Binding IsLiesOfPSaveSelectorEnabled}" Visibility="{Binding IsLiesOfPSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P character save" />
+                                    <Button Margin="8,0,0,0" Content="Browse…" Click="BrowseLiesOfPSave_Click" Visibility="{Binding IsLiesOfPBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Lies of P save file" />
+                                    <Button Margin="8,0,0,0" Content="Rescan" Click="RescanLiesOfPSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Rescan Lies of P saves" />
+                                    <Button Margin="8,0,0,0" Content="Change…" Click="ChangeLiesOfPSave_Click" Visibility="{Binding IsLiesOfPChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Lies of P save file" />
+                                    <Button Margin="8,0,0,0" Content="Cancel" Click="CancelLiesOfPChange_Click" Visibility="{Binding IsLiesOfPCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Lies of P save change" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" MinHeight="18" Text="{Binding LiesOfPSaveDiscoveryStatus}" TextTrimming="CharacterEllipsis" ToolTip="{Binding LiesOfPSaveDiscoveryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Lies of P save discovery status" AutomationProperties.HelpText="{Binding LiesOfPSaveDiscoveryStatus}" />
+                            </StackPanel>
                             <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4">
                                 <StackPanel>
                                     <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedTextBrush}" Text="READER STATUS" />

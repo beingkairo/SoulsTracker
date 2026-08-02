@@ -28,7 +28,8 @@ public sealed class PersistentTrackerState
         EldenRingSaveConfiguration.Default,
         BossListScope.AllBosses,
         BlackMythWukongSaveConfiguration.Default,
-        EldenRingMissedDeathAdjustments.Empty);
+        EldenRingMissedDeathAdjustments.Empty,
+        LiesOfPSaveConfiguration.Default);
 
     /// <summary>
     /// Initializes validated persisted tracker state.
@@ -49,7 +50,8 @@ public sealed class PersistentTrackerState
         EldenRingSaveConfiguration? eldenRingSave = null,
         BossListScope bossListScope = BossListScope.AllBosses,
         BlackMythWukongSaveConfiguration? blackMythWukongSave = null,
-        EldenRingMissedDeathAdjustments? eldenRingMissedDeathAdjustments = null)
+        EldenRingMissedDeathAdjustments? eldenRingMissedDeathAdjustments = null,
+        LiesOfPSaveConfiguration? liesOfPSave = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -70,6 +72,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneDeathCounter = manualBloodborneDeathCounter;
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
         BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
+        LiesOfPSave = liesOfPSave ?? LiesOfPSaveConfiguration.Default;
         BossProgress = bossProgress;
         OverlayConfiguration = overlayConfiguration;
         ManualBloodborneHotkeys = manualBloodborneHotkeys is { IsValid: true } validHotkeys
@@ -103,6 +106,9 @@ public sealed class PersistentTrackerState
 
     /// <summary>Local configuration for the separate read-only Black Myth: Wukong save reader.</summary>
     public BlackMythWukongSaveConfiguration BlackMythWukongSave { get; }
+
+    /// <summary>Local configuration for the separate read-only Lies of P Steam save reader.</summary>
+    public LiesOfPSaveConfiguration LiesOfPSave { get; }
 
     /// <summary>Returns the independent manual counter for a supported manual profile.</summary>
     public ManualBloodborneDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.Bloodborne
