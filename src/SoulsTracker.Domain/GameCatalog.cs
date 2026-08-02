@@ -193,7 +193,7 @@ public static class GameCatalog
             GameUiAvailability.Selectable,
             GameTrackingMode.GameLifetimeReadOnly,
             ReaderBindingState.PendingVerification,
-            []),
+            LiesOfPBossCatalog.Create()),
     ]);
 
     private static readonly ReadOnlyDictionary<GameId, GameDefinition> DefinitionsById =

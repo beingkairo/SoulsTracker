@@ -71,7 +71,7 @@ public sealed class GameCatalogTests
                 GameUiAvailability.Selectable,
                 GameTrackingMode.GameLifetimeReadOnly,
                 ReaderBindingState.PendingVerification,
-                0),
+                33),
         ];
 
         ExpectedGameDefinition[] actual = GameCatalog.All
