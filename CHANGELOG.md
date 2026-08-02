@@ -2,6 +2,23 @@
 
 All notable changes to SoulsTracker are documented here.
 
+## 1.3.0 - 2026-08-02
+
+* Added automatic, read-only Lies of P save discovery, character selection, lifetime death totals, and paired character-save handling.
+* Added a Lies of P boss checklist covering the base game and Overture.
+
+### Supported games
+
+- Demon Souls
+- Dark Souls: Remastered
+- Dark Souls II: Scholar of the First Sin
+- Dark Souls III
+- Bloodborne
+- Sekiro: Shadows Die Twice
+- Elden Ring
+- Black Myth: Wukong
+- Lies of P
+
 ## 1.2.2 - 2026-07-30
 
 * Added missed-death adjustments for Elden Ring, so you can correct the displayed total when the game save omits certain PvP or invasion-style deaths.

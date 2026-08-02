@@ -10,6 +10,7 @@ Automatic death tracking currently works for:
 - Sekiro: Shadows Die Twice
 - Elden Ring
 - Black Myth: Wukong
+- Lies of P
 
 Elden Ring and Black Myth: Wukong are tracked through local save files. Bloodborne and Demon's Souls use manual death counters.
 
@@ -24,6 +25,8 @@ Install SoulsTracker and open it before opening OBS. Go to the **Main** tab and 
 For Elden Ring, SoulsTracker searches for local `ER0000.sl2` files and lets you choose the character you are using. The character list shows each character's name and level.
 
 For Black Myth: Wukong, SoulsTracker searches supported Steam and Epic save locations. If it finds one clear save slot, it selects it automatically. If it finds more than one, choose the one you are using.
+
+For Lies of P, SoulsTracker searches local Steam character saves and lets you choose the character you are using. Paired character saves are handled together so the selected character remains stable when the game writes both files.
 
 Browse and Rescan are available if your saves are stored somewhere else. Save-based counters only update after the game saves, so the number may take a moment to change.
 
