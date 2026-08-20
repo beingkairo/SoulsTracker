@@ -46,6 +46,8 @@ The Total Deaths overlay can be moved and resized however you want.
 
 SoulsTracker should be opened before OBS. If OBS was already running, refresh each SoulsTracker Browser Source after the app says the overlay is ready.
 
+If you need OBS to open first, turn on **OBS startup recovery** in **Settings**. This is off by default. When you choose it, a small helper starts only for your Windows user at sign-in and keeps the same `127.0.0.1` Browser Source available. It shows `Please open SoulsTracker` until the app starts, then updates the existing source automatically. Turn the setting off to remove the sign-in helper immediately.
+
 You can change the font, colors, size, background, markers, alignment, outline, shadow, and defeated boss style from the Overlay tab. Click Apply to update the preview and OBS source.
 
 ### Other settings
@@ -69,6 +71,8 @@ Automatic tracking can be affected by game updates. If a game changes how its da
 ## Local overlay security
 
 The overlay server only runs on `127.0.0.1`, which means it is limited to your own computer.
+
+OBS startup recovery is also local-only: it has no account, remote host, telemetry, save access, or game tracking while SoulsTracker is closed. The helper accepts state only from the current user through a bounded local pipe and continues to require the existing tokenized Browser Source URL.
 
 Generated overlay URLs include a local access token. Treat those URLs like private OBS settings and do not post them publicly.
 

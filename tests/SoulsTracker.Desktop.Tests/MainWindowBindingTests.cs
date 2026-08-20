@@ -695,12 +695,12 @@ public sealed class MainWindowBindingTests
                 ScrollViewer settings = Assert.IsType<ScrollViewer>(window.FindName("SettingsContentScrollViewer"));
                 Assert.Equal(ScrollBarVisibility.Auto, settings.VerticalScrollBarVisibility);
                 Assert.Equal(ScrollBarVisibility.Disabled, settings.HorizontalScrollBarVisibility);
-                Assert.Equal(0, settings.ScrollableHeight);
+                Assert.True(settings.ScrollableHeight > 0);
                 StackPanel settingsContent = Assert.IsType<StackPanel>(window.FindName("SettingsContentStack"));
                 Border[] settingsPanels = FindVisualDescendants<Border>(settingsContent)
-                    .Where(panel => AutomationProperties.GetName(panel) is "Death sound settings" or "OBS text export settings")
+                    .Where(panel => AutomationProperties.GetName(panel) is "OBS startup recovery settings" or "Death sound settings" or "OBS text export settings")
                     .ToArray();
-                Assert.Equal(["Death sound settings", "OBS text export settings"], settingsPanels.Select(AutomationProperties.GetName).ToArray());
+                Assert.Equal(["OBS startup recovery settings", "Death sound settings", "OBS text export settings"], settingsPanels.Select(AutomationProperties.GetName).ToArray());
                 Assert.True(settingsPanels[0].TranslatePoint(new Point(0, 0), settingsContent).Y < settingsPanels[1].TranslatePoint(new Point(0, 0), settingsContent).Y);
 
                 Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 1;

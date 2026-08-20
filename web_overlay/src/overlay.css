@@ -10,6 +10,15 @@ body {
   font-family: "Segoe UI", sans-serif;
 }
 
+.souls-tracker-host-status {
+  display: inline-block;
+  margin: 0;
+  padding: 10px 14px;
+  color: #fff;
+  background: rgb(21 23 27 / 88%);
+  font-size: 16px;
+}
+
 /* The counter uses the entire OBS browser-source viewport as its placement
    canvas. Its panel remains anchored when its title or numeric value changes. */
 #souls-tracker-overlay.souls-tracker-total-deaths-canvas {

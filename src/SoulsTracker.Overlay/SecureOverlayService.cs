@@ -14,7 +14,7 @@ using SoulsTracker.Domain;
 namespace SoulsTracker.Overlay;
 
 /// <summary>Owns the loopback-only, read-only OBS transport. It deliberately has no browser mutation API.</summary>
-public sealed class SecureOverlayService : IAsyncDisposable
+public sealed class SecureOverlayService : IAsyncDisposable, IOverlayStateSink
 {
     // OBS and the desktop preview hold WebSocket connections open by design.  The
     // generic host defaults to a multi-second graceful shutdown window for those
@@ -65,7 +65,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
 
         Port = endpoint.Port!.Value;
         trackerState = loaded.State!;
-        snapshot = CreateSnapshot(trackerState, runtimeObservation, sequence);
+        snapshot = OverlaySnapshotFactory.Create(trackerState, runtimeObservation, sequence);
         application = BuildApplication(Port);
         try { await application.StartAsync(cancellationToken).ConfigureAwait(false); }
         catch (Exception ex)
@@ -82,7 +82,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
         lock (snapshotSynchronization)
         {
             trackerState = state;
-            if (!CanUseRuntimeObservation(state, runtimeObservation))
+            if (!OverlaySnapshotFactory.CanUseRuntimeObservation(state, runtimeObservation))
             {
                 runtimeObservation = null;
             }
@@ -96,7 +96,7 @@ public sealed class SecureOverlayService : IAsyncDisposable
         lock (snapshotSynchronization)
         {
             if (trackerState is null) return;
-            runtimeObservation = CanUseRuntimeObservation(trackerState, observation) ? observation : null;
+            runtimeObservation = OverlaySnapshotFactory.CanUseRuntimeObservation(trackerState, observation) ? observation : null;
             PublishSnapshot(trackerState, runtimeObservation);
         }
     }
@@ -175,41 +175,9 @@ public sealed class SecureOverlayService : IAsyncDisposable
     private void PublishSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation)
     {
         long nextSequence = checked(sequence + 1);
-        snapshot = CreateSnapshot(state, observation, nextSequence);
+        snapshot = OverlaySnapshotFactory.Create(state, observation, nextSequence);
         Volatile.Write(ref sequence, nextSequence);
     }
-
-    private static OverlaySnapshot CreateSnapshot(PersistentTrackerState state, RuntimeGameObservation? observation, long sequenceNumber)
-    {
-        OverlayGameMetadata game = new(state.SelectedGameId);
-        TotalDeathsDisplayValue deaths = CanUseRuntimeObservation(state, observation)
-            ? TotalDeathsDisplayValue.FromRuntimeObservation(observation!)
-            : GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly
-                ? TotalDeathsDisplayValue.FromManualCounter(state.SelectedGameId, state.GetManualDeathCounter(state.SelectedGameId))
-                : state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP
-                    ? TotalDeathsDisplayValue.UnavailableForSelectedGame(state.SelectedGameId)
-                : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
-        long? combinedTotal = TotalDeathsDisplayProjection.Combine(state, CanUseRuntimeObservation(state, observation) ? observation : null);
-        if (combinedTotal.HasValue && deaths.GameId == GameId.EldenRing)
-        {
-            deaths = TotalDeathsDisplayValue.WithNumericValue(deaths, combinedTotal.Value);
-        }
-        IEnumerable<OverlayBossEntry> bosses = BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.BossListScope)
-                .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
-        return new OverlaySnapshot(
-            OverlaySnapshot.CurrentSchemaVersion,
-            sequenceNumber,
-            DateTimeOffset.UtcNow,
-            game,
-            deaths,
-            bosses,
-            OverlayPresentationConfiguration.From(state.OverlayConfiguration));
-    }
-
-    private static bool CanUseRuntimeObservation(PersistentTrackerState state, RuntimeGameObservation? observation) =>
-        observation?.GameId == state.SelectedGameId &&
-        (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
-        (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null);
 
     private static OverlaySnapshot EmptySnapshot() => new(1, 0, DateTimeOffset.UtcNow, null, TotalDeathsDisplayValue.Unavailable, []);
     private static int FindAvailablePort()

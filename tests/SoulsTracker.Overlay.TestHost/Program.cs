@@ -74,4 +74,5 @@ sealed class EndpointAccess(int port) : IOverlayEndpointAccess
     public OverlayEndpointConfiguration Configuration { get; } = new(port, OverlayAccessToken.Parse(AccessToken));
     public bool IsAuthorized(string? suppliedToken) => string.Equals(AccessToken, suppliedToken, StringComparison.Ordinal);
     public string BuildCanonicalUrl(string route) => $"http://127.0.0.1:{port}{route}?token={AccessToken}";
+    public string BuildLocalHostProof() => AccessToken;
 }

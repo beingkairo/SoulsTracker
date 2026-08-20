@@ -118,6 +118,16 @@ Invoke-External dotnet @(
     $publishPath
 )
 
+Invoke-External dotnet @(
+    "publish",
+    (Join-Path $root "src\SoulsTracker.OverlayHost\SoulsTracker.OverlayHost.csproj"),
+    "--configuration",
+    "Release",
+    "--no-restore",
+    "--output",
+    $publishPath
+)
+
 Promote-VerifiedDesktopArtifact -StagingPath $publishPath -ReleasePath $releasePath -ArtifactsRoot $artifactsRoot
 
 if (-not $SkipInstaller) {

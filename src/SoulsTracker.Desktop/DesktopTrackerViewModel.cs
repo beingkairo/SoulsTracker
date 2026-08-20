@@ -55,6 +55,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool isTotalDeathsOverlayEnabled;
     private bool showTotalDeathsGameName;
     private bool isBossListOverlayEnabled;
+    private bool isPersistentOverlayHostEnabled;
+    private string? persistentOverlayHostStatus;
+    private Func<bool, Task<bool>>? setPersistentOverlayHostAsync;
     private BossListVisibilityMode bossListVisibilityMode;
     private LegacyImportViewModel? legacyImport;
     private GlobalHotkeySettings hotkeySettings = GlobalHotkeySettings.Default;
@@ -471,6 +474,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsTotalDeathsOverlayEnabled { get => isTotalDeathsOverlayEnabled; private set => SetField(ref isTotalDeathsOverlayEnabled, value); }
     public bool ShowTotalDeathsGameName { get => showTotalDeathsGameName; private set => SetField(ref showTotalDeathsGameName, value); }
     public bool IsBossListOverlayEnabled { get => isBossListOverlayEnabled; private set => SetField(ref isBossListOverlayEnabled, value); }
+    public bool IsPersistentOverlayHostEnabled { get => isPersistentOverlayHostEnabled; private set => SetField(ref isPersistentOverlayHostEnabled, value); }
+    public string? PersistentOverlayHostStatus { get => persistentOverlayHostStatus; private set => SetField(ref persistentOverlayHostStatus, value); }
     public BossListVisibilityMode BossListVisibilityMode { get => bossListVisibilityMode; private set => SetField(ref bossListVisibilityMode, value); }
     public LegacyImportViewModel? LegacyImport { get => legacyImport; private set => SetField(ref legacyImport, value); }
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
@@ -611,6 +616,54 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         TotalDeathsOverlayUrl = "Overlay endpoint unavailable. Close the conflicting local application and restart SoulsTracker.";
         BossListOverlayUrl = TotalDeathsOverlayUrl;
         LocalOverlayStatus = LocalOverlayUnavailableMessage;
+    }
+
+    internal void ConfigurePersistentOverlayHost(bool enabled, Func<bool, Task<bool>> apply)
+    {
+        IsPersistentOverlayHostEnabled = enabled;
+        setPersistentOverlayHostAsync = apply ?? throw new ArgumentNullException(nameof(apply));
+        PersistentOverlayHostStatus = enabled ? "OBS startup recovery is enabled for this Windows user." : "OBS startup recovery is off. SoulsTracker starts the local overlay while it is open.";
+    }
+
+    internal void SetPersistentOverlayHostFallbackStatus(bool inAppOverlayReady)
+    {
+        PersistentOverlayHostStatus = inAppOverlayReady
+            ? "OBS startup recovery could not connect. SoulsTracker is using the normal local overlay for this session. Restart SoulsTracker to retry."
+            : "OBS startup recovery could not connect, and the normal local overlay is unavailable. Close any conflicting local app and restart SoulsTracker to retry.";
+    }
+
+    public async Task SetPersistentOverlayHostEnabledAsync(bool enabled)
+    {
+        if (setPersistentOverlayHostAsync is null || IsPersistentOverlayHostEnabled == enabled) return;
+        IsBusy = true;
+        try
+        {
+            if (await setPersistentOverlayHostAsync(enabled))
+            {
+                IsPersistentOverlayHostEnabled = enabled;
+                PersistentOverlayHostStatus = enabled ? "OBS startup recovery is enabled for this Windows user." : "OBS startup recovery is disabled and the helper has stopped.";
+            }
+            else
+            {
+                PersistentOverlayHostStatus = enabled
+                    ? "OBS startup recovery could not be enabled. Try again."
+                    : "OBS startup recovery could not be disabled. Try again.";
+            }
+        }
+        catch
+        {
+            PersistentOverlayHostStatus = enabled
+                ? "OBS startup recovery could not be enabled. Try again."
+                : "OBS startup recovery could not be disabled. Try again.";
+        }
+        finally
+        {
+            // This is intentionally raised even when the operation failed: the
+            // Settings control is one-way and must be driven back to the actual
+            // registered/host state, not retain a transient click.
+            OnPropertyChanged(nameof(IsPersistentOverlayHostEnabled));
+            IsBusy = false;
+        }
     }
     internal void SetGlobalHotkeyStatus(string status) => GlobalHotkeyStatus = string.IsNullOrWhiteSpace(status)
         ? throw new ArgumentException("A global hotkey status is required.", nameof(status))

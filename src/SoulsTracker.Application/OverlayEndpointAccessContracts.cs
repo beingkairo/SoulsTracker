@@ -11,6 +11,8 @@ public interface IOverlayEndpointAccess
     OverlayEndpointConfiguration Configuration { get; }
     bool IsAuthorized(string? suppliedToken);
     string BuildCanonicalUrl(string route);
+    /// <summary>Returns an opaque proof for the current-user overlay-host pipe. It must never be displayed or logged.</summary>
+    string BuildLocalHostProof();
 }
 
 /// <summary>Creates an opaque endpoint capability from new or persisted configuration.</summary>

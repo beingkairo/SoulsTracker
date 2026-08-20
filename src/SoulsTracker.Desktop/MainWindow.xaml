@@ -650,6 +650,15 @@
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,24,24,16" AutomationProperties.Name="Settings workspace content">
                 <StackPanel x:Name="SettingsContentStack">
+                    <Border Style="{StaticResource Panel}" AutomationProperties.Name="OBS startup recovery settings">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelTitle}" Text="OBS STARTUP RECOVERY" />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Optional: keep your existing local Browser Source available after Windows sign-in, before SoulsTracker opens." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="This stays on this computer, uses 127.0.0.1 only, and does not track games or send data while SoulsTracker is closed." />
+                            <CheckBox x:Name="PersistentOverlayHostEnabledCheckBox" Content="Enable OBS startup recovery for this Windows user" IsChecked="{Binding IsPersistentOverlayHostEnabled, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Checked="PersistentOverlayHostEnabled_Checked" Unchecked="PersistentOverlayHostEnabled_Unchecked" AutomationProperties.Name="Enable OBS startup recovery" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="{Binding PersistentOverlayHostStatus}" AutomationProperties.Name="OBS startup recovery status" AutomationProperties.LiveSetting="Polite" />
+                        </StackPanel>
+                    </Border>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="DEATH SOUND" />

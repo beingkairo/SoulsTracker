@@ -45,6 +45,8 @@ public sealed class OverlayEndpointCredentials : IOverlayEndpointAccess
         if (route is not "/overlay/total_deaths" and not "/overlay/boss_list") throw new ArgumentException("Only approved canonical overlay routes can be displayed.", nameof(route));
         return $"http://127.0.0.1:{Port}{route}?token={token}";
     }
+
+    public string BuildLocalHostProof() => token;
 }
 
 /// <summary>Infrastructure implementation factory; it is the only layer using the persistence bridge.</summary>

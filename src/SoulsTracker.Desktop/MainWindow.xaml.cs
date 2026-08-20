@@ -531,6 +531,16 @@ public partial class MainWindow : Window
     private async void TotalDeathsOverlayEnabled_Checked(object sender, RoutedEventArgs e) =>
         await SetTotalDeathsOverlayEnabledAsync(isEnabled: true);
 
+    private async void PersistentOverlayHostEnabled_Checked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetPersistentOverlayHostEnabledAsync(true);
+    }
+
+    private async void PersistentOverlayHostEnabled_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetPersistentOverlayHostEnabledAsync(false);
+    }
+
     private async void TotalDeathsOverlayEnabled_Unchecked(object sender, RoutedEventArgs e) =>
         await SetTotalDeathsOverlayEnabledAsync(isEnabled: false);
 

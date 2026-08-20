@@ -45,6 +45,7 @@ interface OverlaySnapshot {
   TotalDeaths: TotalDeathsDisplayValue;
   Bosses: OverlayBossEntry[];
   Presentation: OverlayPresentationConfiguration;
+  HostStatus?: string;
 }
 
 class OverlayClient {
@@ -114,11 +115,23 @@ class OverlayClient {
     candidate.Presentation = applySceneStyle(normalizePresentation(candidate.Presentation), this.route);
 
     this.acceptedSequence = candidate.SequenceNumber;
-    if (this.route === "total-deaths") {
+    if (candidate.HostStatus === "Please open SoulsTracker") {
+      this.renderHostStatus(candidate.HostStatus);
+    } else if (this.route === "total-deaths") {
       this.renderTotalDeaths(candidate);
     } else {
       this.renderBossList(candidate);
     }
+  }
+
+  private renderHostStatus(message: string): void {
+    const status = document.createElement("p");
+    status.className = "souls-tracker-host-status";
+    status.dataset.testid = "overlay-host-placeholder";
+    status.textContent = message;
+    this.target.className = "";
+    delete this.target.dataset.alignment;
+    replaceContent(this.target, status);
   }
 
   private renderConnectionState(): void {

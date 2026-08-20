@@ -447,5 +447,6 @@ public sealed class SecureOverlayServiceTests
         public OverlayEndpointConfiguration Configuration { get; }
         public bool IsAuthorized(string? suppliedToken) => string.Equals(token, suppliedToken, StringComparison.Ordinal);
         public string BuildCanonicalUrl(string route) => route is "/overlay/total_deaths" or "/overlay/boss_list" ? $"http://127.0.0.1:{Configuration.Port}{route}?token={token}" : throw new ArgumentException("Only canonical routes are valid.", nameof(route));
+        public string BuildLocalHostProof() => token;
     }
 }
