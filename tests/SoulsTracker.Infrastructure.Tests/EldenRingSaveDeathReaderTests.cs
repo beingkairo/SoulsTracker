@@ -61,6 +61,7 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
         RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
 
         Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
+        Assert.True(result.HasNoRecordedDeaths);
         Assert.Equal(0, result.Observation!.TotalDeaths.Value);
     }
 

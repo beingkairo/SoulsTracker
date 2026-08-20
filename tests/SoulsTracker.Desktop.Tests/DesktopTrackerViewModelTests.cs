@@ -1740,7 +1740,7 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task EldenRingSyncedZeroUsesTheNumericDisplayWithoutMaskingUnavailableReaderStates()
+    public async Task ValidatedZeroDeathSaveUsesAnExplicitStatusWithoutMaskingUnavailableReaderStates()
     {
         PersistentTrackerState state = new(
             PersistentTrackerState.CurrentSchemaVersion,
@@ -1753,15 +1753,82 @@ public sealed class DesktopTrackerViewModelTests
         await harness.ViewModel.InitializeAsync();
 
         harness.ViewModel.ApplyRuntimeReaderResult(
-            RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.EldenRing, 0, DateTimeOffset.UtcNow)));
-        Assert.Equal("0", harness.ViewModel.TotalDeathsText);
-        Assert.True(harness.ViewModel.IsTotalDeathsValueNumeric);
+            RuntimeGameReadResult.NoDeathsRecorded(new RuntimeGameObservation(GameId.EldenRing, 0, DateTimeOffset.UtcNow)));
+        Assert.Equal(DesktopTrackerViewModel.NoDeathsRecordedMessage, harness.ViewModel.TotalDeathsText);
+        Assert.Equal(DesktopTrackerViewModel.NoDeathsRecordedMessage, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.False(harness.ViewModel.IsTotalDeathsValueNumeric);
 
         harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(GameId.EldenRing));
         Assert.Equal("Choose an Elden Ring save file to begin tracking.", harness.ViewModel.TotalDeathsText);
 
         harness.ViewModel.ApplyRuntimeReaderResult(null);
         Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, harness.ViewModel.TotalDeathsText);
+    }
+
+    [Fact]
+    public async Task LiesOfPValidatedNoDeathsOverridesSaveSetupText()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            liesOfPSave: new LiesOfPSaveConfiguration(@"C:\\Tracker\\SaveData-1_Character_1.sav"));
+        await using TestHarness harness = new(state);
+        await harness.ViewModel.InitializeAsync();
+
+        harness.ViewModel.ApplyRuntimeReaderResult(
+            RuntimeGameReadResult.NoDeathsRecorded(new RuntimeGameObservation(GameId.LiesOfP, 0, DateTimeOffset.UtcNow)));
+
+        Assert.Equal(DesktopTrackerViewModel.NoDeathsRecordedMessage, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Equal(DesktopTrackerViewModel.NoDeathsRecordedMessage, harness.ViewModel.TotalDeathsText);
+        Assert.DoesNotContain("unsupported", harness.ViewModel.RuntimeReaderStatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SelectedLiesOfPSaveReadFailureOverridesTrackingCopyAndClearsTheZeroDeathState()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            liesOfPSave: new LiesOfPSaveConfiguration(@"C:\\Tracker\\SaveData-1_Character_1.sav"));
+        await using TestHarness harness = new(state);
+        await harness.ViewModel.InitializeAsync();
+        harness.ViewModel.ApplyRuntimeReaderResult(
+            RuntimeGameReadResult.NoDeathsRecorded(new RuntimeGameObservation(GameId.LiesOfP, 0, DateTimeOffset.UtcNow)));
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.SelectedSaveUnreadable(GameId.LiesOfP));
+
+        Assert.Equal(DesktopTrackerViewModel.SelectedSaveUnreadableMessage, harness.ViewModel.RuntimeReaderStatusText);
+        Assert.Equal(DesktopTrackerViewModel.SelectedSaveUnreadableMessage, harness.ViewModel.TotalDeathsText);
+        Assert.DoesNotContain("Tracking", harness.ViewModel.RuntimeReaderStatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SelectedWukongSaveReadFailureOverridesTrackingCopyWhileUnselectedSetupRemainsDistinct()
+    {
+        using var files = new TemporaryWukongSaves();
+        string selectedPath = files.Add(1, 4);
+        await using TestHarness selected = new(
+            WukongState(selectedPath),
+            saveDiscovery: new FixedSaveDiscovery(new DiscoveredLocalSave(selectedPath, "Save slot 1")));
+        await selected.ViewModel.InitializeAsync();
+        Assert.Equal("Tracking Save slot 1", selected.ViewModel.BlackMythWukongSaveDiscoveryStatus);
+
+        selected.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.SelectedSaveUnreadable(GameId.BlackMythWukong));
+        Assert.Equal(DesktopTrackerViewModel.SelectedSaveUnreadableMessage, selected.ViewModel.RuntimeReaderStatusText);
+        Assert.Equal(DesktopTrackerViewModel.SelectedSaveUnreadableMessage, selected.ViewModel.TotalDeathsText);
+
+        await using TestHarness unselected = new(PersistentTrackerState.Default);
+        await unselected.ViewModel.InitializeAsync();
+        await unselected.ViewModel.SelectGameAsync(unselected.Game(GameId.BlackMythWukong));
+        unselected.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(GameId.BlackMythWukong));
+        Assert.Equal("Choose a Black Myth: Wukong save file to begin tracking.", unselected.ViewModel.TotalDeathsText);
+        Assert.NotEqual(DesktopTrackerViewModel.SelectedSaveUnreadableMessage, unselected.ViewModel.RuntimeReaderStatusText);
     }
 
     private static PersistentTrackerState WithSelectedGame(GameId gameId, long manualDeaths) => new(

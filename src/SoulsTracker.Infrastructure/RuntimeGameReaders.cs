@@ -17,6 +17,7 @@ public enum RuntimeGameReaderStatus
 {
     Unavailable,
     WaitingForSaveFile,
+    SelectedSaveUnreadable,
     WaitingForActiveCharacter,
     Synced,
 }
@@ -29,13 +30,15 @@ public sealed record RuntimeGameReadResult
         RuntimeGameReaderStatus status,
         RuntimeGameObservation? observation,
         BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null,
-        string? blackMythWukongSavePath = null)
+        string? blackMythWukongSavePath = null,
+        bool hasNoRecordedDeaths = false)
     {
         GameId = gameId ?? throw new ArgumentNullException(nameof(gameId));
         Status = status;
         Observation = observation;
         BlackMythWukongSaveMetadata = blackMythWukongSaveMetadata;
         BlackMythWukongSavePath = blackMythWukongSavePath;
+        HasNoRecordedDeaths = hasNoRecordedDeaths;
     }
 
     public GameId GameId { get; }
@@ -50,11 +53,22 @@ public sealed record RuntimeGameReadResult
     /// <summary>Identifies the selected Wukong save that produced the optional metadata.</summary>
     public string? BlackMythWukongSavePath { get; }
 
+    /// <summary>
+    /// True only when the selected reader validated the save and its parsed
+    /// death total is zero. This distinguishes a confirmed new character from
+    /// unavailable, unsupported, or unreadable save data.
+    /// </summary>
+    public bool HasNoRecordedDeaths { get; }
+
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
 
     public static RuntimeGameReadResult WaitingForSaveFile(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForSaveFile, null);
+
+    /// <summary>Reports that a configured selected local save could not be safely read this poll.</summary>
+    public static RuntimeGameReadResult SelectedSaveUnreadable(GameId gameId) =>
+        new(gameId, RuntimeGameReaderStatus.SelectedSaveUnreadable, null);
 
     public static RuntimeGameReadResult Synced(
         RuntimeGameObservation observation,
@@ -66,6 +80,27 @@ public sealed record RuntimeGameReadResult
             observation,
             blackMythWukongSaveMetadata,
             blackMythWukongSavePath);
+
+    /// <summary>Reports a parser-validated zero-death save without treating an unavailable reader as zero.</summary>
+    public static RuntimeGameReadResult NoDeathsRecorded(
+        RuntimeGameObservation observation,
+        BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null,
+        string? blackMythWukongSavePath = null)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        if (observation.TotalDeaths.Value != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(observation), "A no-deaths result requires a zero total.");
+        }
+
+        return new(
+            observation.GameId,
+            RuntimeGameReaderStatus.Synced,
+            observation,
+            blackMythWukongSaveMetadata,
+            blackMythWukongSavePath,
+            hasNoRecordedDeaths: true);
+    }
 
     /// <summary>
     /// Reports an unavailable reader while carrying a same-game, presentation-

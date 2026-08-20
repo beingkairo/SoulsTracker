@@ -65,6 +65,40 @@ public sealed class LiesOfPSaveReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task ReaderReportsValidatedOmittedDeathPropertyAsNoDeathsRecorded()
+    {
+        string path = Path.Combine(root, "SaveData-1_Character_1.sav");
+        Directory.CreateDirectory(root);
+        await File.WriteAllBytesAsync(path, Fixture.Create(null));
+
+        var reader = new LiesOfPSaveDeathReader();
+        reader.Configure(new LiesOfPSaveConfiguration(path));
+        RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
+
+        Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
+        Assert.True(result.HasNoRecordedDeaths);
+        Assert.Equal(0, result.Observation!.TotalDeaths.Value);
+    }
+
+    [Fact]
+    public async Task ReaderReportsSelectedSaveUnreadableAfterAFormerlyValidMemberBecomesMalformed()
+    {
+        string path = Path.Combine(root, "SaveData-1_Character_1.sav");
+        Directory.CreateDirectory(root);
+        await File.WriteAllBytesAsync(path, Fixture.Create(6));
+        var reader = new LiesOfPSaveDeathReader();
+        reader.Configure(new LiesOfPSaveConfiguration(path));
+        Assert.Equal(RuntimeGameReaderStatus.Synced, (await reader.ReadAsync(default))!.Status);
+
+        await File.WriteAllBytesAsync(path, [1, 2, 3]);
+        RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
+
+        Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, result.Status);
+        Assert.Null(result.Observation);
+        Assert.False(result.HasNoRecordedDeaths);
+    }
+
+    [Fact]
     public async Task DiscoveryGroupsPairedMembersAndUsesNewestValidCopy()
     {
         string account = Path.Combine(root, "LiesofP", "Saved", "SaveGames", "6144");

@@ -29,6 +29,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string LiesOfPWaitingForSaveFileMessage = "Choose a Lies of P save file";
     internal const string EldenRingChooseCharacterMessage = "Choose a character to continue.";
     internal const string GameSyncedMessage = "Synced";
+    internal const string NoDeathsRecordedMessage = "No deaths recorded yet — the tracker will update after your first saved death.";
+    internal const string SelectedSaveUnreadableMessage = "Selected save cannot currently be read. Save in-game, then Rescan or change the selected save.";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
     internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable — waiting for active character.";
 
@@ -42,6 +44,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
     private RuntimeGameReaderStatus runtimeReaderStatus;
+    private bool runtimeReaderHasNoRecordedDeaths;
     private GameId? runtimeReaderGameId;
     private bool isLoading = true;
     private bool isBusy;
@@ -351,6 +354,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 return null;
             }
 
+            if (runtimeReaderHasNoRecordedDeaths)
+            {
+                return NoDeathsRecordedMessage;
+            }
+
+            if (runtimeReaderStatus == RuntimeGameReaderStatus.SelectedSaveUnreadable)
+            {
+                return SelectedSaveUnreadableMessage;
+            }
+
             if (selectedGameId == GameId.BlackMythWukong && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
             {
                 return BlackMythWukongSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
@@ -545,6 +558,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             runtimeReaderGameId = null;
             runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
+            runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
             SetBlackMythWukongSaveMetadata(null);
             UpdateTotalDeathsText();
@@ -558,6 +572,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (result is not null && result.GameId == state.SelectedGameId && !blackMythWukongSaveIsUnconfigured && !liesOfPSaveIsUnconfigured)
         {
             runtimeReaderStatus = result.Status;
+            runtimeReaderHasNoRecordedDeaths = result.HasNoRecordedDeaths;
             runtimeObservation = result.Observation;
             SetBlackMythWukongSaveMetadata(
                 result.GameId == GameId.BlackMythWukong &&
@@ -572,6 +587,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             runtimeReaderGameId = GameId.BlackMythWukong;
             runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
+            runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
             SetBlackMythWukongSaveMetadata(null);
         }
@@ -579,12 +595,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             runtimeReaderGameId = GameId.LiesOfP;
             runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
+            runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
             SetBlackMythWukongSaveMetadata(null);
         }
         else
         {
             runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
+            runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
             SetBlackMythWukongSaveMetadata(null);
         }
@@ -1463,6 +1481,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
         EldenRingSaveConfiguration? previousEldenRingSave = state?.EldenRingSave;
+        LiesOfPSaveConfiguration? previousLiesOfPSave = state?.LiesOfPSave;
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
         if (state.SelectedGameId != GameId.BlackMythWukong ||
             !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase))
@@ -1474,16 +1493,20 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (runtimeReaderGameId != state.SelectedGameId || blackMythWukongSaveIsUnconfigured || liesOfPSaveIsUnconfigured)
         {
             runtimeObservation = null;
+            runtimeReaderHasNoRecordedDeaths = false;
             runtimeReaderStatus = blackMythWukongSaveIsUnconfigured || liesOfPSaveIsUnconfigured
                 ? RuntimeGameReaderStatus.WaitingForSaveFile
                 : RuntimeGameReaderStatus.Unavailable;
             runtimeReaderGameId = blackMythWukongSaveIsUnconfigured ? GameId.BlackMythWukong : liesOfPSaveIsUnconfigured ? GameId.LiesOfP : null;
         }
-        else if (state.SelectedGameId == GameId.EldenRing && previousEldenRingSave != state.EldenRingSave)
+        else if ((state.SelectedGameId == GameId.EldenRing && previousEldenRingSave != state.EldenRingSave) ||
+                 (state.SelectedGameId == GameId.BlackMythWukong && !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase)) ||
+                 (state.SelectedGameId == GameId.LiesOfP && previousLiesOfPSave != state.LiesOfPSave))
         {
             runtimeObservation = null;
+            runtimeReaderHasNoRecordedDeaths = false;
             runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
-            runtimeReaderGameId = GameId.EldenRing;
+            runtimeReaderGameId = state.SelectedGameId;
         }
         IsTotalDeathsOverlayEnabled = state.OverlayConfiguration.TotalDeaths.IsEnabled;
         ShowTotalDeathsGameName = state.OverlayConfiguration.TotalDeaths.ShowGameName;
@@ -1548,6 +1571,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
 
         GameId selectedId = state.SelectedGameId;
+        if (runtimeReaderHasNoRecordedDeaths)
+        {
+            TotalDeathsText = NoDeathsRecordedMessage;
+            return;
+        }
+
+        if (runtimeReaderStatus == RuntimeGameReaderStatus.SelectedSaveUnreadable)
+        {
+            TotalDeathsText = SelectedSaveUnreadableMessage;
+            return;
+        }
+
         long? combined = TotalDeathsDisplayProjection.Combine(state, runtimeObservation?.GameId == selectedId ? runtimeObservation : null);
         TotalDeathsText = combined.HasValue
             ? combined.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)

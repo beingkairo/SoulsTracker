@@ -33,7 +33,10 @@ public sealed class LiesOfPSaveDeathReader : IRuntimeGameDeathReader
                 {
                     if (LiesOfPSaveParser.TryReadTotalDeaths(save.bytes, out long totalDeaths) == LiesOfPSaveParseOutcome.Success)
                     {
-                        return RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow));
+                        RuntimeGameObservation observation = new(GameId, totalDeaths, DateTimeOffset.UtcNow);
+                        return totalDeaths == 0
+                            ? RuntimeGameReadResult.NoDeathsRecorded(observation)
+                            : RuntimeGameReadResult.Synced(observation);
                     }
 
                     return null;
@@ -43,11 +46,11 @@ public sealed class LiesOfPSaveDeathReader : IRuntimeGameDeathReader
             {
                 await Task.Delay(RetryDelayMilliseconds, cancellationToken).ConfigureAwait(false);
             }
-            catch (UnauthorizedAccessException) { return null; }
-            catch (System.Security.SecurityException) { return null; }
+            catch (UnauthorizedAccessException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
+            catch (System.Security.SecurityException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
         }
 
-        return null;
+        return RuntimeGameReadResult.SelectedSaveUnreadable(GameId);
     }
 
     private static async Task<(string path, byte[] bytes)?> TryReadNewestValidMemberAsync(string selectedPath, CancellationToken cancellationToken)

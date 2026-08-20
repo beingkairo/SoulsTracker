@@ -72,7 +72,9 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
                 EldenRingSaveParseOutcome outcome = EldenRingSaveParser.TryReadTotalDeaths(bytes, configuration.SlotIndex, out long totalDeaths);
                 RuntimeGameReadResult? result = outcome switch
                 {
-                    EldenRingSaveParseOutcome.Success => RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow)),
+                    EldenRingSaveParseOutcome.Success => totalDeaths == 0
+                        ? RuntimeGameReadResult.NoDeathsRecorded(new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow))
+                        : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow)),
                     EldenRingSaveParseOutcome.EmptySlot => RuntimeGameReadResult.WaitingForActiveCharacter(GameId),
                     _ => null,
                 };

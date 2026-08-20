@@ -44,17 +44,17 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
         {
             fingerprint = SaveFingerprint.From(configuration.LocalPath);
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
-        catch (System.Security.SecurityException) { return null; }
+        catch (IOException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
+        catch (UnauthorizedAccessException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
+        catch (System.Security.SecurityException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
 
         try
         {
             EnsureReadable(configuration.LocalPath);
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
-        catch (System.Security.SecurityException) { return null; }
+        catch (IOException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
+        catch (UnauthorizedAccessException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
+        catch (System.Security.SecurityException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
 
         if (lastFingerprint == fingerprint && lastResult is not null)
         {
@@ -80,11 +80,16 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
                     out long totalDeaths,
                     out BlackMythWukongSaveMetadata? saveMetadata);
                 RuntimeGameReadResult? result = outcome == BlackMythWukongSaveParseOutcome.Success
-                    ? RuntimeGameReadResult.Synced(
-                        new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
-                        saveMetadata,
-                        configuration.LocalPath)
-                    : null;
+                    ? totalDeaths == 0
+                        ? RuntimeGameReadResult.NoDeathsRecorded(
+                            new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
+                            saveMetadata,
+                            configuration.LocalPath)
+                        : RuntimeGameReadResult.Synced(
+                            new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
+                            saveMetadata,
+                            configuration.LocalPath)
+                    : RuntimeGameReadResult.SelectedSaveUnreadable(GameId);
                 lastFingerprint = fingerprint;
                 lastResult = result;
                 return result;
@@ -96,11 +101,11 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
                     await Task.Delay(RetryDelayMilliseconds, cancellationToken).ConfigureAwait(false);
                 }
             }
-            catch (UnauthorizedAccessException) { return null; }
-            catch (System.Security.SecurityException) { return null; }
+            catch (UnauthorizedAccessException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
+            catch (System.Security.SecurityException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
         }
 
-        return null;
+        return RuntimeGameReadResult.SelectedSaveUnreadable(GameId);
     }
 
     private static async Task<byte[]> ReadSharedReadOnlyAsync(string path, CancellationToken cancellationToken)

@@ -161,6 +161,7 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
 
         RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
         Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
+        Assert.True(result.HasNoRecordedDeaths);
         Assert.Equal(GameId.BlackMythWukong, result.Observation!.GameId);
         Assert.Equal(0, result.Observation.TotalDeaths.Value);
         Assert.Equal(22, result.BlackMythWukongSaveMetadata!.Level);
@@ -169,11 +170,11 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task ReaderRejectsMissingLockedAndPartialArchivesThenUpdatesOnceAfterACompletedWrite()
+    public async Task ReaderReportsSelectedSaveUnreadableForMissingLockedAndPartialArchivesThenUpdatesOnceAfterACompletedWrite()
     {
         var reader = new BlackMythWukongSaveDeathReader();
         reader.Configure(new BlackMythWukongSaveConfiguration(Path.Combine(root, "ArchiveSaveFile.1.sav")));
-        Assert.Null(await reader.ReadAsync(default));
+        Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await reader.ReadAsync(default))!.Status);
 
         string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(7));
         reader.Configure(new BlackMythWukongSaveConfiguration(path));
@@ -181,16 +182,16 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
 
         using (var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
-            Assert.Null(await reader.ReadAsync(default));
+            Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await reader.ReadAsync(default))!.Status);
             var lockedReader = new BlackMythWukongSaveDeathReader();
             lockedReader.Configure(new BlackMythWukongSaveConfiguration(path));
-            Assert.Null(await lockedReader.ReadAsync(default));
+            Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await lockedReader.ReadAsync(default))!.Status);
         }
 
         byte[] completed = WukongSaveFixture.Create(8);
         await File.WriteAllBytesAsync(path, completed.AsMemory(0, completed.Length / 2));
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(2));
-        Assert.Null(await reader.ReadAsync(default));
+        Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await reader.ReadAsync(default))!.Status);
 
         await File.WriteAllBytesAsync(path, completed);
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(4));
