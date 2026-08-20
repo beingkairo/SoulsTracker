@@ -659,6 +659,18 @@
                             <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="{Binding PersistentOverlayHostStatus}" AutomationProperties.Name="OBS startup recovery status" AutomationProperties.LiveSetting="Polite" />
                         </StackPanel>
                     </Border>
+                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Manual update check settings">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelTitle}" Text="UPDATES" />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Checks GitHub only when you choose this. SoulsTracker never downloads or installs updates automatically." />
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="CheckForUpdatesButton" Content="Check for updates" Click="CheckForUpdates_Click" IsEnabled="{Binding CanCheckForUpdates}" AutomationProperties.Name="Check for updates" />
+                                <Button x:Name="RetryUpdateCheckButton" Margin="8,0,0,0" Content="Retry" Click="CheckForUpdates_Click" IsEnabled="{Binding CanRetryUpdateCheck}" Visibility="{Binding CanRetryUpdateCheck, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Retry update check" />
+                                <Button x:Name="OpenUpdateReleasePageButton" Margin="8,0,0,0" Content="Open release page" Click="OpenUpdateReleasePage_Click" IsEnabled="{Binding CanOpenAvailableUpdateReleasePage}" Visibility="{Binding CanOpenAvailableUpdateReleasePage, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Open available update release page" />
+                            </StackPanel>
+                            <TextBlock x:Name="UpdateCheckStatusTextBlock" Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="{Binding UpdateCheckStatus}" AutomationProperties.Name="Update check status" AutomationProperties.LiveSetting="Polite" />
+                        </StackPanel>
+                    </Border>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="DEATH SOUND" />

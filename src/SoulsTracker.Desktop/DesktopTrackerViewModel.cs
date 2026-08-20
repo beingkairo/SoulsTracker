@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Reflection;
+using System.Net.Http;
 using System.IO;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -41,6 +43,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly ILocalSaveDiscovery eldenRingSaveDiscovery;
     private readonly ILocalSaveDiscovery blackMythWukongSaveDiscovery;
     private readonly ILocalSaveDiscovery liesOfPSaveDiscovery;
+    private static readonly HttpClient ManualUpdateHttpClient = new();
+    private readonly IManualReleaseUpdateChecker manualReleaseUpdateChecker;
+    private readonly Func<string> installedVersionProvider;
+    private readonly IUpdateReleasePageLauncher updateReleasePageLauncher;
+    private bool isCheckingForUpdates;
+    private string? updateCheckStatus;
+    private Uri? availableUpdateReleasePage;
+    private bool updateCheckCanRetry;
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
     private RuntimeGameReaderStatus runtimeReaderStatus;
@@ -124,7 +134,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ILocalSaveDiscovery? blackMythWukongSaveDiscovery = null,
         ILocalSaveDiscovery? eldenRingSaveDiscovery = null,
         TimeProvider? timeProvider = null,
-        ILocalSaveDiscovery? liesOfPSaveDiscovery = null)
+        ILocalSaveDiscovery? liesOfPSaveDiscovery = null,
+        IManualReleaseUpdateChecker? manualReleaseUpdateChecker = null,
+        Func<string>? installedVersionProvider = null,
+        IUpdateReleasePageLauncher? updateReleasePageLauncher = null)
         : this(
             coordinator,
             eldenRingSaveProfileReader,
@@ -132,7 +145,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             eldenRingSaveDiscovery,
             timeProvider,
             ReadBlackMythWukongSaveMetadataCoreAsync,
-            liesOfPSaveDiscovery)
+            liesOfPSaveDiscovery,
+            manualReleaseUpdateChecker,
+            installedVersionProvider,
+            updateReleasePageLauncher)
     {
     }
 
@@ -143,13 +159,19 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ILocalSaveDiscovery? eldenRingSaveDiscovery,
         TimeProvider? timeProvider,
         Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>> readWukongSaveMetadataAsync,
-        ILocalSaveDiscovery? liesOfPSaveDiscovery = null)
+        ILocalSaveDiscovery? liesOfPSaveDiscovery = null,
+        IManualReleaseUpdateChecker? manualReleaseUpdateChecker = null,
+        Func<string>? installedVersionProvider = null,
+        IUpdateReleasePageLauncher? updateReleasePageLauncher = null)
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
         this.eldenRingSaveDiscovery = eldenRingSaveDiscovery ?? new EldenRingSaveDiscovery();
         this.blackMythWukongSaveDiscovery = blackMythWukongSaveDiscovery ?? new BlackMythWukongSaveDiscovery();
         this.liesOfPSaveDiscovery = liesOfPSaveDiscovery ?? new LiesOfPSaveDiscovery();
+        this.manualReleaseUpdateChecker = manualReleaseUpdateChecker ?? new GitHubLatestReleaseUpdateChecker(ManualUpdateHttpClient);
+        this.installedVersionProvider = installedVersionProvider ?? CurrentInstalledVersion;
+        this.updateReleasePageLauncher = updateReleasePageLauncher ?? new ShellUpdateReleasePageLauncher();
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.readWukongSaveMetadataAsync = readWukongSaveMetadataAsync ?? throw new ArgumentNullException(nameof(readWukongSaveMetadataAsync));
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
@@ -168,6 +190,53 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsCheckingForUpdates { get => isCheckingForUpdates; private set { if (SetField(ref isCheckingForUpdates, value)) { OnPropertyChanged(nameof(CanCheckForUpdates)); OnPropertyChanged(nameof(CanRetryUpdateCheck)); OnPropertyChanged(nameof(CanOpenAvailableUpdateReleasePage)); } } }
+    public string? UpdateCheckStatus { get => updateCheckStatus; private set => SetField(ref updateCheckStatus, value); }
+    public Uri? AvailableUpdateReleasePage { get => availableUpdateReleasePage; private set { if (SetField(ref availableUpdateReleasePage, value)) OnPropertyChanged(nameof(CanOpenAvailableUpdateReleasePage)); } }
+    public bool CanCheckForUpdates => ControlsEnabled && !IsCheckingForUpdates;
+    public bool CanRetryUpdateCheck => CanCheckForUpdates && updateCheckCanRetry;
+    public bool CanOpenAvailableUpdateReleasePage => !IsCheckingForUpdates && AvailableUpdateReleasePage is not null;
+
+    public async Task CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!CanCheckForUpdates) return;
+        IsCheckingForUpdates = true;
+        updateCheckCanRetry = false;
+        AvailableUpdateReleasePage = null;
+        UpdateCheckStatus = "Checking for updates…";
+        try
+        {
+            ManualReleaseUpdateResult result = await manualReleaseUpdateChecker.CheckAsync(installedVersionProvider(), cancellationToken);
+            switch (result.Status)
+            {
+                case ManualReleaseUpdateStatus.UpToDate: UpdateCheckStatus = "You’re up to date."; break;
+                case ManualReleaseUpdateStatus.UpdateAvailable: UpdateCheckStatus = $"Version {result.AvailableVersion} is available."; AvailableUpdateReleasePage = result.ReleasePage; break;
+                case ManualReleaseUpdateStatus.RateLimited: SetRetryableUpdateFailure("GitHub asked you to try again later."); break;
+                case ManualReleaseUpdateStatus.InvalidResponse or ManualReleaseUpdateStatus.InvalidInstalledVersion: SetRetryableUpdateFailure("Update information could not be verified. Try again or open the official Releases page."); break;
+                default: SetRetryableUpdateFailure("Couldn’t reach GitHub right now. Check your connection and try again."); break;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { UpdateCheckStatus = "Update check cancelled. Try again when you’re ready."; updateCheckCanRetry = true; }
+        finally { IsCheckingForUpdates = false; OnPropertyChanged(nameof(CanRetryUpdateCheck)); }
+    }
+
+    public void OpenAvailableUpdateReleasePage()
+    {
+        if (!CanOpenAvailableUpdateReleasePage || AvailableUpdateReleasePage is not { } page) return;
+        UpdateCheckStatus = updateReleasePageLauncher.TryOpen(page)
+            ? "Opening the official release page…"
+            : "The official release page could not be opened. Try again or open GitHub Releases in your browser.";
+    }
+
+    private void SetRetryableUpdateFailure(string status)
+    {
+        updateCheckCanRetry = true;
+        AvailableUpdateReleasePage = new Uri("https://github.com/beingkairo/SoulsTracker/releases");
+        UpdateCheckStatus = status;
+    }
+
+    private static string CurrentInstalledVersion() => typeof(DesktopTrackerViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
     private void BossListAppearanceDraft_PropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
     {
@@ -293,6 +362,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             if (SetField(ref isLoading, value))
             {
                 OnPropertyChanged(nameof(ControlsEnabled));
+                OnPropertyChanged(nameof(CanCheckForUpdates));
+                OnPropertyChanged(nameof(CanRetryUpdateCheck));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
@@ -308,6 +379,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             if (SetField(ref isBusy, value))
             {
                 OnPropertyChanged(nameof(ControlsEnabled));
+                OnPropertyChanged(nameof(CanCheckForUpdates));
+                OnPropertyChanged(nameof(CanRetryUpdateCheck));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));

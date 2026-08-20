@@ -1831,6 +1831,66 @@ public sealed class DesktopTrackerViewModelTests
         Assert.NotEqual(DesktopTrackerViewModel.SelectedSaveUnreadableMessage, unselected.ViewModel.RuntimeReaderStatusText);
     }
 
+    [Theory]
+    [InlineData(ManualReleaseUpdateStatus.UpToDate, "You’re up to date.", false)]
+    [InlineData(ManualReleaseUpdateStatus.RateLimited, "GitHub asked you to try again later.", true)]
+    [InlineData(ManualReleaseUpdateStatus.InvalidResponse, "Update information could not be verified.", true)]
+    [InlineData(ManualReleaseUpdateStatus.Unavailable, "Couldn’t reach GitHub right now.", true)]
+    public async Task ManualUpdateCheckMapsKnownResultsToTruthfulRetryableState(ManualReleaseUpdateStatus status, string expected, bool retryable)
+    {
+        var checker = new FixedManualUpdateChecker(new(status, status == ManualReleaseUpdateStatus.UpdateAvailable ? "1.4.0" : null, new Uri("https://github.com/beingkairo/SoulsTracker/releases")));
+        await using TestHarness harness = new(PersistentTrackerState.Default, manualReleaseUpdateChecker: checker, installedVersionProvider: static () => "1.3.0");
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.CheckForUpdatesAsync();
+        Assert.StartsWith(expected, harness.ViewModel.UpdateCheckStatus, StringComparison.Ordinal);
+        Assert.Equal(retryable, harness.ViewModel.CanRetryUpdateCheck);
+        Assert.Equal(retryable, harness.ViewModel.CanOpenAvailableUpdateReleasePage);
+    }
+
+    [Fact]
+    public async Task ManualUpdateCheckExposesBusyThenUpdateAndTestableReleaseLaunchOutcomes()
+    {
+        var checker = new DeferredManualUpdateChecker();
+        var launcher = new TestUpdateReleasePageLauncher(false);
+        await using TestHarness harness = new(PersistentTrackerState.Default, manualReleaseUpdateChecker: checker, installedVersionProvider: static () => "1.3.0", updateReleasePageLauncher: launcher);
+        await harness.ViewModel.InitializeAsync();
+        Task check = harness.ViewModel.CheckForUpdatesAsync();
+        await checker.Started.Task;
+        Assert.True(harness.ViewModel.IsCheckingForUpdates);
+        Assert.False(harness.ViewModel.CanCheckForUpdates);
+        checker.Complete(new(ManualReleaseUpdateStatus.UpdateAvailable, "1.4.0", new Uri("https://github.com/beingkairo/SoulsTracker/releases/tag/v1.4.0")));
+        await check;
+        Assert.Equal("Version 1.4.0 is available.", harness.ViewModel.UpdateCheckStatus);
+        harness.ViewModel.OpenAvailableUpdateReleasePage();
+        Assert.Equal(1, launcher.Calls);
+        Assert.StartsWith("The official release page could not be opened.", harness.ViewModel.UpdateCheckStatus, StringComparison.Ordinal);
+        Assert.True(harness.ViewModel.CanOpenAvailableUpdateReleasePage);
+    }
+
+    [Fact]
+    public async Task ManualUpdateCancellationIsDistinctAndRetryable()
+    {
+        await using TestHarness harness = new(PersistentTrackerState.Default, manualReleaseUpdateChecker: new CancellingManualUpdateChecker(), installedVersionProvider: static () => "1.3.0");
+        await harness.ViewModel.InitializeAsync();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await harness.ViewModel.CheckForUpdatesAsync(cancellation.Token);
+        Assert.Equal("Update check cancelled. Try again when you’re ready.", harness.ViewModel.UpdateCheckStatus);
+        Assert.True(harness.ViewModel.CanRetryUpdateCheck);
+    }
+
+    [Fact]
+    public async Task ManualUpdateReleaseLaunchSuccessReportsOpening()
+    {
+        var launcher = new TestUpdateReleasePageLauncher(true);
+        await using TestHarness harness = new(PersistentTrackerState.Default, manualReleaseUpdateChecker: new FixedManualUpdateChecker(new(ManualReleaseUpdateStatus.UpdateAvailable, "1.4.0", new Uri("https://github.com/beingkairo/SoulsTracker/releases/tag/v1.4.0"))), installedVersionProvider: static () => "1.3.0", updateReleasePageLauncher: launcher);
+        await harness.ViewModel.InitializeAsync();
+        await harness.ViewModel.CheckForUpdatesAsync();
+        harness.ViewModel.OpenAvailableUpdateReleasePage();
+        Assert.Equal(1, launcher.Calls);
+        Assert.Equal("Opening the official release page…", harness.ViewModel.UpdateCheckStatus);
+    }
+
     private static PersistentTrackerState WithSelectedGame(GameId gameId, long manualDeaths) => new(
         PersistentTrackerState.CurrentSchemaVersion,
         gameId,
@@ -1864,13 +1924,19 @@ public sealed class DesktopTrackerViewModelTests
             IEldenRingSaveProfileReader? profileReader = null,
             ILocalSaveDiscovery? saveDiscovery = null,
             ILocalSaveDiscovery? eldenRingSaveDiscovery = null,
-            Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>>? readWukongSaveMetadataAsync = null)
+            Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>>? readWukongSaveMetadataAsync = null,
+            IManualReleaseUpdateChecker? manualReleaseUpdateChecker = null,
+            Func<string>? installedVersionProvider = null,
+            IUpdateReleasePageLauncher? updateReleasePageLauncher = null)
             : this(
                 TrackerStateLoadResult.Loaded(state),
                 profileReader,
                 saveDiscovery,
                 eldenRingSaveDiscovery,
-                readWukongSaveMetadataAsync)
+                readWukongSaveMetadataAsync,
+                manualReleaseUpdateChecker,
+                installedVersionProvider,
+                updateReleasePageLauncher)
         {
         }
 
@@ -1879,19 +1945,25 @@ public sealed class DesktopTrackerViewModelTests
             IEldenRingSaveProfileReader? profileReader = null,
             ILocalSaveDiscovery? saveDiscovery = null,
             ILocalSaveDiscovery? eldenRingSaveDiscovery = null,
-            Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>>? readWukongSaveMetadataAsync = null)
+            Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>>? readWukongSaveMetadataAsync = null,
+            IManualReleaseUpdateChecker? manualReleaseUpdateChecker = null,
+            Func<string>? installedVersionProvider = null,
+            IUpdateReleasePageLauncher? updateReleasePageLauncher = null)
         {
             Repository = new FakeRepository(loadResult);
             coordinator = new SerializedTrackerCoordinator(Repository, new NullPublisher());
             ViewModel = readWukongSaveMetadataAsync is null
-                ? new DesktopTrackerViewModel(coordinator, profileReader, saveDiscovery, eldenRingSaveDiscovery ?? new FixedSaveDiscovery())
+                ? new DesktopTrackerViewModel(coordinator, profileReader, saveDiscovery, eldenRingSaveDiscovery ?? new FixedSaveDiscovery(), manualReleaseUpdateChecker: manualReleaseUpdateChecker, installedVersionProvider: installedVersionProvider, updateReleasePageLauncher: updateReleasePageLauncher)
                 : new DesktopTrackerViewModel(
                     coordinator,
                     profileReader,
                     saveDiscovery,
                     eldenRingSaveDiscovery ?? new FixedSaveDiscovery(),
                     TimeProvider.System,
-                    readWukongSaveMetadataAsync);
+                    readWukongSaveMetadataAsync,
+                    manualReleaseUpdateChecker: manualReleaseUpdateChecker,
+                    installedVersionProvider: installedVersionProvider,
+                    updateReleasePageLauncher: updateReleasePageLauncher);
         }
 
         public FakeRepository Repository { get; }
@@ -1942,6 +2014,30 @@ public sealed class DesktopTrackerViewModelTests
     private sealed class NullPublisher : ITrackerStateChangePublisher
     {
         public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class FixedManualUpdateChecker(ManualReleaseUpdateResult result) : IManualReleaseUpdateChecker
+    {
+        public ValueTask<ManualReleaseUpdateResult> CheckAsync(string installedVersion, CancellationToken cancellationToken = default) => ValueTask.FromResult(result);
+    }
+
+    private sealed class DeferredManualUpdateChecker : IManualReleaseUpdateChecker
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<ManualReleaseUpdateResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<ManualReleaseUpdateResult> CheckAsync(string installedVersion, CancellationToken cancellationToken = default) { Started.TrySetResult(); return new(completion.Task); }
+        public void Complete(ManualReleaseUpdateResult result) => completion.TrySetResult(result);
+    }
+
+    private sealed class CancellingManualUpdateChecker : IManualReleaseUpdateChecker
+    {
+        public ValueTask<ManualReleaseUpdateResult> CheckAsync(string installedVersion, CancellationToken cancellationToken = default) => ValueTask.FromException<ManualReleaseUpdateResult>(new OperationCanceledException(cancellationToken));
+    }
+
+    private sealed class TestUpdateReleasePageLauncher(bool succeeds) : IUpdateReleasePageLauncher
+    {
+        public int Calls { get; private set; }
+        public bool TryOpen(Uri releasePage) { Calls++; return succeeds; }
     }
 
     private sealed class FixedProfileReader(IReadOnlyList<EldenRingCharacterSlotMetadata> slots) : IEldenRingSaveProfileReader

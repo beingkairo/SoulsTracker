@@ -700,6 +700,11 @@ public partial class MainWindow : Window
     private async void ChooseBossExport_Click(object sender, RoutedEventArgs e) { var dialog = CreateTextExportDialog(); if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetBossExportPathAsync(dialog.FileName); }
     private async void ClearDeathsExport_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearDeathsExportAsync(); }
     private async void ClearBossExport_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearBossExportAsync(); }
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.CheckForUpdatesAsync(); }
+    private void OpenUpdateReleasePage_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.OpenAvailableUpdateReleasePage();
+    }
     // These controls intentionally use one-way bindings: committed state remains
     // the source of truth after asynchronous persistence completes. Do not gate a
     // routed toggle event on the currently committed value, though. A second user
