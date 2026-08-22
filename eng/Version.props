@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- The single product-version source. Release tooling consumes this file via Get-Version.ps1. -->
-    <VersionPrefix>1.3.1</VersionPrefix>
+    <VersionPrefix>1.3.2</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <Version>$(VersionPrefix)</Version>
     <Version Condition="'$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</Version>

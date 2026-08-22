@@ -134,8 +134,8 @@ public static class GameCatalog
             GameId.Bloodborne,
             "Bloodborne",
             GameUiAvailability.Selectable,
-            GameTrackingMode.ManualOnly,
-            ReaderBindingState.IntentionallyUnavailable,
+            GameTrackingMode.GameLifetimeReadOnly,
+            ReaderBindingState.PendingVerification,
             [
                 Boss("cleric_beast", "Cleric Beast"),
                 Boss("father_gascoigne", "Father Gascoigne"),

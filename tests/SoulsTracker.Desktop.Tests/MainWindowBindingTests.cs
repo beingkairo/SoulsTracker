@@ -906,8 +906,6 @@ public sealed class MainWindowBindingTests
     [Theory]
     [InlineData("elden_ring", "IncrementHotkeyTextBox", "Increment global hotkey")]
     [InlineData("elden_ring", "DecrementHotkeyTextBox", "Decrement global hotkey")]
-    [InlineData("bloodborne", "IncrementHotkeyTextBox", "Increment global hotkey")]
-    [InlineData("bloodborne", "DecrementHotkeyTextBox", "Decrement global hotkey")]
     public void SharedGlobalHotkeyRecorderUsesTheSameNeutralAccessibleIdentityForEverySupportedGame(
         string gameIdValue,
         string triggerName,
@@ -1772,7 +1770,7 @@ public sealed class MainWindowBindingTests
     }
 
     [Fact]
-    public void GlobalManualGuidanceIsVisibleForEveryManualGame()
+    public void GlobalManualGuidanceIsVisibleOnlyForTheManualProfile()
     {
         RunOnStaThread(() =>
         {
@@ -1798,7 +1796,7 @@ public sealed class MainWindowBindingTests
                 window.Show();
                 window.UpdateLayout();
                 guidance = Assert.IsType<TextBlock>(window.FindName("GlobalHotkeyStatusTextBlock"));
-                Assert.Equal(Visibility.Visible, guidance.Visibility);
+                Assert.Equal(Visibility.Collapsed, guidance.Visibility);
 
                 window.Close();
                 window = null;

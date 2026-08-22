@@ -149,6 +149,9 @@ public partial class App : System.Windows.Application, IDisposable
                         "1.6.0.0",
                         "1.6.0.0",
                         "637ACA527538C0EC6E1F136C8ED66046E95DFBDBB1F51926E134D9916398B856"))),
+                new BloodborneActiveCharacterDeathReader(
+                    new ExactNameBloodborneProcessEnumerator(),
+                    new WindowsReadOnlyProcessAttachmentFactory()),
                 eldenRingSaveReader,
                 blackMythWukongSaveReader,
                 liesOfPSaveReader,

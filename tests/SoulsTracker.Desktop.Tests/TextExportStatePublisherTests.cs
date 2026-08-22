@@ -33,7 +33,7 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     public async Task ReportsFailureWithoutThrowingWhenChosenDirectoryIsUnavailable()
     {
         string missingPath = Path.Combine(root, "missing", "deaths.txt");
-        PersistentTrackerState state = new(1, GameId.Bloodborne, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default, textExports: new TextExportConfiguration(missingPath, true, null, false));
+        PersistentTrackerState state = new(1, GameId.DemonsSouls, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default, textExports: new TextExportConfiguration(missingPath, true, null, false), manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 1));
 
         Assert.False(await TextExportStatePublisher.WriteAsync(state));
     }
@@ -56,19 +56,24 @@ public sealed class TextExportStatePublisherTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ReusesTheConfiguredDeathsFileForTheCurrentlySelectedManualGameWithoutSharingTotals()
+    public async Task ReusesTheConfiguredDeathsFileForTheManualProfile()
     {
         string deathsPath = Path.Combine(root, "manual-deaths.txt");
         TextExportConfiguration exports = new(deathsPath, true, null, false);
-        ManualBloodborneDeathCounter bloodborne = ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 4);
-        ManualBloodborneDeathCounter demonsSouls = ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 9);
+        ManualBloodborneDeathCounter bloodborne = ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne);
+        PersistentTrackerState demonsSoulsState = new(1, GameId.DemonsSouls, bloodborne, BossProgress.Empty, OverlayConfiguration.Default, textExports: exports, manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 4));
 
-        PersistentTrackerState bloodborneState = new(1, GameId.Bloodborne, bloodborne, BossProgress.Empty, OverlayConfiguration.Default, textExports: exports, manualDemonsSoulsDeathCounter: demonsSouls);
-        PersistentTrackerState demonsSoulsState = new(1, GameId.DemonsSouls, bloodborne, BossProgress.Empty, OverlayConfiguration.Default, textExports: exports, manualDemonsSoulsDeathCounter: demonsSouls);
-
-        Assert.True(await TextExportStatePublisher.WriteAsync(bloodborneState));
+        Assert.True(await TextExportStatePublisher.WriteAsync(demonsSoulsState));
         Assert.Equal("Total Deaths: 4", await File.ReadAllTextAsync(deathsPath));
 
+        demonsSoulsState = new PersistentTrackerState(
+            1,
+            GameId.DemonsSouls,
+            bloodborne,
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            textExports: exports,
+            manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, 9));
         Assert.True(await TextExportStatePublisher.WriteAsync(demonsSoulsState));
         Assert.Equal("Total Deaths: 9", await File.ReadAllTextAsync(deathsPath));
     }

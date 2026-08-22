@@ -15,16 +15,18 @@ OverlayConfiguration configuration = new(
 PersistentTrackerState state = publishManualIncrement
     ? new(
         PersistentTrackerState.CurrentSchemaVersion,
-        GameId.Bloodborne,
+        GameId.DemonsSouls,
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
         BossProgress.Empty,
-        configuration)
+        configuration,
+        manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls))
     : new(
         PersistentTrackerState.CurrentSchemaVersion,
-        GameId.Bloodborne,
-        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, initialValue: 6),
-        BossProgress.Empty.MarkDefeated(GameId.Bloodborne, GameCatalog.GetRequired(GameId.Bloodborne).BossCatalog[0].Id),
-        configuration);
+        GameId.DemonsSouls,
+        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+        BossProgress.Empty.MarkDefeated(GameId.DemonsSouls, GameCatalog.GetRequired(GameId.DemonsSouls).BossCatalog[0].Id),
+        configuration,
+        manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, initialValue: 6));
 var publisher = new OverlayStateChangePublisher();
 await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(state), publisher);
 await using var service = new SecureOverlayService(coordinator, new EndpointAccessFactory());

@@ -8,7 +8,7 @@ public sealed class RuntimeGameObservationTests
     [Fact]
     public void RuntimeObservationsAcceptOnlySelectableAutomaticProfilesWithUtcTotals()
     {
-        GameId[] automaticGameIds = [GameId.Ds1, GameId.Ds2, GameId.Ds3, GameId.Sekiro, GameId.EldenRing];
+        GameId[] automaticGameIds = [GameId.Ds1, GameId.Ds2, GameId.Ds3, GameId.Bloodborne, GameId.Sekiro, GameId.EldenRing];
         DateTimeOffset observedAtUtc = new(2026, 7, 11, 12, 0, 0, TimeSpan.Zero);
 
         foreach (GameId gameId in automaticGameIds)
@@ -27,7 +27,6 @@ public sealed class RuntimeGameObservationTests
         DateTimeOffset observedAtUtc = new(2026, 7, 11, 12, 0, 0, TimeSpan.Zero);
         GameLifetimeDeathTotal total = new(42);
 
-        Assert.Throws<ArgumentException>(() => new RuntimeGameObservation(GameId.Bloodborne, total, observedAtUtc));
         Assert.Throws<ArgumentException>(() => new RuntimeGameObservation(GameId.DemonsSouls, total, observedAtUtc));
         Assert.Throws<ArgumentException>(() => new RuntimeGameObservation(CreateUnknownGameId(), total, observedAtUtc));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeGameObservation(GameId.Ds1, -1, observedAtUtc));

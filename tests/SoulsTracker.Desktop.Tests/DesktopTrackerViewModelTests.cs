@@ -73,7 +73,7 @@ public sealed class DesktopTrackerViewModelTests
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
         harness.ViewModel.ConfigureGlobalHotkeys(GlobalHotkeySettings.Default, _ => Task.FromResult(GlobalHotkeyRegistrationResult.Registered));
 
         harness.ViewModel.BeginHotkeyRecording(increment: true);
@@ -573,7 +573,7 @@ public sealed class DesktopTrackerViewModelTests
     [Fact]
     public async Task TotalDeathsPresentationDistinguishesNumericCountersFromCompactStatuses()
     {
-        await using TestHarness manual = new(WithSelectedGame(GameId.Bloodborne, 12));
+        await using TestHarness manual = new(WithSelectedGame(GameId.DemonsSouls, 12));
         await manual.ViewModel.InitializeAsync();
         Assert.True(manual.ViewModel.IsTotalDeathsValueNumeric);
 
@@ -903,7 +903,7 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task InitializeLoadsStateBeforeControlsAndProjectsSelectedBloodborne()
+    public async Task InitializeDoesNotProjectTheLegacyManualTotalForSelectedBloodborne()
     {
         PersistentTrackerState state = WithSelectedGame(GameId.Bloodborne, 4);
         await using TestHarness harness = new(state);
@@ -914,19 +914,21 @@ public sealed class DesktopTrackerViewModelTests
 
         Assert.True(harness.ViewModel.ControlsEnabled);
         Assert.Equal(GameId.Bloodborne, harness.ViewModel.SelectedGame!.GameId);
-        Assert.Equal(4, harness.ViewModel.ManualDeaths);
-        Assert.Equal("4", harness.ViewModel.TotalDeathsText);
+        Assert.Equal(0, harness.ViewModel.ManualDeaths);
+        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, harness.ViewModel.TotalDeathsText);
         Assert.NotEmpty(harness.ViewModel.Bosses);
         Assert.Equal(DesktopTrackerViewModel.LocalTrackerStateReadyMessage, harness.ViewModel.LocalTrackerStateStatus);
     }
 
     [Fact]
-    public async Task BloodborneIncrementDecrementAndZeroFloorUseCoordinatorCommands()
+    public async Task BloodborneUsesRuntimeTrackingInsteadOfManualCounterCommands()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
         await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
 
+        int savesAfterSelection = harness.Repository.SaveCount;
+        Assert.False(harness.ViewModel.IsManualGameSelected);
         Assert.False(harness.ViewModel.CanDecrementManualDeaths);
         await harness.ViewModel.DecrementManualDeathsAsync();
         await harness.ViewModel.IncrementManualDeathsAsync();
@@ -935,18 +937,18 @@ public sealed class DesktopTrackerViewModelTests
 
         Assert.Equal(0, harness.ViewModel.ManualDeaths);
         Assert.False(harness.ViewModel.CanDecrementManualDeaths);
-        Assert.Equal(3, harness.Repository.SaveCount); // select + increment + decrement; zero decrement is a no-op.
+        Assert.Equal(savesAfterSelection, harness.Repository.SaveCount);
     }
 
     [Fact]
-    public async Task ManualGameSelectionsKeepIndependentDeathTotalsAndUseManualLabels()
+    public async Task OnlyDemonSoulsUsesTheManualLabelAndManualDeathTotal()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
         GameChoice bloodborne = harness.Game(GameId.Bloodborne);
         GameChoice demonsSouls = harness.Game(GameId.DemonsSouls);
 
-        Assert.Equal("Bloodborne [Manual]", bloodborne.DisplayName);
+        Assert.Equal("Bloodborne", bloodborne.DisplayName);
         Assert.Equal("Demon Souls [Manual]", demonsSouls.DisplayName);
         await harness.ViewModel.SelectGameAsync(bloodborne);
         await harness.ViewModel.IncrementManualDeathsAsync();
@@ -957,8 +959,29 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(2, harness.ViewModel.ManualDeaths);
         Assert.Equal("2", harness.ViewModel.TotalDeathsText);
         await harness.ViewModel.SelectGameAsync(bloodborne);
-        Assert.Equal(1, harness.ViewModel.ManualDeaths);
+        Assert.Equal(0, harness.ViewModel.ManualDeaths);
+        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, harness.ViewModel.TotalDeathsText);
+    }
+
+    [Fact]
+    public async Task BloodborneRuntimeResultsReplaceLegacyManualPresentationWithoutTreatingWaitingAsZero()
+    {
+        await using TestHarness harness = new(WithSelectedGame(GameId.Bloodborne, 4));
+        await harness.ViewModel.InitializeAsync();
+
+        harness.ViewModel.ApplyRuntimeReaderResult(
+            RuntimeGameReadResult.NoDeathsRecorded(new RuntimeGameObservation(GameId.Bloodborne, 0, DateTimeOffset.UtcNow)));
+        Assert.Equal(DesktopTrackerViewModel.NoDeathsRecordedMessage, harness.ViewModel.TotalDeathsText);
+        Assert.Equal(DesktopTrackerViewModel.NoDeathsRecordedMessage, harness.ViewModel.RuntimeReaderStatusText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(
+            RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Bloodborne, 1, DateTimeOffset.UtcNow)));
         Assert.Equal("1", harness.ViewModel.TotalDeathsText);
+        Assert.Equal(DesktopTrackerViewModel.GameSyncedMessage, harness.ViewModel.RuntimeReaderStatusText);
+
+        harness.ViewModel.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForActiveCharacter(GameId.Bloodborne));
+        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsWaitingForActiveCharacterMessage, harness.ViewModel.TotalDeathsText);
+        Assert.Equal(DesktopTrackerViewModel.GameWaitingForActiveCharacterMessage, harness.ViewModel.RuntimeReaderStatusText);
     }
 
     [Fact]
@@ -1689,7 +1712,7 @@ public sealed class DesktopTrackerViewModelTests
             {
                 var firstViewModel = new DesktopTrackerViewModel(firstCoordinator);
                 await firstViewModel.InitializeAsync();
-                await firstViewModel.SelectGameAsync(firstViewModel.GameChoices.Single(choice => choice.GameId == GameId.Bloodborne));
+                await firstViewModel.SelectGameAsync(firstViewModel.GameChoices.Single(choice => choice.GameId == GameId.DemonsSouls));
                 await firstViewModel.IncrementManualDeathsAsync();
                 await firstViewModel.SetBossDefeatedAsync(firstViewModel.Bosses[0], true);
             }
@@ -1700,7 +1723,7 @@ public sealed class DesktopTrackerViewModelTests
             var secondViewModel = new DesktopTrackerViewModel(secondCoordinator);
             await secondViewModel.InitializeAsync();
 
-            Assert.Equal(GameId.Bloodborne, secondViewModel.SelectedGame!.GameId);
+            Assert.Equal(GameId.DemonsSouls, secondViewModel.SelectedGame!.GameId);
             Assert.Equal(1, secondViewModel.ManualDeaths);
             Assert.True(secondViewModel.Bosses[0].IsDefeated);
         }

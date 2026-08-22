@@ -4,9 +4,9 @@ SoulsTracker is a Windows app for streams: death totals, a boss checklist for ea
 
 ## Games
 
-Automatic tracking is available for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, Sekiro, Elden Ring, Black Myth: Wukong, and Lies of P.
+Automatic tracking is available for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, Bloodborne, Sekiro, Elden Ring, Black Myth: Wukong, and Lies of P.
 
-Bloodborne and Demon's Souls use manual counters.
+Demon Souls uses a manual counter.
 
 ## Start streaming
 

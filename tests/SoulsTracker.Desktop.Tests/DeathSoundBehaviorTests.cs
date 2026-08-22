@@ -16,7 +16,7 @@ public sealed class DeathSoundBehaviorTests
         await File.WriteAllBytesAsync(sound, []);
         try
         {
-            var repository = new MemoryRepository(new PersistentTrackerState(1, GameId.Bloodborne, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default, deathSound: new DeathSoundConfiguration(sound, true, 100)));
+            var repository = new MemoryRepository(new PersistentTrackerState(1, GameId.DemonsSouls, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default, deathSound: new DeathSoundConfiguration(sound, true, 100), manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls)));
             await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
             var viewModel = new DesktopTrackerViewModel(coordinator);
             var player = new RecordingPlayer();

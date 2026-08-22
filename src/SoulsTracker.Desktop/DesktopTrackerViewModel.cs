@@ -440,7 +440,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         get
         {
             GameId? selectedGameId = state?.SelectedGameId;
-            if (selectedGameId is null || selectedGameId == GameId.Bloodborne || selectedGameId == GameId.DemonsSouls)
+            if (selectedGameId is null || selectedGameId == GameId.DemonsSouls)
             {
                 return null;
             }
@@ -1865,7 +1865,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ? LiesOfPWaitingForSaveFileMessage
             : GameWaitingForSaveFileMessage;
 
-    private static bool IsManualGame(GameId gameId) => gameId == GameId.Bloodborne || gameId == GameId.DemonsSouls;
+    private static bool IsManualGame(GameId gameId) => gameId == GameId.DemonsSouls;
 
     private async Task PersistDeathSoundVolumeTextAsync(long version, CancellationToken cancellationToken)
     {
@@ -2289,11 +2289,9 @@ public sealed class GameChoice
     public GameChoice(GameDefinition definition) => this.definition = definition ?? throw new ArgumentNullException(nameof(definition));
 
     public GameId GameId => definition!.Id;
-    public string DisplayName => GameId == SoulsTracker.Domain.GameId.Bloodborne
-        ? "Bloodborne [Manual]"
-        : GameId == SoulsTracker.Domain.GameId.DemonsSouls
+    public string DisplayName => GameId == SoulsTracker.Domain.GameId.DemonsSouls
             ? "Demon Souls [Manual]"
-        : definition!.DisplayName;
+            : definition!.DisplayName;
     public bool IsSelectable => definition!.IsSelectable;
     public string AvailabilityLabel => IsSelectable ? string.Empty : "SOON";
 }

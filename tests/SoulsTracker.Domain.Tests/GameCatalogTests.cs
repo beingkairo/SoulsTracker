@@ -41,8 +41,8 @@ public sealed class GameCatalogTests
                 GameId.Bloodborne,
                 "Bloodborne",
                 GameUiAvailability.Selectable,
-                GameTrackingMode.ManualOnly,
-                ReaderBindingState.IntentionallyUnavailable,
+                GameTrackingMode.GameLifetimeReadOnly,
+                ReaderBindingState.PendingVerification,
                 22),
             new(
                 GameId.Sekiro,

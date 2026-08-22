@@ -2,6 +2,10 @@
 
 All notable changes to SoulsTracker are documented here.
 
+## 1.3.2 - 2026-08-21
+
+* Added automatic, read-only Bloodborne lifetime death tracking.
+
 ## 1.3.0 - 2026-08-02
 
 * Added automatic, read-only Lies of P save discovery, character selection, lifetime death totals, and paired character-save handling.

@@ -89,7 +89,7 @@ public sealed class GlobalHotkeysTests
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
         var sink = new RecordingMessageSink();
         var native = new RecordingGlobalHotkeyNative(true, false, true, true);
         using var service = new DesktopGlobalHotkeyService(sink, native, harness.ViewModel);
@@ -139,26 +139,26 @@ public sealed class GlobalHotkeysTests
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
         using var service = CreateStartedService(harness.ViewModel);
 
         Assert.True(await service.HandleMessageAsync(
             GlobalHotkeyController.WindowsHotkeyMessage,
             GlobalHotkeyController.DecrementHotkeyId));
         Assert.Equal(0, harness.ViewModel.ManualDeaths);
-        Assert.Equal(1, harness.Repository.SaveCount); // Game selection only; zero decrement is a no-op.
+        Assert.Equal(0, harness.Repository.SaveCount); // The default manual profile is already selected; zero decrement is a no-op.
 
         Assert.True(await service.HandleMessageAsync(
             GlobalHotkeyController.WindowsHotkeyMessage,
             GlobalHotkeyController.IncrementHotkeyId));
         Assert.Equal(1, harness.ViewModel.ManualDeaths);
-        Assert.Equal(2, harness.Repository.SaveCount);
+        Assert.Equal(1, harness.Repository.SaveCount);
 
         Assert.True(await service.HandleMessageAsync(
             GlobalHotkeyController.WindowsHotkeyMessage,
             GlobalHotkeyController.DecrementHotkeyId));
         Assert.Equal(0, harness.ViewModel.ManualDeaths);
-        Assert.Equal(3, harness.Repository.SaveCount);
+        Assert.Equal(2, harness.Repository.SaveCount);
 
         await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Ds1));
         int automaticGameSaveCount = harness.Repository.SaveCount;
@@ -174,19 +174,17 @@ public sealed class GlobalHotkeysTests
     }
 
     [Fact]
-    public async Task SharedGlobalHotkeysKeepBloodborneAndDemonsSoulsCountersIsolated()
+    public async Task SharedGlobalHotkeysRouteOnlyToTheManualProfile()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
         using var service = CreateStartedService(harness.ViewModel);
 
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
-        Assert.True(await service.HandleMessageAsync(GlobalHotkeyController.WindowsHotkeyMessage, GlobalHotkeyController.IncrementHotkeyId));
         await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
         Assert.True(await service.HandleMessageAsync(GlobalHotkeyController.WindowsHotkeyMessage, GlobalHotkeyController.IncrementHotkeyId));
         Assert.True(await service.HandleMessageAsync(GlobalHotkeyController.WindowsHotkeyMessage, GlobalHotkeyController.IncrementHotkeyId));
 
-        Assert.Equal(1, harness.Repository.State.ManualBloodborneDeathCounter.Value);
+        Assert.Equal(0, harness.Repository.State.ManualBloodborneDeathCounter.Value);
         Assert.Equal(2, harness.Repository.State.ManualDemonsSoulsDeathCounter.Value);
     }
 
@@ -283,7 +281,7 @@ public sealed class GlobalHotkeysTests
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.Bloodborne));
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
         var messageSink = new RecordingMessageSink();
         using var service = new DesktopGlobalHotkeyService(
             messageSink,
@@ -295,7 +293,7 @@ public sealed class GlobalHotkeysTests
         Assert.True(messageSink.Dispatch(
             GlobalHotkeyController.WindowsHotkeyMessage,
             GlobalHotkeyController.IncrementHotkeyId));
-        Assert.Equal(2, await nextSave.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, await nextSave.WaitAsync(TimeSpan.FromSeconds(2)));
         Assert.Equal(1, harness.ViewModel.ManualDeaths);
         Assert.False(messageSink.Dispatch(GlobalHotkeyController.WindowsHotkeyMessage, hotkeyId: 0x5003));
     }
