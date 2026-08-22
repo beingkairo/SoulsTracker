@@ -31,7 +31,7 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[1.3.0, )"
+          "SoulsTracker.Domain": "[1.3.1, )"
         }
       },
       "soulstracker.domain": {
@@ -42,15 +42,15 @@
         "dependencies": {
           "Microsoft.Data.Sqlite.Core": "[10.0.10, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
-          "SoulsTracker.Application": "[1.3.0, )",
-          "SoulsTracker.Domain": "[1.3.0, )",
-          "System.Security.Cryptography.ProtectedData": "[10.0.10, )"
+          "SoulsTracker.Application": "[1.3.1, )",
+          "SoulsTracker.Domain": "[1.3.1, )",
+          "System.Security.Cryptography.ProtectedData": "[10.0.11, )"
         }
       },
       "soulstracker.overlay": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Application": "[1.3.0, )"
+          "SoulsTracker.Application": "[1.3.1, )"
         }
       },
       "Microsoft.Data.Sqlite.Core": {
@@ -74,9 +74,9 @@
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "CentralTransitive",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "BKt0SQgq2lq3ESE68jkeLwv95ypANrPDtkTOIFGcnhg2aRUeUUBDrQlkVDZctrg1WenVcvn5P5XZnuYI7q6rFQ=="
+        "requested": "[10.0.11, )",
+        "resolved": "10.0.11",
+        "contentHash": "PNoxCTPb+Tlux+GJyq4c89ddYdpioVSqfGx8pqOF6shCSKwUNNctXhQtRkCICjbJmGrJJsW8NY52kVYO/b8mlQ=="
       }
     },
     "net10.0-windows7.0/win-x64": {
