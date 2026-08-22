@@ -8,6 +8,24 @@ namespace SoulsTracker.Application.Tests;
 public sealed class TrackerStateTransitionServiceTests
 {
     [Fact]
+    public void SwitchingFromLiesOfPMainGameToWukongUsesAllBosses()
+    {
+        PersistentTrackerState state = new(
+            PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP,
+            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
+            BossProgress.Empty,
+            OverlayConfiguration.Default,
+            bossListScope: BossListScope.MainGame);
+
+        TrackerTransitionResult result = TrackerStateTransitionService.Apply(state, new SelectGameCommand(GameId.BlackMythWukong));
+
+        Assert.Equal(GameId.BlackMythWukong, result.State.SelectedGameId);
+        Assert.Equal(BossListScope.AllBosses, result.State.BossListScope);
+        Assert.Equal(BlackMythWukongBossCatalog.Create().Count, BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(GameId.BlackMythWukong), result.State.BossListScope).Count());
+    }
+
+    [Fact]
     public void LiesOfPSaveSelectionIsAValidatedStateTransition()
     {
         PersistentTrackerState state = new(

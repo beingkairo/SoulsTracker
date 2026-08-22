@@ -25,20 +25,23 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal(["All bosses", "Main game", "DLC"], baseAndDlc.Select(static choice => choice.Label));
     }
 
-    [Fact]
-    public async Task ChangingFromDlcGameToBaseOnlyGameResetsTheSelectedScopeToTheOnlyVisibleChoice()
+    [Theory]
+    [InlineData(BossListScope.MainGame)]
+    [InlineData(BossListScope.Dlc)]
+    public async Task ChangingFromFilteredGameToWukongResetsTheSelectedScopeToTheOnlyVisibleChoice(BossListScope sourceScope)
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
         Assert.False(harness.ViewModel.RequestGameSelection(harness.Game(GameId.EldenRing)));
         await harness.ViewModel.ConfirmEldenRingNoticeAsync();
-        await harness.ViewModel.SetBossListScopeAsync(harness.ViewModel.BossListScopes.Single(choice => choice.Value == BossListScope.Dlc));
+        await harness.ViewModel.SetBossListScopeAsync(harness.ViewModel.BossListScopes.Single(choice => choice.Value == sourceScope));
 
-        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.DemonsSouls));
+        await harness.ViewModel.SelectGameAsync(harness.Game(GameId.BlackMythWukong));
 
         Assert.Equal(BossListScope.AllBosses, harness.Repository.State.BossListScope);
         Assert.Equal(BossListScope.AllBosses, harness.ViewModel.SelectedBossListScope.Value);
         Assert.Equal([BossListScope.AllBosses], harness.ViewModel.BossListScopes.Select(static choice => choice.Value));
+        Assert.Equal(BlackMythWukongBossCatalog.Create().Count, harness.ViewModel.Bosses.Count);
     }
 
     [Fact]
@@ -114,7 +117,7 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task PersistentOverlayHostFailedEnableRestoresTheActualUncheckedStateAndReportsRetry()
+    public async Task PersistentOverlayHostFailedEnableRestoresTheActualUncheckedStateWithoutChangingGlobalBusyState()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
@@ -128,12 +131,13 @@ public sealed class DesktopTrackerViewModelTests
         await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(true);
 
         Assert.False(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.Equal("OBS startup recovery could not be enabled. Try again.", harness.ViewModel.PersistentOverlayHostStatus);
         Assert.Equal(1, stateNotifications); // forced refresh drives the one-way checkbox back to actual state
+        Assert.False(harness.ViewModel.IsPersistentOverlayHostChanging);
+        Assert.False(harness.ViewModel.IsBusy);
     }
 
     [Fact]
-    public async Task PersistentOverlayHostFailedDisableKeepsActualCheckedStateAndSuccessesUpdateIt()
+    public async Task PersistentOverlayHostFailedDisableKeepsActualCheckedStateAndSuccessesUpdateItWithoutGlobalBusyState()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
@@ -142,17 +146,16 @@ public sealed class DesktopTrackerViewModelTests
 
         await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(true);
         Assert.True(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.Equal("OBS startup recovery is enabled for this Windows user.", harness.ViewModel.PersistentOverlayHostStatus);
+        Assert.False(harness.ViewModel.IsBusy);
 
         allowChange = false;
         await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(false);
         Assert.True(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.Equal("OBS startup recovery could not be disabled. Try again.", harness.ViewModel.PersistentOverlayHostStatus);
+        Assert.False(harness.ViewModel.IsPersistentOverlayHostChanging);
 
         allowChange = true;
         await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(false);
         Assert.False(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.Equal("OBS startup recovery is disabled and the helper has stopped.", harness.ViewModel.PersistentOverlayHostStatus);
     }
 
     [Fact]
@@ -192,16 +195,22 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task PersistentOverlayHostFallbackStatusKeepsTheEnabledStateAndExplainsTheWorkingPath()
+    public async Task PersistentOverlayHostChangingStateIsLocalToItsToggle()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
         await harness.ViewModel.InitializeAsync();
-        harness.ViewModel.ConfigurePersistentOverlayHost(enabled: true, _ => Task.FromResult(true));
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.ViewModel.ConfigurePersistentOverlayHost(enabled: false, _ => completion.Task);
 
-        harness.ViewModel.SetPersistentOverlayHostFallbackStatus(inAppOverlayReady: true);
+        Task change = harness.ViewModel.SetPersistentOverlayHostEnabledAsync(true);
+        Assert.True(harness.ViewModel.IsPersistentOverlayHostChanging);
+        Assert.True(harness.ViewModel.CanChangePersistentOverlayHost is false);
+        Assert.False(harness.ViewModel.IsBusy);
 
+        completion.SetResult(true);
+        await change;
         Assert.True(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.Equal("OBS startup recovery could not connect. SoulsTracker is using the normal local overlay for this session. Restart SoulsTracker to retry.", harness.ViewModel.PersistentOverlayHostStatus);
+        Assert.False(harness.ViewModel.IsPersistentOverlayHostChanging);
     }
 
     [Fact]
@@ -1246,6 +1255,13 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Equal("Tracking custom save: ArchiveSaveFile.9.sav", harness.ViewModel.BlackMythWukongSaveDiscoveryStatus);
         Assert.DoesNotContain(Path.GetDirectoryName(customPath)!, harness.ViewModel.BlackMythWukongSaveDiscoveryStatus, StringComparison.OrdinalIgnoreCase);
         Assert.Null(harness.ViewModel.BlackMythWukongSaveMetadataText);
+        Assert.Equal(["Save slot 1", "Save slot 9"], harness.ViewModel.BlackMythWukongSaveChoices.Select(static choice => choice.Label));
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
+
+        await harness.ViewModel.SelectBlackMythWukongSaveChoiceAsync(harness.ViewModel.BlackMythWukongSaveChoices[0]);
+
+        Assert.Equal(originalPath, harness.Repository.State.BlackMythWukongSave.LocalPath);
+        Assert.True(harness.ViewModel.IsWukongSaveSelectorVisible);
         Assert.Contains(nameof(DesktopTrackerViewModel.RuntimeReaderStatusText), notifications);
     }
 
@@ -1832,17 +1848,19 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Theory]
-    [InlineData(ManualReleaseUpdateStatus.UpToDate, "You’re up to date.", false)]
+    [InlineData(ManualReleaseUpdateStatus.UpToDate, "All up to date.", false)]
     [InlineData(ManualReleaseUpdateStatus.RateLimited, "GitHub asked you to try again later.", true)]
     [InlineData(ManualReleaseUpdateStatus.InvalidResponse, "Update information could not be verified.", true)]
     [InlineData(ManualReleaseUpdateStatus.Unavailable, "Couldn’t reach GitHub right now.", true)]
     public async Task ManualUpdateCheckMapsKnownResultsToTruthfulRetryableState(ManualReleaseUpdateStatus status, string expected, bool retryable)
     {
-        var checker = new FixedManualUpdateChecker(new(status, status == ManualReleaseUpdateStatus.UpdateAvailable ? "1.4.0" : null, new Uri("https://github.com/beingkairo/SoulsTracker/releases")));
+        var checker = new FixedManualUpdateChecker(new(status, status is ManualReleaseUpdateStatus.UpdateAvailable ? "1.4.0" : "1.3.0", new Uri("https://github.com/beingkairo/SoulsTracker/releases")));
         await using TestHarness harness = new(PersistentTrackerState.Default, manualReleaseUpdateChecker: checker, installedVersionProvider: static () => "1.3.0");
         await harness.ViewModel.InitializeAsync();
         await harness.ViewModel.CheckForUpdatesAsync();
         Assert.StartsWith(expected, harness.ViewModel.UpdateCheckStatus, StringComparison.Ordinal);
+        Assert.True(harness.ViewModel.HasCheckedForUpdates);
+        Assert.Equal("1.3.0", harness.ViewModel.UpdateCurrentVersion);
         Assert.Equal(retryable, harness.ViewModel.CanRetryUpdateCheck);
         Assert.Equal(retryable, harness.ViewModel.CanOpenAvailableUpdateReleasePage);
     }
@@ -1860,11 +1878,29 @@ public sealed class DesktopTrackerViewModelTests
         Assert.False(harness.ViewModel.CanCheckForUpdates);
         checker.Complete(new(ManualReleaseUpdateStatus.UpdateAvailable, "1.4.0", new Uri("https://github.com/beingkairo/SoulsTracker/releases/tag/v1.4.0")));
         await check;
-        Assert.Equal("Version 1.4.0 is available.", harness.ViewModel.UpdateCheckStatus);
+        Assert.Equal("New version out!", harness.ViewModel.UpdateCheckStatus);
+        Assert.Equal("1.3.0", harness.ViewModel.UpdateCurrentVersion);
+        Assert.Equal("1.4.0", harness.ViewModel.UpdateLatestVersion);
         harness.ViewModel.OpenAvailableUpdateReleasePage();
         Assert.Equal(1, launcher.Calls);
         Assert.StartsWith("The official release page could not be opened.", harness.ViewModel.UpdateCheckStatus, StringComparison.Ordinal);
         Assert.True(harness.ViewModel.CanOpenAvailableUpdateReleasePage);
+    }
+
+    [Fact]
+    public async Task ManualUpdateCheckShowsOnlyTheProductVersionWithoutBuildMetadata()
+    {
+        await using TestHarness harness = new(
+            PersistentTrackerState.Default,
+            manualReleaseUpdateChecker: new FixedManualUpdateChecker(new(ManualReleaseUpdateStatus.UpToDate, "1.3.0")),
+            installedVersionProvider: static () => "1.3.0+9e5f910db978a241127756f5eeeb6633c39517cc");
+        await harness.ViewModel.InitializeAsync();
+
+        await harness.ViewModel.CheckForUpdatesAsync();
+
+        Assert.Equal("1.3.0", harness.ViewModel.UpdateCurrentVersion);
+        Assert.Equal("1.3.0", harness.ViewModel.UpdateLatestVersion);
+        Assert.Equal("All up to date.", harness.ViewModel.UpdateCheckStatus);
     }
 
     [Fact]

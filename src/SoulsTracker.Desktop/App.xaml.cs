@@ -318,7 +318,6 @@ public partial class App : System.Windows.Application, IDisposable
         if (overlayHostRegistration?.IsEnabled == true)
         {
             activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.ConfirmedInAppFallback;
-            viewModel.SetPersistentOverlayHostFallbackStatus(overlayService is not null);
         }
         else activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.InApp;
     }
@@ -399,8 +398,12 @@ public partial class App : System.Windows.Application, IDisposable
             activeOverlayPath = ActiveOverlayPath.InApp;
             return true;
         }
-        if (overlayHostClient is not null) await overlayHostClient.DisposeAsync();
+        // The successful StopAsync above has already shut down the helper. Clearing
+        // it again would wait for its now-closed pipe before the normal overlay can
+        // restart, so detach locally instead.
+        if (overlayHostClient is not null) await overlayHostClient.DisposeAfterHostStopAsync();
         overlayHostClient = null;
+        activeOverlayStateSink = null;
         await StartInAppOverlayAsync(viewModel);
         activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.InApp;
         return overlayService is not null;

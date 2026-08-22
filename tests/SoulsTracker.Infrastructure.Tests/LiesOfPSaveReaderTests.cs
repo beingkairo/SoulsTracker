@@ -120,6 +120,22 @@ public sealed class LiesOfPSaveReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task SelectedFolderOffersEachCharacterForQuickSwitching()
+    {
+        string account = Path.Combine(root, "chosen-folder");
+        Directory.CreateDirectory(account);
+        string selected = Path.Combine(account, "SaveData-2_Character_1.sav");
+        await File.WriteAllBytesAsync(Path.Combine(account, "SaveData-1_Character_1.sav"), Fixture.Create(4));
+        await File.WriteAllBytesAsync(selected, Fixture.Create(8));
+        await File.WriteAllBytesAsync(Path.Combine(account, "SaveData-3_Character_2.sav"), [1]);
+
+        IReadOnlyList<DiscoveredLocalSave> choices = LiesOfPSaveDiscovery.DiscoverInSelectedFolder(selected);
+
+        Assert.Equal(["Character 1", "Character 2"], choices.Select(static choice => choice.Label));
+        Assert.Contains(choices, choice => string.Equals(choice.LocalPath, selected, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task DiscoveryUsesUniqueNonSensitiveLabelsForDuplicateCharactersAcrossAccounts()
     {
         string firstAccount = Path.Combine(root, "LiesofP", "Saved", "SaveGames", "account-a");

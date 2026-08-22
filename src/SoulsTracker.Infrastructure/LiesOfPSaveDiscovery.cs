@@ -40,6 +40,29 @@ public sealed class LiesOfPSaveDiscovery(ILiesOfPSteamInstallRootSource? install
             }
         }
 
+        IReadOnlyList<DiscoveredLocalSave> labeled = LabelCharacters(members);
+        return ValueTask.FromResult(labeled);
+    }
+
+    /// <summary>Finds valid character saves beside a user-selected character save.</summary>
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverInSelectedFolder(string selectedSavePath)
+    {
+        string? selectedDirectory = Path.GetDirectoryName(selectedSavePath);
+        if (!TryDirectory(selectedDirectory, out string directory)) return [];
+
+        var members = new List<(string path, int character, DateTime lastWriteUtc)>();
+        foreach (string path in SafeFiles(directory, "SaveData-*_Character_*.sav", MaximumFilesPerAccount))
+        {
+            if (BlackMythWukongSaveDiscovery.HasReparsePointBetween(directory, path) || !IsRegularBoundedSave(path)) continue;
+            int character = LiesOfPSaveMembers.CharacterNumber(path);
+            if (character != int.MaxValue) members.Add((Path.GetFullPath(path), character, new FileInfo(path).LastWriteTimeUtc));
+        }
+
+        return LabelCharacters(members);
+    }
+
+    private static DiscoveredLocalSave[] LabelCharacters(IEnumerable<(string path, int character, DateTime lastWriteUtc)> members)
+    {
         var candidates = members
             .GroupBy(static candidate => CharacterKey(candidate.path, candidate.character), StringComparer.OrdinalIgnoreCase)
             .Select(static group => group.OrderByDescending(candidate => candidate.lastWriteUtc).ThenBy(candidate => candidate.path, StringComparer.OrdinalIgnoreCase).First())
@@ -47,13 +70,12 @@ public sealed class LiesOfPSaveDiscovery(ILiesOfPSteamInstallRootSource? install
             .ThenBy(static candidate => candidate.path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        IReadOnlyList<DiscoveredLocalSave> labeled = candidates
+        return candidates
             .GroupBy(static candidate => candidate.character)
             .SelectMany(static group => group.Select((candidate, index) => new DiscoveredLocalSave(
                 candidate.path,
                 group.Count() == 1 ? $"Character {candidate.character}" : $"Character {candidate.character} ({index + 1})")))
             .ToArray();
-        return ValueTask.FromResult(labeled);
     }
 
     public static bool IsRegularBoundedSave(string path)

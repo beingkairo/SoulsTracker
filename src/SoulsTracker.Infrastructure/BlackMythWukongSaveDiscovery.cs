@@ -52,18 +52,37 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
             }
         }
 
-        DiscoveredLocalSave[] ordered = discovered.Values
+        IReadOnlyList<DiscoveredLocalSave> labeled = LabelSlots(discovered.Values);
+        return ValueTask.FromResult(labeled);
+    }
+
+    /// <summary>Finds valid save slots beside a user-selected slot, keeping character switching within that folder.</summary>
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverInSelectedFolder(string selectedSavePath)
+    {
+        string? selectedDirectory = Path.GetDirectoryName(selectedSavePath);
+        if (!TryDirectory(selectedDirectory, out string directory)) return [];
+
+        var discovered = new Dictionary<string, DiscoveredLocalSave>(StringComparer.OrdinalIgnoreCase);
+        foreach (string save in EnumerateFiles(directory, "ArchiveSaveFile.*.sav", MaximumSlotsPerAccount))
+        {
+            if (HasReparsePointBetween(directory, save) || !IsRegularBoundedSave(save) || !BlackMythWukongSaveConfiguration.IsArchiveSaveFileName(Path.GetFileName(save))) continue;
+            string canonical = Path.GetFullPath(save);
+            int slot = SlotNumber(canonical);
+            if (slot != int.MaxValue) discovered.TryAdd(canonical, new DiscoveredLocalSave(canonical, $"Save slot {slot}"));
+        }
+
+        return LabelSlots(discovered.Values);
+    }
+
+    private static DiscoveredLocalSave[] LabelSlots(IEnumerable<DiscoveredLocalSave> saves) =>
+        saves
             .OrderBy(static save => SlotNumber(save.LocalPath))
             .ThenBy(static save => save.LocalPath, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        IReadOnlyList<DiscoveredLocalSave> labeled = ordered
             .GroupBy(static save => SlotNumber(save.LocalPath))
             .SelectMany(static group => group.Select((save, index) => new DiscoveredLocalSave(
                 save.LocalPath,
                 group.Count() == 1 ? save.Label : $"{save.Label} ({index + 1})")))
             .ToArray();
-        return ValueTask.FromResult(labeled);
-    }
 
     private static string[] EnumerateDirectories(string root, int maximum)
     {

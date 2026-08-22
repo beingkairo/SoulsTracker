@@ -249,7 +249,7 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
             Assert.Equal(7, loaded.ManualBloodborneDeathCounter.Value);
             Assert.Equal(3, loaded.ManualDemonsSoulsDeathCounter.Value);
             Assert.True(loaded.BossProgress.IsDefeated(GameId.Ds1, boss));
-            Assert.Equal(BossListScope.MainGame, loaded.BossListScope);
+            Assert.Equal(BossListScope.AllBosses, loaded.BossListScope);
             await reopened.SaveAsync(loaded);
         }
 

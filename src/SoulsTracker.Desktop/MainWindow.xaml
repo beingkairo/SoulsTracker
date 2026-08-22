@@ -366,7 +366,7 @@
                             </ComboBox>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="ELDEN RING SAVE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="SoulsTracker looks for local saves, then lets you choose the character to track." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose a local save, then the character to track." />
                                 <TextBlock Margin="0,0,0,5" FontWeight="SemiBold" Text="1. Choose save" />
                                 <StackPanel Orientation="Horizontal">
                                     <ComboBox x:Name="EldenRingSaveSelector" Width="190" ItemsSource="{Binding EldenRingSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingSaveChoice, Mode=OneWay}" SelectionChanged="EldenRingSave_SelectionChanged" IsEnabled="{Binding IsEldenRingSaveSelectorEnabled}" Visibility="{Binding IsEldenRingSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save" />
@@ -386,7 +386,7 @@
                             </StackPanel>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsBlackMythWukongSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="BLACK MYTH: WUKONG SAVE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="SoulsTracker looks for local save slots. Death totals update after the game saves, so they can take a moment." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose a local save slot to track." />
                                 <StackPanel Orientation="Horizontal">
                                     <ComboBox x:Name="BlackMythWukongSaveSelector" Width="190" ItemsSource="{Binding BlackMythWukongSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedBlackMythWukongSaveChoice, Mode=OneWay}" SelectionChanged="BlackMythWukongSave_SelectionChanged" IsEnabled="{Binding IsWukongSaveSelectorEnabled}" Visibility="{Binding IsWukongSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong save slot" />
                                     <Button Margin="8,0,0,0" Content="Browse…" Click="BrowseBlackMythWukongSave_Click" Visibility="{Binding IsWukongBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Black Myth Wukong save file" />
@@ -417,7 +417,7 @@
                             </StackPanel>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsLiesOfPSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="LIES OF P SAVE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="SoulsTracker looks for local Steam character saves. Death totals update after the game saves, so they can take a moment." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,8" Text="Choose a local character save to track." />
                                 <StackPanel Orientation="Horizontal">
                                     <ComboBox x:Name="LiesOfPSaveSelector" Width="190" ItemsSource="{Binding LiesOfPSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedLiesOfPSaveChoice, Mode=OneWay}" SelectionChanged="LiesOfPSave_SelectionChanged" IsEnabled="{Binding IsLiesOfPSaveSelectorEnabled}" Visibility="{Binding IsLiesOfPSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P character save" />
                                     <Button Margin="8,0,0,0" Content="Browse…" Click="BrowseLiesOfPSave_Click" Visibility="{Binding IsLiesOfPBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Lies of P save file" />
@@ -650,32 +650,31 @@
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,24,24,16" AutomationProperties.Name="Settings workspace content">
                 <StackPanel x:Name="SettingsContentStack">
-                    <Border Style="{StaticResource Panel}" AutomationProperties.Name="OBS startup recovery settings">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource PanelTitle}" Text="OBS STARTUP RECOVERY" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Optional: keep your existing local Browser Source available after Windows sign-in, before SoulsTracker opens." />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="This stays on this computer, uses 127.0.0.1 only, and does not track games or send data while SoulsTracker is closed." />
-                            <CheckBox x:Name="PersistentOverlayHostEnabledCheckBox" Content="Enable OBS startup recovery for this Windows user" IsChecked="{Binding IsPersistentOverlayHostEnabled, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Checked="PersistentOverlayHostEnabled_Checked" Unchecked="PersistentOverlayHostEnabled_Unchecked" AutomationProperties.Name="Enable OBS startup recovery" />
-                            <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="{Binding PersistentOverlayHostStatus}" AutomationProperties.Name="OBS startup recovery status" AutomationProperties.LiveSetting="Polite" />
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Manual update check settings">
+                    <Border Style="{StaticResource Panel}" AutomationProperties.Name="Manual update check settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="UPDATES" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Checks GitHub only when you choose this. SoulsTracker never downloads or installs updates automatically." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Checks GitHub for the latest updates." />
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="CheckForUpdatesButton" Content="Check for updates" Click="CheckForUpdates_Click" IsEnabled="{Binding CanCheckForUpdates}" AutomationProperties.Name="Check for updates" />
                                 <Button x:Name="RetryUpdateCheckButton" Margin="8,0,0,0" Content="Retry" Click="CheckForUpdates_Click" IsEnabled="{Binding CanRetryUpdateCheck}" Visibility="{Binding CanRetryUpdateCheck, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Retry update check" />
                                 <Button x:Name="OpenUpdateReleasePageButton" Margin="8,0,0,0" Content="Open release page" Click="OpenUpdateReleasePage_Click" IsEnabled="{Binding CanOpenAvailableUpdateReleasePage}" Visibility="{Binding CanOpenAvailableUpdateReleasePage, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Open available update release page" />
                             </StackPanel>
-                            <TextBlock x:Name="UpdateCheckStatusTextBlock" Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="{Binding UpdateCheckStatus}" AutomationProperties.Name="Update check status" AutomationProperties.LiveSetting="Polite" />
+                            <StackPanel x:Name="UpdateVersionSummary" Margin="0,8,0,0" Orientation="Horizontal" Visibility="{Binding HasCheckedForUpdates, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Update check result" AutomationProperties.LiveSetting="Polite">
+                                <TextBlock Style="{StaticResource MutedText}" Text="Current Version: " />
+                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding UpdateCurrentVersion}" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="12,0" Text="|" />
+                                <TextBlock Style="{StaticResource MutedText}" Text="Latest Version: " />
+                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding UpdateLatestVersion}" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="12,0" Text="|" />
+                                <TextBlock Style="{StaticResource MutedText}" Text="Status: " />
+                                <TextBlock x:Name="UpdateCheckStatusTextBlock" Style="{StaticResource MutedText}" Text="{Binding UpdateCheckStatus}" AutomationProperties.Name="Update check status" />
+                            </StackPanel>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource Panel}" AutomationProperties.Name="Death sound settings">
+                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death sound settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="DEATH SOUND" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,0" Text="Play one local WAV or MP3 after a confirmed death increment." />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,2,0,10" Text="Save-file tracking may delay the sound." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Play a local WAV or MP3 when the death counter increases." />
                             <CheckBox x:Name="DeathSoundEnabledCheckBox" Content="Enable death sound" IsChecked="{Binding IsDeathSoundEnabled, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Checked="DeathSoundEnabled_Checked" Unchecked="DeathSoundEnabled_Unchecked" AutomationProperties.Name="Enable death sound" />
                             <TextBlock x:Name="DeathSoundFileNameTextBlock" Text="{Binding DeathSoundFileName, TargetNullValue=No death sound selected.}" AutomationProperties.Name="Selected death sound file name" />
                             <Grid Margin="0,8,0,0">
@@ -711,7 +710,7 @@
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="OBS text export settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="OBS TEXT EXPORT" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Optional local TXT files for OBS Text sources." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Write local TXT files for OBS Text sources." />
                             <StackPanel x:Name="DeathsExportToggleRow" Orientation="Horizontal">
                                 <CheckBox x:Name="DeathsExportEnabledCheckBox" Height="16" IsChecked="{Binding IsDeathsExportEnabled, Mode=OneWay}" Checked="DeathsExportEnabled_Checked" Unchecked="DeathsExportEnabled_Unchecked" AutomationProperties.Name="Enable writing Deaths to txt file">
                                     <TextBlock><Run Text="Enable writing " /><Run FontWeight="Bold" Text="Deaths" /><Run Text=" to txt file" /></TextBlock>
@@ -726,6 +725,14 @@
                             </StackPanel>
                             <TextBlock x:Name="BossExportFileNameTextBlock" Text="{Binding BossExportFileName, Mode=OneWay, TargetNullValue=No file selected.}" AutomationProperties.Name="Boss export file name" />
                             <StackPanel Orientation="Horizontal"><Button x:Name="ChooseBossExportButton" Content="Choose…" Click="ChooseBossExport_Click" IsEnabled="{Binding CanChooseBossExport}" AutomationProperties.Name="Choose boss text file" /><Button x:Name="ClearBossExportButton" Margin="8,0,0,0" Content="Clear" Click="ClearBossExport_Click" IsEnabled="{Binding CanClearBossExport}" AutomationProperties.Name="Clear boss text file" /></StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="OBS startup recovery settings">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelTitle}" Text="OBS STARTUP RECOVERY" />
+                            <TextBlock x:Name="PersistentOverlayHostDescriptionTextBlock" Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Keeps your OBS death counter visible when OBS opens before SoulsTracker." />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Changes take a moment." />
+                            <CheckBox x:Name="PersistentOverlayHostEnabledCheckBox" Content="Enable OBS startup recovery for this Windows user" IsChecked="{Binding IsPersistentOverlayHostEnabled, Mode=OneWay}" IsEnabled="{Binding CanChangePersistentOverlayHost}" Click="PersistentOverlayHostEnabled_Click" AutomationProperties.Name="Enable OBS startup recovery" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -751,7 +758,7 @@
                         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Global hotkey recording" />
                     </StackPanel>
                     <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="Press the input that you want to use as a hotkey then click enter to save." />
-                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Press ESC to exit without saving" />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Press ESC to cancel." />
                 </StackPanel>
             </Border>
         </Grid>
@@ -765,9 +772,9 @@
             <Border x:Name="EldenRingNoticeDialog" Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
                 <StackPanel>
                     <TextBlock FontSize="18" FontWeight="SemiBold" Text="Set up Elden Ring" />
-                    <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="Elden Ring keeps all of your characters in one ER0000.sl2 save file." />
-                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Choose the save file, then pick the character you want to track." />
-                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Usual location: %APPDATA%\EldenRing\&lt;your Steam ID&gt;\ER0000.sl2" />
+                    <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="All Elden Ring characters are stored in ER0000.sl2." />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Choose the save file and character to track." />
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Typical location: %APPDATA%\EldenRing\&lt;your Steam ID&gt;\ER0000.sl2" />
                     <StackPanel Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button x:Name="EldenRingNoticeCancelButton" Margin="0,0,8,0" Content="Not now" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Not now" />
                         <Button x:Name="EldenRingNoticeConfirmButton" Content="Got it" IsDefault="True" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Got it" />

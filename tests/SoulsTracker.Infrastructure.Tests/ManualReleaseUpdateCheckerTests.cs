@@ -47,6 +47,15 @@ public sealed class ManualReleaseUpdateCheckerTests
     }
 
     [Fact]
+    public async Task CheckerReturnsTheConfirmedLatestVersionWhenInstalledVersionIsCurrent()
+    {
+        using var client = new HttpClient(new FakeHandler(HttpStatusCode.OK, "{\"tag_name\":\"v1.3.0\"}"));
+        ManualReleaseUpdateResult result = await new GitHubLatestReleaseUpdateChecker(client).CheckAsync("1.3.0");
+        Assert.Equal(ManualReleaseUpdateStatus.UpToDate, result.Status);
+        Assert.Equal("1.3.0", result.AvailableVersion);
+    }
+
+    [Fact]
     public async Task CheckerMapsOfflineFailureToSafeUnavailableState()
     {
         using var client = new HttpClient(new ThrowingHandler());

@@ -9,7 +9,7 @@ public static class BossCatalogDisplayFilter
         ArgumentNullException.ThrowIfNull(game);
         if (!Enum.IsDefined(scope)) return BossListScope.AllBosses;
 
-        return scope == BossListScope.Dlc && !game.BossCatalog.Any(static boss => boss.DlcLabel is not null)
+        return scope is BossListScope.MainGame or BossListScope.Dlc && !game.BossCatalog.Any(static boss => boss.DlcLabel is not null)
             ? BossListScope.AllBosses
             : scope;
     }

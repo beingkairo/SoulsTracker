@@ -96,6 +96,17 @@ public sealed class PersistentOverlayHostTests
         await server.WaitAsync(TimeSpan.FromSeconds(2));
     }
 
+    [Fact]
+    public async Task HostClientDetachesImmediatelyAfterTheHostHasAlreadyStopped()
+    {
+        var client = new OverlayHostClient(new TestEndpointAccess(FindAvailablePort()));
+
+        ValueTask detach = client.DisposeAfterHostStopAsync();
+
+        Assert.True(detach.IsCompletedSuccessfully);
+        await detach;
+    }
+
     private static async Task<string> ReceiveAsync(ClientWebSocket socket)
     {
         byte[] buffer = new byte[64 * 1024];

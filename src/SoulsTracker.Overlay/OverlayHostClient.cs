@@ -50,5 +50,16 @@ public sealed class OverlayHostClient : IOverlayStateSink, IAsyncDisposable
         _ = OverlayHostPipe.SendSnapshotAsync(endpoint, snapshot);
     }
 
+    /// <summary>Detaches after the desktop has already asked the host process to stop; deliberately performs no pipe I/O.</summary>
+    public ValueTask DisposeAfterHostStopAsync()
+    {
+        lock (synchronization)
+        {
+            state = null;
+            observation = null;
+        }
+        return ValueTask.CompletedTask;
+    }
+
     public async ValueTask DisposeAsync() => await OverlayHostPipe.ClearAsync(endpoint).ConfigureAwait(false);
 }

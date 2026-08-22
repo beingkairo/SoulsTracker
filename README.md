@@ -1,82 +1,40 @@
 # SoulsTracker
 
-SoulsTracker is a Windows app I originally made for my own streams. It tracks deaths, keeps a separate boss checklist for each game, and gives you local browser overlays for OBS.
+SoulsTracker is a Windows app for streams: death totals, a boss checklist for each game, and local OBS overlays.
 
-Automatic death tracking currently works for:
+## Games
 
-- Dark Souls Remastered
-- Dark Souls II: Scholar of the First Sin
-- Dark Souls III
-- Sekiro: Shadows Die Twice
-- Elden Ring
-- Black Myth: Wukong
-- Lies of P
+Automatic tracking is available for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, Sekiro, Elden Ring, Black Myth: Wukong, and Lies of P.
 
-Elden Ring and Black Myth: Wukong are tracked through local save files. Bloodborne and Demon's Souls use manual death counters.
+Bloodborne and Demon's Souls use manual counters.
 
-Everything is stored locally. SoulsTracker does not have user accounts, telemetry, cloud syncing, or remote overlay hosting.
+## Start streaming
 
-## Getting started
+1. Open SoulsTracker, choose your game on the **Main** tab, and pick a save or character when prompted.
+2. Set up your boss checklist. Progress stays separate for every game and saves automatically.
+3. Open the **Overlay** tab, enable Total Deaths, Boss List, or both, then copy the URL into an OBS **Browser Source**.
 
-### Pick your game
+Use **600 x 1080** for the Boss List source. The Total Deaths overlay works at any size.
 
-Install SoulsTracker and open it before opening OBS. Go to the **Main** tab and choose the game you are playing.
+Open SoulsTracker before OBS for the usual setup. If OBS starts first, enable **OBS startup recovery** in **Settings**. It keeps the Browser Source ready at Windows sign-in and updates it when SoulsTracker opens.
 
-For Elden Ring, SoulsTracker searches for local `ER0000.sl2` files and lets you choose the character you are using. The character list shows each character's name and level.
+Browse and Rescan help with save locations. Save-based counters update after the game saves.
 
-For Black Myth: Wukong, SoulsTracker searches supported Steam and Epic save locations. If it finds one clear save slot, it selects it automatically. If it finds more than one, choose the one you are using.
+## Make it yours
 
-For Lies of P, SoulsTracker searches local Steam character saves and lets you choose the character you are using. Paired character saves are handled together so the selected character remains stable when the game writes both files.
+The **Overlay** tab controls fonts, colors, size, background, markers, alignment, outlines, shadows, and defeated-boss styles.
 
-Browse and Rescan are available if your saves are stored somewhere else. Save-based counters only update after the game saves, so the number may take a moment to change.
+The **Settings** tab includes death sounds, TXT output for OBS text sources, update checks, and global hotkeys for manual counters.
 
-Bloodborne and Demon's Souls are manual. Use `+1` when you die, `-1` to fix a mistake, or set global hotkeys so you do not have to click the buttons during a stream.
+## Privacy and read-only use
 
-The boss checklist is also on the Main tab. Each game keeps its own death total and boss progress, and everything saves automatically.
+Everything stays on your PC. SoulsTracker reads approved game data and save data, then leaves game files and game memory untouched.
 
-### Add it to OBS
+The overlay uses `127.0.0.1` on your computer. OBS startup recovery uses the same local setup and runs only for your Windows user. Keep generated overlay URLs private because they include a local access token.
 
-Open the **Overlay** tab and enable the Total Deaths overlay, the Boss List overlay, or both. Copy the URL for the overlay you want to use.
+Game updates can change saved data. Keep SoulsTracker current and follow each game's online and anti-cheat rules.
 
-In OBS, add a **Browser Source** and paste the URL.
-
-For the Boss List, use a **600 x 1080** browser source. Position it in your scene and lock it. Long boss names wrap inside the widget so the list does not move around during a stream.
-
-The Total Deaths overlay can be moved and resized however you want.
-
-SoulsTracker should be opened before OBS. If OBS was already running, refresh each SoulsTracker Browser Source after the app says the overlay is ready.
-
-If you need OBS to open first, turn on **OBS startup recovery** in **Settings**. This is off by default. When you choose it, a small helper starts only for your Windows user at sign-in and keeps the same `127.0.0.1` Browser Source available. It shows `Please open SoulsTracker` until the app starts, then updates the existing source automatically. Turn the setting off to remove the sign-in helper immediately.
-
-You can change the font, colors, size, background, markers, alignment, outline, shadow, and defeated boss style from the Overlay tab. Click Apply to update the preview and OBS source.
-
-### Other settings
-
-The **Settings** tab includes:
-
-- Death sounds and volume controls
-- TXT output for the death total and boss list
-- Global hotkeys for manual counters
-
-TXT output is there if you would rather use a normal OBS text source or build your own overlay.
-
-## Disclaimer
-
-SoulsTracker is read-only. It does not edit save files, write to game memory, inject code, automate gameplay, or change anything inside the games.
-
-The automatically tracked Souls games only read the stored death total. Elden Ring and Black Myth: Wukong read local save files instead. Bloodborne and Demon's Souls do not read the game at all and use manual counters.
-
-Automatic tracking can be affected by game updates. If a game changes how its data is stored, SoulsTracker may also need an update. Use it at your own discretion, especially when playing online, and follow each game's online and anti-cheat rules.
-
-## Local overlay security
-
-The overlay server only runs on `127.0.0.1`, which means it is limited to your own computer.
-
-OBS startup recovery is also local-only: it has no account, remote host, telemetry, save access, or game tracking while SoulsTracker is closed. The helper accepts state only from the current user through a bounded local pipe and continues to require the existing tokenized Browser Source URL.
-
-Generated overlay URLs include a local access token. Treat those URLs like private OBS settings and do not post them publicly.
-
-## Requirements
+## For contributors
 
 - Windows 10 or later
 - .NET SDK version listed in [global.json](global.json)
@@ -93,12 +51,6 @@ npm run check --prefix web_overlay
 npm test --prefix web_overlay
 ```
 
-For a local release publish test:
-
-```powershell
-./scripts/Build-Release.ps1 -SkipInstaller
-```
-
 ## Privacy
 
 SoulsTracker stores its settings and progress locally. See [Privacy](docs/PRIVACY.md) for more information.
@@ -107,13 +59,11 @@ SoulsTracker stores its settings and progress locally. See [Privacy](docs/PRIVAC
 
 Read [Contributing](CONTRIBUTING.md) before opening a pull request.
 
-Security issues should be reported privately using the instructions in [Security](SECURITY.md), not through a public issue.
+Report security issues privately using the instructions in [Security](SECURITY.md).
 
 ## Trademark notice
 
-SoulsTracker is an independent project. It is not affiliated with or endorsed by FromSoftware, Bandai Namco, Sony Interactive Entertainment, Activision, or OBS.
-
-Game names are only used to describe compatibility.
+SoulsTracker is an independent project. Game names describe compatibility.
 
 ## License
 

@@ -235,10 +235,10 @@ public sealed class MainWindowBindingTests
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
         Assert.Contains("Text=\"Set up Elden Ring\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Elden Ring keeps all of your characters in one ER0000.sl2 save file.", xaml, StringComparison.Ordinal);
-        Assert.Contains("Choose the save file, then pick the character you want to track.", xaml, StringComparison.Ordinal);
+        Assert.Contains("All Elden Ring characters are stored in ER0000.sl2.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Choose the save file and character to track.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Death totals update after Elden Ring saves.", xaml, StringComparison.Ordinal);
-        Assert.Contains("Usual location: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
+        Assert.Contains("Typical location: %APPDATA%\\EldenRing\\&lt;your Steam ID&gt;\\ER0000.sl2", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("cannot guarantee this is safe", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("risk", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("normally looks for it automatically", xaml, StringComparison.Ordinal);
@@ -331,7 +331,7 @@ public sealed class MainWindowBindingTests
     {
         string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
 
-        Assert.Contains("SoulsTracker looks for local saves, then lets you choose the character to track.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Choose a local save, then the character to track.", xaml, StringComparison.Ordinal);
         Assert.Contains("1. Choose save", xaml, StringComparison.Ordinal);
         Assert.Contains("2. Choose character", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"Character\"", xaml, StringComparison.Ordinal);
@@ -698,10 +698,20 @@ public sealed class MainWindowBindingTests
                 Assert.True(settings.ScrollableHeight > 0);
                 StackPanel settingsContent = Assert.IsType<StackPanel>(window.FindName("SettingsContentStack"));
                 Border[] settingsPanels = FindVisualDescendants<Border>(settingsContent)
-                    .Where(panel => AutomationProperties.GetName(panel) is "OBS startup recovery settings" or "Death sound settings" or "OBS text export settings")
+                    .Where(panel => AutomationProperties.GetName(panel) is "Manual update check settings" or "OBS startup recovery settings" or "Death sound settings" or "OBS text export settings")
                     .ToArray();
-                Assert.Equal(["OBS startup recovery settings", "Death sound settings", "OBS text export settings"], settingsPanels.Select(AutomationProperties.GetName).ToArray());
-                Assert.True(settingsPanels[0].TranslatePoint(new Point(0, 0), settingsContent).Y < settingsPanels[1].TranslatePoint(new Point(0, 0), settingsContent).Y);
+                Assert.Equal(["Manual update check settings", "Death sound settings", "OBS text export settings", "OBS startup recovery settings"], settingsPanels.Select(AutomationProperties.GetName).ToArray());
+                Assert.All(settingsPanels.Skip(1), panel => Assert.Equal(new Thickness(0, 14, 0, 0), panel.Margin));
+
+                CheckBox persistentHost = Assert.IsType<CheckBox>(window.FindName("PersistentOverlayHostEnabledCheckBox"));
+                Binding hostBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(persistentHost, CheckBox.IsCheckedProperty));
+                Assert.Equal(BindingMode.OneWay, hostBinding.Mode);
+                Assert.Equal(nameof(DesktopTrackerViewModel.CanChangePersistentOverlayHost), Assert.IsType<Binding>(BindingOperations.GetBinding(persistentHost, UIElement.IsEnabledProperty)).Path?.Path);
+                Assert.Null(window.FindName("OBS startup recovery status"));
+                Assert.DoesNotContain("127.0.0.1 only", FindVisualDescendants<TextBlock>(settingsPanels[^1]).Select(text => text.Text).OfType<string>(), StringComparer.Ordinal);
+                TextBlock recoveryDescription = Assert.IsType<TextBlock>(window.FindName("PersistentOverlayHostDescriptionTextBlock"));
+                Assert.Equal("Keeps your OBS death counter visible when OBS opens before SoulsTracker.", recoveryDescription.Text);
+                Assert.DoesNotContain('—', recoveryDescription.Text);
 
                 Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 1;
                 window.UpdateLayout();
@@ -717,6 +727,131 @@ public sealed class MainWindowBindingTests
             finally
             {
                 window?.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void PersistentOverlayHostUsesOneUserClickPathWithoutChangingOverlayToggles()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                int hostOperations = 0;
+                viewModel.ConfigurePersistentOverlayHost(false, enabled =>
+                {
+                    hostOperations++;
+                    return Task.FromResult(true);
+                });
+                bool initialTotalDeaths = viewModel.IsTotalDeathsOverlayEnabled;
+                bool initialBossList = viewModel.IsBossListOverlayEnabled;
+
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                CheckBox host = Assert.IsType<CheckBox>(window.FindName("PersistentOverlayHostEnabledCheckBox"));
+                host.IsChecked = true;
+                host.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Assert.True(viewModel.IsPersistentOverlayHostEnabled);
+                Assert.Equal(1, hostOperations);
+                Assert.Equal(initialTotalDeaths, viewModel.IsTotalDeathsOverlayEnabled);
+                Assert.Equal(initialBossList, viewModel.IsBossListOverlayEnabled);
+
+                viewModel.SetTotalDeathsOverlayEnabledAsync(!initialTotalDeaths).GetAwaiter().GetResult();
+                Assert.True(viewModel.IsPersistentOverlayHostEnabled);
+
+                viewModel.SetBossListOverlayEnabledAsync(!initialBossList).GetAwaiter().GetResult();
+                Assert.True(viewModel.IsPersistentOverlayHostEnabled);
+
+                host.IsChecked = false;
+                host.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Assert.False(viewModel.IsPersistentOverlayHostEnabled);
+                Assert.Equal(2, hostOperations);
+                Assert.Equal(!initialTotalDeaths, viewModel.IsTotalDeathsOverlayEnabled);
+                Assert.Equal(!initialBossList, viewModel.IsBossListOverlayEnabled);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
+    public void UpdateCheckMockRendersTheNewVersionSummaryOnlyAfterTheUserChecks()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(
+                    coordinator,
+                    manualReleaseUpdateChecker: new FixedManualUpdateChecker(new(ManualReleaseUpdateStatus.UpdateAvailable, "1.4.0", new Uri("https://github.com/beingkairo/SoulsTracker/releases/tag/v1.4.0"))),
+                    installedVersionProvider: static () => "1.3.0");
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 2;
+                window.UpdateLayout();
+
+                StackPanel summary = Assert.IsType<StackPanel>(window.FindName("UpdateVersionSummary"));
+                Assert.Equal(Visibility.Collapsed, summary.Visibility);
+
+                viewModel.CheckForUpdatesAsync().GetAwaiter().GetResult();
+                window.UpdateLayout();
+
+                Assert.Equal(Visibility.Visible, summary.Visibility);
+                TextBlock[] summaryParts = FindVisualDescendants<TextBlock>(summary).ToArray();
+                Assert.Equal("Current Version: 1.3.0|Latest Version: 1.4.0|Status: New version out!", string.Concat(summaryParts.Select(text => text.Text)));
+                Assert.All(summaryParts.Where(text => text.Text == "|"), separator => Assert.Equal(new Thickness(12, 0, 12, 0), separator.Margin));
+                Assert.Equal("Update check result", AutomationProperties.GetName(summary));
+                Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(summary));
+                Assert.Equal(Visibility.Visible, Assert.IsType<Button>(window.FindName("OpenUpdateReleasePageButton")).Visibility);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        });
+    }
+
+    [Fact]
+    public void PersistentOverlayHostBecomesEnabledWhenInitialLoadingCompletes()
+    {
+        RunOnStaThread(() =>
+        {
+            MainWindow? window = null;
+            var coordinator = new SerializedTrackerCoordinator(new PresentationRepository(), new NullPublisher());
+            try
+            {
+                var viewModel = new DesktopTrackerViewModel(coordinator);
+                window = new MainWindow { DataContext = viewModel };
+                window.Show();
+                window.UpdateLayout();
+
+                CheckBox host = Assert.IsType<CheckBox>(window.FindName("PersistentOverlayHostEnabledCheckBox"));
+                Assert.False(host.IsEnabled);
+
+                viewModel.InitializeAsync().GetAwaiter().GetResult();
+                viewModel.ConfigurePersistentOverlayHost(false, _ => Task.FromResult(true));
+                window.UpdateLayout();
+
+                Assert.True(host.IsEnabled);
+            }
+            finally
+            {
+                window?.Close();
+                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
         });
     }
@@ -761,7 +896,7 @@ public sealed class MainWindowBindingTests
         Assert.DoesNotContain("MessageBox.Show", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml.cs")), StringComparison.Ordinal);
         Assert.Contains("Text=\"Global hotkey recording\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Press the input that you want to use as a hotkey then click enter to save.", xaml, StringComparison.Ordinal);
-        Assert.Contains("Press ESC to exit without saving", xaml, StringComparison.Ordinal);
+        Assert.Contains("Press ESC to cancel.", xaml, StringComparison.Ordinal);
         Assert.Contains("HotkeyRecordingOverlay", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Global hotkey recording\"", xaml, StringComparison.Ordinal);
         string recordingOverlay = Between(xaml, "x:Name=\"HotkeyRecordingOverlay\"", "x:Name=\"EldenRingNoticeOverlay\"");
@@ -1939,6 +2074,11 @@ public sealed class MainWindowBindingTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FixedManualUpdateChecker(ManualReleaseUpdateResult result) : IManualReleaseUpdateChecker
+    {
+        public ValueTask<ManualReleaseUpdateResult> CheckAsync(string installedVersion, CancellationToken cancellationToken = default) => ValueTask.FromResult(result);
     }
 
     private sealed class TextExportPersistenceRepository(PersistentTrackerState? initialState = null) : ITrackerStateRepository

@@ -91,7 +91,7 @@ public sealed class GitHubLatestReleaseUpdateChecker(HttpClient client) : IManua
             if (!response.IsSuccessStatusCode) return new(ManualReleaseUpdateStatus.Unavailable);
             using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false));
             if (!json.RootElement.TryGetProperty("tag_name", out JsonElement tag) || !ReleaseSemanticVersion.TryParse(tag.GetString(), out ReleaseSemanticVersion? released)) return new(ManualReleaseUpdateStatus.InvalidResponse);
-            if (released!.CompareTo(installed!) <= 0) return new(ManualReleaseUpdateStatus.UpToDate);
+            if (released!.CompareTo(installed!) <= 0) return new(ManualReleaseUpdateStatus.UpToDate, released.ToString());
             Uri page = ReleasesPage;
             if (json.RootElement.TryGetProperty("html_url", out JsonElement url) && Uri.TryCreate(url.GetString(), UriKind.Absolute, out Uri? candidate) && candidate.Scheme == Uri.UriSchemeHttps && candidate.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) page = candidate;
             return new(ManualReleaseUpdateStatus.UpdateAvailable, released.ToString(), page);

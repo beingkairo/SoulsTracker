@@ -28,6 +28,15 @@ jobs:
           cache: npm
           cache-dependency-path: web_overlay/package-lock.json
 
+      - name: Read product version
+        id: version
+        shell: pwsh
+        run: |
+          $metadata = & ./eng/Get-ReleaseMetadata.ps1
+          "value=$($metadata.Version)" >> $env:GITHUB_OUTPUT
+          "artifact_stem=$($metadata.ArtifactStem)" >> $env:GITHUB_OUTPUT
+          "release_notes=$($metadata.ReleaseNotesPath)" >> $env:GITHUB_OUTPUT
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
@@ -40,8 +49,9 @@ jobs:
         shell: pwsh
         run: |
           $release = 'artifacts/desktop'
-          Compress-Archive -Path "$release/*" -DestinationPath 'artifacts/SoulsTrackerV1.3-portable.zip' -Force
-          Get-FileHash 'installer/Output/SoulsTrackerV1.3.exe', 'artifacts/SoulsTrackerV1.3-portable.zip' -Algorithm SHA256 |
+          $artifactStem = '${{ steps.version.outputs.artifact_stem }}'
+          Compress-Archive -Path "$release/*" -DestinationPath "artifacts/$artifactStem-portable.zip" -Force
+          Get-FileHash "installer/Output/$artifactStem.exe", "artifacts/$artifactStem-portable.zip" -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path | Split-Path -Leaf)" } |
             Set-Content -Encoding ascii 'artifacts/SHA256SUMS.txt'
 
@@ -50,27 +60,27 @@ jobs:
         with:
           path: .
           format: spdx-json
-          output-file: artifacts/SoulsTrackerV1.3.sbom.spdx.json
+          output-file: artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
-            installer/Output/SoulsTrackerV1.3.exe
-            artifacts/SoulsTrackerV1.3-portable.zip
+            installer/Output/${{ steps.version.outputs.artifact_stem }}.exe
+            artifacts/${{ steps.version.outputs.artifact_stem }}-portable.zip
             artifacts/SHA256SUMS.txt
-            artifacts/SoulsTrackerV1.3.sbom.spdx.json
+            artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          body_path: docs/releases/v1.3.0.md
+          body_path: ${{ steps.version.outputs.release_notes }}
           files: |
-            installer/Output/SoulsTrackerV1.3.exe
-            artifacts/SoulsTrackerV1.3-portable.zip
+            installer/Output/${{ steps.version.outputs.artifact_stem }}.exe
+            artifacts/${{ steps.version.outputs.artifact_stem }}-portable.zip
             artifacts/SHA256SUMS.txt
-            artifacts/SoulsTrackerV1.3.sbom.spdx.json
+            artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
 
       - name: Append setup guide to release notes
         shell: pwsh

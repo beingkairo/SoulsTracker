@@ -32,6 +32,22 @@ public sealed class BlackMythWukongSaveDiscoveryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SelectedFolderOffersEachValidSaveSlotForQuickSwitching()
+    {
+        string saves = Path.Combine(root, "chosen-folder");
+        Directory.CreateDirectory(saves);
+        string selected = Path.Combine(saves, "ArchiveSaveFile.10.sav");
+        await File.WriteAllBytesAsync(selected, CreateArchive(10));
+        await File.WriteAllBytesAsync(Path.Combine(saves, "ArchiveSaveFile.2.sav"), CreateArchive(2));
+        await File.WriteAllBytesAsync(Path.Combine(saves, "ArchiveSaveFile.bad.sav"), [1]);
+
+        IReadOnlyList<DiscoveredLocalSave> choices = BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(selected);
+
+        Assert.Equal(["Save slot 2", "Save slot 10"], choices.Select(static choice => choice.Label));
+        Assert.Contains(choices, choice => string.Equals(choice.LocalPath, selected, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task HonorsCancellationBeforeInspectingRoots()
     {
         using var cancellation = new CancellationTokenSource();

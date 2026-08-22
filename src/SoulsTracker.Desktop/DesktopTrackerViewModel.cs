@@ -48,6 +48,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly Func<string> installedVersionProvider;
     private readonly IUpdateReleasePageLauncher updateReleasePageLauncher;
     private bool isCheckingForUpdates;
+    private bool hasCheckedForUpdates;
+    private string? updateCurrentVersion;
+    private string? updateLatestVersion;
     private string? updateCheckStatus;
     private Uri? availableUpdateReleasePage;
     private bool updateCheckCanRetry;
@@ -69,7 +72,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool showTotalDeathsGameName;
     private bool isBossListOverlayEnabled;
     private bool isPersistentOverlayHostEnabled;
-    private string? persistentOverlayHostStatus;
+    private bool isPersistentOverlayHostChanging;
     private Func<bool, Task<bool>>? setPersistentOverlayHostAsync;
     private BossListVisibilityMode bossListVisibilityMode;
     private LegacyImportViewModel? legacyImport;
@@ -192,6 +195,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public bool IsCheckingForUpdates { get => isCheckingForUpdates; private set { if (SetField(ref isCheckingForUpdates, value)) { OnPropertyChanged(nameof(CanCheckForUpdates)); OnPropertyChanged(nameof(CanRetryUpdateCheck)); OnPropertyChanged(nameof(CanOpenAvailableUpdateReleasePage)); } } }
+    public bool HasCheckedForUpdates { get => hasCheckedForUpdates; private set => SetField(ref hasCheckedForUpdates, value); }
+    public string? UpdateCurrentVersion { get => updateCurrentVersion; private set => SetField(ref updateCurrentVersion, value); }
+    public string? UpdateLatestVersion { get => updateLatestVersion; private set => SetField(ref updateLatestVersion, value); }
     public string? UpdateCheckStatus { get => updateCheckStatus; private set => SetField(ref updateCheckStatus, value); }
     public Uri? AvailableUpdateReleasePage { get => availableUpdateReleasePage; private set { if (SetField(ref availableUpdateReleasePage, value)) OnPropertyChanged(nameof(CanOpenAvailableUpdateReleasePage)); } }
     public bool CanCheckForUpdates => ControlsEnabled && !IsCheckingForUpdates;
@@ -204,20 +210,24 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         IsCheckingForUpdates = true;
         updateCheckCanRetry = false;
         AvailableUpdateReleasePage = null;
+        string installedVersion = NormalizeProductVersion(installedVersionProvider());
+        UpdateCurrentVersion = installedVersion;
+        UpdateLatestVersion = "Checking…";
+        HasCheckedForUpdates = true;
         UpdateCheckStatus = "Checking for updates…";
         try
         {
-            ManualReleaseUpdateResult result = await manualReleaseUpdateChecker.CheckAsync(installedVersionProvider(), cancellationToken);
+            ManualReleaseUpdateResult result = await manualReleaseUpdateChecker.CheckAsync(installedVersion, cancellationToken);
             switch (result.Status)
             {
-                case ManualReleaseUpdateStatus.UpToDate: UpdateCheckStatus = "You’re up to date."; break;
-                case ManualReleaseUpdateStatus.UpdateAvailable: UpdateCheckStatus = $"Version {result.AvailableVersion} is available."; AvailableUpdateReleasePage = result.ReleasePage; break;
+                case ManualReleaseUpdateStatus.UpToDate: UpdateLatestVersion = result.AvailableVersion ?? UpdateCurrentVersion; UpdateCheckStatus = "All up to date."; break;
+                case ManualReleaseUpdateStatus.UpdateAvailable: UpdateLatestVersion = result.AvailableVersion ?? "Unavailable"; UpdateCheckStatus = "New version out!"; AvailableUpdateReleasePage = result.ReleasePage; break;
                 case ManualReleaseUpdateStatus.RateLimited: SetRetryableUpdateFailure("GitHub asked you to try again later."); break;
                 case ManualReleaseUpdateStatus.InvalidResponse or ManualReleaseUpdateStatus.InvalidInstalledVersion: SetRetryableUpdateFailure("Update information could not be verified. Try again or open the official Releases page."); break;
                 default: SetRetryableUpdateFailure("Couldn’t reach GitHub right now. Check your connection and try again."); break;
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { UpdateCheckStatus = "Update check cancelled. Try again when you’re ready."; updateCheckCanRetry = true; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { UpdateLatestVersion = "Unavailable"; UpdateCheckStatus = "Update check cancelled. Try again when you’re ready."; updateCheckCanRetry = true; }
         finally { IsCheckingForUpdates = false; OnPropertyChanged(nameof(CanRetryUpdateCheck)); }
     }
 
@@ -233,10 +243,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         updateCheckCanRetry = true;
         AvailableUpdateReleasePage = new Uri("https://github.com/beingkairo/SoulsTracker/releases");
+        UpdateLatestVersion = "Unavailable";
         UpdateCheckStatus = status;
     }
 
     private static string CurrentInstalledVersion() => typeof(DesktopTrackerViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+
+    private static string NormalizeProductVersion(string version) =>
+        ReleaseSemanticVersion.TryParse(version, out ReleaseSemanticVersion? parsed)
+            ? parsed!.ToString()
+            : version;
 
     private void BossListAppearanceDraft_PropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
     {
@@ -364,6 +380,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(CanCheckForUpdates));
                 OnPropertyChanged(nameof(CanRetryUpdateCheck));
+                OnPropertyChanged(nameof(CanChangePersistentOverlayHost));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
@@ -381,6 +398,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(CanCheckForUpdates));
                 OnPropertyChanged(nameof(CanRetryUpdateCheck));
+                OnPropertyChanged(nameof(CanChangePersistentOverlayHost));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
@@ -487,7 +505,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsBlackMythWukongChangeMode { get => isBlackMythWukongChangeMode; private set { if (SetField(ref isBlackMythWukongChangeMode, value)) NotifyWukongSaveSourceProperties(); } }
     public bool IsWukongSaveSelectorVisible =>
         BlackMythWukongSaveChoices.Count > 0
-        && (IsBlackMythWukongChangeMode || WukongSaveSourceState == LocalSaveSourceState.MultipleCandidates);
+        && (IsBlackMythWukongChangeMode || BlackMythWukongSaveChoices.Count > 1);
     public bool IsWukongBrowseVisible => WukongSaveSourceState is LocalSaveSourceState.Scanning or LocalSaveSourceState.NoCandidate or LocalSaveSourceState.MultipleCandidates || IsBlackMythWukongChangeMode;
     public bool IsWukongChangeVisible => !IsBlackMythWukongChangeMode && WukongSaveSourceState is LocalSaveSourceState.AutomaticallySelected or LocalSaveSourceState.PersistedDiscovered or LocalSaveSourceState.CustomSelection or LocalSaveSourceState.UnavailableSelection;
     public bool IsWukongCancelVisible => IsBlackMythWukongChangeMode;
@@ -502,7 +520,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? LiesOfPSaveDiscoveryStatus => liesOfPSaveDiscoveryStatus;
     public LocalSaveSourceState LiesOfPSaveSourceState { get => liesOfPSaveSourceState; private set { if (SetField(ref liesOfPSaveSourceState, value)) NotifyLiesOfPSaveSourceProperties(); } }
     public bool IsLiesOfPChangeMode { get => isLiesOfPChangeMode; private set { if (SetField(ref isLiesOfPChangeMode, value)) NotifyLiesOfPSaveSourceProperties(); } }
-    public bool IsLiesOfPSaveSelectorVisible => LiesOfPSaveChoices.Count > 0 && (IsLiesOfPChangeMode || LiesOfPSaveSourceState == LocalSaveSourceState.MultipleCandidates);
+    public bool IsLiesOfPSaveSelectorVisible => LiesOfPSaveChoices.Count > 0 && (IsLiesOfPChangeMode || LiesOfPSaveChoices.Count > 1);
     public bool IsLiesOfPSaveSelectorEnabled => ControlsEnabled && LiesOfPSaveSourceState != LocalSaveSourceState.Scanning && IsLiesOfPSaveSelectorVisible;
     public bool IsLiesOfPBrowseVisible => LiesOfPSaveSourceState is LocalSaveSourceState.Scanning or LocalSaveSourceState.NoCandidate or LocalSaveSourceState.MultipleCandidates || IsLiesOfPChangeMode;
     public bool IsLiesOfPChangeVisible => !IsLiesOfPChangeMode && LiesOfPSaveSourceState is LocalSaveSourceState.AutomaticallySelected or LocalSaveSourceState.PersistedDiscovered or LocalSaveSourceState.CustomSelection or LocalSaveSourceState.UnavailableSelection;
@@ -561,7 +579,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool ShowTotalDeathsGameName { get => showTotalDeathsGameName; private set => SetField(ref showTotalDeathsGameName, value); }
     public bool IsBossListOverlayEnabled { get => isBossListOverlayEnabled; private set => SetField(ref isBossListOverlayEnabled, value); }
     public bool IsPersistentOverlayHostEnabled { get => isPersistentOverlayHostEnabled; private set => SetField(ref isPersistentOverlayHostEnabled, value); }
-    public string? PersistentOverlayHostStatus { get => persistentOverlayHostStatus; private set => SetField(ref persistentOverlayHostStatus, value); }
+    public bool IsPersistentOverlayHostChanging { get => isPersistentOverlayHostChanging; private set { if (SetField(ref isPersistentOverlayHostChanging, value)) OnPropertyChanged(nameof(CanChangePersistentOverlayHost)); } }
+    public bool CanChangePersistentOverlayHost => ControlsEnabled && !IsPersistentOverlayHostChanging;
     public BossListVisibilityMode BossListVisibilityMode { get => bossListVisibilityMode; private set => SetField(ref bossListVisibilityMode, value); }
     public LegacyImportViewModel? LegacyImport { get => legacyImport; private set => SetField(ref legacyImport, value); }
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
@@ -713,47 +732,27 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         IsPersistentOverlayHostEnabled = enabled;
         setPersistentOverlayHostAsync = apply ?? throw new ArgumentNullException(nameof(apply));
-        PersistentOverlayHostStatus = enabled ? "OBS startup recovery is enabled for this Windows user." : "OBS startup recovery is off. SoulsTracker starts the local overlay while it is open.";
-    }
-
-    internal void SetPersistentOverlayHostFallbackStatus(bool inAppOverlayReady)
-    {
-        PersistentOverlayHostStatus = inAppOverlayReady
-            ? "OBS startup recovery could not connect. SoulsTracker is using the normal local overlay for this session. Restart SoulsTracker to retry."
-            : "OBS startup recovery could not connect, and the normal local overlay is unavailable. Close any conflicting local app and restart SoulsTracker to retry.";
     }
 
     public async Task SetPersistentOverlayHostEnabledAsync(bool enabled)
     {
         if (setPersistentOverlayHostAsync is null || IsPersistentOverlayHostEnabled == enabled) return;
-        IsBusy = true;
+        IsPersistentOverlayHostChanging = true;
         try
         {
             if (await setPersistentOverlayHostAsync(enabled))
             {
                 IsPersistentOverlayHostEnabled = enabled;
-                PersistentOverlayHostStatus = enabled ? "OBS startup recovery is enabled for this Windows user." : "OBS startup recovery is disabled and the helper has stopped.";
-            }
-            else
-            {
-                PersistentOverlayHostStatus = enabled
-                    ? "OBS startup recovery could not be enabled. Try again."
-                    : "OBS startup recovery could not be disabled. Try again.";
             }
         }
-        catch
-        {
-            PersistentOverlayHostStatus = enabled
-                ? "OBS startup recovery could not be enabled. Try again."
-                : "OBS startup recovery could not be disabled. Try again.";
-        }
+        catch { }
         finally
         {
             // This is intentionally raised even when the operation failed: the
             // Settings control is one-way and must be driven back to the actual
             // registered/host state, not retain a transient click.
             OnPropertyChanged(nameof(IsPersistentOverlayHostEnabled));
-            IsBusy = false;
+            IsPersistentOverlayHostChanging = false;
         }
     }
     internal void SetGlobalHotkeyStatus(string status) => GlobalHotkeyStatus = string.IsNullOrWhiteSpace(status)
@@ -949,11 +948,19 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             SetBlackMythWukongSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
             return;
         }
+        IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
+            () => BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(localPath),
+            cancellationToken);
+        if (!IsCurrentWukongSelectionOperation(selectionVersion)) return;
         await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
         if (!IsCurrentWukongSelectionOperation(selectionVersion, localPath)) return;
+        BlackMythWukongSaveChoices.Clear();
+        foreach (DiscoveredLocalSave candidate in candidates) BlackMythWukongSaveChoices.Add(candidate);
+        SelectedBlackMythWukongSaveChoice = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, localPath));
         SetBlackMythWukongSaveDiscoveryStatus(CustomSaveTrackingStatus(localPath));
         IsBlackMythWukongChangeMode = false;
         WukongSaveSourceState = LocalSaveSourceState.CustomSelection;
+        OnPropertyChanged(nameof(SelectedBlackMythWukongSaveChoice));
         long metadataVersion = BeginWukongMetadataRead();
         TryApplyBlackMythWukongSaveMetadata(metadataVersion, localPath, read.Metadata);
     }
@@ -988,9 +995,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         WukongSaveSourceState = LocalSaveSourceState.Scanning;
         SetBlackMythWukongSaveDiscoveryStatus("Looking for local saves…");
         IReadOnlyList<DiscoveredLocalSave> candidates;
+        string? configuredAtStart = state?.BlackMythWukongSave.LocalPath;
         try
         {
             candidates = await Task.Run(async () => await blackMythWukongSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+            if (configuredAtStart is not null && File.Exists(configuredAtStart) && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredAtStart)))
+            {
+                candidates = await Task.Run(() => BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(configuredAtStart), cancellationToken);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1111,11 +1123,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
             return;
         }
+        IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
+            () => LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath),
+            cancellationToken);
         await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken);
         if (!IsLiesOfPSelected || !PathsEqual(localPath, state?.LiesOfPSave.LocalPath)) return;
+        LiesOfPSaveChoices.Clear();
+        foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
+        SelectedLiesOfPSaveChoice = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, localPath));
         IsLiesOfPChangeMode = false;
         LiesOfPSaveSourceState = LocalSaveSourceState.CustomSelection;
         SetLiesOfPSaveDiscoveryStatus(CustomSaveTrackingStatus(localPath));
+        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
     }
 
     public async Task SelectLiesOfPSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
@@ -1136,7 +1155,15 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         LiesOfPSaveSourceState = LocalSaveSourceState.Scanning;
         SetLiesOfPSaveDiscoveryStatus("Looking for local saves…");
         IReadOnlyList<DiscoveredLocalSave> candidates;
-        try { candidates = await Task.Run(async () => await liesOfPSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken); }
+        string? configuredAtStart = state?.LiesOfPSave.LocalPath;
+        try
+        {
+            candidates = await Task.Run(async () => await liesOfPSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+            if (configuredAtStart is not null && File.Exists(configuredAtStart) && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredAtStart)))
+            {
+                candidates = await Task.Run(() => LiesOfPSaveDiscovery.DiscoverInSelectedFolder(configuredAtStart), cancellationToken);
+            }
+        }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
         catch { SetLiesOfPSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…"); LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate; return; }
         if (!IsLiesOfPSelected) return;
