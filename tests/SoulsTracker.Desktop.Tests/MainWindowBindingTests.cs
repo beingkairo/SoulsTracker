@@ -1851,7 +1851,7 @@ public sealed class MainWindowBindingTests
         };
         timer.Start();
         Dispatcher.PushFrame(frame);
-        Assert.True(condition(), diagnostic?.Invoke() ?? "The routed WPF Save action did not publish its visible volume confirmation.");
+        Assert.True(condition(), diagnostic?.Invoke() ?? "The routed WPF Save action did not complete.");
     }
 
 

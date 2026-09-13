@@ -7,4 +7,3 @@ SoulsTracker is a local Windows application.
 - The application has no account system, telemetry, analytics, cloud synchronization, or remote overlay hosting.
 - The optional update check contacts GitHub's public latest-release endpoint only when you press **Check for updates**. It sends no account, token, analytics, machine identifier, or save data, and it never downloads or installs anything automatically.
 - A local overlay URL contains a token. Treat it like private configuration and do not share it publicly.
-- Custom death sounds are selected from local files; SoulsTracker does not upload them.

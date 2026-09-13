@@ -24,7 +24,7 @@ Browse and Rescan help with save locations. Save-based counters update after the
 
 The **Overlay** tab controls fonts, colors, size, background, markers, alignment, outlines, shadows, and defeated-boss styles.
 
-The **Settings** tab includes death sounds, TXT output for OBS text sources, update checks, and global hotkeys for manual counters.
+The **Settings** tab includes TXT output for OBS text sources, update checks, and global hotkeys for manual counters.
 
 ## Privacy and read-only use
 
