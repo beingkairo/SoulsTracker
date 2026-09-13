@@ -19,10 +19,6 @@ public partial class App : System.Windows.Application, IDisposable
     private DesktopGlobalHotkeyService? globalHotkeys;
     private bool mainWindowCloseRequested;
     private SecureOverlayService? overlayService;
-    private OverlayHostClient? overlayHostClient;
-    private IOverlayStateSink? activeOverlayStateSink;
-    private ActiveOverlayPath activeOverlayPath;
-    private OverlayHostStartupRegistration? overlayHostRegistration;
     private OverlayStateChangePublisher? overlayPublisher;
     private TextExportStatePublisher? textExportPublisher;
     private RuntimeGameReaderCoordinator? runtimeReaders;
@@ -103,12 +99,7 @@ public partial class App : System.Windows.Application, IDisposable
         {
             viewModel.LegacyImport!.OfferIfEligible(viewModel.CurrentState);
         }
-        if (!mainWindowCloseRequested && viewModel.ControlsEnabled)
-        {
-            overlayHostRegistration = new OverlayHostStartupRegistration(Path.Combine(AppContext.BaseDirectory, "SoulsTracker.OverlayHost.exe"));
-            viewModel.ConfigurePersistentOverlayHost(overlayHostRegistration.IsEnabled, enabled => SetPersistentOverlayHostAsync(enabled, viewModel));
-            await StartConfiguredOverlayAsync(viewModel);
-        }
+
 
         if (!mainWindowCloseRequested && viewModel.ControlsEnabled)
         {
@@ -295,10 +286,6 @@ public partial class App : System.Windows.Application, IDisposable
     {
         try
         {
-            if (overlayHostClient is not null)
-            {
-                await overlayHostClient.DisposeAsync().ConfigureAwait(false);
-            }
             if (overlayService is not null)
             {
                 await overlayService.DisposeAsync().ConfigureAwait(false);
@@ -307,21 +294,7 @@ public partial class App : System.Windows.Application, IDisposable
         finally
         {
             overlayService = null;
-            overlayHostClient = null;
-            activeOverlayStateSink = null;
-            activeOverlayPath = ActiveOverlayPath.None;
         }
-    }
-
-    private async Task StartConfiguredOverlayAsync(DesktopTrackerViewModel viewModel)
-    {
-        if (overlayHostRegistration?.IsEnabled == true && await StartPersistentOverlayHostAsync(viewModel)) return;
-        await StartInAppOverlayAsync(viewModel);
-        if (overlayHostRegistration?.IsEnabled == true)
-        {
-            activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.ConfirmedInAppFallback;
-        }
-        else activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.InApp;
     }
 
     private async Task StartInAppOverlayAsync(DesktopTrackerViewModel viewModel)
@@ -333,7 +306,6 @@ public partial class App : System.Windows.Application, IDisposable
                 overlayService = new SecureOverlayService(coordinator!, new OverlayEndpointAccessFactory());
                 await overlayService.StartAsync();
                 overlayPublisher!.Attach(overlayService);
-                activeOverlayStateSink = overlayService;
                 viewModel.SetOverlayUrls(overlayService.TotalDeathsUrl, overlayService.BossListUrl);
                 viewModel.SetOverlayReady();
                 return;
@@ -341,74 +313,10 @@ public partial class App : System.Windows.Application, IDisposable
             catch
             {
                 overlayService = null;
-                activeOverlayStateSink = null;
                 if (attempt < 9) await Task.Delay(150);
             }
         }
         viewModel.SetOverlayUnavailable();
-    }
-
-    private async Task<bool> StartPersistentOverlayHostAsync(DesktopTrackerViewModel viewModel)
-    {
-        PersistentTrackerState? state = viewModel.CurrentState;
-        if (state is null || !state.OverlayConfiguration.Endpoint.IsAssigned) return false;
-        string executable = Path.Combine(AppContext.BaseDirectory, "SoulsTracker.OverlayHost.exe");
-        if (!File.Exists(executable)) return false;
-        try
-        {
-            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true });
-            var access = new OverlayEndpointAccessFactory().FromConfiguration(state.OverlayConfiguration.Endpoint);
-            overlayHostClient = new OverlayHostClient(access);
-            bool connected = false;
-            for (int attempt = 0; attempt < 10 && !connected; attempt++)
-            {
-                connected = await overlayHostClient.ConnectAsync(state);
-                if (!connected) await Task.Delay(150);
-            }
-            if (!connected) { await overlayHostClient.DisposeAsync(); overlayHostClient = null; return false; }
-            overlayPublisher!.Attach(overlayHostClient);
-            activeOverlayStateSink = overlayHostClient;
-            activeOverlayPath = ActiveOverlayPath.PersistentHost;
-            viewModel.SetOverlayUrls(access.BuildCanonicalUrl("/overlay/total_deaths"), access.BuildCanonicalUrl("/overlay/boss_list"));
-            viewModel.SetOverlayReady();
-            return true;
-        }
-        catch { overlayHostClient = null; return false; }
-    }
-
-    private async Task<bool> SetPersistentOverlayHostAsync(bool enabled, DesktopTrackerViewModel viewModel)
-    {
-        if (overlayHostRegistration is null) return false;
-        if (enabled)
-        {
-            overlayHostRegistration.Enable();
-            if (overlayService is not null) await overlayService.DisposeAsync();
-            overlayService = null;
-            if (await StartPersistentOverlayHostAsync(viewModel)) return true;
-            overlayHostRegistration.Disable();
-            await StartInAppOverlayAsync(viewModel);
-            activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.InApp;
-            return false;
-        }
-
-        PersistentTrackerState? state = viewModel.CurrentState;
-        if (state is null || !state.OverlayConfiguration.Endpoint.IsAssigned) return false;
-        var access = new OverlayEndpointAccessFactory().FromConfiguration(state.OverlayConfiguration.Endpoint);
-        if (!await PersistentOverlayHostCleanup.DisableAsync(activeOverlayPath, access, overlayHostRegistration, endpoint => OverlayHostPipe.StopAsync(endpoint))) return false;
-        if (activeOverlayPath == ActiveOverlayPath.ConfirmedInAppFallback)
-        {
-            activeOverlayPath = ActiveOverlayPath.InApp;
-            return true;
-        }
-        // The successful StopAsync above has already shut down the helper. Clearing
-        // it again would wait for its now-closed pipe before the normal overlay can
-        // restart, so detach locally instead.
-        if (overlayHostClient is not null) await overlayHostClient.DisposeAfterHostStopAsync();
-        overlayHostClient = null;
-        activeOverlayStateSink = null;
-        await StartInAppOverlayAsync(viewModel);
-        activeOverlayPath = overlayService is null ? ActiveOverlayPath.None : ActiveOverlayPath.InApp;
-        return overlayService is not null;
     }
 
     private async ValueTask DisposeCoordinatorAsync()
@@ -474,7 +382,7 @@ public partial class App : System.Windows.Application, IDisposable
                         textExportPublisher?.PublishRuntimeObservation(currentState, result);
 
                     }
-                    activeOverlayStateSink?.PublishRuntimeObservation(result?.Observation);
+                    overlayService?.PublishRuntimeObservation(result?.Observation);
                 });
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
             }

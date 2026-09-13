@@ -12,11 +12,11 @@ Demon Souls uses a manual counter.
 
 1. Open SoulsTracker, choose your game on the **Main** tab, and pick a save or character when prompted.
 2. Set up your boss checklist. Progress stays separate for every game and saves automatically.
-3. Open the **Overlay** tab, enable Total Deaths, Boss List, or both, then copy the URL into an OBS **Browser Source**.
+3. Open the **Overlay** tab, enable Total Deaths, then copy the URL into an OBS **Browser Source**.
 
 Use **600 x 1080** for the Boss List source. The Total Deaths overlay works at any size.
 
-Open SoulsTracker before OBS for the usual setup. If OBS starts first, enable **OBS startup recovery** in **Settings**. It keeps the Browser Source ready at Windows sign-in and updates it when SoulsTracker opens.
+Keep SoulsTracker running while OBS uses the local Browser Source.
 
 Browse and Rescan help with save locations. Save-based counters update after the game saves.
 
@@ -30,7 +30,7 @@ The **Settings** tab includes TXT output for OBS text sources, update checks, an
 
 Everything stays on your PC. SoulsTracker reads approved game data and save data, then leaves game files and game memory untouched.
 
-The overlay uses `127.0.0.1` on your computer. OBS startup recovery uses the same local setup and runs only for your Windows user. Keep generated overlay URLs private because they include a local access token.
+The overlay uses `127.0.0.1` on your computer. Keep generated overlay URLs private because they include a local access token.
 
 Game updates can change saved data. Keep SoulsTracker current and follow each game's online and anti-cheat rules.
 

@@ -120,7 +120,6 @@ Invoke-External dotnet @(
 
 Invoke-External dotnet @(
     "publish",
-    (Join-Path $root "src\SoulsTracker.OverlayHost\SoulsTracker.OverlayHost.csproj"),
     "--configuration",
     "Release",
     "--no-restore",

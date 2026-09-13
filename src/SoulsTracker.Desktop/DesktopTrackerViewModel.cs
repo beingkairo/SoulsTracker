@@ -70,9 +70,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool isTotalDeathsOverlayEnabled;
     private bool showTotalDeathsGameName;
     private bool isBossListOverlayEnabled;
-    private bool isPersistentOverlayHostEnabled;
-    private bool isPersistentOverlayHostChanging;
-    private Func<bool, Task<bool>>? setPersistentOverlayHostAsync;
     private BossListVisibilityMode bossListVisibilityMode;
     private LegacyImportViewModel? legacyImport;
     private GlobalHotkeySettings hotkeySettings = GlobalHotkeySettings.Default;
@@ -373,7 +370,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(CanCheckForUpdates));
                 OnPropertyChanged(nameof(CanRetryUpdateCheck));
-                OnPropertyChanged(nameof(CanChangePersistentOverlayHost));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyTextExportControlAvailability();
             }
@@ -390,7 +386,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ControlsEnabled));
                 OnPropertyChanged(nameof(CanCheckForUpdates));
                 OnPropertyChanged(nameof(CanRetryUpdateCheck));
-                OnPropertyChanged(nameof(CanChangePersistentOverlayHost));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
@@ -569,9 +564,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool IsTotalDeathsOverlayEnabled { get => isTotalDeathsOverlayEnabled; private set => SetField(ref isTotalDeathsOverlayEnabled, value); }
     public bool ShowTotalDeathsGameName { get => showTotalDeathsGameName; private set => SetField(ref showTotalDeathsGameName, value); }
     public bool IsBossListOverlayEnabled { get => isBossListOverlayEnabled; private set => SetField(ref isBossListOverlayEnabled, value); }
-    public bool IsPersistentOverlayHostEnabled { get => isPersistentOverlayHostEnabled; private set => SetField(ref isPersistentOverlayHostEnabled, value); }
-    public bool IsPersistentOverlayHostChanging { get => isPersistentOverlayHostChanging; private set { if (SetField(ref isPersistentOverlayHostChanging, value)) OnPropertyChanged(nameof(CanChangePersistentOverlayHost)); } }
-    public bool CanChangePersistentOverlayHost => ControlsEnabled && !IsPersistentOverlayHostChanging;
     public BossListVisibilityMode BossListVisibilityMode { get => bossListVisibilityMode; private set => SetField(ref bossListVisibilityMode, value); }
     public LegacyImportViewModel? LegacyImport { get => legacyImport; private set => SetField(ref legacyImport, value); }
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
@@ -684,33 +676,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         LocalOverlayStatus = LocalOverlayUnavailableMessage;
     }
 
-    internal void ConfigurePersistentOverlayHost(bool enabled, Func<bool, Task<bool>> apply)
-    {
-        IsPersistentOverlayHostEnabled = enabled;
-        setPersistentOverlayHostAsync = apply ?? throw new ArgumentNullException(nameof(apply));
-    }
-
-    public async Task SetPersistentOverlayHostEnabledAsync(bool enabled)
-    {
-        if (setPersistentOverlayHostAsync is null || IsPersistentOverlayHostEnabled == enabled) return;
-        IsPersistentOverlayHostChanging = true;
-        try
-        {
-            if (await setPersistentOverlayHostAsync(enabled))
-            {
-                IsPersistentOverlayHostEnabled = enabled;
-            }
-        }
-        catch { }
-        finally
-        {
-            // This is intentionally raised even when the operation failed: the
-            // Settings control is one-way and must be driven back to the actual
-            // registered/host state, not retain a transient click.
-            OnPropertyChanged(nameof(IsPersistentOverlayHostEnabled));
-            IsPersistentOverlayHostChanging = false;
-        }
-    }
     internal void SetGlobalHotkeyStatus(string status) => GlobalHotkeyStatus = string.IsNullOrWhiteSpace(status)
         ? throw new ArgumentException("A global hotkey status is required.", nameof(status))
         : status;

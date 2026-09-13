@@ -530,13 +530,6 @@ public partial class MainWindow : Window
     private async void TotalDeathsOverlayEnabled_Checked(object sender, RoutedEventArgs e) =>
         await SetTotalDeathsOverlayEnabledAsync(isEnabled: true);
 
-    private async void PersistentOverlayHostEnabled_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox { IsChecked: bool enabled })
-        {
-            await viewModel.SetPersistentOverlayHostEnabledAsync(enabled);
-        }
-    }
 
     private async void TotalDeathsOverlayEnabled_Unchecked(object sender, RoutedEventArgs e) =>
         await SetTotalDeathsOverlayEnabledAsync(isEnabled: false);

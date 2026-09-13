@@ -117,103 +117,6 @@ public sealed class DesktopTrackerViewModelTests
     }
 
     [Fact]
-    public async Task PersistentOverlayHostFailedEnableRestoresTheActualUncheckedStateWithoutChangingGlobalBusyState()
-    {
-        await using TestHarness harness = new(PersistentTrackerState.Default);
-        await harness.ViewModel.InitializeAsync();
-        int stateNotifications = 0;
-        harness.ViewModel.PropertyChanged += (_, args) =>
-        {
-            if (args.PropertyName == nameof(DesktopTrackerViewModel.IsPersistentOverlayHostEnabled)) stateNotifications++;
-        };
-        harness.ViewModel.ConfigurePersistentOverlayHost(enabled: false, _ => Task.FromResult(false));
-
-        await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(true);
-
-        Assert.False(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.Equal(1, stateNotifications); // forced refresh drives the one-way checkbox back to actual state
-        Assert.False(harness.ViewModel.IsPersistentOverlayHostChanging);
-        Assert.False(harness.ViewModel.IsBusy);
-    }
-
-    [Fact]
-    public async Task PersistentOverlayHostFailedDisableKeepsActualCheckedStateAndSuccessesUpdateItWithoutGlobalBusyState()
-    {
-        await using TestHarness harness = new(PersistentTrackerState.Default);
-        await harness.ViewModel.InitializeAsync();
-        bool allowChange = true;
-        harness.ViewModel.ConfigurePersistentOverlayHost(enabled: false, _ => Task.FromResult(allowChange));
-
-        await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(true);
-        Assert.True(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.False(harness.ViewModel.IsBusy);
-
-        allowChange = false;
-        await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(false);
-        Assert.True(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.False(harness.ViewModel.IsPersistentOverlayHostChanging);
-
-        allowChange = true;
-        await harness.ViewModel.SetPersistentOverlayHostEnabledAsync(false);
-        Assert.False(harness.ViewModel.IsPersistentOverlayHostEnabled);
-    }
-
-    [Fact]
-    public async Task PersistentOverlayHostDisableRetainsRegistrationWhenThePipeStopFails()
-    {
-        var registration = new TestOverlayHostRegistration(enabled: true);
-        var endpoint = new TestOverlayEndpointAccess();
-
-        bool stopped = await PersistentOverlayHostCleanup.StopThenRemoveRegistrationAsync(endpoint, registration, _ => Task.FromResult(false));
-
-        Assert.False(stopped);
-        Assert.True(registration.IsEnabled);
-        Assert.Equal(0, registration.DisableCalls);
-
-        Assert.True(await PersistentOverlayHostCleanup.StopThenRemoveRegistrationAsync(endpoint, registration, _ => Task.FromResult(true)));
-        Assert.False(registration.IsEnabled);
-        Assert.Equal(1, registration.DisableCalls);
-    }
-
-    [Fact]
-    public async Task PersistentOverlayHostConfirmedInAppFallbackDisablesWithoutAHostPipeStop()
-    {
-        var registration = new TestOverlayHostRegistration(enabled: true);
-        var endpoint = new TestOverlayEndpointAccess();
-        int pipeStopCalls = 0;
-
-        bool disabled = await PersistentOverlayHostCleanup.DisableAsync(
-            ActiveOverlayPath.ConfirmedInAppFallback,
-            endpoint,
-            registration,
-            _ => { pipeStopCalls++; return Task.FromResult(false); });
-
-        Assert.True(disabled);
-        Assert.False(registration.IsEnabled);
-        Assert.Equal(1, registration.DisableCalls);
-        Assert.Equal(0, pipeStopCalls);
-    }
-
-    [Fact]
-    public async Task PersistentOverlayHostChangingStateIsLocalToItsToggle()
-    {
-        await using TestHarness harness = new(PersistentTrackerState.Default);
-        await harness.ViewModel.InitializeAsync();
-        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        harness.ViewModel.ConfigurePersistentOverlayHost(enabled: false, _ => completion.Task);
-
-        Task change = harness.ViewModel.SetPersistentOverlayHostEnabledAsync(true);
-        Assert.True(harness.ViewModel.IsPersistentOverlayHostChanging);
-        Assert.True(harness.ViewModel.CanChangePersistentOverlayHost is false);
-        Assert.False(harness.ViewModel.IsBusy);
-
-        completion.SetResult(true);
-        await change;
-        Assert.True(harness.ViewModel.IsPersistentOverlayHostEnabled);
-        Assert.False(harness.ViewModel.IsPersistentOverlayHostChanging);
-    }
-
-    [Fact]
     public async Task EldenRingNoticeCancelLeavesCurrentGameAndAcknowledgementUnchanged()
     {
         await using TestHarness harness = new(PersistentTrackerState.Default);
@@ -2034,13 +1937,7 @@ public sealed class DesktopTrackerViewModelTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class TestOverlayHostRegistration(bool enabled) : IOverlayHostStartupRegistration
-    {
-        public bool IsEnabled { get; private set; } = enabled;
-        public int DisableCalls { get; private set; }
-        public void Enable() => IsEnabled = true;
-        public void Disable() { DisableCalls++; IsEnabled = false; }
-    }
+
 
     private sealed class TestOverlayEndpointAccess : IOverlayEndpointAccess
     {
