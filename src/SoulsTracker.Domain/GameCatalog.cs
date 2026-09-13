@@ -242,13 +242,4 @@ public static class GameCatalog
         return false;
     }
 
-    /// <summary>
-    /// Returns a boss only when it belongs to the supplied game's catalog.
-    /// </summary>
-    /// <exception cref="ArgumentException">Thrown when the game or boss is unknown or mismatched.</exception>
-    public static BossDefinition GetRequiredBoss(GameId gameId, BossId bossId) =>
-        GetRequired(gameId).GetRequiredBoss(bossId);
-
-    private static BossDefinition Boss(string id, string displayName, string? dlcLabel = null) =>
-        new(BossId.Parse(id), displayName, dlcLabel);
 }

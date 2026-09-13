@@ -18,7 +18,7 @@ public sealed class PersistentTrackerState
         CurrentSchemaVersion,
         selectedGameId: GameId.DemonsSouls,
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-        BossProgress.Empty,
+
         OverlayConfiguration.Default,
         ManualBloodborneHotkeyConfiguration.Default,
 
@@ -26,7 +26,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
         eldenRingNoticeAcknowledged: false,
         EldenRingSaveConfiguration.Default,
-        BossListScope.AllBosses,
+
         BlackMythWukongSaveConfiguration.Default,
         EldenRingMissedDeathAdjustments.Empty,
         LiesOfPSaveConfiguration.Default);
@@ -40,7 +40,7 @@ public sealed class PersistentTrackerState
         int schemaVersion,
         GameId? selectedGameId,
         ManualBloodborneDeathCounter manualBloodborneDeathCounter,
-        BossProgress bossProgress,
+
         OverlayConfiguration overlayConfiguration,
         ManualBloodborneHotkeyConfiguration? manualBloodborneHotkeys = null,
 
@@ -48,7 +48,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
         bool eldenRingNoticeAcknowledged = false,
         EldenRingSaveConfiguration? eldenRingSave = null,
-        BossListScope bossListScope = BossListScope.AllBosses,
+
         BlackMythWukongSaveConfiguration? blackMythWukongSave = null,
         EldenRingMissedDeathAdjustments? eldenRingMissedDeathAdjustments = null,
         LiesOfPSaveConfiguration? liesOfPSave = null)
@@ -64,7 +64,7 @@ public sealed class PersistentTrackerState
         selectedGameId ??= GameId.DemonsSouls;
         ValidateSelectedGame(selectedGameId, eldenRingNoticeAcknowledged);
         ArgumentNullException.ThrowIfNull(manualBloodborneDeathCounter);
-        ArgumentNullException.ThrowIfNull(bossProgress);
+
         ArgumentNullException.ThrowIfNull(overlayConfiguration);
 
         SchemaVersion = schemaVersion;
@@ -73,7 +73,7 @@ public sealed class PersistentTrackerState
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
         BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
         LiesOfPSave = liesOfPSave ?? LiesOfPSaveConfiguration.Default;
-        BossProgress = bossProgress;
+
         OverlayConfiguration = overlayConfiguration;
         ManualBloodborneHotkeys = manualBloodborneHotkeys is { IsValid: true } validHotkeys
             ? validHotkeys
@@ -83,7 +83,7 @@ public sealed class PersistentTrackerState
         EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
         EldenRingSave = eldenRingSave ?? EldenRingSaveConfiguration.Default;
         EldenRingMissedDeathAdjustments = eldenRingMissedDeathAdjustments ?? EldenRingMissedDeathAdjustments.Empty;
-        BossListScope = BossCatalogDisplayFilter.NormalizeScope(GameCatalog.GetRequired(selectedGameId), bossListScope);
+
     }
 
     /// <summary>
@@ -117,10 +117,6 @@ public sealed class PersistentTrackerState
             ? ManualDemonsSoulsDeathCounter
             : throw new InvalidOperationException("The selected game does not use a manual death counter.");
 
-    /// <summary>
-    /// Gets immutable, game-scoped boss progress.
-    /// </summary>
-    public BossProgress BossProgress { get; }
 
     /// <summary>
     /// Gets the validated overlay configuration.
@@ -141,8 +137,6 @@ public sealed class PersistentTrackerState
     /// <summary>Gets local, per-save and per-character Elden Ring missed-death additions.</summary>
     public EldenRingMissedDeathAdjustments EldenRingMissedDeathAdjustments { get; }
 
-    /// <summary>Gets the persisted scope shared by checklist, overlay, preview, and TXT export.</summary>
-    public BossListScope BossListScope { get; }
 
     private static void ValidateSelectedGame(GameId? selectedGameId, bool eldenRingNoticeAcknowledged)
     {

@@ -143,44 +143,6 @@ public sealed class TotalDeathsDisplayValue
     public long? Value { get; }
 }
 
-/// <summary>
-/// Provides one typed boss display entry and its defeated state.
-/// </summary>
-public sealed class OverlayBossEntry
-{
-    /// <summary>
-    /// Initializes a display entry from canonical boss metadata.
-    /// </summary>
-    public OverlayBossEntry(BossDefinition bossDefinition, bool isDefeated)
-    {
-        ArgumentNullException.ThrowIfNull(bossDefinition);
-
-        BossId = bossDefinition.Id;
-        DisplayName = bossDefinition.DisplayName;
-        DlcLabel = bossDefinition.DlcLabel;
-        IsDefeated = isDefeated;
-    }
-
-    /// <summary>
-    /// Gets the stable boss ID.
-    /// </summary>
-    public BossId BossId { get; }
-
-    /// <summary>
-    /// Gets the canonical boss display name.
-    /// </summary>
-    public string DisplayName { get; }
-
-    /// <summary>
-    /// Gets the optional canonical DLC grouping label.
-    /// </summary>
-    public string? DlcLabel { get; }
-
-    /// <summary>
-    /// Gets whether the boss is defeated for the selected game.
-    /// </summary>
-    public bool IsDefeated { get; }
-}
 
 /// <summary>
 /// Contains the secret-free, validated presentation choices an overlay browser
