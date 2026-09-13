@@ -31,7 +31,7 @@ public partial class App : System.Windows.Application, IDisposable
     private LiesOfPSaveDeathReader? liesOfPSaveReader;
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
-    private AutomatedDeathSoundNotifier? automatedDeathSoundNotifier;
+
     private DesktopDataRootSelection? dataRootSelection;
 
     public App()
@@ -88,8 +88,7 @@ public partial class App : System.Windows.Application, IDisposable
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
         textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() => viewModel.SetTextExportStatus(succeeded));
-        viewModel.ConfigureDeathSoundPlayback(new WpfDeathSoundPlayer());
-        automatedDeathSoundNotifier = new AutomatedDeathSoundNotifier(new WpfDeathSoundPlayer());
+
         if (!stateSelection.IsDevelopmentOverride)
         {
             var locator = new ApprovedLegacyImportLocationLocator();
@@ -439,7 +438,7 @@ public partial class App : System.Windows.Application, IDisposable
                 blackMythWukongSaveReader = null;
             }
 
-            automatedDeathSoundNotifier = null;
+
             if (coordinator is not null)
             {
                 await coordinator.DisposeAsync().ConfigureAwait(false);
@@ -473,7 +472,7 @@ public partial class App : System.Windows.Application, IDisposable
                     if (viewModel.CurrentState is { } currentState)
                     {
                         textExportPublisher?.PublishRuntimeObservation(currentState, result);
-                        automatedDeathSoundNotifier?.Observe(currentState.SelectedGameId, result, currentState.DeathSound);
+
                     }
                     activeOverlayStateSink?.PublishRuntimeObservation(result?.Observation);
                 });

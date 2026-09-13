@@ -188,52 +188,7 @@ public sealed class GlobalHotkeysTests
         Assert.Equal(2, harness.Repository.State.ManualDemonsSoulsDeathCounter.Value);
     }
 
-    [Fact]
-    public async Task SharedGlobalHotkeysRouteToTheSelectedEldenRingCharacterAdjustment()
-    {
-        string directory = Path.Combine(Path.GetTempPath(), "SoulsTracker", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        string savePath = Path.Combine(directory, "ER0000.sl2");
-        string soundPath = Path.Combine(directory, "death.wav");
-        await File.WriteAllBytesAsync(savePath, [1]);
-        await File.WriteAllBytesAsync(soundPath, []);
-        try
-        {
-            PersistentTrackerState state = new(
-                1,
-                GameId.EldenRing,
-                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-                BossProgress.Empty,
-                OverlayConfiguration.Default,
-                deathSound: new DeathSoundConfiguration(soundPath, true, 100),
-                eldenRingNoticeAcknowledged: true,
-                eldenRingSave: new EldenRingSaveConfiguration(savePath, 1));
-            await using TestHarness harness = new(
-                state,
-                new FixedProfileReader([new EldenRingCharacterSlotMetadata(1, false, "Kairo", 40)]),
-                new FixedSaveDiscovery(new DiscoveredLocalSave(savePath, "Save 1")));
-            var soundPlayer = new RecordingDeathSoundPlayer();
-            harness.ViewModel.ConfigureDeathSoundPlayback(soundPlayer);
-            await harness.ViewModel.InitializeAsync();
-            Assert.True(harness.ViewModel.IsGlobalHotkeyConfigurationAvailable);
-            Assert.True(harness.ViewModel.CanAdjustEldenRingMissedDeaths);
-            Assert.Equal("Use these global hotkeys to add or remove missed deaths for the selected character.", harness.ViewModel.GlobalHotkeyUsageDescription);
-            using var service = CreateStartedService(harness.ViewModel);
 
-            Assert.True(await service.HandleMessageAsync(GlobalHotkeyController.WindowsHotkeyMessage, GlobalHotkeyController.IncrementHotkeyId));
-            Assert.Equal(1, harness.Repository.State.EldenRingMissedDeathAdjustments.Get(harness.Repository.State.EldenRingSave));
-            Assert.Equal(0, harness.Repository.State.ManualBloodborneDeathCounter.Value);
-            Assert.Equal(0, harness.Repository.State.ManualDemonsSoulsDeathCounter.Value);
-
-            Assert.True(await service.HandleMessageAsync(GlobalHotkeyController.WindowsHotkeyMessage, GlobalHotkeyController.DecrementHotkeyId));
-            Assert.Equal(0, harness.Repository.State.EldenRingMissedDeathAdjustments.Get(harness.Repository.State.EldenRingSave));
-            Assert.Equal(1, soundPlayer.PlayCount);
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
 
     [Fact]
     public async Task SharedGlobalHotkeysAreHarmlessUntilEldenRingHasASelectedCharacter()
@@ -487,11 +442,4 @@ public sealed class GlobalHotkeysTests
         public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) => ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>(saves);
     }
 
-    private sealed class RecordingDeathSoundPlayer : IDeathSoundPlayer
-    {
-        public event EventHandler? PlaybackEnded { add { } remove { } }
-        public event EventHandler? PlaybackFailed { add { } remove { } }
-        public int PlayCount { get; private set; }
-        public void Play(DeathSoundConfiguration configuration) => PlayCount++;
-    }
 }

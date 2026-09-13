@@ -26,7 +26,6 @@ public static class TrackerStateTransitionService
             UpdateOverlayPresentationCommand updatePresentation => ApplyUpdateOverlayPresentation(state, updatePresentation),
             ResetOverlayAppearanceCommand resetAppearance => ResetOverlayAppearance(state, resetAppearance),
             UpdateOverlayAppearanceCommand updateAppearance => ApplyUpdateOverlayAppearance(state, updateAppearance),
-            UpdateDeathSoundConfigurationCommand updateDeathSound => ApplyUpdateDeathSoundConfiguration(state, updateDeathSound),
             AcknowledgeEldenRingNoticeCommand => ApplyAcknowledgeEldenRingNotice(state),
             UpdateEldenRingSaveConfigurationCommand updateEldenRingSave => ApplyUpdateEldenRingSaveConfiguration(state, updateEldenRingSave),
             AdjustEldenRingMissedDeathsCommand adjustEldenRingMissedDeaths => ApplyAdjustEldenRingMissedDeaths(state, adjustEldenRingMissedDeaths),
@@ -55,7 +54,7 @@ public static class TrackerStateTransitionService
                 gameId,
                 state.ManualBloodborneDeathCounter,
                 state.BossProgress,
-                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, scope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
+                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, scope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.SelectGame);
     }
 
@@ -70,7 +69,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.SelectedGameId == GameId.Bloodborne ? state.ManualBloodborneDeathCounter.Increment() : state.ManualBloodborneDeathCounter,
                 state.BossProgress,
-                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports,
+                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
                 state.SelectedGameId == GameId.DemonsSouls ? state.ManualDemonsSoulsDeathCounter.Increment() : state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope,
                 state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.IncrementManualBloodborneDeaths);
@@ -94,7 +93,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.SelectedGameId == GameId.Bloodborne ? updatedCounter : state.ManualBloodborneDeathCounter,
                 state.BossProgress,
-                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports,
+                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
                 state.SelectedGameId == GameId.DemonsSouls ? updatedCounter : state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope,
                 state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.DecrementManualBloodborneDeaths);
@@ -126,7 +125,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.ManualBloodborneDeathCounter,
                 updatedProgress,
-                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
+                state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.SetBossDefeated);
     }
 
@@ -136,7 +135,7 @@ public static class TrackerStateTransitionService
         BossListScope normalized = BossCatalogDisplayFilter.NormalizeScope(GameCatalog.GetRequired(state.SelectedGameId), command.Scope);
         if (normalized == state.BossListScope) return Unchanged(state, TrackerCommandType.UpdateBossListScope);
         return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress,
-            state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter,
+            state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter,
             state.EldenRingNoticeAcknowledged, state.EldenRingSave, normalized, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.UpdateBossListScope);
     }
 
@@ -162,7 +161,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.ManualBloodborneDeathCounter,
                 state.BossProgress,
-                updatedConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
+                updatedConfiguration, state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.UpdateOverlayPresentation);
     }
 
@@ -174,7 +173,7 @@ public static class TrackerStateTransitionService
                 new TotalDeathsOverlayOptions(existing.TotalDeaths.IsEnabled, existing.TotalDeaths.ShowGameName, existing.TotalDeaths.CompactTitle, OverlayAppearance.Default, existing.TotalDeaths.TitleIconMode), existing.BossList)
             : new OverlayConfiguration(existing.SchemaVersion, existing.Endpoint, existing.TotalDeaths,
                 new BossListOverlayOptions(existing.BossList.IsEnabled, existing.BossList.VisibilityMode, OverlayAppearance.BossListDefault, existing.BossList.DefeatedColor, existing.BossList.DefeatedTreatment, existing.BossList.ShowCheckmark, existing.BossList.CheckmarkAccent, existing.BossList.MaximumVisibleCount, existing.BossList.ShowDefeatedSkull, existing.BossList.CenterMarkerAlignment));
-        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, updated, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.ResetOverlayAppearance);
+        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, updated, state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.ResetOverlayAppearance);
     }
 
     private static TrackerTransitionResult ApplyUpdateOverlayAppearance(PersistentTrackerState state, UpdateOverlayAppearanceCommand command)
@@ -186,19 +185,9 @@ public static class TrackerStateTransitionService
                 new TotalDeathsOverlayOptions(existing.TotalDeaths.IsEnabled, command.TotalDeathsShowGameName, command.TotalDeathsCompactTitle, command.Appearance, command.TotalDeathsTitleIconMode), existing.BossList)
             : new OverlayConfiguration(existing.SchemaVersion, existing.Endpoint, existing.TotalDeaths,
                 new BossListOverlayOptions(existing.BossList.IsEnabled, command.BossListVisibilityMode, command.Appearance, command.BossListDefeatedColor, command.BossListDefeatedTreatment, command.BossListShowCheckmark, command.BossListCheckmarkAccent, command.BossListMaximumVisibleCount, command.BossListShowDefeatedSkull, command.BossListCenterMarkerAlignment));
-        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, updated, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.UpdateOverlayAppearance);
+        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, updated, state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.UpdateOverlayAppearance);
     }
 
-    private static TrackerTransitionResult ApplyUpdateDeathSoundConfiguration(PersistentTrackerState state, UpdateDeathSoundConfigurationCommand command)
-    {
-        ArgumentNullException.ThrowIfNull(command.Configuration);
-        if (state.DeathSound == command.Configuration)
-        {
-            return Unchanged(state, TrackerCommandType.UpdateDeathSoundConfiguration);
-        }
-
-        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, state.OverlayConfiguration, state.ManualBloodborneHotkeys, command.Configuration, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.UpdateDeathSoundConfiguration);
-    }
 
     private static TrackerTransitionResult ApplyAcknowledgeEldenRingNotice(PersistentTrackerState state) =>
         state.EldenRingNoticeAcknowledged
@@ -211,7 +200,7 @@ public static class TrackerStateTransitionService
                     state.BossProgress,
                     state.OverlayConfiguration,
                     state.ManualBloodborneHotkeys,
-                    state.DeathSound,
+
                     state.TextExports,
                     state.ManualDemonsSoulsDeathCounter,
                     eldenRingNoticeAcknowledged: true,
@@ -234,7 +223,7 @@ public static class TrackerStateTransitionService
                 state.BossProgress,
                 state.OverlayConfiguration,
                 state.ManualBloodborneHotkeys,
-                state.DeathSound,
+
                 state.TextExports,
                 state.ManualDemonsSoulsDeathCounter,
                 state.EldenRingNoticeAcknowledged,
@@ -258,7 +247,7 @@ public static class TrackerStateTransitionService
                 state.BossProgress,
                 state.OverlayConfiguration,
                 state.ManualBloodborneHotkeys,
-                state.DeathSound,
+
                 state.TextExports,
                 state.ManualDemonsSoulsDeathCounter,
                 state.EldenRingNoticeAcknowledged,
@@ -275,7 +264,7 @@ public static class TrackerStateTransitionService
         if (state.LiesOfPSave == command.Configuration) return Unchanged(state, TrackerCommandType.UpdateLiesOfPSaveConfiguration);
         return Changed(new PersistentTrackerState(
             state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress,
-            state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports,
+            state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
             state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments,
             command.Configuration), TrackerCommandType.UpdateLiesOfPSaveConfiguration);
@@ -298,7 +287,7 @@ public static class TrackerStateTransitionService
 
         return Changed(new PersistentTrackerState(
             state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress,
-            state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports,
+            state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
             state.BossListScope, state.BlackMythWukongSave, updated, state.LiesOfPSave), TrackerCommandType.AdjustEldenRingMissedDeaths);
     }

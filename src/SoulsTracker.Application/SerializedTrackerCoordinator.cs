@@ -61,11 +61,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
     {
         var request = new HotkeyRequest(hotkeys, cancellationToken); if (!requests.Writer.TryWrite(request)) ObjectDisposedException.ThrowIf(true, this); return request.Completion.Task;
     }
-    public Task<PersistentTrackerState> SetDeathSoundConfigurationAsync(DeathSoundConfiguration configuration, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(configuration);
-        var request = new DeathSoundRequest(configuration, cancellationToken); if (!requests.Writer.TryWrite(request)) ObjectDisposedException.ThrowIf(true, this); return request.Completion.Task;
-    }
+
     public Task<PersistentTrackerState> SetTextExportConfigurationAsync(TextExportConfiguration configuration, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -116,7 +112,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                         current.BossProgress,
                         current.OverlayConfiguration,
                         hotkeyRequest.Hotkeys,
-                        current.DeathSound,
+
                         current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave);
                     await repository.SaveAsync(updated, hotkeyRequest.CancellationToken).ConfigureAwait(false);
                     committedState = updated;
@@ -129,40 +125,28 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
 
                 continue;
             }
-            if (request is DeathSoundRequest deathSoundRequest)
-            {
-                try
-                {
-                    PersistentTrackerState current = committedState!;
-                    PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, deathSoundRequest.Configuration, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave);
-                    await repository.SaveAsync(updated, deathSoundRequest.CancellationToken).ConfigureAwait(false);
-                    committedState = updated;
-                    deathSoundRequest.Completion.TrySetResult(updated);
-                }
-                catch { deathSoundRequest.Completion.TrySetException(new InvalidOperationException("The death sound settings could not be saved.")); }
-                continue;
-            }
+
             if (request is TextExportRequest exportRequest)
             {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
                 catch { exportRequest.Completion.TrySetException(new InvalidOperationException("The text export settings could not be saved.")); }
                 continue;
             }
             if (request is EldenRingSaveRequest eldenRingSaveRequest)
             {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, eldenRingSaveRequest.Configuration, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateEldenRingSaveConfiguration), eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); eldenRingSaveRequest.Completion.TrySetResult(updated); }
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, eldenRingSaveRequest.Configuration, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateEldenRingSaveConfiguration), eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); eldenRingSaveRequest.Completion.TrySetResult(updated); }
                 catch { eldenRingSaveRequest.Completion.TrySetException(new InvalidOperationException("The Elden Ring save selection could not be saved.")); }
                 continue;
             }
             if (request is BlackMythWukongSaveRequest blackMythWukongSaveRequest)
             {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, blackMythWukongSaveRequest.Configuration, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateBlackMythWukongSaveConfiguration), blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); blackMythWukongSaveRequest.Completion.TrySetResult(updated); }
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, blackMythWukongSaveRequest.Configuration, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateBlackMythWukongSaveConfiguration), blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); blackMythWukongSaveRequest.Completion.TrySetResult(updated); }
                 catch { blackMythWukongSaveRequest.Completion.TrySetException(new InvalidOperationException("The Black Myth: Wukong save selection could not be saved.")); }
                 continue;
             }
             if (request is LiesOfPSaveRequest liesOfPSaveRequest)
             {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.DeathSound, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, liesOfPSaveRequest.Configuration); await repository.SaveAsync(updated, liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateLiesOfPSaveConfiguration), liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); liesOfPSaveRequest.Completion.TrySetResult(updated); }
+                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.ManualBloodborneDeathCounter, current.BossProgress, current.OverlayConfiguration, current.ManualBloodborneHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BossListScope, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, liesOfPSaveRequest.Configuration); await repository.SaveAsync(updated, liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateLiesOfPSaveConfiguration), liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); liesOfPSaveRequest.Completion.TrySetResult(updated); }
                 catch { liesOfPSaveRequest.Completion.TrySetException(new InvalidOperationException("The Lies of P save selection could not be saved.")); }
                 continue;
             }
@@ -231,13 +215,13 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
 
     public async ValueTask DisposeAsync() { requests.Writer.TryComplete(); await processor.ConfigureAwait(false); await repository.DisposeAsync().ConfigureAwait(false); }
     private static PersistentTrackerState WithEndpoint(PersistentTrackerState state, OverlayEndpointConfiguration endpoint) =>
-        state.OverlayConfiguration.Endpoint.Equals(endpoint) ? state : new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, new OverlayConfiguration(state.OverlayConfiguration.SchemaVersion, endpoint, state.OverlayConfiguration.TotalDeaths, state.OverlayConfiguration.BossList), state.ManualBloodborneHotkeys, state.DeathSound, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave);
+        state.OverlayConfiguration.Endpoint.Equals(endpoint) ? state : new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, state.BossProgress, new OverlayConfiguration(state.OverlayConfiguration.SchemaVersion, endpoint, state.OverlayConfiguration.TotalDeaths, state.OverlayConfiguration.BossList), state.ManualBloodborneHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BossListScope, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave);
 
     private abstract class CoordinatorRequest(CancellationToken cancellationToken) { public CancellationToken CancellationToken { get; } = cancellationToken; public abstract void RejectNotInitialized(); }
     private sealed class CommandRequest(ITrackerCommand command, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public ITrackerCommand Command { get; } = command; public TaskCompletionSource<TrackerCommandExecutionResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetResult(new(TrackerCommandExecutionStatus.NotInitialized, null, "Tracker state has not loaded.")); }
     private sealed class EndpointRequest(OverlayEndpointConfiguration endpoint, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public OverlayEndpointConfiguration Endpoint { get; } = endpoint; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
     private sealed class HotkeyRequest(ManualBloodborneHotkeyConfiguration hotkeys, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public ManualBloodborneHotkeyConfiguration Hotkeys { get; } = hotkeys; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
-    private sealed class DeathSoundRequest(DeathSoundConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public DeathSoundConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
+
     private sealed class TextExportRequest(TextExportConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public TextExportConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
     private sealed class EldenRingSaveRequest(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public EldenRingSaveConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
     private sealed class BlackMythWukongSaveRequest(BlackMythWukongSaveConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public BlackMythWukongSaveConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }

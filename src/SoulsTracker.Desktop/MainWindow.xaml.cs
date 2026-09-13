@@ -15,7 +15,6 @@ namespace SoulsTracker.Desktop;
 /// <summary>Hosts the P3-01 manual tracking surface.</summary>
 public partial class MainWindow : Window
 {
-    private bool deathSoundVolumeEditorIsActive;
     private bool isRestoringEldenRingProfileSelection;
     private bool isRestoringEldenRingSaveSelection;
     private bool isRestoringBlackMythWukongSaveSelection;
@@ -606,80 +605,6 @@ public partial class MainWindow : Window
         }
     }
 
-
-    private async void BrowseDeathSound_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Audio files (*.wav;*.mp3)|*.wav;*.mp3", CheckFileExists = true, Multiselect = false };
-        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetDeathSoundFileAsync(dialog.FileName);
-    }
-    private async void ClearDeathSound_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearDeathSoundAsync();
-    }
-    private void PlayDeathSound_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.PreviewDeathSound();
-    }
-    private async void DeathSoundEnabled_Checked(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && !viewModel.IsDeathSoundEnabled) await viewModel.SetDeathSoundEnabledAsync(true);
-    }
-    private async void DeathSoundEnabled_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && viewModel.IsDeathSoundEnabled) await viewModel.SetDeathSoundEnabledAsync(false);
-    }
-    private async void DeathSoundVolume_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key != Key.Return || sender is not System.Windows.Controls.TextBox textBox || DataContext is not DesktopTrackerViewModel viewModel)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        await viewModel.CommitDeathSoundVolumeTextAsync();
-        await SynchronizeDeathSoundVolumeStatusAsync(viewModel);
-    }
-
-    private async void DeathSoundVolume_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (deathSoundVolumeEditorIsActive && sender is System.Windows.Controls.TextBox && DataContext is DesktopTrackerViewModel viewModel)
-        {
-            await viewModel.QueueDeathSoundVolumeTextSaveAsync();
-            await SynchronizeDeathSoundVolumeStatusAsync(viewModel);
-        }
-    }
-
-    private void DeathSoundVolume_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
-        deathSoundVolumeEditorIsActive = true;
-
-    private async void DeathSoundVolume_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        deathSoundVolumeEditorIsActive = false;
-        if (DataContext is DesktopTrackerViewModel viewModel)
-        {
-            await viewModel.CommitDeathSoundVolumeTextAsync();
-            await SynchronizeDeathSoundVolumeStatusAsync(viewModel);
-        }
-    }
-
-    // The coordinator intentionally completes on a worker thread, and its task uses
-    // RunContinuationsAsynchronously. A routed async handler therefore cannot assume
-    // that its continuation still owns this Window's dispatcher. Marshal the
-    // already-authoritative VM result back to the visible live-region after the await.
-    private async Task SynchronizeDeathSoundVolumeStatusAsync(DesktopTrackerViewModel viewModel)
-    {
-        await Dispatcher.InvokeAsync(() =>
-        {
-            DeathSoundStatusTextBlock.Text = viewModel.DeathSoundStatus;
-            DeathSoundStatusTextBlock.Foreground = viewModel.IsDeathSoundVolumeUpdateSuccessful
-                ? (System.Windows.Media.Brush)FindResource("SuccessBrush")
-                : viewModel.IsDeathSoundVolumeValidationError
-                    ? (System.Windows.Media.Brush)FindResource("DangerBrush")
-                    : (System.Windows.Media.Brush)FindResource("MutedTextBrush");
-            System.Windows.Automation.AutomationProperties.SetName(DeathSoundStatusTextBlock, viewModel.DeathSoundStatus ?? string.Empty);
-            DeathSoundStatusTextBlock.UpdateLayout();
-        });
-    }
 
     private void CopyTotalDeathsOverlayUrl_Click(object sender, RoutedEventArgs e) => CopyOverlayUrl(sender as System.Windows.Controls.Button, (DataContext as DesktopTrackerViewModel)?.TotalDeathsSceneUrl);
     private void CopyBossListOverlayUrl_Click(object sender, RoutedEventArgs e) => CopyOverlayUrl(sender as System.Windows.Controls.Button, (DataContext as DesktopTrackerViewModel)?.BossListSceneUrl);

@@ -552,7 +552,6 @@ public sealed class MainWindowBindingTests
 
                 Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("TotalDeathsOverlayEnabledCheckBox")).HorizontalAlignment);
                 Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("BossListOverlayEnabledCheckBox")).HorizontalAlignment);
-                Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox")).HorizontalAlignment);
                 Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("DeathsExportEnabledCheckBox")).HorizontalAlignment);
                 Assert.Equal(HorizontalAlignment.Left, Assert.IsType<CheckBox>(window.FindName("BossExportEnabledCheckBox")).HorizontalAlignment);
             }
@@ -698,9 +697,9 @@ public sealed class MainWindowBindingTests
                 Assert.True(settings.ScrollableHeight > 0);
                 StackPanel settingsContent = Assert.IsType<StackPanel>(window.FindName("SettingsContentStack"));
                 Border[] settingsPanels = FindVisualDescendants<Border>(settingsContent)
-                    .Where(panel => AutomationProperties.GetName(panel) is "Manual update check settings" or "OBS startup recovery settings" or "Death sound settings" or "OBS text export settings")
+                    .Where(panel => AutomationProperties.GetName(panel) is "Manual update check settings" or "OBS startup recovery settings" or "OBS text export settings")
                     .ToArray();
-                Assert.Equal(["Manual update check settings", "Death sound settings", "OBS text export settings", "OBS startup recovery settings"], settingsPanels.Select(AutomationProperties.GetName).ToArray());
+                Assert.Equal(["Manual update check settings", "OBS text export settings", "OBS startup recovery settings"], settingsPanels.Select(AutomationProperties.GetName).ToArray());
                 Assert.All(settingsPanels.Skip(1), panel => Assert.Equal(new Thickness(0, 14, 0, 0), panel.Margin));
 
                 CheckBox persistentHost = Assert.IsType<CheckBox>(window.FindName("PersistentOverlayHostEnabledCheckBox"));
@@ -979,139 +978,9 @@ public sealed class MainWindowBindingTests
         });
     }
 
-    [Fact]
-    public void DeathSoundControlsAreSettingsOnlyAndUseAccessibleSafeBindings()
-    {
-        RunOnStaThread(() =>
-        {
-            MainWindow? window = null;
-            try
-            {
-                window = new MainWindow();
-                Assert.IsType<Button>(window.FindName("BrowseDeathSoundButton"));
-                Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
-                Assert.IsType<Button>(window.FindName("PlayDeathSoundButton"));
-                AssertPropertyBinding(window, "BrowseDeathSoundButton", nameof(DesktopTrackerViewModel.CanBrowseDeathSound), Button.IsEnabledProperty);
-                AssertPropertyBinding(window, "ClearDeathSoundButton", nameof(DesktopTrackerViewModel.CanClearDeathSound), Button.IsEnabledProperty);
-                AssertPropertyBinding(window, "PlayDeathSoundButton", nameof(DesktopTrackerViewModel.CanPreviewDeathSound), Button.IsEnabledProperty);
-                CheckBox enabled = Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox"));
-                Assert.Equal("Enable death sound", AutomationProperties.GetName(enabled));
-                TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
-                AssertPropertyBinding(window, "DeathSoundVolumeTextBox", nameof(DesktopTrackerViewModel.CanEditDeathSoundVolume), TextBox.IsEnabledProperty);
-                Assert.Equal("Death sound volume percentage", AutomationProperties.GetName(volume));
-                Assert.Equal(72d, volume.Width);
-                Assert.True(volume.Focusable);
-                Assert.DoesNotContain("Slider", volume.Name, StringComparison.OrdinalIgnoreCase);
-                string xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml"));
-                Assert.Contains("DeathSoundVolume_KeyDown", xaml, StringComparison.Ordinal);
-                Assert.Contains("DeathSoundVolume_GotKeyboardFocus", xaml, StringComparison.Ordinal);
-                Assert.Contains("DeathSoundVolume_TextChanged", xaml, StringComparison.Ordinal);
-                Assert.Contains("DeathSoundVolume_LostKeyboardFocus", xaml, StringComparison.Ordinal);
-                Assert.DoesNotContain("SaveDeathSoundVolume", xaml, StringComparison.Ordinal);
-                Binding volumeBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(volume, TextBox.TextProperty));
-                Assert.Equal(nameof(DesktopTrackerViewModel.DeathSoundVolumeText), volumeBinding.Path?.Path);
-                Assert.Equal(BindingMode.TwoWay, volumeBinding.Mode);
-                Button clear = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
-                Assert.Equal(2, Grid.GetColumn(clear));
-                Assert.Equal(0, Grid.GetRow(clear));
-                Assert.Equal(HorizontalAlignment.Right, clear.HorizontalAlignment);
-                Assert.Contains("Text=\"%\"", File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "SoulsTracker.Desktop", "MainWindow.xaml")), StringComparison.Ordinal);
-                TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
-                Assert.Equal(System.Windows.Automation.AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(status));
-                DataTrigger hiddenWhenEmptyTrigger = Assert.Single(status.Style.Triggers.OfType<DataTrigger>(), trigger => Assert.IsType<Binding>(trigger.Binding).Path?.Path == nameof(DesktopTrackerViewModel.DeathSoundStatus) && trigger.Value is null);
-                Setter hiddenWhenEmptySetter = Assert.Single(hiddenWhenEmptyTrigger.Setters.OfType<Setter>());
-                Assert.Equal(UIElement.VisibilityProperty, hiddenWhenEmptySetter.Property);
-                Assert.Equal(Visibility.Collapsed, hiddenWhenEmptySetter.Value);
-                DataTrigger successTrigger = Assert.Single(status.Style.Triggers.OfType<DataTrigger>(), trigger => Assert.IsType<Binding>(trigger.Binding).Path?.Path == nameof(DesktopTrackerViewModel.IsDeathSoundVolumeUpdateSuccessful) && string.Equals(trigger.Value?.ToString(), "True", StringComparison.OrdinalIgnoreCase));
-                Binding successBinding = Assert.IsType<Binding>(successTrigger.Binding);
-                Assert.Equal(nameof(DesktopTrackerViewModel.IsDeathSoundVolumeUpdateSuccessful), successBinding.Path?.Path);
-                DataTrigger errorTrigger = Assert.Single(status.Style.Triggers.OfType<DataTrigger>(), trigger => Assert.IsType<Binding>(trigger.Binding).Path?.Path == nameof(DesktopTrackerViewModel.IsDeathSoundVolumeValidationError) && string.Equals(trigger.Value?.ToString(), "True", StringComparison.OrdinalIgnoreCase));
-                Binding errorBinding = Assert.IsType<Binding>(errorTrigger.Binding);
-                Assert.Equal(nameof(DesktopTrackerViewModel.IsDeathSoundVolumeValidationError), errorBinding.Path?.Path);
-                Assert.IsType<Button>(window.FindName("CopyTotalDeathsOverlayUrlButton"));
-                Assert.IsType<Button>(window.FindName("CopyBossListOverlayUrlButton"));
-                TextBlock fileName = Assert.IsType<TextBlock>(window.FindName("DeathSoundFileNameTextBlock"));
-                Binding fileBinding = Assert.IsType<Binding>(BindingOperations.GetBinding(fileName, TextBlock.TextProperty));
-                Assert.Equal(nameof(DesktopTrackerViewModel.DeathSoundFileName), fileBinding.Path?.Path);
-                Assert.DoesNotContain("Path", fileName.Name, StringComparison.OrdinalIgnoreCase);
-            }
-            finally { window?.Close(); }
-        });
-    }
 
-    [Fact]
-    public void VolumeAutosaveUpdatesTheVisibleStatusAfterEditingSettles()
-    {
-        RunOnStaThread(() =>
-        {
-            MainWindow? window = null;
-            var repository = new TextExportPersistenceRepository();
-            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
-            try
-            {
-                var viewModel = new DesktopTrackerViewModel(coordinator);
-                viewModel.InitializeAsync().GetAwaiter().GetResult();
-                viewModel.SetDeathSoundEnabledAsync(true).GetAwaiter().GetResult();
-                window = new MainWindow { DataContext = viewModel };
-                window.Show();
-                Assert.IsType<TabControl>(window.FindName("WorkspaceTabs")).SelectedIndex = 2;
-                window.UpdateLayout();
 
-                TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
-                TextBlock status = Assert.IsType<TextBlock>(window.FindName("DeathSoundStatusTextBlock"));
-                Assert.Equal(Visibility.Collapsed, status.Visibility);
-                int savesBeforeVolumeEdit = repository.SaveCount;
-                volume.Focus();
-                volume.Text = "37";
 
-                WaitForVolumeStatus(
-                    volume,
-                    status,
-                    viewModel,
-                    repository,
-                    "37",
-                    "Volume changed to 37%",
-                    isSuccessful: true,
-                    isValidationError: false,
-                    "#FF70D6A7",
-                    savesBeforeVolumeEdit + 1,
-                    37);
-
-                Assert.Equal("Volume changed to 37%", status.Text);
-                Assert.Equal(Visibility.Visible, status.Visibility);
-                Assert.True(viewModel.IsDeathSoundVolumeUpdateSuccessful);
-                Assert.Equal("#FF70D6A7", ((SolidColorBrush)status.Foreground).Color.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                Assert.Equal("Volume changed to 37%", AutomationProperties.GetName(status));
-                Assert.Equal(savesBeforeVolumeEdit + 1, repository.SaveCount);
-
-                volume.Text = "101";
-                WaitForVolumeStatus(
-                    volume,
-                    status,
-                    viewModel,
-                    repository,
-                    "101",
-                    DesktopTrackerViewModel.DeathSoundVolumeValidationMessage,
-                    isSuccessful: false,
-                    isValidationError: true,
-                    "#FFFF8C8C",
-                    savesBeforeVolumeEdit + 1,
-                    37);
-
-                Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, status.Text);
-                Assert.Equal(Visibility.Visible, status.Visibility);
-                Assert.True(viewModel.IsDeathSoundVolumeValidationError);
-                Assert.Equal("#FFFF8C8C", ((SolidColorBrush)status.Foreground).Color.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, AutomationProperties.GetName(status));
-                Assert.Equal(savesBeforeVolumeEdit + 1, repository.SaveCount);
-            }
-            finally
-            {
-                window?.Close();
-                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            }
-        });
-    }
 
     [Fact]
     public void TextExportSettingsUseExplicitEnablementControls()
@@ -1227,169 +1096,9 @@ public sealed class MainWindowBindingTests
         });
     }
 
-    [Fact]
-    public void DeathSoundEnablementTogglesPersistAndControlFileActions()
-    {
-        RunOnStaThread(() =>
-        {
-            MainWindow? window = null;
-            string soundPath = Path.Combine(Path.GetTempPath(), $"souls-tracker-test-{Guid.NewGuid():N}.wav");
-            var repository = new TextExportPersistenceRepository();
-            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
-            try
-            {
-                var viewModel = new DesktopTrackerViewModel(coordinator);
-                viewModel.InitializeAsync().GetAwaiter().GetResult();
-                window = new MainWindow { DataContext = viewModel };
-                window.Show();
-                window.UpdateLayout();
 
-                CheckBox enabled = Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox"));
-                Button browse = Assert.IsType<Button>(window.FindName("BrowseDeathSoundButton"));
-                Button clear = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
-                Button play = Assert.IsType<Button>(window.FindName("PlayDeathSoundButton"));
-                TextBox volume = Assert.IsType<TextBox>(window.FindName("DeathSoundVolumeTextBox"));
 
-                Assert.False(enabled.IsChecked);
-                Assert.False(browse.IsEnabled);
-                Assert.False(clear.IsEnabled);
-                Assert.False(play.IsEnabled);
-                Assert.False(volume.IsEnabled);
 
-                enabled.IsChecked = true;
-                WaitForDispatcher(() => viewModel.IsDeathSoundEnabled && enabled.IsChecked == true && repository.SaveCount >= 1);
-                browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                volume.GetBindingExpression(TextBox.IsEnabledProperty)?.UpdateTarget();
-                Assert.True(viewModel.CanBrowseDeathSound);
-                Assert.False(viewModel.CanClearDeathSound);
-                Assert.True(browse.IsEnabled);
-                Assert.False(clear.IsEnabled);
-                Assert.False(play.IsEnabled);
-                Assert.True(volume.IsEnabled);
-                Assert.True(repository.State.DeathSound.IsEnabled);
-
-                File.WriteAllBytes(soundPath, []);
-                viewModel.SetDeathSoundFileAsync(soundPath).GetAwaiter().GetResult();
-                WaitForDispatcher(() => viewModel.DeathSoundFileName is not null && repository.SaveCount >= 2);
-                browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                Assert.True(viewModel.CanBrowseDeathSound);
-                Assert.True(viewModel.CanClearDeathSound);
-                Assert.True(browse.IsEnabled);
-                Assert.True(clear.IsEnabled);
-                Assert.True(play.IsEnabled);
-
-                enabled.IsChecked = false;
-                WaitForDispatcher(() => !viewModel.IsDeathSoundEnabled && enabled.IsChecked == false && repository.SaveCount >= 3);
-                browse.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                clear.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                play.GetBindingExpression(Button.IsEnabledProperty)?.UpdateTarget();
-                volume.GetBindingExpression(TextBox.IsEnabledProperty)?.UpdateTarget();
-                Assert.False(viewModel.CanBrowseDeathSound);
-                Assert.False(viewModel.CanClearDeathSound);
-                Assert.False(browse.IsEnabled);
-                Assert.False(clear.IsEnabled);
-                Assert.False(play.IsEnabled);
-                Assert.False(volume.IsEnabled);
-                Assert.False(repository.State.DeathSound.IsEnabled);
-
-                window.Close();
-                window = null;
-                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-                var restartedCoordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
-                try
-                {
-                    var restarted = new DesktopTrackerViewModel(restartedCoordinator);
-                    restarted.InitializeAsync().GetAwaiter().GetResult();
-                    Assert.False(restarted.IsDeathSoundEnabled);
-                    Assert.False(restarted.CanBrowseDeathSound);
-                    Assert.False(restarted.CanClearDeathSound);
-                }
-                finally { restartedCoordinator.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
-            }
-            finally
-            {
-                window?.Close();
-                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                File.Delete(soundPath);
-            }
-        });
-    }
-
-    [Fact]
-    public void RoutedClearActionsPreserveEnabledSoundAndTextExportTogglesAfterReload()
-    {
-        RunOnStaThread(() =>
-        {
-            MainWindow? window = null;
-            PersistentTrackerState configuredState = new(
-                PersistentTrackerState.CurrentSchemaVersion,
-                selectedGameId: null,
-                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-                BossProgress.Empty,
-                OverlayConfiguration.Default,
-                deathSound: new DeathSoundConfiguration("C:\\temp\\sound.wav", isEnabled: true, volume: 100),
-                textExports: new TextExportConfiguration("C:\\temp\\deaths.txt", deathsEnabled: true, "C:\\temp\\bosses.txt", bossListEnabled: true));
-            var repository = new TextExportPersistenceRepository(configuredState);
-            var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
-            try
-            {
-                var viewModel = new DesktopTrackerViewModel(coordinator);
-                viewModel.InitializeAsync().GetAwaiter().GetResult();
-                window = new MainWindow { DataContext = viewModel };
-                window.Show();
-                window.UpdateLayout();
-
-                Button clearSound = Assert.IsType<Button>(window.FindName("ClearDeathSoundButton"));
-                Button clearDeaths = Assert.IsType<Button>(window.FindName("ClearDeathsExportButton"));
-                Button clearBoss = Assert.IsType<Button>(window.FindName("ClearBossExportButton"));
-                Assert.True(clearSound.IsEnabled);
-                Assert.True(clearDeaths.IsEnabled);
-                Assert.True(clearBoss.IsEnabled);
-
-                clearSound.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                WaitForDispatcher(() => repository.SaveCount >= 1 && viewModel.DeathSoundFileName is null);
-                clearDeaths.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                WaitForDispatcher(() => repository.SaveCount >= 2 && viewModel.DeathsExportFileName is null);
-                clearBoss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                WaitForDispatcher(() => repository.SaveCount >= 3 && viewModel.BossExportFileName is null);
-
-                Assert.True(viewModel.IsDeathSoundEnabled);
-                Assert.True(viewModel.IsDeathsExportEnabled);
-                Assert.True(viewModel.IsBossExportEnabled);
-                Assert.True(repository.State.DeathSound.IsEnabled);
-                Assert.True(repository.State.TextExports.DeathsEnabled);
-                Assert.True(repository.State.TextExports.BossListEnabled);
-
-                window.Close();
-                window = null;
-                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-                var restartedCoordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
-                try
-                {
-                    var restarted = new DesktopTrackerViewModel(restartedCoordinator);
-                    restarted.InitializeAsync().GetAwaiter().GetResult();
-                    Assert.True(restarted.IsDeathSoundEnabled);
-                    Assert.True(restarted.IsDeathsExportEnabled);
-                    Assert.True(restarted.IsBossExportEnabled);
-                    Assert.Null(restarted.DeathSoundFileName);
-                    Assert.Null(restarted.DeathsExportFileName);
-                    Assert.Null(restarted.BossExportFileName);
-                }
-                finally { restartedCoordinator.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
-            }
-            finally
-            {
-                window?.Close();
-                coordinator.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            }
-        });
-    }
 
     [Fact]
     public void OverlayUrlTextBindingsAreExplicitlyOneWay()
@@ -1717,7 +1426,7 @@ public sealed class MainWindowBindingTests
                 AssertKeyboardFocusVisual(Assert.IsType<TextBox>(window.FindName("TotalDeathsOverlayUrlTextBox")));
                 AssertKeyboardFocusVisual(bossMode);
                 AssertKeyboardFocusVisual(Assert.IsType<TabItem>(window.FindName("MainWorkspaceTab")));
-                AssertKeyboardFocusVisual(Assert.IsType<CheckBox>(window.FindName("DeathSoundEnabledCheckBox")));
+
                 AssertComboBoxAccentIsLimitedToTheOpenDropDown(bossMode);
 
                 Border legacyPanel = Assert.IsType<Border>(window.FindName("LegacyImportPanel"));
@@ -2145,43 +1854,5 @@ public sealed class MainWindowBindingTests
         Assert.True(condition(), diagnostic?.Invoke() ?? "The routed WPF Save action did not publish its visible volume confirmation.");
     }
 
-    private static void WaitForVolumeStatus(
-        TextBox volume,
-        TextBlock status,
-        DesktopTrackerViewModel viewModel,
-        TextExportPersistenceRepository repository,
-        string expectedEditorText,
-        string expectedStatus,
-        bool isSuccessful,
-        bool isValidationError,
-        string expectedForeground,
-        int expectedSaveCount,
-        int expectedPersistedVolume)
-    {
-        string Foreground() =>
-            status.Foreground is SolidColorBrush brush
-                ? brush.Color.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : status.Foreground?.GetType().Name ?? "<null>";
 
-        bool IsSettled() =>
-            string.Equals(volume.Text, expectedEditorText, StringComparison.Ordinal)
-            && string.Equals(status.Text, expectedStatus, StringComparison.Ordinal)
-            && status.Visibility == Visibility.Visible
-            && viewModel.IsDeathSoundVolumeUpdateSuccessful == isSuccessful
-            && viewModel.IsDeathSoundVolumeValidationError == isValidationError
-            && string.Equals(AutomationProperties.GetName(status), expectedStatus, StringComparison.Ordinal)
-            && string.Equals(Foreground(), expectedForeground, StringComparison.Ordinal)
-            && repository.SaveCount == expectedSaveCount
-            && repository.State.DeathSound.Volume == expectedPersistedVolume
-            && viewModel.DeathSoundVolume == expectedPersistedVolume;
-
-        WaitForDispatcher(
-            IsSettled,
-            () =>
-                $"Volume status did not settle. Editor: '{volume.Text}'; status: '{status.Text}'; visibility: {status.Visibility}; "
-                + $"success: {viewModel.IsDeathSoundVolumeUpdateSuccessful}; validation error: {viewModel.IsDeathSoundVolumeValidationError}; "
-                + $"accessible name: '{AutomationProperties.GetName(status)}'; foreground: {Foreground()}; "
-                + $"save count: {repository.SaveCount}; persisted volume: {repository.State.DeathSound.Volume}; "
-                + $"view-model volume: {viewModel.DeathSoundVolume}.");
-    }
 }

@@ -58,8 +58,6 @@ public sealed record UpdateOverlayAppearanceCommand(
     bool BossListShowDefeatedSkull = false,
     CenterMarkerAlignment BossListCenterMarkerAlignment = CenterMarkerAlignment.Left) : ITrackerCommand;
 
-/// <summary>Replaces the validated local-only death sound configuration.</summary>
-public sealed record UpdateDeathSoundConfigurationCommand(DeathSoundConfiguration Configuration) : ITrackerCommand;
 
 /// <summary>Stores the local acknowledgement required before selecting Elden Ring.</summary>
 public sealed record AcknowledgeEldenRingNoticeCommand : ITrackerCommand;
@@ -89,7 +87,7 @@ public enum TrackerCommandType
     UpdateOverlayPresentation,
     ResetOverlayAppearance,
     UpdateOverlayAppearance,
-    UpdateDeathSoundConfiguration,
+
     AcknowledgeEldenRingNotice,
     UpdateEldenRingSaveConfiguration,
     AdjustEldenRingMissedDeaths,

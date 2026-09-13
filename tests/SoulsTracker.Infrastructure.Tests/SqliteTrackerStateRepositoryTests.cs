@@ -303,25 +303,6 @@ public sealed class SqliteTrackerStateRepositoryTests : IAsyncLifetime
         Assert.Equal(0, payload["BossListScope"]!.GetValue<int>());
     }
 
-    [Fact]
-    public async Task DeathSoundConfigurationRoundTripsAndMalformedPersistedPathFallsBackSafely()
-    {
-        const string path = "C:\\local-only\\death.wav";
-        PersistentTrackerState configured = new(1, null, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), BossProgress.Empty, OverlayConfiguration.Default, deathSound: new DeathSoundConfiguration(path, true, 42));
-        await using (var repository = new SqliteTrackerStateRepository(root, "sound.db", new ReversingProtector())) { await repository.LoadAsync(); await repository.SaveAsync(configured); }
-        await using (var reopened = new SqliteTrackerStateRepository(root, "sound.db", new ReversingProtector()))
-        {
-            DeathSoundConfiguration sound = (await reopened.LoadAsync()).State!.DeathSound;
-            Assert.Equal(path, sound.LocalPath); Assert.True(sound.IsEnabled); Assert.Equal(42, sound.Volume);
-        }
-        await using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "sound.db")};Pooling=False"))
-        {
-            await connection.OpenAsync(); await using var command = connection.CreateCommand();
-            command.CommandText = "UPDATE tracker_state SET payload=json_set(payload, '$.DeathSoundPath', 'not-audio.exe') WHERE id=1"; await command.ExecuteNonQueryAsync();
-        }
-        await using var malformed = new SqliteTrackerStateRepository(root, "sound.db", new ReversingProtector());
-        Assert.Equal(DeathSoundConfiguration.Default, (await malformed.LoadAsync()).State!.DeathSound);
-    }
 
     [Fact]
     public async Task TextExportConfigurationRoundTripsAndInvalidExtensionsFallBack()

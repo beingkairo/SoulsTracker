@@ -21,7 +21,7 @@ public sealed class PersistentTrackerState
         BossProgress.Empty,
         OverlayConfiguration.Default,
         ManualBloodborneHotkeyConfiguration.Default,
-        DeathSoundConfiguration.Default,
+
         TextExportConfiguration.Default,
         ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
         eldenRingNoticeAcknowledged: false,
@@ -43,7 +43,7 @@ public sealed class PersistentTrackerState
         BossProgress bossProgress,
         OverlayConfiguration overlayConfiguration,
         ManualBloodborneHotkeyConfiguration? manualBloodborneHotkeys = null,
-        DeathSoundConfiguration? deathSound = null,
+
         TextExportConfiguration? textExports = null,
         ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
         bool eldenRingNoticeAcknowledged = false,
@@ -78,7 +78,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneHotkeys = manualBloodborneHotkeys is { IsValid: true } validHotkeys
             ? validHotkeys
             : ManualBloodborneHotkeyConfiguration.Default;
-        DeathSound = deathSound ?? DeathSoundConfiguration.Default;
+
         TextExports = textExports ?? TextExportConfiguration.Default;
         EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
         EldenRingSave = eldenRingSave ?? EldenRingSaveConfiguration.Default;
@@ -129,7 +129,7 @@ public sealed class PersistentTrackerState
 
     public ManualBloodborneHotkeyConfiguration ManualBloodborneHotkeys { get; }
 
-    public DeathSoundConfiguration DeathSound { get; }
+
     public TextExportConfiguration TextExports { get; }
 
     /// <summary>Gets whether this local installation accepted the Elden Ring notice.</summary>

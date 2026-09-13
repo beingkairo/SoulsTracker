@@ -36,7 +36,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
     internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable — waiting for active character.";
 
-    internal const string DeathSoundVolumeValidationMessage = "Death sound volume must be between 0 and 100.";
 
     private readonly SerializedTrackerCoordinator coordinator;
     private readonly IEldenRingSaveProfileReader eldenRingSaveProfileReader;
@@ -87,12 +86,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool recordingIncrementHotkey;
     private GlobalHotkeyBinding? hotkeyBindingBeforeRecording;
     private Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>>? applyHotkeysAsync;
-    private IDeathSoundPlayer? deathSoundPlayer;
-    private string? deathSoundStatus;
-    private string deathSoundVolumeText = "100";
-    private readonly object deathSoundVolumeSaveSync = new();
-    private Task deathSoundVolumeSaveTail = Task.CompletedTask;
-    private long deathSoundVolumeEditVersion;
     private string? textExportStatus;
     private OverlayTitleIconModeChoice draftTitleIconModeChoice = OverlayTitleIconModeChoice.All[0];
     private BossListVisibilityMode draftBossListMode;
@@ -382,7 +375,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(CanRetryUpdateCheck));
                 OnPropertyChanged(nameof(CanChangePersistentOverlayHost));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
-                NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
             }
         }
@@ -402,7 +394,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
-                NotifyDeathSoundControlAvailability();
                 NotifyTextExportControlAvailability();
             }
         }
@@ -584,41 +575,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public BossListVisibilityMode BossListVisibilityMode { get => bossListVisibilityMode; private set => SetField(ref bossListVisibilityMode, value); }
     public LegacyImportViewModel? LegacyImport { get => legacyImport; private set => SetField(ref legacyImport, value); }
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
-    public string? DeathSoundFileName => state?.DeathSound.LocalPath is { } path ? Path.GetFileName(path) : null;
-    public bool IsDeathSoundEnabled => state?.DeathSound.IsEnabled ?? false;
-    /// <summary>True when the user may choose a death-sound file for the enabled feature.</summary>
-    public bool CanBrowseDeathSound => ControlsEnabled && IsDeathSoundEnabled;
-    /// <summary>True when the enabled feature has a configured file that may be cleared.</summary>
-    public bool CanClearDeathSound => CanBrowseDeathSound && state?.DeathSound.LocalPath is not null;
-    /// <summary>True when the enabled feature has a local file that can be previewed safely.</summary>
-    public bool CanPreviewDeathSound => CanBrowseDeathSound && state?.DeathSound.LocalPath is { } path && File.Exists(path);
-    /// <summary>Volume controls are available only while the optional sound feature is enabled.</summary>
-    public bool CanEditDeathSoundVolume => ControlsEnabled && IsDeathSoundEnabled;
-    public int DeathSoundVolume => state?.DeathSound.Volume ?? 100;
-    /// <summary>Editable volume draft; valid values persist after editing settles or is committed.</summary>
-    public string DeathSoundVolumeText
-    {
-        get => deathSoundVolumeText;
-        set => SetField(ref deathSoundVolumeText, value ?? string.Empty);
-    }
-    public string? DeathSoundStatus
-    {
-        get => deathSoundStatus;
-        private set
-        {
-            if (SetField(ref deathSoundStatus, value))
-            {
-                OnPropertyChanged(nameof(IsDeathSoundVolumeUpdateSuccessful));
-                OnPropertyChanged(nameof(IsDeathSoundVolumeValidationError));
-            }
-        }
-    }
-
-    /// <summary>True only for the requested successful percentage-save acknowledgement.</summary>
-    public bool IsDeathSoundVolumeUpdateSuccessful =>
-        DeathSoundStatus is not null && DeathSoundStatus.StartsWith("Volume changed to ", StringComparison.Ordinal);
-    public bool IsDeathSoundVolumeValidationError =>
-        string.Equals(DeathSoundStatus, DeathSoundVolumeValidationMessage, StringComparison.Ordinal);
     public string? TotalDeathsAppearanceStatus { get => totalDeathsAppearanceStatus; private set => SetField(ref totalDeathsAppearanceStatus, value); }
     public string? BossListAppearanceStatus { get => bossListAppearanceStatus; private set => SetField(ref bossListAppearanceStatus, value); }
     public string? TextExportStatus { get => textExportStatus; private set => SetField(ref textExportStatus, value); }
@@ -758,75 +714,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     internal void SetGlobalHotkeyStatus(string status) => GlobalHotkeyStatus = string.IsNullOrWhiteSpace(status)
         ? throw new ArgumentException("A global hotkey status is required.", nameof(status))
         : status;
-    internal void ConfigureDeathSoundPlayback(IDeathSoundPlayer player)
-    {
-        if (deathSoundPlayer is not null)
-        {
-            deathSoundPlayer.PlaybackEnded -= DeathSoundPlayer_PlaybackEnded;
-            deathSoundPlayer.PlaybackFailed -= DeathSoundPlayer_PlaybackFailed;
-        }
-        deathSoundPlayer = player ?? throw new ArgumentNullException(nameof(player));
-        deathSoundPlayer.PlaybackEnded += DeathSoundPlayer_PlaybackEnded;
-        deathSoundPlayer.PlaybackFailed += DeathSoundPlayer_PlaybackFailed;
-        RefreshDeathSoundStatus();
-        if (state is not null)
-        {
-            DeathSoundVolumeText = state.DeathSound.Volume.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-    }
-
-    /// <summary>Starts a local preview using the already-saved configuration; it never persists or changes tracking state.</summary>
-    public void PreviewDeathSound()
-    {
-        if (!CanPreviewDeathSound || deathSoundPlayer is null)
-        {
-            DeathSoundStatus = "Death sound is unavailable.";
-            return;
-        }
-
-        DeathSoundStatus = "Playing death sound.";
-        deathSoundPlayer.Play(state!.DeathSound);
-    }
-
     internal void SetTextExportStatus(bool succeeded) => TextExportStatus = succeeded ? "Text exports ready." : "Text export is unavailable.";
-
-    public Task SetDeathSoundFileAsync(string selectedLocalPath, CancellationToken cancellationToken = default)
-    {
-        if (!ControlsEnabled || string.IsNullOrWhiteSpace(selectedLocalPath) || !File.Exists(selectedLocalPath))
-        {
-            DeathSoundStatus = "Death sound is unavailable.";
-            return Task.CompletedTask;
-        }
-        try { return SaveDeathSoundAsync(new DeathSoundConfiguration(selectedLocalPath, IsDeathSoundEnabled, DeathSoundVolume), cancellationToken); }
-        catch (ArgumentException) { DeathSoundStatus = "Death sound must be a WAV or MP3 file."; return Task.CompletedTask; }
-    }
-    public Task ClearDeathSoundAsync(CancellationToken cancellationToken = default) => SaveDeathSoundAsync(new DeathSoundConfiguration(null, IsDeathSoundEnabled, DeathSoundVolume), cancellationToken);
-    public Task SetDeathSoundEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveDeathSoundAsync(new DeathSoundConfiguration(state?.DeathSound.LocalPath, enabled, DeathSoundVolume), cancellationToken);
-    public Task SetDeathSoundVolumeAsync(int volume, CancellationToken cancellationToken = default)
-    {
-        try { return SaveDeathSoundAsync(new DeathSoundConfiguration(state?.DeathSound.LocalPath, IsDeathSoundEnabled, volume), cancellationToken); }
-        catch (ArgumentOutOfRangeException) { DeathSoundStatus = DeathSoundVolumeValidationMessage; return Task.CompletedTask; }
-    }
-    public async Task SetDeathSoundVolumeTextAsync(string? volumeText, CancellationToken cancellationToken = default)
-    {
-        DeathSoundVolumeText = volumeText ?? string.Empty;
-        await CommitDeathSoundVolumeTextAsync(cancellationToken);
-    }
-
-    /// <summary>Debounces an in-progress edit so partial values are never written during normal typing.</summary>
-    public async Task QueueDeathSoundVolumeTextSaveAsync(CancellationToken cancellationToken = default)
-    {
-        long version = Interlocked.Increment(ref deathSoundVolumeEditVersion);
-        await Task.Delay(TimeSpan.FromMilliseconds(450), cancellationToken);
-        await PersistDeathSoundVolumeTextAsync(version, cancellationToken);
-    }
-
-    /// <summary>Immediately commits the current volume draft on focus loss or Enter.</summary>
-    public async Task CommitDeathSoundVolumeTextAsync(CancellationToken cancellationToken = default)
-    {
-        long version = Interlocked.Increment(ref deathSoundVolumeEditVersion);
-        await PersistDeathSoundVolumeTextAsync(version, cancellationToken);
-    }
     public Task SetDeathsExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(path, IsDeathsExportEnabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
     public Task SetBossExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, path, IsBossExportEnabled), cancellationToken);
     public Task SetDeathsExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, enabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
@@ -1543,14 +1431,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 ApplyCommittedState(result.CommittedState);
             }
 
-            bool isConfirmedIncrement = command is IncrementManualBloodborneDeathsCommand ||
-                command is AdjustEldenRingMissedDeathsCommand { Increment: true };
-            bool wasPersisted = result.Status is TrackerCommandExecutionStatus.Applied or TrackerCommandExecutionStatus.DeliveryFailed;
-            if (isConfirmedIncrement && wasPersisted)
-            {
-                deathSoundPlayer?.Play(state!.DeathSound);
-            }
-
             if (result.Status is TrackerCommandExecutionStatus.SaveFailed or TrackerCommandExecutionStatus.NotInitialized)
             {
                 ErrorMessage = "SoulsTracker could not save the requested tracker change. The displayed state was not changed.";
@@ -1626,7 +1506,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         DraftCheckmarkAccent = state.OverlayConfiguration.BossList.CheckmarkAccent;
         DraftCenterMarkerAlignment = state.OverlayConfiguration.BossList.CenterMarkerAlignment;
         DraftMaximumVisibleCount = state.OverlayConfiguration.BossList.MaximumVisibleCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        RefreshDeathSoundStatus();
+
         GameId? selectedId = state.SelectedGameId;
         SelectedGame = GameChoices.Single(choice => choice.GameId == selectedId);
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == state.EldenRingSave.SlotIndex);
@@ -1823,11 +1703,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(EldenRingSavedDeathsText));
         OnPropertyChanged(nameof(PresentationControlsEnabled));
         OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
-        OnPropertyChanged(nameof(DeathSoundFileName));
-        OnPropertyChanged(nameof(IsDeathSoundEnabled));
-        NotifyDeathSoundControlAvailability();
-        OnPropertyChanged(nameof(DeathSoundVolume));
-        OnPropertyChanged(nameof(DeathSoundVolumeText));
         OnPropertyChanged(nameof(DeathsExportFileName)); OnPropertyChanged(nameof(BossExportFileName)); OnPropertyChanged(nameof(IsDeathsExportEnabled)); OnPropertyChanged(nameof(IsBossExportEnabled));
         NotifyTextExportControlAvailability();
     }
@@ -1840,25 +1715,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanClearBossExport));
     }
 
-    private void NotifyDeathSoundControlAvailability()
-    {
-        OnPropertyChanged(nameof(CanBrowseDeathSound));
-        OnPropertyChanged(nameof(CanClearDeathSound));
-        OnPropertyChanged(nameof(CanPreviewDeathSound));
-        OnPropertyChanged(nameof(CanEditDeathSoundVolume));
-    }
-
-    private void DeathSoundPlayer_PlaybackFailed(object? sender, EventArgs e) =>
-        DeathSoundStatus = "Unable to play death sound.";
-
-    private void DeathSoundPlayer_PlaybackEnded(object? sender, EventArgs e)
-    {
-        if (DeathSoundStatus == "Playing death sound.")
-        {
-            RefreshDeathSoundStatus();
-        }
-    }
-
     private static string WaitingForSaveFileMessage(GameId gameId) => gameId == GameId.BlackMythWukong
         ? BlackMythWukongWaitingForSaveFileMessage
         : gameId == GameId.LiesOfP
@@ -1867,64 +1723,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.DemonsSouls;
 
-    private async Task PersistDeathSoundVolumeTextAsync(long version, CancellationToken cancellationToken)
-    {
-        string volumeText = DeathSoundVolumeText;
-        if (!int.TryParse(volumeText, out int volume) || volume is < 0 or > 100)
-        {
-            DeathSoundStatus = DeathSoundVolumeValidationMessage;
-            OnPropertyChanged(nameof(DeathSoundVolume));
-            return;
-        }
-
-        Task queued;
-        lock (deathSoundVolumeSaveSync)
-        {
-            queued = PersistDeathSoundVolumeTextAfterAsync(deathSoundVolumeSaveTail, version, volume, cancellationToken);
-            deathSoundVolumeSaveTail = queued;
-        }
-
-        await queued;
-    }
-
-    private async Task PersistDeathSoundVolumeTextAfterAsync(Task prior, long version, int volume, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await prior;
-            if (version != Interlocked.Read(ref deathSoundVolumeEditVersion))
-            {
-                return;
-            }
-
-            if (state?.DeathSound.Volume != volume)
-            {
-                await SaveDeathSoundAsync(new DeathSoundConfiguration(state?.DeathSound.LocalPath, IsDeathSoundEnabled, volume), cancellationToken);
-            }
-
-            if (state?.DeathSound.Volume == volume)
-            {
-                DeathSoundStatus = $"Volume changed to {volume}%";
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-    }
-
-    private async Task SaveDeathSoundAsync(DeathSoundConfiguration configuration, CancellationToken cancellationToken)
-    {
-        if (!ControlsEnabled) return;
-        IsBusy = true;
-        string volumeDraft = DeathSoundVolumeText;
-        try
-        {
-            ApplyCommittedState(await coordinator.SetDeathSoundConfigurationAsync(configuration, cancellationToken));
-            DeathSoundVolumeText = volumeDraft;
-        }
-        catch { DeathSoundStatus = "Death sound settings could not be saved."; }
-        finally { IsBusy = false; NotifyTrackerProperties(); }
-    }
 
     private async Task SaveExportsAsync(TextExportConfiguration configuration, CancellationToken cancellationToken)
     {
@@ -2238,18 +2036,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 
-    private void RefreshDeathSoundStatus()
-    {
-        // A committed-state refresh can arrive after a routed Save/Enter action. Do not
-        // erase the explicit volume result the user just requested; it remains until the
-        // next volume attempt (or a new app session) so the acknowledgement is observable.
-        if (IsDeathSoundVolumeUpdateSuccessful || IsDeathSoundVolumeValidationError)
-        {
-            return;
-        }
-
-        DeathSoundStatus = state?.DeathSound.LocalPath is null ? null : File.Exists(state.DeathSound.LocalPath) ? "Death sound ready." : "Death sound is unavailable.";
-    }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {

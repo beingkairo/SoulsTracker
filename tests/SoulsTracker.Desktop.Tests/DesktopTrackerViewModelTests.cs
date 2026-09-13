@@ -868,27 +868,7 @@ public sealed class DesktopTrackerViewModelTests
         Assert.Contains("textColor=", display, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task DeathSoundVolumeTextValidatesAndReportsTheSavedPercentage()
-    {
-        await using TestHarness harness = new(PersistentTrackerState.Default);
-        await harness.ViewModel.InitializeAsync();
-        List<string?> changedProperties = [];
-        harness.ViewModel.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
-        await harness.ViewModel.SetDeathSoundVolumeTextAsync("37");
-        Assert.Equal(37, harness.Repository.State.DeathSound.Volume);
-        Assert.Equal("Volume changed to 37%", harness.ViewModel.DeathSoundStatus);
-        Assert.True(harness.ViewModel.IsDeathSoundVolumeUpdateSuccessful);
-        Assert.False(harness.ViewModel.IsDeathSoundVolumeValidationError);
 
-        await harness.ViewModel.SetDeathSoundVolumeTextAsync("101");
-        Assert.Equal(37, harness.Repository.State.DeathSound.Volume);
-        Assert.Equal(DesktopTrackerViewModel.DeathSoundVolumeValidationMessage, harness.ViewModel.DeathSoundStatus);
-        Assert.False(harness.ViewModel.IsDeathSoundVolumeUpdateSuccessful);
-        Assert.True(harness.ViewModel.IsDeathSoundVolumeValidationError);
-        Assert.Contains(nameof(DesktopTrackerViewModel.IsDeathSoundVolumeUpdateSuccessful), changedProperties);
-        Assert.Contains(nameof(DesktopTrackerViewModel.IsDeathSoundVolumeValidationError), changedProperties);
-    }
 
     [Fact]
     public async Task ApplyAppearanceReportsSuccessWithoutPersistingTheOtherOverlay()
