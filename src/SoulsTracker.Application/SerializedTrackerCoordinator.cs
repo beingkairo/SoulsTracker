@@ -130,6 +130,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                     committedState = updated;
                     hotkeyRequest.Completion.TrySetResult(updated);
                 }
+                catch (OperationCanceledException) { hotkeyRequest.Completion.TrySetCanceled(hotkeyRequest.CancellationToken); }
                 catch
                 {
                     hotkeyRequest.Completion.TrySetException(new InvalidOperationException("The manual hotkeys could not be saved."));
