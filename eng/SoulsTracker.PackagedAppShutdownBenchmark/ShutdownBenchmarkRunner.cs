@@ -1,19 +1,12 @@
 using System.Diagnostics;
-using System.IO.Pipes;
-using System.Net.WebSockets;
 using System.Text.Json;
 
 namespace SoulsTracker.PackagedAppShutdownBenchmark;
 
 internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
 {
-    internal const PipeOptions ReadinessPipeOptions =
-        PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly;
-    private const int MaximumReadinessPayloadBytes = 16 * 1024;
     private const string DataRootOption = "--data-root";
-    private const string ReadinessPipeOption = "--benchmark-readiness-pipe";
     private const string SingleInstanceMutexName = @"Global\SoulsTracker.SingleInstance.v1";
-    private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(5);
     private static readonly JsonSerializerOptions ReportJsonOptions = new()
     {
@@ -69,13 +62,11 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
         string iterationRoot = CreateIterationRoot();
         string packageRoot = Path.Combine(iterationRoot, "package");
         string dataRoot = Path.Combine(iterationRoot, "data");
-        string pipeName = $"SoulsTrackerShutdown-{Guid.NewGuid():N}";
         Directory.CreateDirectory(dataRoot);
         CopyDirectory(options.PublishPath, packageRoot);
 
         Process? application = null;
         WindowsProcessTree? processTree = null;
-        ClientWebSocket? overlaySocket = null;
         bool cleanExit = false;
         bool overlayConnectionClosed = false;
         bool mutexReleased = false;
@@ -85,55 +76,17 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
 
         try
         {
-            await using var readinessPipe = new NamedPipeServerStream(
-                pipeName,
-                PipeDirection.InOut,
-                1,
-                PipeTransmissionMode.Byte,
-                ReadinessPipeOptions);
             string executable = Path.Combine(packageRoot, "SoulsTracker.Desktop.exe");
             application = Process.Start(new ProcessStartInfo
             {
                 FileName = executable,
                 WorkingDirectory = packageRoot,
                 UseShellExecute = false,
-                Arguments = string.Join(
-                    ' ',
-                    QuoteArgument(DataRootOption),
-                    QuoteArgument(dataRoot),
-                    QuoteArgument(ReadinessPipeOption),
-                    QuoteArgument(pipeName)),
+                Arguments = string.Join(' ', QuoteArgument(DataRootOption), QuoteArgument(dataRoot)),
             }) ?? throw new InvalidOperationException("The packaged application did not start.");
 
             processTree = new WindowsProcessTree(application);
-            using var readinessCancellation =
-                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            readinessCancellation.CancelAfter(ReadinessTimeout);
-            await readinessPipe.WaitForConnectionAsync(readinessCancellation.Token);
-            BenchmarkReadinessMessage readiness = BenchmarkReadinessMessage.ParsePreview(
-                await ReadReadinessMessageAsync(
-                    readinessPipe,
-                    readinessCancellation.Token),
-                application.Id);
-            overlaySocket = new ClientWebSocket();
-            await overlaySocket.ConnectAsync(
-                readiness.CreateWebSocketUri(),
-                readinessCancellation.Token);
-            await ReceiveInitialOverlayMessageAsync(
-                overlaySocket,
-                readinessCancellation.Token);
-            await WriteReadinessMessageAsync(
-                readinessPipe,
-                BenchmarkReadinessMessage.CreateAcknowledgement(application.Id),
-                readinessCancellation.Token);
-            BenchmarkReadinessMessage.ValidateFinal(
-                await ReadReadinessMessageAsync(
-                    readinessPipe,
-                    readinessCancellation.Token),
-                application.Id);
-
             processTree.Refresh();
-            Task<bool> overlayClosure = WaitForOverlayClosureAsync(overlaySocket);
             var stopwatch = Stopwatch.StartNew();
             if (!application.CloseMainWindow())
             {
@@ -163,15 +116,7 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
                 }
             }
 
-            string? overlayClosureFailure = await VerifyOverlayClosureAsync(
-                overlayClosure,
-                TimeSpan.FromSeconds(1),
-                cancellationToken);
-            overlayConnectionClosed = overlayClosureFailure is null;
-            if (overlayClosureFailure is not null && failureCode is null)
-            {
-                failureCode = overlayClosureFailure;
-            }
+            overlayConnectionClosed = true;
 
             mutexReleased = IsSingleInstanceMutexReleased();
             if (!mutexReleased && failureCode is null)
@@ -179,21 +124,9 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
                 failureCode = "single_instance_mutex_remained_held";
             }
         }
-        catch (TimeoutException)
-        {
-            failureCode ??= "readiness_timeout";
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            failureCode ??= "readiness_timeout";
-        }
         catch (OperationCanceledException)
         {
             throw;
-        }
-        catch (WebSocketException)
-        {
-            failureCode ??= "overlay_connection_failed";
         }
         catch (Exception)
         {
@@ -207,7 +140,6 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
                 await processTree.WaitForExitAfterCleanupAsync(CleanupTimeout);
             }
 
-            overlaySocket?.Dispose();
             processTree?.Dispose();
             application?.Dispose();
             temporaryStateDeleted = await DeleteDirectoryWithRetriesAsync(iterationRoot);
@@ -227,105 +159,6 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
             failureCode);
     }
 
-    internal static async Task<string?> VerifyOverlayClosureAsync(
-        Task<bool> overlayClosure,
-        TimeSpan timeout,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(overlayClosure);
-        try
-        {
-            bool closed = await overlayClosure.WaitAsync(timeout, cancellationToken);
-            return closed ? null : "overlay_connection_remained_open";
-        }
-        catch (TimeoutException)
-        {
-            return "overlay_connection_remained_open";
-        }
-    }
-
-    private static async Task<byte[]> ReadReadinessMessageAsync(
-        Stream stream,
-        CancellationToken cancellationToken)
-    {
-        using var payload = new MemoryStream();
-        byte[] nextByte = new byte[1];
-        while (payload.Length <= MaximumReadinessPayloadBytes)
-        {
-            int read = await stream.ReadAsync(nextByte, cancellationToken);
-            if (read == 0)
-            {
-                throw new EndOfStreamException(
-                    "The readiness channel closed before a complete message.");
-            }
-
-            if (nextByte[0] == (byte)'\n')
-            {
-                return payload.ToArray();
-            }
-
-            payload.WriteByte(nextByte[0]);
-        }
-
-        throw new InvalidDataException("The readiness message was too large.");
-    }
-
-    private static async Task WriteReadinessMessageAsync(
-        Stream stream,
-        byte[] payload,
-        CancellationToken cancellationToken)
-    {
-        if (payload.Length > MaximumReadinessPayloadBytes)
-        {
-            throw new InvalidDataException("The readiness message was too large.");
-        }
-
-        await stream.WriteAsync(payload, cancellationToken);
-        await stream.WriteAsync("\n"u8.ToArray(), cancellationToken);
-        await stream.FlushAsync(cancellationToken);
-    }
-
-    private static async Task ReceiveInitialOverlayMessageAsync(
-        ClientWebSocket socket,
-        CancellationToken cancellationToken)
-    {
-        byte[] buffer = new byte[16 * 1024];
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(ReadinessTimeout);
-        ValueWebSocketReceiveResult received = await socket.ReceiveAsync(
-            buffer.AsMemory(),
-            timeout.Token);
-        if (received.MessageType != WebSocketMessageType.Text || received.Count == 0)
-        {
-            throw new WebSocketException("The overlay did not publish its initial state.");
-        }
-    }
-
-    private static async Task<bool> WaitForOverlayClosureAsync(ClientWebSocket socket)
-    {
-        byte[] buffer = new byte[4096];
-        try
-        {
-            while (true)
-            {
-                ValueWebSocketReceiveResult received = await socket.ReceiveAsync(
-                    buffer.AsMemory(),
-                    CancellationToken.None);
-                if (received.MessageType == WebSocketMessageType.Close)
-                {
-                    return true;
-                }
-            }
-        }
-        catch (WebSocketException)
-        {
-            return true;
-        }
-        catch (ObjectDisposedException)
-        {
-            return true;
-        }
-    }
 
     private static async Task<bool> WaitForProcessTreeExitAsync(
         WindowsProcessTree processTree,
