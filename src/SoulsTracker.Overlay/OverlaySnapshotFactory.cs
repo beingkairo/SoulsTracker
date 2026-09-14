@@ -26,6 +26,7 @@ public static class OverlaySnapshotFactory
 
     public static bool CanUseRuntimeObservation(PersistentTrackerState state, RuntimeGameObservation? observation) =>
         observation?.GameId == state.SelectedGameId &&
+        EffectiveDeathTotalResult.Resolve(state, observation).Status is not EffectiveDeathTotalStatus.SourceMismatch &&
         (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
         (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null);
 }
