@@ -90,7 +90,8 @@ public static class TotalDeathsDisplayProjection
 
         if (state.SelectedGameId == GameId.EldenRing && EldenRingMissedDeathAdjustments.IsConfiguredCharacter(state.EldenRingSave))
         {
-            return state.EldenRingMissedDeathAdjustments.Get(state.EldenRingSave);
+            // An adjustment has no meaning without a valid saved observation.
+            return null;
         }
 
         return null;
