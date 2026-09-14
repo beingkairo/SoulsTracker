@@ -13,7 +13,8 @@ public sealed class RuntimeGameObservation
     public RuntimeGameObservation(
         GameId gameId,
         GameLifetimeDeathTotal totalDeaths,
-        DateTimeOffset observedAtUtc)
+        DateTimeOffset observedAtUtc,
+        string? sourceIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(gameId);
 
@@ -40,14 +41,15 @@ public sealed class RuntimeGameObservation
         GameId = gameId;
         TotalDeaths = totalDeaths;
         ObservedAtUtc = observedAtUtc;
+        SourceIdentity = sourceIdentity;
     }
 
     /// <summary>
     /// Initializes a runtime observation from a raw reader value while retaining
     /// the domain lifetime-total type in the resulting contract.
     /// </summary>
-    public RuntimeGameObservation(GameId gameId, long totalDeaths, DateTimeOffset observedAtUtc)
-        : this(gameId, new GameLifetimeDeathTotal(totalDeaths), observedAtUtc)
+    public RuntimeGameObservation(GameId gameId, long totalDeaths, DateTimeOffset observedAtUtc, string? sourceIdentity = null)
+        : this(gameId, new GameLifetimeDeathTotal(totalDeaths), observedAtUtc, sourceIdentity)
     {
     }
 
@@ -65,4 +67,6 @@ public sealed class RuntimeGameObservation
     /// Gets the UTC timestamp at which the reader observed the total.
     /// </summary>
     public DateTimeOffset ObservedAtUtc { get; }
+
+    public string? SourceIdentity { get; }
 }

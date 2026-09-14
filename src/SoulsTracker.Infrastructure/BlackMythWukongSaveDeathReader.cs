@@ -82,11 +82,11 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
                 RuntimeGameReadResult? result = outcome == BlackMythWukongSaveParseOutcome.Success
                     ? totalDeaths == 0
                         ? RuntimeGameReadResult.NoDeathsRecorded(
-                            new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
+                            new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow, $"{GameId.Value}:{configuration.LocalPath}"),
                             saveMetadata,
                             configuration.LocalPath)
                         : RuntimeGameReadResult.Synced(
-                            new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow),
+                            new RuntimeGameObservation(GameId, totalDeaths, DateTimeOffset.UtcNow, $"{GameId.Value}:{configuration.LocalPath}"),
                             saveMetadata,
                             configuration.LocalPath)
                     : RuntimeGameReadResult.SelectedSaveUnreadable(GameId);

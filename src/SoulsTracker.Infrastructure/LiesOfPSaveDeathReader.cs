@@ -33,7 +33,7 @@ public sealed class LiesOfPSaveDeathReader : IRuntimeGameDeathReader
                 {
                     if (LiesOfPSaveParser.TryReadTotalDeaths(save.bytes, out long totalDeaths) == LiesOfPSaveParseOutcome.Success)
                     {
-                        RuntimeGameObservation observation = new(GameId, totalDeaths, DateTimeOffset.UtcNow);
+                        RuntimeGameObservation observation = new(GameId, totalDeaths, DateTimeOffset.UtcNow, $"{GameId.Value}:{configuration.LocalPath}");
                         return totalDeaths == 0
                             ? RuntimeGameReadResult.NoDeathsRecorded(observation)
                             : RuntimeGameReadResult.Synced(observation);
