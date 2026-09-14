@@ -207,6 +207,82 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         Assert.Equal(updated.BlackMythWukongSaveMetadata, cached.BlackMythWukongSaveMetadata);
     }
 
+    [Fact]
+    public async Task ReaderUsesDeterministicFreshnessBoundaryAndPreservesTheConfirmedObservation()
+    {
+        string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(7, levelField: WukongSaveFixture.FieldVarint(4, 22)));
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var reader = new BlackMythWukongSaveDeathReader(clock);
+        reader.Configure(new BlackMythWukongSaveConfiguration(path));
+
+        RuntimeGameReadResult first = (await reader.ReadAsync(default))!;
+        clock.Advance(TimeSpan.FromSeconds(9.999));
+        RuntimeGameReadResult cached = (await reader.ReadAsync(default))!;
+        Assert.Equal(RuntimeGameReaderStatus.Cached, cached.Status);
+        Assert.Equal(first.Observation, cached.Observation);
+        Assert.Equal(first.BlackMythWukongSavePath, cached.BlackMythWukongSavePath);
+        Assert.Equal(first.BlackMythWukongSaveMetadata, cached.BlackMythWukongSaveMetadata);
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.Equal(RuntimeGameReaderStatus.Synced, (await reader.ReadAsync(default))!.Status);
+    }
+
+    [Fact]
+    public async Task ReaderDetectsSameLengthContentChangesEvenWhenTimestampIsRestored()
+    {
+        string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(7));
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var reader = new BlackMythWukongSaveDeathReader(clock);
+        reader.Configure(new BlackMythWukongSaveConfiguration(path));
+        await reader.ReadAsync(default);
+        DateTime timestamp = File.GetLastWriteTimeUtc(path);
+
+        await File.WriteAllBytesAsync(path, WukongSaveFixture.Create(8));
+        File.SetLastWriteTimeUtc(path, timestamp);
+        RuntimeGameReadResult changed = (await reader.ReadAsync(default))!;
+
+        Assert.Equal(RuntimeGameReaderStatus.Synced, changed.Status);
+        Assert.Equal(8, changed.Observation!.TotalDeaths.Value);
+    }
+
+    [Fact]
+    public async Task ReaderNeverCachesAnUnavailableOrMalformedSaveAfterAConfirmedRead()
+    {
+        string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(7));
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var reader = new BlackMythWukongSaveDeathReader(clock);
+        reader.Configure(new BlackMythWukongSaveConfiguration(path));
+        await reader.ReadAsync(default);
+
+        await File.WriteAllBytesAsync(path, [1, 2, 3]);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(1));
+        Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await reader.ReadAsync(default))!.Status);
+
+        File.Delete(path);
+        Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await reader.ReadAsync(default))!.Status);
+    }
+
+    [Fact]
+    public async Task NewReaderDoesNotInheritAnotherReadersCache()
+    {
+        string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(7));
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var first = new BlackMythWukongSaveDeathReader(clock);
+        first.Configure(new BlackMythWukongSaveConfiguration(path));
+        await first.ReadAsync(default);
+
+        var restarted = new BlackMythWukongSaveDeathReader(clock);
+        restarted.Configure(new BlackMythWukongSaveConfiguration(path));
+        Assert.Equal(RuntimeGameReaderStatus.Synced, (await restarted.ReadAsync(default))!.Status);
+    }
+
+    private sealed class TestTimeProvider(DateTimeOffset value) : TimeProvider
+    {
+        private DateTimeOffset utcNow = value;
+        public override DateTimeOffset GetUtcNow() => utcNow;
+        public void Advance(TimeSpan amount) => utcNow += amount;
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(root))

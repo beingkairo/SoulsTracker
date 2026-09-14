@@ -137,13 +137,13 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
     }
 
-    private readonly record struct SaveFingerprint(long Length, DateTime LastWriteUtc)
+    private readonly record struct SaveFingerprint(long Length, DateTime LastWriteUtc, string ContentHash)
     {
         public static SaveFingerprint From(string path)
         {
             var info = new FileInfo(path);
             if (!info.Exists) throw new IOException("Selected save file is unavailable.");
-            return new(info.Length, info.LastWriteTimeUtc);
+            return new(info.Length, info.LastWriteTimeUtc, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
         }
     }
 }
