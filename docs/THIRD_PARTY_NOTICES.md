@@ -17,8 +17,6 @@ Generated: 2026-07-17 UTC
 | NuGet | Microsoft.Data.Sqlite.Core | 10.0.9 | MIT | https://docs.microsoft.com/dotnet/standard/data/sqlite/ |
 | NuGet | Microsoft.NET.Test.Sdk | 17.14.1 | MIT | https://github.com/microsoft/vstest |
 | NuGet | Microsoft.TestPlatform.ObjectModel | 17.14.1 | MIT | https://github.com/microsoft/vstest |
-| NuGet | Microsoft.TestPlatform.TestHost | 17.14.1 | MIT | https://github.com/microsoft/vstest |
-| NuGet | Microsoft.Web.WebView2 | 1.0.3065.39 | See LICENSE.txt in package | https://aka.ms/webview |
 | NuGet | Newtonsoft.Json | 13.0.3 | MIT | https://www.newtonsoft.com/json |
 | NuGet | SourceGear.sqlite3 | 3.50.4.5 | See LICENSE.txt in package | https://sqlite.org/ |
 | NuGet | SQLitePCLRaw.bundle_e_sqlite3 | 3.0.3 | Apache-2.0 | https://www.nuget.org/packages/SQLitePCLRaw.bundle_e_sqlite3/3.0.3 |

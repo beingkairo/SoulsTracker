@@ -134,7 +134,6 @@
       "soulstracker.desktop": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Web.WebView2": "[1.0.3065.39, )",
           "SoulsTracker.Application": "[1.2.2, )",
           "SoulsTracker.Infrastructure": "[1.2.2, )",
           "SoulsTracker.Overlay": "[1.2.2, )"
@@ -169,12 +168,6 @@
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.11"
         }
-      },
-      "Microsoft.Web.WebView2": {
-        "type": "CentralTransitive",
-        "requested": "[1.0.3065.39, )",
-        "resolved": "1.0.3065.39",
-        "contentHash": "ww6ToZ2jpHyP4k3DCQJETjKcdVS1cha9pS8dV2NetyfafItxz08wcAyQV0Yl86W7euhI02UJWEaC5sM8WLr0tQ=="
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "CentralTransitive",
