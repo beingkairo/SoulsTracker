@@ -882,65 +882,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task RescanLiesOfPSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsLiesOfPSelected) return;
-        long selectionVersion = saveGameConfigurationWorkflow.BeginLiesSelection();
         LiesOfPSaveSourceState = LocalSaveSourceState.Scanning;
         SetLiesOfPSaveDiscoveryStatus("Looking for local saves…");
-        IReadOnlyList<DiscoveredLocalSave> candidates;
-        string? configuredAtStart = state?.LiesOfPSave.LocalPath;
-        try
-        {
-            SaveGameConfigurationWorkflow.SaveDiscoveryResult discoveryResult = await SaveGameConfigurationWorkflow.DiscoverWithConfiguredFallbackAsync(
-                liesOfPSaveDiscovery,
-                LiesOfPSaveDiscovery.DiscoverInSelectedFolder,
-                configuredAtStart,
-                cancellationToken);
-            candidates = discoveryResult.Candidates;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
-        catch { SetLiesOfPSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…"); LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate; return; }
- if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
- if (!IsLiesOfPSelected) return;
-
-        LiesOfPSaveChoices.Clear();
-        foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
-        string? configured = state?.LiesOfPSave.LocalPath;
-        SelectedLiesOfPSaveChoice = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, configured));
-        if (configured is not null && !File.Exists(configured))
-        {
-            LiesOfPSaveSourceState = LocalSaveSourceState.UnavailableSelection;
-            SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable.");
-        }
-        else if (SelectedLiesOfPSaveChoice is { } selected)
-        {
-            LiesOfPSaveSourceState = LocalSaveSourceState.PersistedDiscovered;
-            SetLiesOfPSaveDiscoveryStatus($"Tracking {selected.Label}");
-        }
-        else if (configured is null && candidates.Count == 1)
-        {
-            await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(candidates[0].LocalPath), cancellationToken);
-            if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
-            if (!IsLiesOfPSelected || !PathsEqual(candidates[0].LocalPath, state?.LiesOfPSave.LocalPath)) return;
-            SelectedLiesOfPSaveChoice = candidates[0];
-            LiesOfPSaveSourceState = LocalSaveSourceState.AutomaticallySelected;
-            SetLiesOfPSaveDiscoveryStatus($"Tracking {candidates[0].Label}");
-        }
-        else if (configured is null && candidates.Count > 1)
-        {
-            LiesOfPSaveSourceState = LocalSaveSourceState.MultipleCandidates;
-            SetLiesOfPSaveDiscoveryStatus("Choose the character you’re streaming.");
-        }
-        else if (configured is not null && saveGameConfigurationWorkflow.IsLiesOfPConfiguredSaveReadable(configured!))
-        {
-            LiesOfPSaveSourceState = LocalSaveSourceState.CustomSelection;
-            SetLiesOfPSaveDiscoveryStatus(CustomSaveTrackingStatus(configured));
-        }
-        else
-        {
-            LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate;
-            SetLiesOfPSaveDiscoveryStatus("No save found automatically.");
-        }
-        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
-        NotifyLiesOfPSaveSourceProperties();
+        ApplyLiesSelectionOutcome(await saveGameConfigurationWorkflow.RescanLiesOfPSavesAsync(state?.LiesOfPSave.LocalPath, liesOfPSaveDiscovery, cancellationToken));
     }
 
     public void BeginLiesOfPChange() { if (IsLiesOfPSelected) IsLiesOfPChangeMode = true; }
