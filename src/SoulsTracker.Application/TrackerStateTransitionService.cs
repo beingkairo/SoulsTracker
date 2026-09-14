@@ -88,7 +88,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.SelectedGameId == GameId.Bloodborne ? updatedCounter : state.ManualBloodborneDeathCounter,
                 state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
-                state.SelectedGameId == GameId.DemonsSouls ? updatedCounter : state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, 
+                state.SelectedGameId == GameId.DemonsSouls ? updatedCounter : state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
                 state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.DecrementManualBloodborneDeaths);
     }
