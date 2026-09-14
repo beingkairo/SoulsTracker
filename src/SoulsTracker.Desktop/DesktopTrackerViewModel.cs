@@ -869,15 +869,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     public async Task SetLiesOfPSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
-        if (!ControlsEnabled || !saveGameConfigurationWorkflow.ValidateLiesOfPSelection(localPath))
+        SaveGameConfigurationWorkflow.SelectionValidationResult validation = SaveGameConfigurationWorkflow.ValidateLiesOfPSelectionResult(localPath);
+        if (!ControlsEnabled || !validation.IsValid)
         {
-            SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
+            SetLiesOfPSaveDiscoveryStatus(validation.Status);
             return;
         }
         long selectionVersion = saveGameConfigurationWorkflow.BeginLiesSelection();
-        IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
-            () => saveGameConfigurationWorkflow.DiscoverLiesOfPSelection(localPath),
+        SaveGameConfigurationWorkflow.SelectionDiscoveryResult discovery = await Task.Run(
+            () => saveGameConfigurationWorkflow.DiscoverLiesOfPSelectionResult(localPath),
             cancellationToken);
+        IReadOnlyList<DiscoveredLocalSave> candidates = discovery.Candidates;
         if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
         await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken);
         if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;

@@ -8,6 +8,8 @@ namespace SoulsTracker.Desktop;
 /// <summary>Owns persistence of game-specific save configuration changes.</summary>
 internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator coordinator)
 {
+    internal readonly record struct SelectionValidationResult(bool IsValid, string Status);
+    internal readonly record struct SelectionDiscoveryResult(IReadOnlyList<DiscoveredLocalSave> Candidates, SelectionValidationResult Validation);
     private long operationVersion;
     private long wukongDiscoveryVersion;
     private long liesSelectionVersion;
@@ -44,6 +46,11 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     public bool ValidateLiesOfPSelection(string localPath) =>
         IsValidLiesOfPSave(localPath);
 
+    public static SelectionValidationResult ValidateLiesOfPSelectionResult(string localPath) =>
+        LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) && LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath)
+            ? new(true, string.Empty)
+            : new(false, "Selected save is unavailable or unsupported.");
+
     public IReadOnlyList<DiscoveredLocalSave> DiscoverWukongSelection(string localPath)
     {
         _ = coordinator;
@@ -55,6 +62,9 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
         _ = coordinator;
         return LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath);
     }
+
+    public SelectionDiscoveryResult DiscoverLiesOfPSelectionResult(string localPath) =>
+        new(DiscoverLiesOfPSelection(localPath), ValidateLiesOfPSelectionResult(localPath));
 
     public bool IsLiesOfPConfiguredSaveReadable(string localPath)
     {
