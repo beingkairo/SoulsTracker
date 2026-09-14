@@ -42,7 +42,7 @@ public sealed class OverlayEndpointCredentials : IOverlayEndpointAccess
 
     public string BuildCanonicalUrl(string route)
     {
-        if (route is not "/overlay/total_deaths" and not "/overlay/boss_list") throw new ArgumentException("Only approved canonical overlay routes can be displayed.", nameof(route));
+        if (route is not "/overlay/total_deaths") throw new ArgumentException("Only the approved Total Deaths overlay route can be displayed.", nameof(route));
         return $"http://127.0.0.1:{Port}{route}?token={token}";
     }
 

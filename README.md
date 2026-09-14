@@ -1,6 +1,6 @@
 # SoulsTracker
 
-SoulsTracker is a Windows app for streams: death totals, a boss checklist for each game, and local OBS overlays.
+SoulsTracker is a Windows app for streams: total death tracking and local OBS overlays.
 
 ## Games
 
@@ -11,10 +11,10 @@ Demon Souls uses a manual counter.
 ## Start streaming
 
 1. Open SoulsTracker, choose your game on the **Main** tab, and pick a save or character when prompted.
-2. Set up your boss checklist. Progress stays separate for every game and saves automatically.
+2. Configure the retained overlay appearance and optional local text export.
 3. Open the **Overlay** tab, enable Total Deaths, then copy the URL into an OBS **Browser Source**.
 
-Use **600 x 1080** for the Boss List source. The Total Deaths overlay works at any size.
+The Total Deaths overlay works at any size.
 
 Keep SoulsTracker running while OBS uses the local Browser Source.
 
@@ -22,7 +22,7 @@ Browse and Rescan help with save locations. Save-based counters update after the
 
 ## Make it yours
 
-The **Overlay** tab controls fonts, colors, size, background, markers, alignment, outlines, shadows, and defeated-boss styles.
+The **Overlay** tab controls fonts, colors, size, background, alignment, outlines, and shadows.
 
 The **Settings** tab includes TXT output for OBS text sources, update checks, and global hotkeys for manual counters.
 
