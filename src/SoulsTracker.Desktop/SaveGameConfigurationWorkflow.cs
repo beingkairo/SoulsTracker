@@ -12,6 +12,7 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     private long wukongDiscoveryVersion;
     private long liesSelectionVersion;
     private long wukongMetadataVersion;
+    private long wukongSelectionVersion;
 
     // Versioning belongs to the configuration workflow because discovery and
     // selection are configuration operations, even though their results are
@@ -30,6 +31,9 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     public long BeginWukongMetadataRead() => Interlocked.Increment(ref wukongMetadataVersion);
     public bool IsCurrentWukongMetadataRead(long version) => version == Interlocked.Read(ref wukongMetadataVersion);
     public void InvalidateWukongMetadataReads() => Interlocked.Increment(ref wukongMetadataVersion);
+    public long BeginWukongSelection() => Interlocked.Increment(ref wukongSelectionVersion);
+    public bool IsCurrentWukongSelection(long version) => version == Interlocked.Read(ref wukongSelectionVersion);
+    public void InvalidateWukongSelections() => Interlocked.Increment(ref wukongSelectionVersion);
 
     public static bool IsValidLiesOfPSave(string localPath) =>
         LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) &&
