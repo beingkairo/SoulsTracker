@@ -63,13 +63,6 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
         {
             succeeded &= await AtomicWriteAsync(config.DeathsPath, string.Empty).ConfigureAwait(false);
         }
-        if (config.BossListEnabled && config.BossListPath is not null)
-        {
-            GameDefinition game = GameCatalog.GetRequired(state.SelectedGameId);
-            IEnumerable<BossDefinition> bosses = BossCatalogDisplayFilter.Apply(game, state.BossListScope);
-            string content = game.DisplayName + Environment.NewLine + string.Join(Environment.NewLine, bosses.Select(b => state.BossProgress.IsDefeated(game.Id, b.Id) ? $"[x] {b.DisplayName}" : $"[ ] {b.DisplayName}"));
-            succeeded &= await AtomicWriteAsync(config.BossListPath, content).ConfigureAwait(false);
-        }
         return succeeded;
     }
 

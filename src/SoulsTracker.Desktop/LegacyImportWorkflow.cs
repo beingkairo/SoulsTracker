@@ -66,12 +66,12 @@ public sealed class LegacyImportWorkflow
         state.SelectedGameId == GameId.DemonsSouls &&
         state.ManualBloodborneDeathCounter.Value == 0 &&
         state.ManualDemonsSoulsDeathCounter.Value == 0 &&
-        !GameCatalog.All.Any(game => game.BossCatalog.Any(boss => state.BossProgress.IsDefeated(game.Id, boss.Id)));
+        true;
 
     private static LegacyImportReviewResult CreateReviewResult(LegacyImportCandidate candidate, LegacyImportPreflightReview result)
     {
         if (result.Outcome != LegacyImportPreflightOutcome.Prepared) return new(result.Outcome, candidate.DisplayLabel, null, [], null, 0, false);
-        return new(result.Outcome, candidate.DisplayLabel, result.SelectedGameLabel, result.RecognizedBossNames, result.BossListVisibilityMode, result.WarningCount, true);
+        return new(result.Outcome, candidate.DisplayLabel, result.SelectedGameLabel, Array.Empty<string>(), null, result.WarningCount, true);
     }
 }
 

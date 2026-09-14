@@ -37,7 +37,7 @@ public partial class MainWindow : Window
 
     private void PreviewViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(DesktopTrackerViewModel.TotalDeathsPreviewUri) or nameof(DesktopTrackerViewModel.BossListPreviewUri)) RefreshPreviews();
+        if (e.PropertyName == nameof(DesktopTrackerViewModel.TotalDeathsPreviewUri)) RefreshPreviews();
         if (e.PropertyName == nameof(DesktopTrackerViewModel.IsEldenRingNoticeVisible))
         {
             Dispatcher.BeginInvoke(() =>
@@ -51,9 +51,7 @@ public partial class MainWindow : Window
     private void RefreshPreviews()
     {
         if (previewViewModel is null || !IsLoaded) return;
-        LiveOverlayPreview.Source = OverlayTypeTabs.SelectedIndex == 1
-            ? previewViewModel.BossListPreviewUri
-            : previewViewModel.TotalDeathsPreviewUri;
+        LiveOverlayPreview.Source = previewViewModel.TotalDeathsPreviewUri;
     }
 
     private void OverlayTypeTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -373,14 +371,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void BossListScope_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.ComboBox { SelectedItem: BossListScopeChoice scope } && viewModel.SelectedBossListScope != scope)
-        {
-            await viewModel.SetBossListScopeAsync(scope);
-        }
-    }
-
     private void IncrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: true);
 
     private void DecrementHotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => BeginHotkeyRecording(increment: false);
@@ -519,14 +509,6 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ApplyGlobalHotkeysAsync();
     }
 
-    private async void BossCheckBox_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox { DataContext: BossChoice boss, IsChecked: bool isDefeated })
-        {
-            await viewModel.SetBossDefeatedAsync(boss, isDefeated);
-        }
-    }
-
     private async void TotalDeathsOverlayEnabled_Checked(object sender, RoutedEventArgs e) =>
         await SetTotalDeathsOverlayEnabledAsync(isEnabled: true);
 
@@ -556,38 +538,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void BossListOverlayEnabled_Checked(object sender, RoutedEventArgs e) =>
-        await SetBossListOverlayEnabledAsync(isEnabled: true);
-
-    private async void BossListOverlayEnabled_Unchecked(object sender, RoutedEventArgs e) =>
-        await SetBossListOverlayEnabledAsync(isEnabled: false);
-
-    private async Task SetBossListOverlayEnabledAsync(bool isEnabled)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && viewModel.IsBossListOverlayEnabled != isEnabled)
-        {
-            await viewModel.SetBossListOverlayEnabledAsync(isEnabled);
-        }
-    }
-
-    private async void BossListVisibilityModeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel &&
-            BossListVisibilityModeSelector.SelectedItem is SoulsTracker.Domain.BossListVisibilityMode mode &&
-            viewModel.BossListVisibilityMode != mode)
-        {
-            await viewModel.SetBossListVisibilityModeAsync(mode);
-        }
-    }
 
     private async void ApplyTotalDeathsAppearance_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ApplyOverlayAppearanceAsync(totalDeaths: true);
-    }
-
-    private async void ApplyBossListAppearance_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ApplyOverlayAppearanceAsync(totalDeaths: false);
     }
 
     private async void ResetSelectedOverlayAppearance_Click(object sender, RoutedEventArgs e)
@@ -600,7 +554,7 @@ public partial class MainWindow : Window
 
 
     private void CopyTotalDeathsOverlayUrl_Click(object sender, RoutedEventArgs e) => CopyOverlayUrl(sender as System.Windows.Controls.Button, (DataContext as DesktopTrackerViewModel)?.TotalDeathsSceneUrl);
-    private void CopyBossListOverlayUrl_Click(object sender, RoutedEventArgs e) => CopyOverlayUrl(sender as System.Windows.Controls.Button, (DataContext as DesktopTrackerViewModel)?.BossListSceneUrl);
+
     private static void CopyOverlayUrl(System.Windows.Controls.Button? button, string? value)
     {
         if (button is null || string.IsNullOrWhiteSpace(value)) return;
@@ -613,9 +567,7 @@ public partial class MainWindow : Window
     }
     private static Microsoft.Win32.SaveFileDialog CreateTextExportDialog() => new() { Filter = "Text files (*.txt)|*.txt", DefaultExt = ".txt", AddExtension = true, OverwritePrompt = false };
     private async void ChooseDeathsExport_Click(object sender, RoutedEventArgs e) { var dialog = CreateTextExportDialog(); if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetDeathsExportPathAsync(dialog.FileName); }
-    private async void ChooseBossExport_Click(object sender, RoutedEventArgs e) { var dialog = CreateTextExportDialog(); if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel) await viewModel.SetBossExportPathAsync(dialog.FileName); }
     private async void ClearDeathsExport_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearDeathsExportAsync(); }
-    private async void ClearBossExport_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ClearBossExportAsync(); }
     private async void CheckForUpdates_Click(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.CheckForUpdatesAsync(); }
     private void OpenUpdateReleasePage_Click(object sender, RoutedEventArgs e)
     {
@@ -628,8 +580,6 @@ public partial class MainWindow : Window
     // otherwise drop that interaction (and make the checkbox visibly flicker).
     private async void DeathsExportEnabled_Checked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetDeathsExportEnabledAsync(true); }
     private async void DeathsExportEnabled_Unchecked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetDeathsExportEnabledAsync(false); }
-    private async void BossExportEnabled_Checked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetBossExportEnabledAsync(true); }
-    private async void BossExportEnabled_Unchecked(object sender, RoutedEventArgs e) { if (DataContext is DesktopTrackerViewModel vm) await vm.SetBossExportEnabledAsync(false); }
 
     private async void ReviewLegacyImport_Click(object sender, RoutedEventArgs e)
     {

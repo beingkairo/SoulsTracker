@@ -21,9 +21,7 @@ public static class OverlaySnapshotFactory
                     : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
         long? combinedTotal = TotalDeathsDisplayProjection.Combine(state, usable ? observation : null);
         if (combinedTotal.HasValue && deaths.GameId == GameId.EldenRing) deaths = TotalDeathsDisplayValue.WithNumericValue(deaths, combinedTotal.Value);
-        IEnumerable<OverlayBossEntry> bosses = BossCatalogDisplayFilter.Apply(GameCatalog.GetRequired(state.SelectedGameId), state.BossListScope)
-            .Select(b => new OverlayBossEntry(b, state.BossProgress.IsDefeated(state.SelectedGameId, b.Id)));
-        return new OverlaySnapshot(OverlaySnapshot.CurrentSchemaVersion, sequenceNumber, DateTimeOffset.UtcNow, game, deaths, bosses, OverlayPresentationConfiguration.From(state.OverlayConfiguration));
+        return new OverlaySnapshot(OverlaySnapshot.CurrentSchemaVersion, sequenceNumber, DateTimeOffset.UtcNow, game, deaths, OverlayPresentationConfiguration.From(state.OverlayConfiguration));
     }
 
     public static bool CanUseRuntimeObservation(PersistentTrackerState state, RuntimeGameObservation? observation) =>

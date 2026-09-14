@@ -9,11 +9,7 @@ namespace SoulsTracker.Infrastructure;
 
 public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 {
-    private const int BossListTitleMigrationVersion = 1;
-    // Version 3 is deliberately independent of the earlier attempted correction.
-    // A prior marker must not prevent this controlled legacy-title correction from
-    // being evaluated once when an existing installation next loads its state.
-    private const int BossListTitleCorrectionMigrationVersion = 4;
+
     private const string TableSql = "CREATE TABLE IF NOT EXISTS tracker_state (id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL, payload TEXT NOT NULL, token BLOB NULL);";
     private const string ImportAuditTableSql = "CREATE TABLE IF NOT EXISTS legacy_import_audit (import_id TEXT PRIMARY KEY NOT NULL, committed_at_utc TEXT NOT NULL, contract_version INTEGER NOT NULL, preflight_outcome INTEGER NOT NULL, outcome INTEGER NOT NULL, source_fingerprint TEXT NOT NULL, backup_fingerprint TEXT NOT NULL);";
     private readonly string path;
@@ -61,10 +57,9 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
                 return await LoadAsync(cancellationToken).ConfigureAwait(false);
             }
             StoredState dto = JsonSerializer.Deserialize<StoredState>(reader.GetString(1)) ?? throw new InvalidDataException(); string? token = reader.IsDBNull(2) ? null : Encoding.UTF8.GetString(protector.Unprotect((byte[])reader[2]));
-            bool applyBossListTitleCorrection = dto.BossListTitleCorrectionMigrationVersion is null or < BossListTitleCorrectionMigrationVersion;
-            PersistentTrackerState loadedState = ToDomain(dto, token, applyBossListTitleCorrection);
+            PersistentTrackerState loadedState = ToDomain(dto, token);
             await reader.DisposeAsync().ConfigureAwait(false);
-            if (applyBossListTitleCorrection || GetStoredBossListScope(dto) != loadedState.BossListScope) await SaveAsync(loadedState, cancellationToken).ConfigureAwait(false);
+
             return TrackerStateLoadResult.Loaded(loadedState);
         }
         catch (SqliteException) { return TrackerStateLoadResult.Failed(TrackerStateLoadFailureKind.Integrity, "The local tracker database failed SQLite validation."); }
@@ -173,12 +168,12 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 
         StoredState dto = JsonSerializer.Deserialize<StoredState>(reader.GetString(1)) ?? throw new InvalidDataException();
         string? token = reader.IsDBNull(2) ? null : Encoding.UTF8.GetString(protector.Unprotect((byte[])reader[2]));
-        return ToDomain(dto, token, dto.BossListTitleCorrectionMigrationVersion is null or < BossListTitleCorrectionMigrationVersion);
+        return ToDomain(dto, token);
     }
     private static ConfirmedLegacyImportCommitOutcome? GetDestinationRefusal(PersistentTrackerState state)
     {
         if (state.SelectedGameId != GameId.DemonsSouls) return ConfirmedLegacyImportCommitOutcome.DestinationHasSelectedGame;
-        if (GameCatalog.All.Any(game => game.BossCatalog.Any(boss => state.BossProgress.IsDefeated(game.Id, boss.Id)))) return ConfirmedLegacyImportCommitOutcome.DestinationHasDefeatedBossProgress;
+
         return state.ManualBloodborneDeathCounter.Value != 0 ||
             state.ManualDemonsSoulsDeathCounter.Value != 0 ||
             false
@@ -212,28 +207,26 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
     private static (StoredState, string?) FromDomain(PersistentTrackerState state)
     {
         OverlayConfiguration config = state.OverlayConfiguration;
-        var bosses = GameCatalog.All.SelectMany(g => g.BossCatalog.Where(b => state.BossProgress.IsDefeated(g.Id, b.Id)).Select(b => new StoredBoss(g.Id.Value, b.Id.Value))).ToArray();
         ManualBloodborneHotkeyConfiguration hotkeys = state.ManualBloodborneHotkeys;
         StoredEldenRingMissedDeathAdjustment[] adjustments = state.EldenRingMissedDeathAdjustments.ToEntries()
             .Select(static entry => new StoredEldenRingMissedDeathAdjustment(entry.LocalSavePath, entry.SlotIndex, entry.Value))
             .ToArray();
-        return (new StoredState(state.SelectedGameId.Value, state.ManualBloodborneDeathCounter.Value, bosses, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, config.BossList.IsEnabled, (int)config.BossList.VisibilityMode, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, config.BossList.Appearance, config.BossList.DefeatedColor, (int)config.BossList.DefeatedTreatment, config.BossList.ShowCheckmark, config.BossList.CheckmarkAccent, config.BossList.MaximumVisibleCount, null, null, null, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, state.TextExports.BossListPath, state.TextExports.BossListEnabled, (int)config.TotalDeaths.TitleIconMode, config.BossList.ShowDefeatedSkull, BossListTitleMigrationVersion, BossListTitleCorrectionMigrationVersion, (int)config.BossList.CenterMarkerAlignment, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, null, (int)state.BossListScope, null, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
+        return (new StoredState(state.SelectedGameId.Value, state.ManualBloodborneDeathCounter.Value, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
     }
-    private static PersistentTrackerState ToDomain(StoredState dto, string? token, bool applyLegacyBossListTitleMigration)
+    private static PersistentTrackerState ToDomain(StoredState dto, string? token)
     {
         OverlayAccessToken? accessToken = token is null ? null : OverlayAccessToken.Parse(token);
         var endpoint = new OverlayEndpointConfiguration(dto.Port, accessToken);
-        BossProgress progress = BossProgress.Empty;
-        foreach (StoredBoss boss in dto.Bosses ?? []) progress = progress.MarkDefeated(GameId.Parse(boss.GameId), BossId.Parse(boss.BossId));
+
         var candidateHotkeys = dto.IncrementModifiers is uint incrementModifiers && dto.IncrementVirtualKey is uint incrementKey && dto.DecrementModifiers is uint decrementModifiers && dto.DecrementVirtualKey is uint decrementKey ? new ManualBloodborneHotkeyConfiguration(incrementModifiers, incrementKey, decrementModifiers, decrementKey) : null;
         var hotkeys = candidateHotkeys is { IsValid: true } ? candidateHotkeys : ManualBloodborneHotkeyConfiguration.Default;
         OverlayAppearance totalAppearance = dto.TotalAppearance ?? OverlayAppearance.Default;
-        OverlayAppearance bossAppearance = NormalizeLegacyBossAppearance(dto.BossAppearance ?? OverlayAppearance.BossListDefault, applyLegacyBossListTitleMigration);
+
         var total = new TotalDeathsOverlayOptions(dto.TotalEnabled, dto.ShowGameName, dto.TotalCompactTitle ?? false, totalAppearance, dto.TotalTitleIconMode is int icon && Enum.IsDefined((OverlayTitleIconMode)icon) ? (OverlayTitleIconMode)icon : OverlayTitleIconMode.Off);
-        var bossOptions = new BossListOverlayOptions(dto.BossEnabled, (BossListVisibilityMode)dto.VisibilityMode, bossAppearance, dto.BossDefeatedColor ?? "#8C8C96", dto.BossDefeatedTreatment is int treatment && Enum.IsDefined((DefeatedBossTreatment)treatment) ? (DefeatedBossTreatment)treatment : DefeatedBossTreatment.Nothing, dto.BossShowCheckmark ?? true, dto.BossCheckmarkAccent ?? "#A78BFA", dto.BossMaximumVisibleCount is >= 1 and <= 100 ? dto.BossMaximumVisibleCount.Value : 25, dto.BossShowDefeatedSkull ?? false, dto.BossCenterMarkerAlignment is int alignment && Enum.IsDefined((CenterMarkerAlignment)alignment) ? (CenterMarkerAlignment)alignment : CenterMarkerAlignment.Left);
+
 
         TextExportConfiguration exports;
-        try { exports = new TextExportConfiguration(dto.DeathsExportPath, dto.DeathsExportEnabled ?? false, dto.BossExportPath, dto.BossExportEnabled ?? false); }
+        try { exports = new TextExportConfiguration(dto.DeathsExportPath, dto.DeathsExportEnabled ?? false); }
         catch (ArgumentException) { exports = TextExportConfiguration.Default; }
         EldenRingSaveConfiguration eldenRingSave;
         try { eldenRingSave = new EldenRingSaveConfiguration(dto.EldenRingSavePath, dto.EldenRingSaveSlotIndex ?? 0); }
@@ -247,23 +240,13 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         EldenRingMissedDeathAdjustments adjustments;
         try { adjustments = new EldenRingMissedDeathAdjustments((dto.EldenRingMissedDeathAdjustments ?? []).Select(static entry => new EldenRingMissedDeathAdjustment(entry.LocalSavePath, entry.SlotIndex, entry.Value))); }
         catch (ArgumentException) { adjustments = EldenRingMissedDeathAdjustments.Empty; }
-        BossListScope scope = GetStoredBossListScope(dto);
+
         GameId selectedGameId = dto.SelectedGameId is null ? GameId.DemonsSouls : GameId.Parse(dto.SelectedGameId);
-        return new PersistentTrackerState(1, selectedGameId, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, dto.ManualDeaths), progress, new OverlayConfiguration(1, endpoint, total, bossOptions), hotkeys, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, scope, blackMythWukongSave, adjustments, liesOfPSave);
+        return new PersistentTrackerState(1, selectedGameId, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, dto.ManualDeaths), new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
     }
-    private static BossListScope GetStoredBossListScope(StoredState dto) => dto.BossListScope is int universal && Enum.IsDefined((BossListScope)universal)
-            ? (BossListScope)universal
-            : dto.EldenRingBossListScope is int legacy && Enum.IsDefined((BossListScope)legacy)
-                ? legacy switch { 0 => BossListScope.AllBosses, 1 => BossListScope.MainGame, 2 => BossListScope.Dlc, _ => BossListScope.AllBosses }
-                : BossListScope.AllBosses;
-    private static OverlayAppearance NormalizeLegacyBossAppearance(OverlayAppearance appearance, bool applyMigration)
-    {
-        return applyMigration && (appearance.Title == "TOTAL DEATHS" || appearance.Title == "BOSSES" || appearance.Title == "Bosses List")
-            ? new OverlayAppearance(OverlayAppearance.BossListDefault.Title, appearance.FontFamily, appearance.FontSize, appearance.TextColor, appearance.AccentColor, appearance.BackgroundColor, appearance.BackgroundOpacity, appearance.Padding, appearance.CornerRadius, appearance.Alignment)
-            : appearance;
-    }
+
+
     public ValueTask DisposeAsync() { if (!disposed) { disposed = true; writerLock.Dispose(); } return ValueTask.CompletedTask; }
-    private sealed record StoredState(string? SelectedGameId, long ManualDeaths, StoredBoss[]? Bosses, int? Port, bool TotalEnabled, bool ShowGameName, bool BossEnabled, int VisibilityMode, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, OverlayAppearance? BossAppearance = null, string? BossDefeatedColor = null, int? BossDefeatedTreatment = null, bool? BossShowCheckmark = null, string? BossCheckmarkAccent = null, int? BossMaximumVisibleCount = null, string? DeathSoundPath = null, bool? DeathSoundEnabled = null, int? DeathSoundVolume = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, string? BossExportPath = null, bool? BossExportEnabled = null, int? TotalTitleIconMode = null, bool? BossShowDefeatedSkull = null, int? BossListTitleMigrationVersion = null, int? BossListTitleCorrectionMigrationVersion = null, int? BossCenterMarkerAlignment = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? EldenRingBossListScope = null, int? BossListScope = null, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? ManualBlackMythWukongDeaths = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
-    private sealed record StoredBoss(string GameId, string BossId);
+    private sealed record StoredState(string? SelectedGameId, long ManualDeaths, int? Port, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
     private sealed record StoredEldenRingMissedDeathAdjustment(string LocalSavePath, int SlotIndex, long Value);
 }

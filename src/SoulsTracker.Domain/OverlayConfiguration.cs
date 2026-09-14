@@ -263,8 +263,7 @@ public sealed class OverlayConfiguration
     public static OverlayConfiguration Default { get; } = new(
         CurrentSchemaVersion,
         OverlayEndpointConfiguration.Unassigned,
-        TotalDeathsOverlayOptions.Default,
-        BossListOverlayOptions.Default);
+        TotalDeathsOverlayOptions.Default);
 
     /// <summary>
     /// Initializes validated overlay configuration.
@@ -273,8 +272,7 @@ public sealed class OverlayConfiguration
     public OverlayConfiguration(
         int schemaVersion,
         OverlayEndpointConfiguration endpoint,
-        TotalDeathsOverlayOptions totalDeaths,
-        BossListOverlayOptions bossList)
+        TotalDeathsOverlayOptions totalDeaths)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -286,12 +284,12 @@ public sealed class OverlayConfiguration
 
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(totalDeaths);
-        ArgumentNullException.ThrowIfNull(bossList);
+
 
         SchemaVersion = schemaVersion;
         Endpoint = endpoint;
         TotalDeaths = totalDeaths;
-        BossList = bossList;
+
     }
 
     /// <summary>
@@ -309,8 +307,4 @@ public sealed class OverlayConfiguration
     /// </summary>
     public TotalDeathsOverlayOptions TotalDeaths { get; }
 
-    /// <summary>
-    /// Gets the boss-list overlay options.
-    /// </summary>
-    public BossListOverlayOptions BossList { get; }
 }

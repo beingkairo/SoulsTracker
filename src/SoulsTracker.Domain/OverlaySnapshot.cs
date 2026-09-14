@@ -159,19 +159,10 @@ public sealed class OverlayPresentationConfiguration
         return new OverlayPresentationConfiguration(
             configuration.TotalDeaths.IsEnabled,
             configuration.TotalDeaths.ShowGameName,
-            configuration.BossList.IsEnabled,
-            configuration.BossList.VisibilityMode,
             configuration.TotalDeaths.CompactTitle,
             configuration.TotalDeaths.TitleIconMode,
             configuration.TotalDeaths.Appearance,
-            configuration.BossList.Appearance,
-            configuration.BossList.DefeatedColor,
-            configuration.BossList.DefeatedTreatment,
-            configuration.BossList.ShowCheckmark,
-            configuration.BossList.CheckmarkAccent,
-            configuration.BossList.MaximumVisibleCount,
-            configuration.BossList.ShowDefeatedSkull,
-            configuration.BossList.CenterMarkerAlignment);
+            OverlayAppearance.Default);
     }
 
     /// <summary>
@@ -180,43 +171,19 @@ public sealed class OverlayPresentationConfiguration
     public OverlayPresentationConfiguration(
         bool isTotalDeathsEnabled,
         bool showGameName,
-        bool isBossListEnabled,
-        BossListVisibilityMode bossListVisibilityMode,
         bool totalDeathsCompactTitle = false,
         OverlayTitleIconMode totalDeathsTitleIconMode = OverlayTitleIconMode.Off,
         OverlayAppearance? totalDeathsAppearance = null,
-        OverlayAppearance? bossListAppearance = null,
-        string bossListDefeatedColor = "#8C8C96",
-        DefeatedBossTreatment bossListDefeatedTreatment = DefeatedBossTreatment.Nothing,
-        bool bossListShowCheckmark = true,
-        string bossListCheckmarkAccent = "#A78BFA",
-        int bossListMaximumVisibleCount = 25,
-        bool bossListShowDefeatedSkull = false,
-        CenterMarkerAlignment bossListCenterMarkerAlignment = CenterMarkerAlignment.Left)
+        OverlayAppearance? bossListAppearance = null)
     {
-        if (!Enum.IsDefined(bossListVisibilityMode))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(bossListVisibilityMode),
-                bossListVisibilityMode,
-                "The boss-list visibility mode is not supported.");
-        }
 
         IsTotalDeathsEnabled = isTotalDeathsEnabled;
         ShowGameName = false;
-        IsBossListEnabled = isBossListEnabled;
-        BossListVisibilityMode = bossListVisibilityMode;
+
         TotalDeathsCompactTitle = true;
         TotalDeathsTitleIconMode = Enum.IsDefined(totalDeathsTitleIconMode) ? totalDeathsTitleIconMode : OverlayTitleIconMode.Off;
         TotalDeathsAppearance = (totalDeathsAppearance ?? OverlayAppearance.Default).WithAlignment(OverlayTextAlignment.Left);
-        BossListAppearance = bossListAppearance ?? OverlayAppearance.BossListDefault;
-        BossListDefeatedColor = bossListDefeatedColor;
-        BossListDefeatedTreatment = bossListDefeatedTreatment;
-        BossListShowCheckmark = bossListShowCheckmark;
-        BossListCheckmarkAccent = bossListCheckmarkAccent;
-        BossListMaximumVisibleCount = bossListMaximumVisibleCount;
-        BossListShowDefeatedSkull = bossListShowDefeatedSkull;
-        BossListCenterMarkerAlignment = Enum.IsDefined(bossListCenterMarkerAlignment) ? bossListCenterMarkerAlignment : CenterMarkerAlignment.Left;
+
     }
 
     /// <summary>Gets whether the Total Deaths layout is visible.</summary>
@@ -226,21 +193,11 @@ public sealed class OverlayPresentationConfiguration
     public bool ShowGameName { get; }
 
     /// <summary>Gets whether the boss-list layout is visible.</summary>
-    public bool IsBossListEnabled { get; }
 
-    /// <summary>Gets the validated boss-list visibility filter.</summary>
-    public BossListVisibilityMode BossListVisibilityMode { get; }
     public bool TotalDeathsCompactTitle { get; }
     public OverlayTitleIconMode TotalDeathsTitleIconMode { get; }
     public OverlayAppearance TotalDeathsAppearance { get; }
-    public OverlayAppearance BossListAppearance { get; }
-    public string BossListDefeatedColor { get; }
-    public DefeatedBossTreatment BossListDefeatedTreatment { get; }
-    public bool BossListShowCheckmark { get; }
-    public string BossListCheckmarkAccent { get; }
-    public int BossListMaximumVisibleCount { get; }
-    public bool BossListShowDefeatedSkull { get; }
-    public CenterMarkerAlignment BossListCenterMarkerAlignment { get; }
+
 }
 
 /// <summary>
@@ -263,15 +220,13 @@ public sealed class OverlaySnapshot
         long sequenceNumber,
         DateTimeOffset generatedAtUtc,
         OverlayGameMetadata? selectedGame,
-        TotalDeathsDisplayValue totalDeaths,
-        IEnumerable<OverlayBossEntry> bosses)
+        TotalDeathsDisplayValue totalDeaths)
         : this(
             schemaVersion,
             sequenceNumber,
             generatedAtUtc,
             selectedGame,
             totalDeaths,
-            bosses,
             OverlayPresentationConfiguration.From(OverlayConfiguration.Default))
     {
     }
@@ -286,7 +241,6 @@ public sealed class OverlaySnapshot
         DateTimeOffset generatedAtUtc,
         OverlayGameMetadata? selectedGame,
         TotalDeathsDisplayValue totalDeaths,
-        IEnumerable<OverlayBossEntry> bosses,
         OverlayPresentationConfiguration presentation)
     {
         if (schemaVersion != CurrentSchemaVersion)
@@ -311,23 +265,16 @@ public sealed class OverlaySnapshot
         }
 
         ArgumentNullException.ThrowIfNull(totalDeaths);
-        ArgumentNullException.ThrowIfNull(bosses);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        OverlayBossEntry[] bossEntries = bosses.ToArray();
-        if (bossEntries.Any(static entry => entry is null))
-        {
-            throw new ArgumentException("The overlay boss list cannot contain null entries.", nameof(bosses));
-        }
-
-        ValidateSelectionAndDisplay(selectedGame, totalDeaths, bossEntries);
+        ValidateSelectionAndDisplay(selectedGame, totalDeaths);
 
         SchemaVersion = schemaVersion;
         SequenceNumber = sequenceNumber;
         GeneratedAtUtc = generatedAtUtc;
         SelectedGame = selectedGame;
         TotalDeaths = totalDeaths;
-        Bosses = Array.AsReadOnly(bossEntries);
+
         Presentation = presentation;
     }
 
@@ -359,7 +306,7 @@ public sealed class OverlaySnapshot
     /// <summary>
     /// Gets the immutable ordered boss list.
     /// </summary>
-    public IReadOnlyList<OverlayBossEntry> Bosses { get; }
+
 
     /// <summary>
     /// Gets the secret-free, validated presentation choices for this snapshot.
@@ -368,8 +315,7 @@ public sealed class OverlaySnapshot
 
     private static void ValidateSelectionAndDisplay(
         OverlayGameMetadata? selectedGame,
-        TotalDeathsDisplayValue totalDeaths,
-        OverlayBossEntry[] bossEntries)
+        TotalDeathsDisplayValue totalDeaths)
     {
         if (selectedGame is null)
         {
@@ -382,13 +328,6 @@ public sealed class OverlaySnapshot
                     nameof(totalDeaths));
             }
 
-            if (bossEntries.Length != 0)
-            {
-                throw new ArgumentException(
-                    "An overlay snapshot without a selected game cannot contain bosses.",
-                    nameof(bossEntries));
-            }
-
             return;
         }
 
@@ -399,7 +338,7 @@ public sealed class OverlaySnapshot
         }
 
         ValidateTotalDeathsDisplay(definition, totalDeaths);
-        ValidateBossEntries(definition, bossEntries);
+
     }
 
     private static void ValidateTotalDeathsDisplay(
@@ -454,25 +393,4 @@ public sealed class OverlaySnapshot
         }
     }
 
-    private static void ValidateBossEntries(GameDefinition selectedDefinition, OverlayBossEntry[] bossEntries)
-    {
-        HashSet<BossId> seenBossIds = [];
-
-        foreach (OverlayBossEntry entry in bossEntries)
-        {
-            if (!seenBossIds.Add(entry.BossId))
-            {
-                throw new ArgumentException("The overlay boss list cannot contain duplicate boss IDs.", nameof(bossEntries));
-            }
-
-            BossDefinition canonicalBoss = selectedDefinition.GetRequiredBoss(entry.BossId);
-            if (!string.Equals(canonicalBoss.DisplayName, entry.DisplayName, StringComparison.Ordinal) ||
-                !string.Equals(canonicalBoss.DlcLabel, entry.DlcLabel, StringComparison.Ordinal))
-            {
-                throw new ArgumentException(
-                    "Overlay boss metadata must match the selected game's canonical catalog.",
-                    nameof(bossEntries));
-            }
-        }
-    }
 }

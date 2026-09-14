@@ -102,7 +102,6 @@ public sealed class SecureOverlayService : IAsyncDisposable, IOverlayStateSink
     }
 
     public string TotalDeathsUrl => CanonicalUrl("/overlay/total_deaths");
-    public string BossListUrl => CanonicalUrl("/overlay/boss_list");
     public int ActiveWebSocketConnectionCount => Volatile.Read(ref activeWebSocketConnectionCount);
 
     private string CanonicalUrl(string path)
@@ -119,7 +118,7 @@ public sealed class SecureOverlayService : IAsyncDisposable, IOverlayStateSink
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, port));
         WebApplication app = builder.Build();
         app.UseWebSockets();
-        foreach (string route in new[] { "/overlay/total_deaths", "/overlay/boss_list", "/overlay/deaths", "/overlay/boss-progress" })
+        foreach (string route in new[] { "/overlay/total_deaths", "/overlay/deaths" })
             app.MapGet(route, (HttpContext context) => TryGetAuthorizedToken(context, out string? token)
                 ? Results.Content(CreateOverlayShell(token), "text/html; charset=utf-8")
                 : Results.NotFound());
@@ -179,7 +178,7 @@ public sealed class SecureOverlayService : IAsyncDisposable, IOverlayStateSink
         Volatile.Write(ref sequence, nextSequence);
     }
 
-    private static OverlaySnapshot EmptySnapshot() => new(1, 0, DateTimeOffset.UtcNow, null, TotalDeathsDisplayValue.Unavailable, []);
+    private static OverlaySnapshot EmptySnapshot() => new(1, 0, DateTimeOffset.UtcNow, null, TotalDeathsDisplayValue.Unavailable);
     private static int FindAvailablePort()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); return ((IPEndPoint)listener.LocalEndpoint).Port;

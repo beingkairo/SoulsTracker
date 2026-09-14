@@ -171,8 +171,7 @@ public sealed class ApprovedLegacyImportPreflight : IApprovedLegacyImportPreflig
             ? ConfirmedLegacyImportRequest.FromPreparedPreflight(result.Analysis, result.SourceFingerprint, result.BackupFingerprint)
             : null;
         string? gameLabel = proposal?.SelectedGameId is GameId gameId ? GameCatalog.GetRequired(gameId).DisplayName : null;
-        IReadOnlyList<string> bossNames = proposal is null ? [] : proposal.DefeatedBossesByGame.SelectMany(pair => pair.Value.Select(boss => GameCatalog.GetRequiredBoss(pair.Key, boss).DisplayName)).ToArray();
-        return new LegacyImportPreflightReview(result.Outcome, gameLabel, bossNames, proposal?.BossListVisibilityMode, result.Analysis?.Report.Issues.Count ?? 0, request);
+        return new LegacyImportPreflightReview(result.Outcome, gameLabel, [], null, result.Analysis?.Report.Issues.Count ?? 0, request);
     }
 }
 

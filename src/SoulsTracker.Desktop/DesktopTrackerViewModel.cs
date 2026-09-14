@@ -63,14 +63,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private string? errorMessage;
     private string totalDeathsText = "Load tracker state before using controls.";
     private string? totalDeathsOverlayUrl;
-    private string? bossListOverlayUrl;
+
     private string? globalHotkeyStatus;
     private string? localTrackerStateStatus;
     private string? localOverlayStatus;
     private bool isTotalDeathsOverlayEnabled;
     private bool showTotalDeathsGameName;
-    private bool isBossListOverlayEnabled;
-    private BossListVisibilityMode bossListVisibilityMode;
+
     private LegacyImportViewModel? legacyImport;
     private GlobalHotkeySettings hotkeySettings = GlobalHotkeySettings.Default;
     private string pendingIncrementHotkey = GlobalHotkeyBinding.IncrementDefault.DisplayText;
@@ -85,21 +84,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>>? applyHotkeysAsync;
     private string? textExportStatus;
     private OverlayTitleIconModeChoice draftTitleIconModeChoice = OverlayTitleIconModeChoice.All[0];
-    private BossListVisibilityMode draftBossListMode;
-    private string draftDefeatedColor = "#8C8C96";
-    private DefeatedBossTreatment draftDefeatedTreatment = DefeatedBossTreatment.Nothing;
+
     private string? totalDeathsAppearanceStatus;
-    private string? bossListAppearanceStatus;
-    private BossMarkerChoice draftBossMarker = BossMarkerChoice.All[1];
-    private BossMarkerChoice lastNonCenterBossMarker = BossMarkerChoice.All[1];
-    private CenterMarkerAlignment draftCenterMarkerAlignment = CenterMarkerAlignment.Left;
+
+
     private bool legacyDraftShowGameName;
     private bool legacyDraftCompactTitle = true;
-    private IReadOnlyList<BossListScopeChoice> bossListScopes = BossListScopeChoice.For(GameCatalog.GetRequired(GameId.DemonsSouls));
-    private BossListScopeChoice selectedBossListScope = BossListScopeChoice.For(GameCatalog.GetRequired(GameId.DemonsSouls))[0];
-    private string bossSearchQuery = string.Empty;
-    private readonly object bossesSynchronization = new();
-    private readonly object filteredBossesSynchronization = new();
+
     private readonly object eldenRingProfileSlotsSynchronization = new();
     private readonly object eldenRingSaveChoicesSynchronization = new();
     private readonly object blackMythWukongSaveChoicesSynchronization = new();
@@ -168,18 +159,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.readWukongSaveMetadataAsync = readWukongSaveMetadataAsync ?? throw new ArgumentNullException(nameof(readWukongSaveMetadataAsync));
         GameChoices = new ObservableCollection<GameChoice>(GameCatalog.All.Select(static game => new GameChoice(game)));
-        Bosses.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsBossListEmpty));
         EldenRingProfileSlots = [];
         EldenRingSaveChoices = [];
         BlackMythWukongSaveChoices = [];
         LiesOfPSaveChoices = [];
-        BindingOperations.EnableCollectionSynchronization(Bosses, bossesSynchronization);
-        BindingOperations.EnableCollectionSynchronization(FilteredBosses, filteredBossesSynchronization);
+
         BindingOperations.EnableCollectionSynchronization(EldenRingProfileSlots, eldenRingProfileSlotsSynchronization);
         BindingOperations.EnableCollectionSynchronization(EldenRingSaveChoices, eldenRingSaveChoicesSynchronization);
         BindingOperations.EnableCollectionSynchronization(BlackMythWukongSaveChoices, blackMythWukongSaveChoicesSynchronization);
         BindingOperations.EnableCollectionSynchronization(LiesOfPSaveChoices, liesOfPSaveChoicesSynchronization);
-        BossListAppearanceDraft.PropertyChanged += BossListAppearanceDraft_PropertyChanged;
+
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -244,72 +233,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ? parsed!.ToString()
             : version;
 
-    private void BossListAppearanceDraft_PropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
-    {
-        if (eventArgs.PropertyName == nameof(OverlayAppearanceDraft.Alignment))
-        {
-            if (IsCenterBossAlignment)
-            {
-                // Centered lists deliberately do not support markers. Clear the
-                // draft immediately so Apply cannot persist an invisible marker.
-                if (DraftBossMarker.Value != "None")
-                {
-                    lastNonCenterBossMarker = DraftBossMarker;
-                }
-                DraftBossMarker = BossMarkers.Single(choice => choice.Value == "None");
-            }
-            else if (DraftBossMarker.Value == "None" && lastNonCenterBossMarker.Value != "None")
-            {
-                // Returning to a side-aligned layout restores the user's last
-                // side-marker draft without ever allowing it in centered output.
-                DraftBossMarker = lastNonCenterBossMarker;
-            }
-
-            OnPropertyChanged(nameof(IsCenterBossAlignment));
-            OnPropertyChanged(nameof(AreBossMarkerControlsVisible));
-        }
-    }
 
     public ObservableCollection<GameChoice> GameChoices { get; }
 
-    public ObservableCollection<BossChoice> Bosses { get; } = [];
-
-    /// <summary>Gets the current desktop-only boss checklist projection after search filtering.</summary>
-    public ObservableCollection<BossChoice> FilteredBosses { get; } = [];
-
-    /// <summary>Gets or sets the transient desktop boss-search query.</summary>
-    public string BossSearchQuery
-    {
-        get => bossSearchQuery;
-        set
-        {
-            if (!SetField(ref bossSearchQuery, value ?? string.Empty)) return;
-            RefreshFilteredBosses();
-            OnPropertyChanged(nameof(ShowBossSearchPlaceholder));
-        }
-    }
-
-    /// <summary>Gets whether the current non-empty search has no matching bosses in the displayed scope.</summary>
-    public bool IsBossSearchNoResults =>
-        !string.IsNullOrWhiteSpace(BossSearchQuery) && Bosses.Count > 0 && FilteredBosses.Count == 0;
-
-    /// <summary>Gets whether the selected game's current boss filter has no entries to display.</summary>
-    public bool IsBossListEmpty => state is not null && Bosses.Count == 0;
-
-    /// <summary>Shows the search hint until a meaningful filter has been entered.</summary>
-    public bool ShowBossSearchPlaceholder => string.IsNullOrWhiteSpace(BossSearchQuery);
-
-    /// <summary>Describes the boss checklist for the current selection.</summary>
-    public string BossDescription => state is null
-        ? "Track boss progress."
-        : $"Track boss progress for {GameCatalog.GetRequired(state.SelectedGameId).DisplayName}.";
-
     public ObservableCollection<EldenRingProfileSlotChoice> EldenRingProfileSlots { get; }
-    public IReadOnlyList<BossListScopeChoice> BossListScopes { get => bossListScopes; private set => SetField(ref bossListScopes, value); }
-    public BossListScopeChoice SelectedBossListScope { get => selectedBossListScope; private set => SetField(ref selectedBossListScope, value); }
-    public IReadOnlyList<BossListVisibilityMode> BossListVisibilityModes { get; } = Enum.GetValues<BossListVisibilityMode>();
     public IReadOnlyList<OverlayTextAlignment> OverlayAlignments { get; } = Enum.GetValues<OverlayTextAlignment>();
-    public IReadOnlyList<DefeatedBossTreatment> DefeatedBossTreatments { get; } = [DefeatedBossTreatment.Nothing, DefeatedBossTreatment.Dimmed, DefeatedBossTreatment.Strikethrough, DefeatedBossTreatment.Both];
     public IReadOnlyList<string> LocalFontFamilies { get; } = GetLocalFontFamilies();
 
     private static string[] GetLocalFontFamilies()
@@ -318,39 +246,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         catch { return ["Segoe UI"]; }
     }
     public OverlayAppearanceDraft TotalDeathsAppearanceDraft { get; } = new();
-    public OverlayAppearanceDraft BossListAppearanceDraft { get; } = new();
+
     // Legacy test/binding compatibility; V1 no longer exposes editable controls for these choices.
     public bool DraftShowGameName { get => legacyDraftShowGameName; set => SetField(ref legacyDraftShowGameName, value); }
     public bool DraftCompactTitle { get => legacyDraftCompactTitle; set => SetField(ref legacyDraftCompactTitle, value); }
     public IReadOnlyList<OverlayTitleIconModeChoice> TitleIconModes { get; } = OverlayTitleIconModeChoice.All;
     public OverlayTitleIconModeChoice DraftTitleIconModeChoice { get => draftTitleIconModeChoice; set { if (SetField(ref draftTitleIconModeChoice, value)) OnPropertyChanged(nameof(IsTitleIconSelected)); } }
-    public BossListVisibilityMode DraftBossListMode { get => draftBossListMode; set => SetField(ref draftBossListMode, value); }
-    public string DraftDefeatedColor { get => draftDefeatedColor; set => SetField(ref draftDefeatedColor, value); }
-    public DefeatedBossTreatment DraftDefeatedTreatment { get => draftDefeatedTreatment; set => SetField(ref draftDefeatedTreatment, value); }
-    public bool DraftShowCheckmark { get; set; } = true;
-    public bool DraftShowDefeatedSkull { get; set; }
-    public IReadOnlyList<BossMarkerChoice> BossMarkers { get; } = BossMarkerChoice.All;
-    public BossMarkerChoice DraftBossMarker
-    {
-        get => draftBossMarker;
-        set
-        {
-            BossMarkerChoice normalized = IsCenterBossAlignment && value.Value != "None"
-                ? BossMarkers.Single(choice => choice.Value == "None")
-                : value;
-            if (SetField(ref draftBossMarker, normalized))
-            {
-                if (!IsCenterBossAlignment && normalized.Value != "None") lastNonCenterBossMarker = normalized;
-                OnPropertyChanged(nameof(IsBossMarkerSelected));
-                OnPropertyChanged(nameof(ShowBossMarkerColor));
-            }
-        }
-    }
-    public CenterMarkerAlignment DraftCenterMarkerAlignment { get => draftCenterMarkerAlignment; set => SetField(ref draftCenterMarkerAlignment, value); }
-    public bool IsCenterBossAlignment => BossListAppearanceDraft.Alignment == OverlayTextAlignment.Center;
-    public bool IsBossMarkerSelected => DraftBossMarker.Value != "None";
-    public bool AreBossMarkerControlsVisible => !IsCenterBossAlignment;
-    public bool ShowBossMarkerColor => AreBossMarkerControlsVisible && IsBossMarkerSelected;
+
     public bool IsTitleIconSelected => DraftTitleIconModeChoice.Value != OverlayTitleIconMode.Off;
     public string DraftCheckmarkAccent { get; set; } = "#A78BFA";
     public string DraftMaximumVisibleCount { get; set; } = "25";
@@ -540,16 +442,16 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
         : "Unavailable";
     public string? TotalDeathsOverlayUrl { get => totalDeathsOverlayUrl; private set { if (SetField(ref totalDeathsOverlayUrl, value)) { OnPropertyChanged(nameof(TotalDeathsSceneUrl)); OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay)); OnPropertyChanged(nameof(TotalDeathsPreviewUri)); } } }
-    public string? BossListOverlayUrl { get => bossListOverlayUrl; private set { if (SetField(ref bossListOverlayUrl, value)) { OnPropertyChanged(nameof(BossListSceneUrl)); OnPropertyChanged(nameof(BossListSceneUrlDisplay)); OnPropertyChanged(nameof(BossListPreviewUri)); } } }
+
     /// <summary>Each generated URL contains only its own bounded, applied presentation values.</summary>
     public string? TotalDeathsSceneUrl => AppendStyleQuery(TotalDeathsOverlayUrl, totalDeaths: true);
-    public string? BossListSceneUrl => AppendStyleQuery(BossListOverlayUrl, totalDeaths: false);
+
     /// <summary>Safe, compact presentation of a canonical URL. Copy always uses the full URL.</summary>
     public string? TotalDeathsSceneUrlDisplay => ShortenUrlForDisplay(TotalDeathsSceneUrl);
     /// <summary>Safe, compact presentation of a canonical URL. Copy always uses the full URL.</summary>
-    public string? BossListSceneUrlDisplay => ShortenUrlForDisplay(BossListSceneUrl);
+
     public Uri? TotalDeathsPreviewUri => Uri.TryCreate(TotalDeathsSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
-    public Uri? BossListPreviewUri => Uri.TryCreate(BossListSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
+
     public string? GlobalHotkeyStatus { get => globalHotkeyStatus; private set => SetField(ref globalHotkeyStatus, value); }
     public string PendingIncrementHotkey { get => pendingIncrementHotkey; set => SetField(ref pendingIncrementHotkey, value); }
     public string PendingDecrementHotkey { get => pendingDecrementHotkey; set => SetField(ref pendingDecrementHotkey, value); }
@@ -563,21 +465,19 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? LocalOverlayStatus { get => localOverlayStatus; private set => SetField(ref localOverlayStatus, value); }
     public bool IsTotalDeathsOverlayEnabled { get => isTotalDeathsOverlayEnabled; private set => SetField(ref isTotalDeathsOverlayEnabled, value); }
     public bool ShowTotalDeathsGameName { get => showTotalDeathsGameName; private set => SetField(ref showTotalDeathsGameName, value); }
-    public bool IsBossListOverlayEnabled { get => isBossListOverlayEnabled; private set => SetField(ref isBossListOverlayEnabled, value); }
-    public BossListVisibilityMode BossListVisibilityMode { get => bossListVisibilityMode; private set => SetField(ref bossListVisibilityMode, value); }
+
     public LegacyImportViewModel? LegacyImport { get => legacyImport; private set => SetField(ref legacyImport, value); }
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
     public string? TotalDeathsAppearanceStatus { get => totalDeathsAppearanceStatus; private set => SetField(ref totalDeathsAppearanceStatus, value); }
-    public string? BossListAppearanceStatus { get => bossListAppearanceStatus; private set => SetField(ref bossListAppearanceStatus, value); }
+
     public string? TextExportStatus { get => textExportStatus; private set => SetField(ref textExportStatus, value); }
     public string? DeathsExportFileName => state?.TextExports.DeathsPath is { } path ? Path.GetFileName(path) : null;
-    public string? BossExportFileName => state?.TextExports.BossListPath is { } path ? Path.GetFileName(path) : null;
+
     public bool IsDeathsExportEnabled => state?.TextExports.DeathsEnabled ?? false;
-    public bool IsBossExportEnabled => state?.TextExports.BossListEnabled ?? false;
+
     public bool CanChooseDeathsExport => ControlsEnabled && IsDeathsExportEnabled;
     public bool CanClearDeathsExport => CanChooseDeathsExport && state?.TextExports.DeathsPath is not null;
-    public bool CanChooseBossExport => ControlsEnabled && IsBossExportEnabled;
-    public bool CanClearBossExport => CanChooseBossExport && state?.TextExports.BossListPath is not null;
+
     internal PersistentTrackerState? CurrentState => state;
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
@@ -667,12 +567,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ApplyCommittedState(committedState);
         ReconcileWukongSaveSourceFromCommittedState();
     }
-    public void SetOverlayUrls(string totalDeathsUrl, string bossListUrl) { TotalDeathsOverlayUrl = totalDeathsUrl; BossListOverlayUrl = bossListUrl; }
+    public void SetOverlayUrls(string totalDeathsUrl) { TotalDeathsOverlayUrl = totalDeathsUrl; }
     internal void SetOverlayReady() => LocalOverlayStatus = LocalOverlayReadyMessage;
     public void SetOverlayUnavailable()
     {
         TotalDeathsOverlayUrl = "Overlay endpoint unavailable. Close the conflicting local application and restart SoulsTracker.";
-        BossListOverlayUrl = TotalDeathsOverlayUrl;
+
         LocalOverlayStatus = LocalOverlayUnavailableMessage;
     }
 
@@ -680,12 +580,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ? throw new ArgumentException("A global hotkey status is required.", nameof(status))
         : status;
     internal void SetTextExportStatus(bool succeeded) => TextExportStatus = succeeded ? "Text exports ready." : "Text export is unavailable.";
-    public Task SetDeathsExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(path, IsDeathsExportEnabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
-    public Task SetBossExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, path, IsBossExportEnabled), cancellationToken);
-    public Task SetDeathsExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, enabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
-    public Task SetBossExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, state?.TextExports.BossListPath, enabled), cancellationToken);
-    public Task ClearDeathsExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(null, IsDeathsExportEnabled, state?.TextExports.BossListPath, IsBossExportEnabled), cancellationToken);
-    public Task ClearBossExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, IsDeathsExportEnabled, null, IsBossExportEnabled), cancellationToken);
+    public Task SetDeathsExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(path, IsDeathsExportEnabled), cancellationToken);
+    public Task SetDeathsExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, enabled), cancellationToken);
+    public Task ClearDeathsExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(null, IsDeathsExportEnabled), cancellationToken);
     public async Task SetEldenRingSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled) return;
@@ -1065,11 +962,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public void BeginLiesOfPChange() { if (IsLiesOfPSelected) IsLiesOfPChangeMode = true; }
     public void CancelLiesOfPChange() => IsLiesOfPChangeMode = false;
 
-    public async Task SetBossListScopeAsync(BossListScopeChoice? scope, CancellationToken cancellationToken = default)
-    {
-        if (!ControlsEnabled || scope is null || !scope.IsAvailable || scope.Value == state?.BossListScope) return;
-        await SubmitAsync(new UpdateBossListScopeCommand(scope.Value), cancellationToken);
-    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -1225,7 +1117,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         await SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
         if (state?.SelectedGameId != selectedGameBeforeSelection)
         {
-            BossSearchQuery = string.Empty;
+
         }
 
         if (state?.SelectedGameId == SoulsTracker.Domain.GameId.EldenRing)
@@ -1320,30 +1212,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ? Task.CompletedTask
             : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: false), cancellationToken);
 
-    public Task SetBossDefeatedAsync(BossChoice? boss, bool isDefeated, CancellationToken cancellationToken = default) =>
-        boss is null || state is null || !ControlsEnabled
-            ? Task.CompletedTask
-            : SubmitAsync(new SetBossDefeatedCommand(state.SelectedGameId, boss.BossId, isDefeated), cancellationToken);
 
     public Task SetTotalDeathsOverlayEnabledAsync(bool isEnabled, CancellationToken cancellationToken = default) =>
         !PresentationControlsEnabled || isEnabled == IsTotalDeathsOverlayEnabled
             ? Task.CompletedTask
-            : SubmitOverlayPresentationAsync(isEnabled, ShowTotalDeathsGameName, IsBossListOverlayEnabled, BossListVisibilityMode, cancellationToken);
+            : SubmitOverlayPresentationAsync(isEnabled, ShowTotalDeathsGameName, cancellationToken);
 
     public Task SetShowTotalDeathsGameNameAsync(bool showGameName, CancellationToken cancellationToken = default) =>
         !CanConfigureTotalDeathsGameName || showGameName == ShowTotalDeathsGameName
             ? Task.CompletedTask
-            : SubmitOverlayPresentationAsync(IsTotalDeathsOverlayEnabled, showGameName, IsBossListOverlayEnabled, BossListVisibilityMode, cancellationToken);
+            : SubmitOverlayPresentationAsync(IsTotalDeathsOverlayEnabled, showGameName, cancellationToken);
 
-    public Task SetBossListOverlayEnabledAsync(bool isEnabled, CancellationToken cancellationToken = default) =>
-        !PresentationControlsEnabled || isEnabled == IsBossListOverlayEnabled
-            ? Task.CompletedTask
-            : SubmitOverlayPresentationAsync(IsTotalDeathsOverlayEnabled, ShowTotalDeathsGameName, isEnabled, BossListVisibilityMode, cancellationToken);
-
-    public Task SetBossListVisibilityModeAsync(BossListVisibilityMode visibilityMode, CancellationToken cancellationToken = default) =>
-        !PresentationControlsEnabled || !Enum.IsDefined(visibilityMode) || visibilityMode == BossListVisibilityMode
-            ? Task.CompletedTask
-            : SubmitOverlayPresentationAsync(IsTotalDeathsOverlayEnabled, ShowTotalDeathsGameName, IsBossListOverlayEnabled, visibilityMode, cancellationToken);
 
     public Task ResetOverlayAppearanceAsync(bool totalDeaths, CancellationToken cancellationToken = default) =>
         !PresentationControlsEnabled ? Task.CompletedTask : SubmitAsync(new ResetOverlayAppearanceCommand(totalDeaths), cancellationToken);
@@ -1355,21 +1234,19 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             OverlayAppearance appearance = totalDeaths
                 ? TotalDeathsAppearanceDraft.ToDomain(OverlayTextAlignment.Left)
-                : BossListAppearanceDraft.ToDomain(BossListAppearanceDraft.Alignment);
-            int maximumVisible = int.TryParse(DraftMaximumVisibleCount, out int count) ? count : throw new ArgumentException("Maximum visible bosses must be a whole number.");
+                : TotalDeathsAppearanceDraft.ToDomain(OverlayTextAlignment.Left);
             // The selector is the sole source of truth. Legacy booleans are projected only for compatibility.
-            bool checkmark = !IsCenterBossAlignment && DraftBossMarker.Value == "Checkmark";
-            bool skull = !IsCenterBossAlignment && DraftBossMarker.Value == "Skull";
+
             // Appearance drafts are isolated from Main-tab operational errors.
             // A failed Apply must leave the last applied style/URL/preview intact.
-            await SubmitAsync(new UpdateOverlayAppearanceCommand(totalDeaths, appearance, false, true, DraftBossListMode, DraftDefeatedColor, DraftDefeatedTreatment, checkmark, DraftCheckmarkAccent, maximumVisible, DraftTitleIconModeChoice.Value, skull, DraftCenterMarkerAlignment), cancellationToken);
+            await SubmitAsync(new UpdateOverlayAppearanceCommand(totalDeaths, appearance, false, false, BossListVisibilityMode.All, "", DefeatedBossTreatment.Nothing, false, "", 0, OverlayTitleIconMode.Off, false, CenterMarkerAlignment.Left), cancellationToken);
             SetAppearanceFeedback(totalDeaths, ErrorMessage is null
-                ? $"{(totalDeaths ? "Total Deaths" : "Boss List")} appearance applied."
-                : $"{(totalDeaths ? "Total Deaths" : "Boss List")} appearance could not be applied.");
+                ? "Total Deaths appearance applied."
+                : "Total Deaths appearance could not be applied.");
         }
         catch (ArgumentException exception)
         {
-            OverlayAppearanceDraft draft = totalDeaths ? TotalDeathsAppearanceDraft : BossListAppearanceDraft;
+            OverlayAppearanceDraft draft = TotalDeathsAppearanceDraft;
             string detail = draft.ValidationMessage ?? exception.Message.Split(Environment.NewLine)[0];
             SetAppearanceFeedback(totalDeaths, detail);
             return;
@@ -1379,10 +1256,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private Task SubmitOverlayPresentationAsync(
         bool totalDeathsEnabled,
         bool showGameName,
-        bool bossListEnabled,
-        BossListVisibilityMode visibilityMode,
         CancellationToken cancellationToken) =>
-        SubmitAsync(new UpdateOverlayPresentationCommand(totalDeathsEnabled, showGameName, bossListEnabled, visibilityMode), cancellationToken);
+        SubmitAsync(new UpdateOverlayPresentationCommand(totalDeathsEnabled, showGameName, false, BossListVisibilityMode.All), cancellationToken);
 
     private async Task SubmitAsync(ITrackerCommand command, CancellationToken cancellationToken)
     {
@@ -1455,44 +1330,18 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         IsTotalDeathsOverlayEnabled = state.OverlayConfiguration.TotalDeaths.IsEnabled;
         ShowTotalDeathsGameName = state.OverlayConfiguration.TotalDeaths.ShowGameName;
-        IsBossListOverlayEnabled = state.OverlayConfiguration.BossList.IsEnabled;
-        BossListVisibilityMode = state.OverlayConfiguration.BossList.VisibilityMode;
         TotalDeathsAppearanceDraft.Load(state.OverlayConfiguration.TotalDeaths.Appearance);
-        BossListAppearanceDraft.Load(state.OverlayConfiguration.BossList.Appearance);
         TotalDeathsAppearanceDraft.FontFamily = ResolveLocalFont(TotalDeathsAppearanceDraft.FontFamily);
-        BossListAppearanceDraft.FontFamily = ResolveLocalFont(BossListAppearanceDraft.FontFamily);
         DraftTitleIconModeChoice = TitleIconModes.Single(choice => choice.Value == state.OverlayConfiguration.TotalDeaths.TitleIconMode);
-        DraftBossListMode = state.OverlayConfiguration.BossList.VisibilityMode;
-        DraftDefeatedColor = state.OverlayConfiguration.BossList.DefeatedColor;
-        DraftDefeatedTreatment = state.OverlayConfiguration.BossList.DefeatedTreatment;
-        DraftShowCheckmark = state.OverlayConfiguration.BossList.ShowCheckmark;
-        DraftShowDefeatedSkull = state.OverlayConfiguration.BossList.ShowDefeatedSkull;
-        DraftBossMarker = BossMarkers.Single(choice => choice.Value == (DraftShowDefeatedSkull ? "Skull" : DraftShowCheckmark ? "Checkmark" : "None"));
-        DraftCheckmarkAccent = state.OverlayConfiguration.BossList.CheckmarkAccent;
-        DraftCenterMarkerAlignment = state.OverlayConfiguration.BossList.CenterMarkerAlignment;
-        DraftMaximumVisibleCount = state.OverlayConfiguration.BossList.MaximumVisibleCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         GameId? selectedId = state.SelectedGameId;
         SelectedGame = GameChoices.Single(choice => choice.GameId == selectedId);
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == state.EldenRingSave.SlotIndex);
-        BossListScopes = BossListScopeChoice.For(GameCatalog.GetRequired(selectedId));
-        SelectedBossListScope = BossListScopes.Single(scope => scope.Value == state.BossListScope);
+
         OnPropertyChanged(nameof(SelectedGame));
         OnPropertyChanged(nameof(GameSelectionAutomationName));
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
-        OnPropertyChanged(nameof(SelectedBossListScope));
-        OnPropertyChanged(nameof(BossDescription));
 
-        Bosses.Clear();
-        if (selectedId is not null)
-        {
-            GameDefinition game = GameCatalog.GetRequired(selectedId);
-            foreach (BossDefinition boss in BossCatalogDisplayFilter.Apply(game, state.BossListScope))
-            {
-                Bosses.Add(new BossChoice(boss, state.BossProgress.IsDefeated(selectedId, boss.Id)));
-            }
-        }
-        RefreshFilteredBosses();
 
         UpdateTotalDeathsText();
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
@@ -1501,11 +1350,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         NotifyWukongSaveSourceProperties();
         NotifyLiesOfPSaveSourceProperties();
         OnPropertyChanged(nameof(TotalDeathsSceneUrl));
-        OnPropertyChanged(nameof(BossListSceneUrl));
         OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay));
-        OnPropertyChanged(nameof(BossListSceneUrlDisplay));
         OnPropertyChanged(nameof(TotalDeathsPreviewUri));
-        OnPropertyChanged(nameof(BossListPreviewUri));
     }
 
     private void UpdateTotalDeathsText()
@@ -1540,22 +1386,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                         : GameTotalDeathsUnavailableMessage;
     }
 
-    private void RefreshFilteredBosses()
-    {
-        string query = BossSearchQuery.Trim();
-        FilteredBosses.Clear();
-        foreach (BossChoice boss in Bosses)
-        {
-            if (query.Length == 0 ||
-                boss.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                boss.DlcLabel?.Contains(query, StringComparison.OrdinalIgnoreCase) == true)
-            {
-                FilteredBosses.Add(boss);
-            }
-        }
-
-        OnPropertyChanged(nameof(IsBossSearchNoResults));
-    }
 
     private static string LoadFailureMessage(TrackerStateLoadFailureKind kind) => kind switch
     {
@@ -1570,17 +1400,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(url) || url.StartsWith("Overlay endpoint unavailable", StringComparison.Ordinal)) return url;
         if (state is null) return url;
-        OverlayAppearance appearance = totalDeaths
-            ? state.OverlayConfiguration.TotalDeaths.Appearance
-            : state.OverlayConfiguration.BossList.Appearance;
-        bool inline = totalDeaths && state.OverlayConfiguration.TotalDeaths.CompactTitle;
-        bool gameName = totalDeaths && state.OverlayConfiguration.TotalDeaths.ShowGameName;
-        DefeatedBossTreatment treatment = state.OverlayConfiguration.BossList.DefeatedTreatment;
-        string marker = state.OverlayConfiguration.BossList.ShowDefeatedSkull
-            ? "Skull"
-            : state.OverlayConfiguration.BossList.ShowCheckmark
-                ? "Checkmark"
-                : "None";
+        OverlayAppearance appearance = state.OverlayConfiguration.TotalDeaths.Appearance;
         var values = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["styleVersion"] = "1",
@@ -1601,23 +1421,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ["shadowY"] = appearance.ShadowOffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["shadowBlur"] = appearance.ShadowBlur.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
-        if (totalDeaths)
-        {
-            values["inline"] = "true";
-            values["titleIcon"] = state.OverlayConfiguration.TotalDeaths.TitleIconMode.ToString();
-        }
-        else
-        {
-            BossListOverlayOptions boss = state.OverlayConfiguration.BossList;
-            values["alignment"] = appearance.Alignment.ToString();
-            values["mode"] = boss.VisibilityMode.ToString();
-            values["defeatedColor"] = boss.DefeatedColor;
-            values["treatment"] = treatment.ToString();
-            values["marker"] = marker;
-            values["maximumVisible"] = boss.MaximumVisibleCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            values["bossRowSpacing"] = appearance.Padding.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            values["centerMarkerAlignment"] = boss.CenterMarkerAlignment.ToString();
-        }
+        values["inline"] = "true";
+        values["titleIcon"] = state.OverlayConfiguration.TotalDeaths.TitleIconMode.ToString();
         string separator = url.Contains('?') ? "&" : "?";
         return url + separator + string.Join("&", values.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)));
     }
@@ -1632,7 +1437,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private void SetAppearanceFeedback(bool totalDeaths, string message)
     {
-        if (totalDeaths) TotalDeathsAppearanceStatus = message; else BossListAppearanceStatus = message;
+        if (totalDeaths) TotalDeathsAppearanceStatus = message;
         _ = ClearAppearanceFeedbackAfterDelayAsync(totalDeaths, message);
     }
 
@@ -1640,7 +1445,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         await Task.Delay(TimeSpan.FromSeconds(10));
         if (totalDeaths && TotalDeathsAppearanceStatus == message) TotalDeathsAppearanceStatus = null;
-        if (!totalDeaths && BossListAppearanceStatus == message) BossListAppearanceStatus = null;
+
     }
 
     private void NotifyTrackerProperties()
@@ -1656,10 +1461,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsManualGameSelected));
         OnPropertyChanged(nameof(IsGlobalHotkeyConfigurationAvailable));
         OnPropertyChanged(nameof(GlobalHotkeyUsageDescription));
-        OnPropertyChanged(nameof(IsCenterBossAlignment));
-        OnPropertyChanged(nameof(AreBossMarkerControlsVisible));
-        OnPropertyChanged(nameof(IsBossMarkerSelected));
-        OnPropertyChanged(nameof(ShowBossMarkerColor));
+
         OnPropertyChanged(nameof(CanDecrementManualDeaths));
         OnPropertyChanged(nameof(IsEldenRingMissedDeathAdjustmentAvailable));
         OnPropertyChanged(nameof(CanAdjustEldenRingMissedDeaths));
@@ -1668,7 +1470,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(EldenRingSavedDeathsText));
         OnPropertyChanged(nameof(PresentationControlsEnabled));
         OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
-        OnPropertyChanged(nameof(DeathsExportFileName)); OnPropertyChanged(nameof(BossExportFileName)); OnPropertyChanged(nameof(IsDeathsExportEnabled)); OnPropertyChanged(nameof(IsBossExportEnabled));
+        OnPropertyChanged(nameof(DeathsExportFileName)); OnPropertyChanged(nameof(IsDeathsExportEnabled));
         NotifyTextExportControlAvailability();
     }
 
@@ -1676,8 +1478,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(CanChooseDeathsExport));
         OnPropertyChanged(nameof(CanClearDeathsExport));
-        OnPropertyChanged(nameof(CanChooseBossExport));
-        OnPropertyChanged(nameof(CanClearBossExport));
+
     }
 
     private static string WaitingForSaveFileMessage(GameId gameId) => gameId == GameId.BlackMythWukong
@@ -2047,11 +1848,4 @@ public sealed class GameChoice
     public string AvailabilityLabel => IsSelectable ? string.Empty : "SOON";
 }
 
-public sealed class BossChoice(BossDefinition definition, bool isDefeated)
-{
-    private readonly BossDefinition definition = definition ?? throw new ArgumentNullException(nameof(definition));
-    public BossId BossId => definition.Id;
-    public string DisplayName => definition.DisplayName;
-    public string? DlcLabel => definition.DlcLabel;
-    public bool IsDefeated { get; } = isDefeated;
-}
+

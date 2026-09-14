@@ -22,13 +22,7 @@ public sealed record IncrementManualBloodborneDeathsCommand : ITrackerCommand;
 /// </summary>
 public sealed record DecrementManualBloodborneDeathsCommand : ITrackerCommand;
 
-/// <summary>
-/// Sets the defeated state of one canonical boss in one canonical game's catalog.
-/// </summary>
-public sealed record SetBossDefeatedCommand(GameId GameId, BossId BossId, bool IsDefeated) : ITrackerCommand;
 
-/// <summary>Updates the persisted boss scope shared by every output surface.</summary>
-public sealed record UpdateBossListScopeCommand(BossListScope Scope) : ITrackerCommand;
 
 /// <summary>
 /// Updates the persisted presentation choices for the two read-only browser overlays.
@@ -82,8 +76,7 @@ public enum TrackerCommandType
     SelectGame,
     IncrementManualBloodborneDeaths,
     DecrementManualBloodborneDeaths,
-    SetBossDefeated,
-    UpdateBossListScope,
+
     UpdateOverlayPresentation,
     ResetOverlayAppearance,
     UpdateOverlayAppearance,

@@ -306,7 +306,7 @@ public partial class App : System.Windows.Application, IDisposable
                 overlayService = new SecureOverlayService(coordinator!, new OverlayEndpointAccessFactory());
                 await overlayService.StartAsync();
                 overlayPublisher!.Attach(overlayService);
-                viewModel.SetOverlayUrls(overlayService.TotalDeathsUrl, overlayService.BossListUrl);
+                viewModel.SetOverlayUrls(overlayService.TotalDeathsUrl);
                 viewModel.SetOverlayReady();
                 return;
             }

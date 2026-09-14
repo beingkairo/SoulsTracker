@@ -10,21 +10,18 @@ int port = FindAvailablePort();
 OverlayConfiguration configuration = new(
     OverlayConfiguration.CurrentSchemaVersion,
     new OverlayEndpointConfiguration(port, OverlayAccessToken.Parse(Token)),
-    new TotalDeathsOverlayOptions(isEnabled: true, showGameName: false),
-    new BossListOverlayOptions(isEnabled: true, BossListVisibilityMode.Defeated));
+    new TotalDeathsOverlayOptions(isEnabled: true, showGameName: false));
 PersistentTrackerState state = publishManualIncrement
     ? new(
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.DemonsSouls,
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-        BossProgress.Empty,
         configuration,
         manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls))
     : new(
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.DemonsSouls,
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-        BossProgress.Empty.MarkDefeated(GameId.DemonsSouls, GameCatalog.GetRequired(GameId.DemonsSouls).BossCatalog[0].Id),
         configuration,
         manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, initialValue: 6));
 var publisher = new OverlayStateChangePublisher();
@@ -32,7 +29,7 @@ await using var coordinator = new SerializedTrackerCoordinator(new MemoryReposit
 await using var service = new SecureOverlayService(coordinator, new EndpointAccessFactory());
 publisher.Attach(service);
 await service.StartAsync();
-Console.WriteLine($"READY {service.TotalDeathsUrl} {service.BossListUrl}");
+Console.WriteLine($"READY {service.TotalDeathsUrl}");
 if (publishManualIncrement)
 {
     _ = PublishManualIncrementAsync(coordinator);
