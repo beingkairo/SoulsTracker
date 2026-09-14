@@ -35,21 +35,32 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     public bool IsCurrentWukongSelection(long version) => version == Interlocked.Read(ref wukongSelectionVersion);
     public void InvalidateWukongSelections() => Interlocked.Increment(ref wukongSelectionVersion);
 
-    public static bool IsValidLiesOfPSave(string localPath) =>
-        LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) &&
-        LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
+    public bool IsValidLiesOfPSave(string localPath)
+    {
+        _ = coordinator;
+        return LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) && LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
+    }
 
-    public static bool ValidateLiesOfPSelection(string localPath) =>
+    public bool ValidateLiesOfPSelection(string localPath) =>
         IsValidLiesOfPSave(localPath);
 
-    public static IReadOnlyList<DiscoveredLocalSave> DiscoverWukongSelection(string localPath) =>
-        BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(localPath);
+    public IReadOnlyList<DiscoveredLocalSave> DiscoverWukongSelection(string localPath)
+    {
+        _ = coordinator;
+        return BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(localPath);
+    }
 
-    public static IReadOnlyList<DiscoveredLocalSave> DiscoverLiesOfPSelection(string localPath) =>
-        LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath);
+    public IReadOnlyList<DiscoveredLocalSave> DiscoverLiesOfPSelection(string localPath)
+    {
+        _ = coordinator;
+        return LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath);
+    }
 
-    public static bool IsLiesOfPConfiguredSaveReadable(string localPath) =>
-        LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
+    public bool IsLiesOfPConfiguredSaveReadable(string localPath)
+    {
+        _ = coordinator;
+        return LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
+    }
 
     internal readonly record struct SaveDiscoveryResult(
         IReadOnlyList<DiscoveredLocalSave> Candidates,
