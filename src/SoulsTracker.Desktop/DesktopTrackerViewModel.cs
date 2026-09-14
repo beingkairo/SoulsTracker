@@ -97,6 +97,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly object blackMythWukongSaveChoicesSynchronization = new();
     private readonly object liesOfPSaveChoicesSynchronization = new();
     private long blackMythWukongDiscoveryVersion;
+    private long liesOfPSelectionVersion;
     private LocalSaveSourceState wukongSaveSourceState;
     private bool isBlackMythWukongChangeMode;
     private string? blackMythWukongSaveDiscoveryStatus;
@@ -876,10 +877,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
             return;
         }
+        long selectionVersion = Interlocked.Increment(ref liesOfPSelectionVersion);
         IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
             () => LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath),
             cancellationToken);
+        if (selectionVersion != Interlocked.Read(ref liesOfPSelectionVersion)) return;
         await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken);
+        if (selectionVersion != Interlocked.Read(ref liesOfPSelectionVersion)) return;
         if (!IsLiesOfPSelected || !PathsEqual(localPath, state?.LiesOfPSave.LocalPath)) return;
         LiesOfPSaveChoices.Clear();
         foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
@@ -893,7 +897,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task SelectLiesOfPSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || choice is null || !LiesOfPSaveChoices.Contains(choice)) return;
+        long selectionVersion = Interlocked.Increment(ref liesOfPSelectionVersion);
         await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(choice.LocalPath), cancellationToken);
+        if (selectionVersion != Interlocked.Read(ref liesOfPSelectionVersion)) return;
         if (!IsLiesOfPSelected || !PathsEqual(choice.LocalPath, state?.LiesOfPSave.LocalPath)) return;
         SelectedLiesOfPSaveChoice = choice;
         IsLiesOfPChangeMode = false;
@@ -905,6 +911,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task RescanLiesOfPSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsLiesOfPSelected) return;
+        long selectionVersion = Interlocked.Increment(ref liesOfPSelectionVersion);
         LiesOfPSaveSourceState = LocalSaveSourceState.Scanning;
         SetLiesOfPSaveDiscoveryStatus("Looking for local saves…");
         IReadOnlyList<DiscoveredLocalSave> candidates;
@@ -920,7 +927,8 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
         catch { SetLiesOfPSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…"); LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate; return; }
-        if (!IsLiesOfPSelected) return;
+ if (selectionVersion != Interlocked.Read(ref liesOfPSelectionVersion)) return;
+ if (!IsLiesOfPSelected) return;
 
         LiesOfPSaveChoices.Clear();
         foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
@@ -939,6 +947,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         else if (configured is null && candidates.Count == 1)
         {
             await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(candidates[0].LocalPath), cancellationToken);
+            if (selectionVersion != Interlocked.Read(ref liesOfPSelectionVersion)) return;
             if (!IsLiesOfPSelected || !PathsEqual(candidates[0].LocalPath, state?.LiesOfPSave.LocalPath)) return;
             SelectedLiesOfPSaveChoice = candidates[0];
             LiesOfPSaveSourceState = LocalSaveSourceState.AutomaticallySelected;
