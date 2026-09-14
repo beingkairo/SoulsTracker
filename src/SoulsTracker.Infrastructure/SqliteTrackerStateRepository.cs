@@ -42,7 +42,8 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
             bool exists = File.Exists(path);
             await using SqliteConnection connection = Open();
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await ExecuteAsync(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA integrity_check;", cancellationToken).ConfigureAwait(false);
+            await ExecuteAsync(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;", cancellationToken).ConfigureAwait(false);
+            await ValidateIntegrityAsync(connection, cancellationToken).ConfigureAwait(false);
             await ExecuteAsync(connection, TableSql, cancellationToken).ConfigureAwait(false);
             await using SqliteCommand command = connection.CreateCommand(); command.CommandText = "SELECT schema_version, payload, token FROM tracker_state WHERE id=1";
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -149,6 +150,16 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         return new CurrentUserDpapiSecretProtector();
     }
     private static async Task ExecuteAsync(SqliteConnection c, string sql, CancellationToken ct) { await using SqliteCommand command = c.CreateCommand(); command.CommandText = sql; await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
+    private static async Task ValidateIntegrityAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "PRAGMA integrity_check;";
+        object? result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (result is not string integrityResult || !string.Equals(integrityResult, "ok", StringComparison.Ordinal))
+        {
+            throw new SqliteException("SQLite integrity check failed.", 11);
+        }
+    }
     private static async Task ExecuteAsync(SqliteConnection c, string sql, SqliteTransaction transaction, CancellationToken ct) { await using SqliteCommand command = c.CreateCommand(); command.Transaction = transaction; command.CommandText = sql; await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
     private async Task<PersistentTrackerState> ReadStoredStateAsync(SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
     {
