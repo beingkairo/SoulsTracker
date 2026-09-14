@@ -27,6 +27,43 @@ public sealed class RuntimeSourcePublicationTests
         await AssertConsumersAsync(state, read, null);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DelayedCompletionFromPreviousSaveIsRejectedAfterSelectionChanges(bool lies)
+    {
+        PersistentTrackerState oldState = State(lies, "old");
+        PersistentTrackerState newState = State(lies, "new");
+        RuntimeGameReadResult delayed = RuntimeGameReadResult.Synced(new RuntimeGameObservation(
+            oldState.SelectedGameId, 91, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(oldState)));
+
+        RuntimeGameReadResult? publication = Normalize(newState, delayed);
+
+        Assert.Null(publication);
+        await AssertConsumersAsync(newState, publication, null);
+    }
+
+    [Fact]
+    public async Task StaleCompletionCannotOverwriteNewerCurrentSourceResult()
+    {
+        PersistentTrackerState oldState = State(false, "old");
+        PersistentTrackerState currentState = State(false, "new");
+        RuntimeGameReadResult current = RuntimeGameReadResult.Synced(new RuntimeGameObservation(
+            currentState.SelectedGameId, 12, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(currentState)));
+        RuntimeGameReadResult delayedOld = RuntimeGameReadResult.Synced(new RuntimeGameObservation(
+            oldState.SelectedGameId, 91, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(oldState)));
+
+        RuntimeGameReadResult? published = Normalize(currentState, current);
+        RuntimeGameReadResult? stale = Normalize(currentState, delayedOld);
+
+        Assert.NotNull(published);
+        Assert.Null(stale);
+        await AssertConsumersAsync(currentState, published, 12);
+    }
+
     private static RuntimeGameReadResult? Normalize(PersistentTrackerState state, RuntimeGameReadResult? read) =>
         App.NormalizeRuntimePublication(state, read);
 
