@@ -56,11 +56,6 @@ sealed class MemoryRepository(PersistentTrackerState state) : ITrackerStateRepos
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
-sealed class NullPublisher : ITrackerStateChangePublisher
-{
-    public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default) => Task.CompletedTask;
-}
-
 sealed class EndpointAccessFactory : IOverlayEndpointAccessFactory
 {
     public IOverlayEndpointAccess Create(int port) => new EndpointAccess(port);
