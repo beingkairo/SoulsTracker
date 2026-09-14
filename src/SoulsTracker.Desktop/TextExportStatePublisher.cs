@@ -1,5 +1,6 @@
 using System.Text;
 using System.IO;
+using System.Threading.Channels;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -7,13 +8,17 @@ using SoulsTracker.Infrastructure;
 namespace SoulsTracker.Desktop;
 
 /// <summary>Best-effort local OBS Text-source writer; tracker commits never wait for file I/O.</summary>
-internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
+internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, IAsyncDisposable
 {
     private RuntimeGameObservation? runtimeObservation;
+    private readonly Channel<(PersistentTrackerState State, long? Total)> writes = Channel.CreateUnbounded<(PersistentTrackerState, long?)>();
+    private readonly Task worker;
+
+    internal TextExportStatePublisher() => worker = ProcessWritesAsync();
 
     internal event EventHandler<bool>? WriteCompleted;
 
-    public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
+    public async Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
     {
         if (notification.CommandType is TrackerCommandType.UpdateEldenRingSaveConfiguration or TrackerCommandType.UpdateLiesOfPSaveConfiguration)
         {
@@ -22,17 +27,16 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
         RuntimeGameObservation? observation = RuntimeObservationFor(notification.State, Volatile.Read(ref runtimeObservation));
         if (observation is null) Volatile.Write(ref runtimeObservation, null);
         long? displayedTotal = TotalDeathsDisplayProjection.Combine(notification.State, observation);
-        QueueWrite(notification.State, displayedTotal);
-        return Task.CompletedTask;
+        await QueueWrite(notification.State, displayedTotal).ConfigureAwait(false);
     }
 
-    internal void PublishRuntimeObservation(PersistentTrackerState state, RuntimeGameReadResult? result)
+    internal async void PublishRuntimeObservation(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
         RuntimeGameObservation? observation = result is { Observation: { } candidate }
             ? RuntimeObservationFor(state, candidate)
             : null;
         Volatile.Write(ref runtimeObservation, observation);
-        QueueWrite(state, TotalDeathsDisplayProjection.Combine(state, observation));
+        await QueueWrite(state, TotalDeathsDisplayProjection.Combine(state, observation)).ConfigureAwait(false);
     }
 
     private static RuntimeGameObservation? RuntimeObservationFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
@@ -42,8 +46,23 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher
             ? observation
             : null;
 
-    private void QueueWrite(PersistentTrackerState state, long? displayedTotal) =>
-        _ = Task.Run(async () => WriteCompleted?.Invoke(this, await WriteAsync(state, displayedTotal).ConfigureAwait(false)), CancellationToken.None);
+    private ValueTask QueueWrite(PersistentTrackerState state, long? displayedTotal) => writes.Writer.WriteAsync((state, displayedTotal));
+
+    private async Task ProcessWritesAsync()
+    {
+        await foreach (var write in writes.Reader.ReadAllAsync().ConfigureAwait(false))
+        {
+            bool succeeded = await WriteAsync(write.State, write.Total).ConfigureAwait(false);
+            WriteCompleted?.Invoke(this, succeeded);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        writes.Writer.TryComplete();
+        await worker.ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
 
     internal static Task<bool> WriteAsync(PersistentTrackerState state) => WriteAsync(state, displayedTotal: null);
 

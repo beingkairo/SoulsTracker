@@ -291,6 +291,11 @@ public partial class App : System.Windows.Application, IDisposable
         Task? pollingTask = runtimeReaderPollingTask;
         try
         {
+            if (textExportPublisher is not null)
+            {
+                await textExportPublisher.DisposeAsync().ConfigureAwait(false);
+                textExportPublisher = null;
+            }
             // Polling observes this token both while reading and during its normal
             // interval delay. Awaiting the owned task prevents a read from racing
             // the coordinator/repository disposal that follows.
