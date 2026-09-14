@@ -6,7 +6,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:domain="clr-namespace:SoulsTracker.Domain;assembly=SoulsTracker.Domain"
         xmlns:local="clr-namespace:SoulsTracker.Desktop"
-        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+
         Title="SoulsTracker"
         Icon="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull-compact.ico"
         Width="1060"
@@ -521,7 +521,7 @@
                         <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Overlay appearance panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="APPEARANCE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Preview and OBS URLs use applied settings. Draft edits stay local until Apply." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="OBS URLs use applied settings. Draft edits stay local until Apply." />
                                 <TabControl x:Name="OverlayTypeTabs" SelectionChanged="OverlayTypeTabs_SelectionChanged">
                                     <TabItem Header="Total Deaths">
                                         <StackPanel Margin="12">
@@ -563,15 +563,7 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-                    <Border Grid.Column="2" Style="{StaticResource Panel}" Background="#15171B" AutomationProperties.Name="Live overlay preview panel">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource PanelTitle}" Text="LIVE PREVIEW" />
-                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" Margin="0,6,0,10" Text="Applied renderer-backed scene" />
-                            <Border Background="#101217" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" ClipToBounds="True">
-                                <wv2:WebView2 x:Name="LiveOverlayPreview" DefaultBackgroundColor="#FF101217" AutomationProperties.Name="Live overlay preview" />
-                            </Border>
-                        </DockPanel>
-                    </Border>
+
                 </Grid>
             </TabItem>
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">

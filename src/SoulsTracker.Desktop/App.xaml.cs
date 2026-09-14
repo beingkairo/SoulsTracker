@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using System.Diagnostics;
+
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -154,8 +154,7 @@ public partial class App : System.Windows.Application, IDisposable
         {
             SecureOverlayService readyOverlay = overlayService ??
                 throw new InvalidOperationException("The overlay service is required for benchmark readiness.");
-            await window.PrepareLiveOverlayPreviewForBenchmarkAsync(new Uri(readyOverlay.TotalDeathsUrl));
-            await WaitForOverlayPreviewConnectionAsync(readyOverlay);
+
             await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ContextIdle);
             await PackagedBenchmarkReadinessReporter.ReportAsync(
                 readinessPipeName,
@@ -164,22 +163,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
     }
 
-    private static async Task WaitForOverlayPreviewConnectionAsync(SecureOverlayService overlay)
-    {
-        long timeoutTimestamp = Stopwatch.GetTimestamp() +
-            (long)(TimeSpan.FromSeconds(10).TotalSeconds * Stopwatch.Frequency);
-        while (Stopwatch.GetTimestamp() < timeoutTimestamp)
-        {
-            if (overlay.ActiveWebSocketConnectionCount > 0)
-            {
-                return;
-            }
 
-            await Task.Delay(25);
-        }
-
-        throw new TimeoutException("The embedded overlay preview did not connect.");
-    }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
@@ -190,10 +174,6 @@ public partial class App : System.Windows.Application, IDisposable
 
         e.Cancel = true;
         mainWindowCloseRequested = true;
-        if (sender is MainWindow window)
-        {
-            window.DisposeLiveOverlayPreview();
-        }
         await shutdownCoordinator.RequestApplicationShutdownAsync(Shutdown);
     }
 

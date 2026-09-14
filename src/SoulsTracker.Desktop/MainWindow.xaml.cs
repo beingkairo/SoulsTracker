@@ -6,6 +6,7 @@ using System.Windows.Navigation;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+
 using Microsoft.Win32;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -23,85 +24,19 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Loaded += (_, _) => RefreshPreviews();
     }
-    private DesktopTrackerViewModel? previewViewModel;
 
     private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (previewViewModel is not null) previewViewModel.PropertyChanged -= PreviewViewModel_PropertyChanged;
-        previewViewModel = e.NewValue as DesktopTrackerViewModel;
-        if (previewViewModel is not null) previewViewModel.PropertyChanged += PreviewViewModel_PropertyChanged;
-        RefreshPreviews();
-    }
-
-    private void PreviewViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(DesktopTrackerViewModel.TotalDeathsPreviewUri)) RefreshPreviews();
-        if (e.PropertyName == nameof(DesktopTrackerViewModel.IsEldenRingNoticeVisible))
+        if (e.NewValue is DesktopTrackerViewModel vm && vm.IsEldenRingNoticeVisible)
         {
             Dispatcher.BeginInvoke(() =>
-            {
-                if (previewViewModel?.IsEldenRingNoticeVisible == true) FocusEldenRingNoticePrimaryAction();
-                else RestoreGameSelectorFocus();
-            });
+                FocusEldenRingNoticePrimaryAction());
         }
-    }
-
-    private void RefreshPreviews()
-    {
-        if (previewViewModel is null || !IsLoaded) return;
-        LiveOverlayPreview.Source = previewViewModel.TotalDeathsPreviewUri;
     }
 
     private void OverlayTypeTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.OriginalSource == OverlayTypeTabs) RefreshPreviews();
-    }
-
-    internal void DisposeLiveOverlayPreview()
-    {
-        if (previewViewModel is not null)
-        {
-            previewViewModel.PropertyChanged -= PreviewViewModel_PropertyChanged;
-            previewViewModel = null;
-        }
-
-        try
-        {
-            LiveOverlayPreview.Source = null;
-            LiveOverlayPreview.Dispose();
-        }
-        catch
-        {
-            // Window shutdown must continue even when the embedded browser has already stopped.
-        }
-    }
-
-    internal async Task PrepareLiveOverlayPreviewForBenchmarkAsync(Uri source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-
-        WorkspaceTabs.SelectedItem = OverlayWorkspaceTab;
-        await LiveOverlayPreview.EnsureCoreWebView2Async();
-        LiveOverlayPreview.Source = source;
-
-        long timeoutTimestamp = Stopwatch.GetTimestamp() +
-            (long)(TimeSpan.FromSeconds(10).TotalSeconds * Stopwatch.Frequency);
-        while (Stopwatch.GetTimestamp() < timeoutTimestamp)
-        {
-            string isReady = await LiveOverlayPreview.CoreWebView2.ExecuteScriptAsync(
-                "document.readyState === 'complete' && " +
-                "document.getElementById('souls-tracker-overlay') !== null");
-            if (string.Equals(isReady, "true", StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            await Task.Delay(25);
-        }
-
-        throw new TimeoutException("The embedded overlay preview did not become ready.");
     }
 
     private async void GameSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)

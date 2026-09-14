@@ -441,7 +441,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string EldenRingSavedDeathsText => runtimeObservation?.GameId == GameId.EldenRing
         ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
         : "Unavailable";
-    public string? TotalDeathsOverlayUrl { get => totalDeathsOverlayUrl; private set { if (SetField(ref totalDeathsOverlayUrl, value)) { OnPropertyChanged(nameof(TotalDeathsSceneUrl)); OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay)); OnPropertyChanged(nameof(TotalDeathsPreviewUri)); } } }
+    public string? TotalDeathsOverlayUrl { get => totalDeathsOverlayUrl; private set { if (SetField(ref totalDeathsOverlayUrl, value)) { OnPropertyChanged(nameof(TotalDeathsSceneUrl)); OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay)); } } }
 
     /// <summary>Each generated URL contains only its own bounded, applied presentation values.</summary>
     public string? TotalDeathsSceneUrl => AppendStyleQuery(TotalDeathsOverlayUrl, totalDeaths: true);
@@ -450,7 +450,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? TotalDeathsSceneUrlDisplay => ShortenUrlForDisplay(TotalDeathsSceneUrl);
     /// <summary>Safe, compact presentation of a canonical URL. Copy always uses the full URL.</summary>
 
-    public Uri? TotalDeathsPreviewUri => Uri.TryCreate(TotalDeathsSceneUrl, UriKind.Absolute, out Uri? uri) ? uri : null;
+
 
     public string? GlobalHotkeyStatus { get => globalHotkeyStatus; private set => SetField(ref globalHotkeyStatus, value); }
     public string PendingIncrementHotkey { get => pendingIncrementHotkey; set => SetField(ref pendingIncrementHotkey, value); }
@@ -1351,7 +1351,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         NotifyLiesOfPSaveSourceProperties();
         OnPropertyChanged(nameof(TotalDeathsSceneUrl));
         OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay));
-        OnPropertyChanged(nameof(TotalDeathsPreviewUri));
+
     }
 
     private void UpdateTotalDeathsText()
