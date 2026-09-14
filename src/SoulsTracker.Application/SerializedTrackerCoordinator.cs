@@ -10,6 +10,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
     private readonly IConfirmedLegacyImportCommitter? confirmedImportCommitter;
     private readonly Channel<CoordinatorRequest> requests = Channel.CreateUnbounded<CoordinatorRequest>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Task processor;
+    private readonly SemaphoreSlim mutationGate = new(1, 1);
     private PersistentTrackerState? committedState;
     private bool initialized;
 
@@ -32,10 +33,15 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
 
     public async Task<TrackerStateLoadResult> InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (initialized) return TrackerStateLoadResult.Loaded(committedState!);
-        TrackerStateLoadResult result = await repository.LoadAsync(cancellationToken).ConfigureAwait(false);
-        if (result.IsSuccess) { committedState = result.State; initialized = true; }
-        return result;
+        await mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (initialized) return TrackerStateLoadResult.Loaded(committedState!);
+            TrackerStateLoadResult result = await repository.LoadAsync(cancellationToken).ConfigureAwait(false);
+            if (result.IsSuccess) { committedState = result.State; initialized = true; }
+            return result;
+        }
+        finally { mutationGate.Release(); }
     }
 
     public Task<TrackerCommandExecutionResult> SubmitAsync(ITrackerCommand command, CancellationToken cancellationToken = default)
@@ -87,6 +93,9 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
     {
         await foreach (CoordinatorRequest request in requests.Reader.ReadAllAsync().ConfigureAwait(false))
         {
+            await mutationGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
             if (!initialized) { request.RejectNotInitialized(); continue; }
             if (request is EndpointRequest endpointRequest)
             {
@@ -167,7 +176,9 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                 catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.DeliveryFailed, committedState, "The tracker state was saved, but the update could not be delivered.")); }
             }
             catch (Exception ex) { commandRequest.Completion.TrySetException(ex); }
-        }
+            }
+            finally { mutationGate.Release(); }
+            }
     }
 
     private async Task ProcessLegacyImportAsync(LegacyImportRequest request)
