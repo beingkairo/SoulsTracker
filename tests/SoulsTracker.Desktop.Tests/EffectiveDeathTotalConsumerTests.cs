@@ -47,12 +47,35 @@ public sealed class EffectiveDeathTotalConsumerTests
         await using (var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher()))
         {
             await coordinator.InitializeAsync();
+            await coordinator.SubmitAsync(new SelectGameCommand(GameId.Bloodborne));
             await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
             await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
             await coordinator.SubmitAsync(new DecrementManualBloodborneDeathsCommand());
         }
 
-        Assert.Equal(1, repository.State.ManualDemonsSoulsDeathCounter.Value);
+        Assert.Equal(GameId.Bloodborne, repository.State.SelectedGameId);
+        Assert.Equal(1, repository.State.ManualBloodborneDeathCounter.Value);
+        await using var reloaded = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        TrackerStateLoadResult load = await reloaded.InitializeAsync();
+        Assert.True(load.IsSuccess);
+        Assert.Equal(1, load.State!.GetManualDeathCounter(GameId.Bloodborne).Value);
+    }
+
+    [Fact]
+    public async Task DesktopViewModelDisplaysTheSelectedManualEffectiveTotal()
+    {
+        var repository = new MemoryRepository();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var tracker = new DesktopTrackerViewModel(coordinator);
+
+        await tracker.InitializeAsync();
+        await tracker.SelectGameAsync(tracker.GameChoices.Single(choice => choice.GameId == GameId.DemonsSouls));
+        await tracker.IncrementManualDeathsAsync();
+
+        Assert.Equal(GameId.DemonsSouls, tracker.SelectedGame!.GameId);
+        Assert.Equal(1, tracker.ManualDeaths);
+        Assert.Equal("1", tracker.TotalDeathsText);
+        Assert.True(tracker.IsTotalDeathsValueNumeric);
     }
 
     private sealed class NullPublisher : ITrackerStateChangePublisher
