@@ -96,7 +96,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly object eldenRingSaveChoicesSynchronization = new();
     private readonly object blackMythWukongSaveChoicesSynchronization = new();
     private readonly object liesOfPSaveChoicesSynchronization = new();
-    private long blackMythWukongDiscoveryVersion;
     private long liesOfPSelectionVersion;
     private LocalSaveSourceState wukongSaveSourceState;
     private bool isBlackMythWukongChangeMode;
@@ -741,7 +740,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (!IsBlackMythWukongSelected) return;
         long selectionVersion = BeginWukongSelectionOperation();
-        long version = Interlocked.Increment(ref blackMythWukongDiscoveryVersion);
+        long version = saveGameConfigurationWorkflow.BeginWukongDiscovery();
         LocalSaveSourceState stableState = WukongSaveSourceState;
         bool stableChangeMode = IsBlackMythWukongChangeMode;
         string? stableStatus = BlackMythWukongSaveDiscoveryStatus;
@@ -760,7 +759,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            if (version == Interlocked.Read(ref blackMythWukongDiscoveryVersion) &&
+            if (saveGameConfigurationWorkflow.IsCurrentWukongDiscovery(version) &&
                 IsCurrentWukongSelectionOperation(selectionVersion))
             {
                 SetBlackMythWukongSaveDiscoveryStatus(stableStatus);
@@ -772,7 +771,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         catch
         {
-            if (version == Interlocked.Read(ref blackMythWukongDiscoveryVersion) &&
+            if (saveGameConfigurationWorkflow.IsCurrentWukongDiscovery(version) &&
                 IsCurrentWukongSelectionOperation(selectionVersion))
             {
                 WukongSaveSourceState = stableState;
@@ -782,7 +781,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             }
             return;
         }
-        if (version != Interlocked.Read(ref blackMythWukongDiscoveryVersion) ||
+        if (!saveGameConfigurationWorkflow.IsCurrentWukongDiscovery(version) ||
             !IsCurrentWukongSelectionOperation(selectionVersion)) return;
         BlackMythWukongSaveChoices.Clear();
         foreach (DiscoveredLocalSave candidate in candidates) BlackMythWukongSaveChoices.Add(candidate);
@@ -826,7 +825,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             metadataVersion = BeginWukongMetadataRead();
             metadataReadPath = configured;
             WukongSaveMetadataReadResult read = await readWukongSaveMetadataAsync(configured, cancellationToken);
-            if (version != Interlocked.Read(ref blackMythWukongDiscoveryVersion) ||
+            if (!saveGameConfigurationWorkflow.IsCurrentWukongDiscovery(version) ||
                 !IsCurrentWukongSelectionOperation(selectionVersion, configured)) return;
             if (read.IsValid)
             {
@@ -854,7 +853,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             refreshedMetadata = read.IsValid ? read.Metadata : null;
             metadataWasRead = true;
         }
-        if (version != Interlocked.Read(ref blackMythWukongDiscoveryVersion) ||
+        if (!saveGameConfigurationWorkflow.IsCurrentWukongDiscovery(version) ||
             !IsCurrentWukongSelectionOperation(selectionVersion)) return;
         if (metadataWasRead)
         {

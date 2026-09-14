@@ -8,6 +8,25 @@ namespace SoulsTracker.Desktop;
 /// <summary>Owns persistence of game-specific save configuration changes.</summary>
 internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator coordinator)
 {
+    private long operationVersion;
+    private long wukongDiscoveryVersion;
+    private long liesSelectionVersion;
+
+    // Versioning belongs to the configuration workflow because discovery and
+    // selection are configuration operations, even though their results are
+    // projected by the view model.
+    public long BeginOperation() => Interlocked.Increment(ref operationVersion);
+
+    public bool IsCurrentOperation(long version) =>
+        version == Interlocked.Read(ref operationVersion);
+
+    public void InvalidateOperations() => Interlocked.Increment(ref operationVersion);
+
+    public long BeginWukongDiscovery() => Interlocked.Increment(ref wukongDiscoveryVersion);
+    public bool IsCurrentWukongDiscovery(long version) => version == Interlocked.Read(ref wukongDiscoveryVersion);
+    public long BeginLiesSelection() => Interlocked.Increment(ref liesSelectionVersion);
+    public bool IsCurrentLiesSelection(long version) => version == Interlocked.Read(ref liesSelectionVersion);
+
     internal readonly record struct SaveDiscoveryResult(
         IReadOnlyList<DiscoveredLocalSave> Candidates,
         string? ConfiguredPath,
