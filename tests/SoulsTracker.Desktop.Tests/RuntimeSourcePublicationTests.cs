@@ -64,6 +64,20 @@ public sealed class RuntimeSourcePublicationTests
         await AssertConsumersAsync(currentState, published, 12);
     }
 
+    [Fact]
+    public async Task CachedResultRetainsConfirmedConsumerPublication()
+    {
+        PersistentTrackerState state = State(false, "cached");
+        RuntimeGameObservation confirmed = new(state.SelectedGameId, 12, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(state));
+        RuntimeGameReadResult cached = RuntimeGameReadResult.Cached(
+            RuntimeGameReadResult.Synced(confirmed));
+
+        RuntimeGameReadResult? publication = Normalize(state, cached);
+        Assert.Equal(RuntimeGameReaderStatus.Cached, publication?.Status);
+        await AssertConsumersAsync(state, publication, 12);
+    }
+
     private static RuntimeGameReadResult? Normalize(PersistentTrackerState state, RuntimeGameReadResult? read) =>
         App.NormalizeRuntimePublication(state, read);
 
@@ -79,10 +93,15 @@ public sealed class RuntimeSourcePublicationTests
         await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(state), new NullPublisher());
         var tracker = new DesktopTrackerViewModel(coordinator);
         await tracker.InitializeAsync();
+        if (publication?.Status is RuntimeGameReaderStatus.Cached)
+        {
+            tracker.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(publication.Observation!));
+        }
         tracker.ApplyRuntimeReaderResult(publication);
         Assert.Equal(expected.HasValue, tracker.IsTotalDeathsValueNumeric);
         if (expected.HasValue) Assert.Equal(expected.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), tracker.TotalDeathsText);
-        Assert.Equal(expected, OverlaySnapshotFactory.Create(state, publication?.Observation, 1).TotalDeaths.Value);
+        RuntimeGameObservation? consumerObservation = publication?.Status is RuntimeGameReaderStatus.Cached ? null : publication?.Observation;
+        Assert.Equal(publication?.Status is RuntimeGameReaderStatus.Cached ? null : expected, OverlaySnapshotFactory.Create(state, consumerObservation, 1).TotalDeaths.Value);
 
         string export = Path.Combine(Path.GetTempPath(), $"souls-source-{Guid.NewGuid():N}.txt");
         try
@@ -96,7 +115,7 @@ public sealed class RuntimeSourcePublicationTests
             {
                 publisher.PublishRuntimeObservation(exportState, publication);
             }
-            Assert.Equal(expected.HasValue ? $"Total Deaths: {expected.Value}" : string.Empty, await File.ReadAllTextAsync(export));
+            Assert.Equal(publication?.Status is RuntimeGameReaderStatus.Cached ? "Total Deaths: 42" : expected.HasValue ? $"Total Deaths: {expected.Value}" : string.Empty, await File.ReadAllTextAsync(export));
         }
         finally { File.Delete(export); }
     }

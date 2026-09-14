@@ -514,7 +514,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         {
             runtimeReaderStatus = result.Status;
             runtimeReaderHasNoRecordedDeaths = result.HasNoRecordedDeaths;
-            runtimeObservation = result.Observation;
+            if (result.Status is not RuntimeGameReaderStatus.Cached)
+            {
+                runtimeObservation = result.Observation;
+            }
             SetBlackMythWukongSaveMetadata(
                 result.GameId == GameId.BlackMythWukong &&
                 result.Status == RuntimeGameReaderStatus.Synced &&

@@ -32,6 +32,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
 
     internal async void PublishRuntimeObservation(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
+        if (result?.Status is RuntimeGameReaderStatus.Cached) return;
         RuntimeGameObservation? observation = result is { Observation: { } candidate }
             ? RuntimeObservationFor(state, candidate)
             : null;

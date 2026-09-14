@@ -349,8 +349,11 @@ public partial class App : System.Windows.Application, IDisposable
                     PersistentTrackerState currentState = viewModel.CurrentState!;
                     RuntimeGameReadResult? publication = NormalizeRuntimePublication(currentState, result);
                     viewModel.ApplyRuntimeReaderResult(publication);
-                    textExportPublisher?.PublishRuntimeObservation(currentState, publication);
-                    overlayService?.PublishRuntimeObservation(publication?.Observation);
+                    if (publication?.Status is not RuntimeGameReaderStatus.Cached)
+                    {
+                        textExportPublisher?.PublishRuntimeObservation(currentState, publication);
+                        overlayService?.PublishRuntimeObservation(publication?.Observation);
+                    }
                 });
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
             }
