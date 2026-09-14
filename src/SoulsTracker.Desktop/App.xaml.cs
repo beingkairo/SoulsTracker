@@ -346,13 +346,11 @@ public partial class App : System.Windows.Application, IDisposable
                     .ConfigureAwait(false);
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    viewModel.ApplyRuntimeReaderResult(result);
-                    if (viewModel.CurrentState is { } currentState)
-                    {
-                        textExportPublisher?.PublishRuntimeObservation(currentState, result);
-
-                    }
-                    overlayService?.PublishRuntimeObservation(result?.Observation);
+                    PersistentTrackerState currentState = viewModel.CurrentState!;
+                    RuntimeGameReadResult? publication = NormalizeRuntimePublication(currentState, result);
+                    viewModel.ApplyRuntimeReaderResult(publication);
+                    textExportPublisher?.PublishRuntimeObservation(currentState, publication);
+                    overlayService?.PublishRuntimeObservation(publication?.Observation);
                 });
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
             }
@@ -360,6 +358,15 @@ public partial class App : System.Windows.Application, IDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+    }
+
+    private static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
+    {
+        if (result is null || result.GameId != state.SelectedGameId) return null;
+        if (state.SelectedGameId == GameId.BlackMythWukong &&
+            !string.Equals(result.BlackMythWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase)) return null;
+        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
+        return result;
     }
 
     /// <summary>
