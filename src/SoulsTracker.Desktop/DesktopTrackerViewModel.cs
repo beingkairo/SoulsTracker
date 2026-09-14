@@ -699,7 +699,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return;
         }
         IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
-            () => BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(localPath),
+            () => SaveGameConfigurationWorkflow.DiscoverWukongSelection(localPath),
             cancellationToken);
         if (!IsCurrentWukongSelectionOperation(selectionVersion)) return;
         await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
@@ -869,14 +869,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     public async Task SetLiesOfPSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
-        if (!ControlsEnabled || !SaveGameConfigurationWorkflow.IsValidLiesOfPSave(localPath))
+        if (!ControlsEnabled || !SaveGameConfigurationWorkflow.ValidateLiesOfPSelection(localPath))
         {
             SetLiesOfPSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
             return;
         }
         long selectionVersion = saveGameConfigurationWorkflow.BeginLiesSelection();
         IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
-            () => LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath),
+            () => SaveGameConfigurationWorkflow.DiscoverLiesOfPSelection(localPath),
             cancellationToken);
         if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
         await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken);
@@ -955,7 +955,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             LiesOfPSaveSourceState = LocalSaveSourceState.MultipleCandidates;
             SetLiesOfPSaveDiscoveryStatus("Choose the character you’re streaming.");
         }
-        else if (configured is not null && LiesOfPSaveDiscovery.IsRegularBoundedSave(configured!))
+        else if (configured is not null && SaveGameConfigurationWorkflow.IsLiesOfPConfiguredSaveReadable(configured!))
         {
             LiesOfPSaveSourceState = LocalSaveSourceState.CustomSelection;
             SetLiesOfPSaveDiscoveryStatus(CustomSaveTrackingStatus(configured));

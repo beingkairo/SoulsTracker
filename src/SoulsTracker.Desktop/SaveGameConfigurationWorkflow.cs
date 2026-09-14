@@ -35,6 +35,18 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
         LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) &&
         LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
 
+    public static bool ValidateLiesOfPSelection(string localPath) =>
+        IsValidLiesOfPSave(localPath);
+
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverWukongSelection(string localPath) =>
+        BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(localPath);
+
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverLiesOfPSelection(string localPath) =>
+        LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath);
+
+    public static bool IsLiesOfPConfiguredSaveReadable(string localPath) =>
+        LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
+
     internal readonly record struct SaveDiscoveryResult(
         IReadOnlyList<DiscoveredLocalSave> Candidates,
         string? ConfiguredPath,
