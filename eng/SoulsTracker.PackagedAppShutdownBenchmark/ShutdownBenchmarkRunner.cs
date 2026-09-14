@@ -43,7 +43,7 @@ internal sealed class ShutdownBenchmarkRunner(BenchmarkOptions options)
         ShutdownSummary summary = ShutdownStatistics.Calculate(samples, budgets);
         var report = new ShutdownBenchmarkReport(
             SchemaVersion: 1,
-            Scenario: options.Scenario.ToString(),
+            Scenario: "shutdown",
             WarmupCount: options.WarmupCount,
             MeasuredCount: options.IterationCount,
             TimeoutMilliseconds: checked((int)options.HardTimeout.TotalMilliseconds),

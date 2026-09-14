@@ -1,9 +1,8 @@
 # Packaged shutdown benchmark
 
 This Windows-only benchmark measures the graceful close path of the
-self-contained desktop payload. Its primary scenario opens the embedded overlay
-preview, connects a second browser-style WebSocket client, closes the main
-window, and waits for the package process tree to exit.
+self-contained desktop payload. It launches the package, closes the main
+window, and waits for the process tree to exit.
 
 Build the verified self-contained payload:
 

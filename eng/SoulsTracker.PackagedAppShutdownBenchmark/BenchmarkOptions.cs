@@ -7,8 +7,7 @@ internal sealed record BenchmarkOptions(
     string OutputPath,
     int WarmupCount,
     int IterationCount,
-    TimeSpan HardTimeout,
-    BenchmarkScenario Scenario)
+    TimeSpan HardTimeout)
 {
     public const int DefaultWarmupCount = 1;
     public const int DefaultIterationCount = 10;
@@ -21,7 +20,7 @@ internal sealed record BenchmarkOptions(
         int warmupCount = DefaultWarmupCount;
         int iterationCount = DefaultIterationCount;
         int timeoutSeconds = DefaultTimeoutSeconds;
-        BenchmarkScenario scenario = BenchmarkScenario.PreviewAndObs;
+
 
         for (int index = 0; index < arguments.Count; index += 2)
         {
@@ -48,17 +47,6 @@ internal sealed record BenchmarkOptions(
                 case "--timeout-seconds":
                     timeoutSeconds = ParsePositiveInteger(value, "timeout");
                     break;
-                case "--scenario":
-                    if (!string.Equals(
-                        value,
-                        nameof(BenchmarkScenario.PreviewAndObs),
-                        StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new ArgumentException("The benchmark scenario is not supported.");
-                    }
-
-                    scenario = BenchmarkScenario.PreviewAndObs;
-                    break;
                 default:
                     throw new ArgumentException("An unknown benchmark option was supplied.");
             }
@@ -74,8 +62,7 @@ internal sealed record BenchmarkOptions(
             outputPath,
             warmupCount,
             iterationCount,
-            TimeSpan.FromSeconds(timeoutSeconds),
-            scenario);
+            TimeSpan.FromSeconds(timeoutSeconds));
     }
 
     private static string RequireAbsolutePath(string value, string name)
@@ -109,9 +96,4 @@ internal sealed record BenchmarkOptions(
 
         return result;
     }
-}
-
-internal enum BenchmarkScenario
-{
-    PreviewAndObs,
 }
