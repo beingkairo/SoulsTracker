@@ -161,8 +161,7 @@ public sealed class OverlayPresentationConfiguration
             configuration.TotalDeaths.ShowGameName,
             configuration.TotalDeaths.CompactTitle,
             configuration.TotalDeaths.TitleIconMode,
-            configuration.TotalDeaths.Appearance,
-            OverlayAppearance.Default);
+            configuration.TotalDeaths.Appearance);
     }
 
     /// <summary>
@@ -173,8 +172,7 @@ public sealed class OverlayPresentationConfiguration
         bool showGameName,
         bool totalDeathsCompactTitle = false,
         OverlayTitleIconMode totalDeathsTitleIconMode = OverlayTitleIconMode.Off,
-        OverlayAppearance? totalDeathsAppearance = null,
-        OverlayAppearance? bossListAppearance = null)
+        OverlayAppearance? totalDeathsAppearance = null)
     {
 
         IsTotalDeathsEnabled = isTotalDeathsEnabled;
@@ -191,8 +189,6 @@ public sealed class OverlayPresentationConfiguration
 
     /// <summary>Gets whether the selected game name is visible with Total Deaths.</summary>
     public bool ShowGameName { get; }
-
-    /// <summary>Gets whether the boss-list layout is visible.</summary>
 
     public bool TotalDeathsCompactTitle { get; }
     public OverlayTitleIconMode TotalDeathsTitleIconMode { get; }
@@ -213,7 +209,7 @@ public sealed class OverlaySnapshot
     /// <summary>
     /// Initializes a validated, read-only overlay snapshot.
     /// </summary>
-    /// <exception cref="ArgumentException">Thrown when the selected game, death display, timestamp, or boss entries conflict.</exception>
+    /// <exception cref="ArgumentException">Thrown when the selected game, death display, or timestamp conflicts.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the schema version or sequence number is unsupported.</exception>
     public OverlaySnapshot(
         int schemaVersion,
@@ -302,10 +298,6 @@ public sealed class OverlaySnapshot
     /// Gets the typed Total Deaths display value.
     /// </summary>
     public TotalDeathsDisplayValue TotalDeaths { get; }
-
-    /// <summary>
-    /// Gets the immutable ordered boss list.
-    /// </summary>
 
 
     /// <summary>

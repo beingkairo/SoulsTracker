@@ -119,14 +119,7 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="BossListOutlineSizeBox" TargetType="TextBox" BasedOn="{StaticResource OverlayAppearanceNumberBox}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding BossListAppearanceDraft.IsOutlineWidthInvalid}" Value="True">
-                    <Setter Property="BorderBrush" Value="#E06C75" />
-                    <Setter Property="ToolTip" Value="Outline size must be between 0 and 8 pixels." />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
+
         <Style x:Key="OverlayAppearanceRow" TargetType="Grid">
             <Setter Property="Margin" Value="0,0,0,6" />
         </Style>
@@ -321,7 +314,7 @@
                 <Image x:Name="SoulsTrackerSkullIcon" Width="38" Height="38" VerticalAlignment="Center" Source="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull-compact.png" AutomationProperties.Name="SoulsTracker skull application icon" />
                 <StackPanel Grid.Column="1" Margin="12,0,0,0">
                     <TextBlock FontSize="22" FontWeight="SemiBold" Text="SoulsTracker" />
-                    <TextBlock x:Name="HeaderSubtitleTextBlock" Style="{StaticResource MutedText}" Text="Death Tracker and Boss List" />
+                    <TextBlock x:Name="HeaderSubtitleTextBlock" Style="{StaticResource MutedText}" Text="Death Tracker" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -499,7 +492,7 @@
                             <StackPanel Margin="0,6,0,0" Visibility="{Binding ReviewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <TextBlock Style="{StaticResource MutedText}" Text="{Binding StatusMessage}" />
                                 <TextBlock Margin="0,4,0,0" Text="{Binding Review.SelectedGameLabel}" />
-                                <ItemsControl ItemsSource="{Binding Review.RecognizedBossNames}" />
+
                                 <StackPanel Margin="0,8,0,0" Orientation="Horizontal"><Button Width="110" Content="Cancel" Click="CancelLegacyImport_Click" AutomationProperties.Name="Cancel legacy import" /><Button Width="190" Margin="8,0,0,0" Content="Import reviewed settings" IsEnabled="{Binding CanImport}" IsDefault="False" Click="ImportReviewedSettings_Click" AutomationProperties.Name="Import reviewed settings" /></StackPanel>
                             </StackPanel>
                         </StackPanel>

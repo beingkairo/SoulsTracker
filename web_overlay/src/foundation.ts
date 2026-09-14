@@ -187,7 +187,7 @@ function panelFor(testId: string, appearance: OverlayAppearance): HTMLElement {
   panel.style.textShadow = textEffectsFor(appearance);
   // Text shadows do not paint bitmap pixels.  Supply a separately composed,
   // bounded drop-shadow filter only for the title skull so skull-only titles
-  // remain legible without applying effects to boss marker assets.
+  // remain legible without applying effects to icon assets.
   return panel;
 }
 

@@ -3,16 +3,6 @@ using System.Text.Json.Serialization;
 namespace SoulsTracker.Domain;
 
 /// <summary>
-/// Identifies the valid visibility filters for the boss-list overlay.
-/// </summary>
-public enum BossListVisibilityMode
-{
-    All,
-    Remaining,
-    Defeated,
-}
-
-/// <summary>
 /// Holds an opaque, validated overlay access token without exposing its value.
 /// </summary>
 public sealed class OverlayAccessToken : IEquatable<OverlayAccessToken>
@@ -180,70 +170,6 @@ public sealed class TotalDeathsOverlayOptions
     public bool CompactTitle { get; }
     public OverlayAppearance Appearance { get; }
     public OverlayTitleIconMode TitleIconMode { get; }
-}
-
-/// <summary>
-/// Configures the boss-list overlay presentation.
-/// </summary>
-public enum CenterMarkerAlignment { Left, Right }
-
-public sealed class BossListOverlayOptions
-{
-    /// <summary>
-    /// Gets the stable default boss-list options.
-    /// </summary>
-    // A new list must not imply a defeated treatment the streamer did not select.
-    public static BossListOverlayOptions Default { get; } = new(isEnabled: true, BossListVisibilityMode.All, OverlayAppearance.BossListDefault, "#8C8C96", DefeatedBossTreatment.Nothing, true, "#A78BFA", 25);
-
-    /// <summary>
-    /// Initializes immutable boss-list overlay options.
-    /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="visibilityMode"/> is not defined.</exception>
-    public BossListOverlayOptions(bool isEnabled, BossListVisibilityMode visibilityMode, OverlayAppearance? appearance = null, string defeatedColor = "#8C8C96", DefeatedBossTreatment defeatedTreatment = DefeatedBossTreatment.Nothing, bool showCheckmark = true, string checkmarkAccent = "#A78BFA", int maximumVisibleCount = 25, bool showDefeatedSkull = false, CenterMarkerAlignment centerMarkerAlignment = CenterMarkerAlignment.Left)
-    {
-        if (!Enum.IsDefined(visibilityMode))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(visibilityMode),
-                visibilityMode,
-                "The boss-list visibility mode is not supported.");
-        }
-
-        IsEnabled = isEnabled;
-        VisibilityMode = visibilityMode;
-        Appearance = appearance ?? OverlayAppearance.BossListDefault;
-        if (!Enum.IsDefined(defeatedTreatment) || maximumVisibleCount is < 1 or > 100 || !IsColor(defeatedColor) || !IsColor(checkmarkAccent)) throw new ArgumentOutOfRangeException(nameof(maximumVisibleCount));
-        DefeatedColor = defeatedColor;
-        DefeatedTreatment = defeatedTreatment == DefeatedBossTreatment.Hidden ? DefeatedBossTreatment.Nothing : defeatedTreatment;
-        // Centered lists intentionally have no marker column or inline marker.
-        // Normalize here as well as in the desktop draft so persisted state, direct
-        // command callers, and reloaded settings cannot reintroduce a center marker.
-        bool centered = Appearance.Alignment == OverlayTextAlignment.Center;
-        ShowCheckmark = !centered && showCheckmark;
-        CheckmarkAccent = checkmarkAccent;
-        MaximumVisibleCount = maximumVisibleCount;
-        ShowDefeatedSkull = !centered && showDefeatedSkull;
-        CenterMarkerAlignment = Enum.IsDefined(centerMarkerAlignment) ? centerMarkerAlignment : CenterMarkerAlignment.Left;
-    }
-
-    /// <summary>
-    /// Gets whether the overlay is enabled.
-    /// </summary>
-    public bool IsEnabled { get; }
-
-    /// <summary>
-    /// Gets the selected visibility filter.
-    /// </summary>
-    public BossListVisibilityMode VisibilityMode { get; }
-    public OverlayAppearance Appearance { get; }
-    public string DefeatedColor { get; }
-    public DefeatedBossTreatment DefeatedTreatment { get; }
-    public bool ShowCheckmark { get; }
-    public string CheckmarkAccent { get; }
-    public int MaximumVisibleCount { get; }
-    public bool ShowDefeatedSkull { get; }
-    public CenterMarkerAlignment CenterMarkerAlignment { get; }
-    private static bool IsColor(string? value) => value is { Length: 7 } && value[0] == '#' && value.Skip(1).All(Uri.IsHexDigit);
 }
 
 /// <summary>

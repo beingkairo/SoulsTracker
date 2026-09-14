@@ -70,8 +70,8 @@ public sealed class LegacyImportWorkflow
 
     private static LegacyImportReviewResult CreateReviewResult(LegacyImportCandidate candidate, LegacyImportPreflightReview result)
     {
-        if (result.Outcome != LegacyImportPreflightOutcome.Prepared) return new(result.Outcome, candidate.DisplayLabel, null, [], null, 0, false);
-        return new(result.Outcome, candidate.DisplayLabel, result.SelectedGameLabel, Array.Empty<string>(), null, result.WarningCount, true);
+        if (result.Outcome != LegacyImportPreflightOutcome.Prepared) return new(result.Outcome, candidate.DisplayLabel, null, 0, false);
+        return new(result.Outcome, candidate.DisplayLabel, result.SelectedGameLabel, result.WarningCount, true);
     }
 }
 
@@ -80,11 +80,9 @@ public sealed record LegacyImportReviewResult(
     LegacyImportPreflightOutcome Outcome,
     string? SourceLabel,
     string? SelectedGameLabel,
-    IReadOnlyList<string> RecognizedBossNames,
-    BossListVisibilityMode? BossListVisibilityMode,
     int WarningCount,
     bool BackupCreated)
 {
-    internal static LegacyImportReviewResult Unavailable() => new(LegacyImportPreflightOutcome.Unavailable, null, null, [], null, 0, false);
-    internal static LegacyImportReviewResult SelectionRequired() => new(LegacyImportPreflightOutcome.Unavailable, null, null, [], null, 0, false);
+    internal static LegacyImportReviewResult Unavailable() => new(LegacyImportPreflightOutcome.Unavailable, null, null, 0, false);
+    internal static LegacyImportReviewResult SelectionRequired() => new(LegacyImportPreflightOutcome.Unavailable, null, null, 0, false);
 }

@@ -80,7 +80,7 @@ public enum ConfirmedLegacyImportCommitOutcome
     InvalidCandidate,
     InvalidAuditMetadata,
     DestinationHasSelectedGame,
-    DestinationHasDefeatedBossProgress,
+
     DestinationHasManualBloodborneDeaths,
     StorageUnavailable,
 }

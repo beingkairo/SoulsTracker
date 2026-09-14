@@ -61,5 +61,5 @@ public sealed class LegacyImportReport(IEnumerable<LegacyAnalysisIssue> issues)
     public IReadOnlyList<LegacyAnalysisIssue> Issues { get; } = Array.AsReadOnly((issues ?? throw new ArgumentNullException(nameof(issues))).ToArray());
 }
 
-public enum LegacyAnalysisIssueCode { MalformedJson, UnsupportedRootValue, AmbiguousDeathCount, UnknownGame, UnknownBoss, UnknownField, InvalidValue, InvalidSelectedGame, InvalidBossListVisibilityMode, ExcludedAudioConfiguration }
+public enum LegacyAnalysisIssueCode { MalformedJson, UnsupportedRootValue, AmbiguousDeathCount, UnknownGame, UnknownField, InvalidValue, InvalidSelectedGame, ExcludedAudioConfiguration }
 public sealed record LegacyAnalysisIssue(LegacyAnalysisIssueCode Code, string FieldCategory, JsonValueKind ValueKind, string ContentFingerprint, string? SafeIdentifier);

@@ -46,19 +46,17 @@ public interface IApprovedLegacyImportPreflight
 /// <summary>Safe review projection of a preflight result. It intentionally omits raw analysis and fingerprints.</summary>
 public sealed class LegacyImportPreflightReview
 {
-    internal LegacyImportPreflightReview(LegacyImportPreflightOutcome outcome, string? selectedGameLabel, IReadOnlyList<string> recognizedBossNames, BossListVisibilityMode? bossListVisibilityMode, int warningCount, ConfirmedLegacyImportRequest? confirmedRequest)
+    internal LegacyImportPreflightReview(LegacyImportPreflightOutcome outcome, string? selectedGameLabel, int warningCount, ConfirmedLegacyImportRequest? confirmedRequest)
     {
         Outcome = outcome;
         SelectedGameLabel = selectedGameLabel;
-        RecognizedBossNames = recognizedBossNames;
-        BossListVisibilityMode = bossListVisibilityMode;
+
         WarningCount = warningCount;
         ConfirmedRequest = confirmedRequest;
     }
     public LegacyImportPreflightOutcome Outcome { get; }
     public string? SelectedGameLabel { get; }
-    public IReadOnlyList<string> RecognizedBossNames { get; }
-    public BossListVisibilityMode? BossListVisibilityMode { get; }
+
     public int WarningCount { get; }
     /// <summary>Returns an opaque Application capability only when P6-02 prepared this review.</summary>
     public bool TryGetConfirmedRequest(out ConfirmedLegacyImportRequest? request)
@@ -163,7 +161,7 @@ public sealed class ApprovedLegacyImportPreflight : IApprovedLegacyImportPreflig
         ArgumentNullException.ThrowIfNull(candidate);
         if (!locator.IsStillApproved(candidate) || candidate.ApprovedPath is null)
         {
-            return new LegacyImportPreflightReview(LegacyImportPreflightOutcome.Unavailable, null, [], null, 0, null);
+            return new LegacyImportPreflightReview(LegacyImportPreflightOutcome.Unavailable, null, 0, null);
         }
         LegacyImportPreflightResult result = preflight.Prepare(candidate.ApprovedPath);
         LegacyImportProposal? proposal = result.Outcome == LegacyImportPreflightOutcome.Prepared ? result.Analysis?.Proposal : null;
@@ -171,7 +169,7 @@ public sealed class ApprovedLegacyImportPreflight : IApprovedLegacyImportPreflig
             ? ConfirmedLegacyImportRequest.FromPreparedPreflight(result.Analysis, result.SourceFingerprint, result.BackupFingerprint)
             : null;
         string? gameLabel = proposal?.SelectedGameId is GameId gameId ? GameCatalog.GetRequired(gameId).DisplayName : null;
-        return new LegacyImportPreflightReview(result.Outcome, gameLabel, [], null, result.Analysis?.Report.Issues.Count ?? 0, request);
+        return new LegacyImportPreflightReview(result.Outcome, gameLabel, result.Analysis?.Report.Issues.Count ?? 0, request);
     }
 }
 

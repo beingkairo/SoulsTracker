@@ -29,9 +29,7 @@ public sealed record DecrementManualBloodborneDeathsCommand : ITrackerCommand;
 /// </summary>
 public sealed record UpdateOverlayPresentationCommand(
     bool IsTotalDeathsEnabled,
-    bool ShowGameName,
-    bool IsBossListEnabled,
-    BossListVisibilityMode BossListVisibilityMode) : ITrackerCommand;
+    bool ShowGameName) : ITrackerCommand;
 
 /// <summary>Applies one approved, bounded appearance preset to one browser overlay.</summary>
 public sealed record ResetOverlayAppearanceCommand(bool IsTotalDeathsOverlay) : ITrackerCommand;
@@ -42,15 +40,7 @@ public sealed record UpdateOverlayAppearanceCommand(
     OverlayAppearance Appearance,
     bool TotalDeathsShowGameName,
     bool TotalDeathsCompactTitle,
-    BossListVisibilityMode BossListVisibilityMode,
-    string BossListDefeatedColor,
-    DefeatedBossTreatment BossListDefeatedTreatment,
-    bool BossListShowCheckmark,
-    string BossListCheckmarkAccent,
-    int BossListMaximumVisibleCount,
-    OverlayTitleIconMode TotalDeathsTitleIconMode = OverlayTitleIconMode.Off,
-    bool BossListShowDefeatedSkull = false,
-    CenterMarkerAlignment BossListCenterMarkerAlignment = CenterMarkerAlignment.Left) : ITrackerCommand;
+    OverlayTitleIconMode TotalDeathsTitleIconMode = OverlayTitleIconMode.Off) : ITrackerCommand;
 
 
 /// <summary>Stores the local acknowledgement required before selecting Elden Ring.</summary>

@@ -14,7 +14,7 @@ public sealed class LegacyImportViewModelTests
         var tracker = new DesktopTrackerViewModel(coordinator);
         await tracker.InitializeAsync();
         LegacyStateAnalysis analysis = LegacyStateAnalyzer.Analyze("{\"settings\":{\"selected_game\":\"ds3\"}}"u8.ToArray());
-        var review = new LegacyImportPreflightReview(LegacyImportPreflightOutcome.Prepared, "Dark Souls III", [], null, 0, ConfirmedLegacyImportRequest.FromPreparedPreflight(analysis, new string('A', 64), new string('B', 64)));
+        var review = new LegacyImportPreflightReview(LegacyImportPreflightOutcome.Prepared, "Dark Souls III", 0, ConfirmedLegacyImportRequest.FromPreparedPreflight(analysis, new string('A', 64), new string('B', 64)));
         var candidate = new LegacyImportCandidate(LegacyImportSourceLabel.SoulsTrackerLegacySettings);
         var import = new LegacyImportViewModel(new LegacyImportWorkflow(new Locator(candidate), new Preflight(review), coordinator), tracker.ApplyImportedCommittedState);
 
@@ -35,7 +35,7 @@ public sealed class LegacyImportViewModelTests
         var tracker = new DesktopTrackerViewModel(coordinator);
         var candidate = new LegacyImportCandidate(LegacyImportSourceLabel.SoulsTrackerLegacySettings);
         var import = new LegacyImportViewModel(
-            new LegacyImportWorkflow(new Locator(candidate), new Preflight(new LegacyImportPreflightReview(LegacyImportPreflightOutcome.Unavailable, null, [], null, 0, null)), coordinator),
+            new LegacyImportWorkflow(new Locator(candidate), new Preflight(new LegacyImportPreflightReview(LegacyImportPreflightOutcome.Unavailable, null, 0, null)), coordinator),
             tracker.ApplyImportedCommittedState);
 
         tracker.ConfigureLegacyImport(import);
