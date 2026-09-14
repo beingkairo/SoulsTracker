@@ -617,7 +617,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         IReadOnlyList<DiscoveredLocalSave> candidates;
         try
         {
-            candidates = await Task.Run(async () => await eldenRingSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+            candidates = await SaveGameConfigurationWorkflow.DiscoverAsync(eldenRingSaveDiscovery, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -750,7 +750,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         string? configuredAtStart = state?.BlackMythWukongSave.LocalPath;
         try
         {
-            candidates = await Task.Run(async () => await blackMythWukongSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+            candidates = await SaveGameConfigurationWorkflow.DiscoverAsync(blackMythWukongSaveDiscovery, cancellationToken);
             if (configuredAtStart is not null && File.Exists(configuredAtStart) && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredAtStart)))
             {
                 candidates = await Task.Run(() => BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(configuredAtStart), cancellationToken);
@@ -910,7 +910,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         string? configuredAtStart = state?.LiesOfPSave.LocalPath;
         try
         {
-            candidates = await Task.Run(async () => await liesOfPSaveDiscovery.DiscoverAsync(cancellationToken), cancellationToken);
+            candidates = await SaveGameConfigurationWorkflow.DiscoverAsync(liesOfPSaveDiscovery, cancellationToken);
             if (configuredAtStart is not null && File.Exists(configuredAtStart) && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredAtStart)))
             {
                 candidates = await Task.Run(() => LiesOfPSaveDiscovery.DiscoverInSelectedFolder(configuredAtStart), cancellationToken);
@@ -1732,7 +1732,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private async Task RefreshEldenRingProfileSlotsAsync(CancellationToken cancellationToken, bool clearStaleSelection = false)
     {
         string? localPath = state?.EldenRingSave.LocalPath;
-        IReadOnlyList<EldenRingProfileSlotChoice> choices = localPath is null ? [] : await ReadEldenRingProfileChoicesAsync(localPath, cancellationToken);
+        IReadOnlyList<EldenRingProfileSlotChoice> choices = localPath is null
+            ? []
+            : await SaveGameConfigurationWorkflow.ReadEldenRingProfileSlotsAsync(eldenRingSaveProfileReader, localPath, cancellationToken);
         ApplyEldenRingProfileChoices(choices);
         if (clearStaleSelection
             && localPath is not null
