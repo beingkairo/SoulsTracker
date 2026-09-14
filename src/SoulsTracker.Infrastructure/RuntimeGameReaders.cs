@@ -20,6 +20,7 @@ public enum RuntimeGameReaderStatus
     SelectedSaveUnreadable,
     WaitingForActiveCharacter,
     Synced,
+    Cached,
 }
 
 /// <summary>Contains only a safe reader status and, when synced, its runtime-only observation.</summary>
@@ -80,6 +81,10 @@ public sealed record RuntimeGameReadResult
             observation,
             blackMythWukongSaveMetadata,
             blackMythWukongSavePath);
+
+    public static RuntimeGameReadResult Cached(RuntimeGameReadResult result) =>
+        new(result.GameId, RuntimeGameReaderStatus.Cached, result.Observation,
+            result.BlackMythWukongSaveMetadata, result.BlackMythWukongSavePath, result.HasNoRecordedDeaths);
 
     /// <summary>Reports a parser-validated zero-death save without treating an unavailable reader as zero.</summary>
     public static RuntimeGameReadResult NoDeathsRecorded(

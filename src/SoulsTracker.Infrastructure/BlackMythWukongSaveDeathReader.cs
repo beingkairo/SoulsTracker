@@ -16,6 +16,9 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
     private BlackMythWukongSaveConfiguration configuration = BlackMythWukongSaveConfiguration.Default;
     private SaveFingerprint? lastFingerprint;
     private RuntimeGameReadResult? lastResult;
+    private readonly TimeProvider timeProvider;
+    private DateTimeOffset lastValidatedAtUtc;
+    public BlackMythWukongSaveDeathReader(TimeProvider? timeProvider = null) => this.timeProvider = timeProvider ?? TimeProvider.System;
 
     public GameId GameId => GameId.BlackMythWukong;
 
@@ -56,9 +59,9 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
         catch (UnauthorizedAccessException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
         catch (System.Security.SecurityException) { return RuntimeGameReadResult.SelectedSaveUnreadable(GameId); }
 
-        if (lastFingerprint == fingerprint && lastResult is not null)
+        if (lastFingerprint == fingerprint && lastResult is not null && timeProvider.GetUtcNow() - lastValidatedAtUtc < TimeSpan.FromSeconds(10))
         {
-            return lastResult;
+            return RuntimeGameReadResult.Cached(lastResult);
         }
 
         for (int attempt = 0; attempt < RetryCount; attempt++)
@@ -92,6 +95,7 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
                     : RuntimeGameReadResult.SelectedSaveUnreadable(GameId);
                 lastFingerprint = fingerprint;
                 lastResult = result;
+                lastValidatedAtUtc = timeProvider.GetUtcNow();
                 return result;
             }
             catch (IOException)

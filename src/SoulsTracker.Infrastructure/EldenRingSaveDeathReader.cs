@@ -14,6 +14,9 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
     private EldenRingSaveConfiguration configuration = EldenRingSaveConfiguration.Default;
     private SaveFingerprint? lastFingerprint;
     private RuntimeGameReadResult? lastResult;
+    private readonly TimeProvider timeProvider;
+    private DateTimeOffset lastValidatedAtUtc;
+    public EldenRingSaveDeathReader(TimeProvider? timeProvider = null) => this.timeProvider = timeProvider ?? TimeProvider.System;
 
     public GameId GameId => GameId.EldenRing;
 
@@ -50,9 +53,9 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
         catch (UnauthorizedAccessException) { return null; }
         catch (System.Security.SecurityException) { return null; }
 
-        if (lastFingerprint == fingerprint && lastResult is not null)
+        if (lastFingerprint == fingerprint && lastResult is not null && timeProvider.GetUtcNow() - lastValidatedAtUtc < TimeSpan.FromSeconds(10))
         {
-            return lastResult;
+            return RuntimeGameReadResult.Cached(lastResult);
         }
 
         for (int attempt = 0; attempt < RetryCount; attempt++)
@@ -80,6 +83,7 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
                 };
                 lastFingerprint = fingerprint;
                 lastResult = result;
+                lastValidatedAtUtc = timeProvider.GetUtcNow();
                 return result;
             }
             catch (IOException)

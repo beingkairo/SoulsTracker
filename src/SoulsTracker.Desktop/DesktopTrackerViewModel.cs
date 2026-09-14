@@ -343,15 +343,15 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 return SelectedSaveUnreadableMessage;
             }
 
-            if (selectedGameId == GameId.BlackMythWukong && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
+            if (selectedGameId == GameId.BlackMythWukong && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
                 return BlackMythWukongSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
             }
-            if (selectedGameId == GameId.LiesOfP && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
+            if (selectedGameId == GameId.LiesOfP && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
                 return LiesOfPSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
             }
-            if (selectedGameId == GameId.EldenRing && runtimeReaderStatus != RuntimeGameReaderStatus.Synced)
+            if (selectedGameId == GameId.EldenRing && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
                 if (state?.EldenRingSave.LocalPath is null) return EldenRingSaveDiscoveryStatus ?? GameWaitingForSaveFileMessage;
                 if (state.EldenRingSave.SlotIndex == EldenRingSaveConfiguration.NoSlotIndex) return EldenRingChooseCharacterMessage;
@@ -363,6 +363,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 RuntimeGameReaderStatus.WaitingForActiveCharacter => GameWaitingForActiveCharacterMessage,
                 RuntimeGameReaderStatus.WaitingForSaveFile => WaitingForSaveFileMessage(selectedGameId),
                 RuntimeGameReaderStatus.Synced => GameSyncedMessage,
+                RuntimeGameReaderStatus.Cached => "Using last confirmed save data",
                 _ => GameUnavailableMessage,
             };
         }
