@@ -1302,7 +1302,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             return;
         }
 
-        long? combined = TotalDeathsDisplayProjection.Combine(state, runtimeObservation?.GameId == selectedId ? runtimeObservation : null);
+        long? combined = EffectiveDeathTotalResult.Resolve(state, runtimeObservation?.GameId == selectedId ? runtimeObservation : null).EffectiveDisplayedTotal;
         TotalDeathsText = combined.HasValue
             ? combined.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : IsManualGame(selectedId)

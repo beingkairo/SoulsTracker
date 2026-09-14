@@ -26,7 +26,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
         }
         RuntimeGameObservation? observation = RuntimeObservationFor(notification.State, Volatile.Read(ref runtimeObservation));
         if (observation is null) Volatile.Write(ref runtimeObservation, null);
-        long? displayedTotal = TotalDeathsDisplayProjection.Combine(notification.State, observation);
+        long? displayedTotal = EffectiveDeathTotalResult.Resolve(notification.State, observation).EffectiveDisplayedTotal;
         await QueueWrite(notification.State, displayedTotal).ConfigureAwait(false);
     }
 
@@ -36,7 +36,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
             ? RuntimeObservationFor(state, candidate)
             : null;
         Volatile.Write(ref runtimeObservation, observation);
-        await QueueWrite(state, TotalDeathsDisplayProjection.Combine(state, observation)).ConfigureAwait(false);
+        await QueueWrite(state, EffectiveDeathTotalResult.Resolve(state, observation).EffectiveDisplayedTotal).ConfigureAwait(false);
     }
 
     private static RuntimeGameObservation? RuntimeObservationFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
@@ -68,7 +68,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
 
     internal static async Task<bool> WriteAsync(PersistentTrackerState state, long? displayedTotal)
     {
-        displayedTotal ??= TotalDeathsDisplayProjection.Combine(state, observation: null);
+        displayedTotal ??= EffectiveDeathTotalResult.Resolve(state, observation: null).EffectiveDisplayedTotal;
         TextExportConfiguration config = state.TextExports;
         bool succeeded = true;
         bool hasDisplayedDeathTotal = GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly || displayedTotal.HasValue;

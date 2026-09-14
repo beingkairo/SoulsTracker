@@ -19,7 +19,7 @@ public static class OverlaySnapshotFactory
                 : state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP
                     ? TotalDeathsDisplayValue.UnavailableForSelectedGame(state.SelectedGameId)
                     : TotalDeathsDisplayValue.FromUnavailableSelectedGame(state.SelectedGameId);
-        long? combinedTotal = TotalDeathsDisplayProjection.Combine(state, usable ? observation : null);
+        long? combinedTotal = EffectiveDeathTotalResult.Resolve(state, usable ? observation : null).EffectiveDisplayedTotal;
         if (combinedTotal.HasValue && deaths.GameId == GameId.EldenRing) deaths = TotalDeathsDisplayValue.WithNumericValue(deaths, combinedTotal.Value);
         return new OverlaySnapshot(OverlaySnapshot.CurrentSchemaVersion, sequenceNumber, DateTimeOffset.UtcNow, game, deaths, OverlayPresentationConfiguration.From(state.OverlayConfiguration));
     }
