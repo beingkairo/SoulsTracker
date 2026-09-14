@@ -105,7 +105,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata;
     private readonly TimeProvider timeProvider;
     private readonly Func<string, CancellationToken, Task<WukongSaveMetadataReadResult>> readWukongSaveMetadataAsync;
-    private long wukongMetadataOperationVersion;
     private long wukongSelectionOperationVersion;
     private long eldenRingDiscoveryVersion;
     private LocalSaveSourceState eldenRingSaveSourceState;
@@ -1606,11 +1605,9 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         return Interlocked.Increment(ref wukongSelectionOperationVersion);
     }
 
-    private long BeginWukongMetadataRead() =>
-        Interlocked.Increment(ref wukongMetadataOperationVersion);
+    private long BeginWukongMetadataRead() => saveGameConfigurationWorkflow.BeginWukongMetadataRead();
 
-    private void InvalidateWukongMetadataOperations() =>
-        Interlocked.Increment(ref wukongMetadataOperationVersion);
+    private void InvalidateWukongMetadataOperations() => saveGameConfigurationWorkflow.InvalidateWukongMetadataReads();
 
     private void InvalidateWukongOperations()
     {
@@ -1628,7 +1625,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         string expectedPath,
         BlackMythWukongSaveMetadata? metadata)
     {
-        if (version != Interlocked.Read(ref wukongMetadataOperationVersion) ||
+        if (!saveGameConfigurationWorkflow.IsCurrentWukongMetadataRead(version) ||
             !IsBlackMythWukongSelected ||
             !PathsEqual(expectedPath, state?.BlackMythWukongSave.LocalPath))
         {
