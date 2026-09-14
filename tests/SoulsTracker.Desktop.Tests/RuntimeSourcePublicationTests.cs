@@ -1,5 +1,5 @@
 using System.IO;
-using System.Reflection;
+
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -28,8 +28,7 @@ public sealed class RuntimeSourcePublicationTests
     }
 
     private static RuntimeGameReadResult? Normalize(PersistentTrackerState state, RuntimeGameReadResult? read) =>
-        (RuntimeGameReadResult?)typeof(App).GetMethod("NormalizeRuntimePublication", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [state, read]);
+        App.NormalizeRuntimePublication(state, read);
 
     private static PersistentTrackerState State(bool lies, string profile, int character = 1, int member = 1, string? export = null) =>
         new(PersistentTrackerState.CurrentSchemaVersion, lies ? GameId.LiesOfP : GameId.BlackMythWukong,

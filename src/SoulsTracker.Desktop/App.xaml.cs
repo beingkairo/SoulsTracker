@@ -360,7 +360,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
     }
 
-    private static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
+    internal static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
         if (result is null || result.GameId != state.SelectedGameId) return null;
         if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;

@@ -16,7 +16,8 @@ public sealed record EffectiveDeathTotalResult
         if (observation is null) return Unavailable(state.SelectedGameId, source);
         if ((state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP) && string.IsNullOrWhiteSpace(observation.SourceIdentity))
             return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };
-        if (!string.Equals(source, observation.SourceIdentity ?? source, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(observation.SourceIdentity) ||
+            !string.Equals(source, observation.SourceIdentity, StringComparison.Ordinal))
             return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };
 
         long baseValue = observation.TotalDeaths.Value;
