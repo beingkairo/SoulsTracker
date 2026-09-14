@@ -27,6 +27,10 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     public long BeginLiesSelection() => Interlocked.Increment(ref liesSelectionVersion);
     public bool IsCurrentLiesSelection(long version) => version == Interlocked.Read(ref liesSelectionVersion);
 
+    public static bool IsValidLiesOfPSave(string localPath) =>
+        LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) &&
+        LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
+
     internal readonly record struct SaveDiscoveryResult(
         IReadOnlyList<DiscoveredLocalSave> Candidates,
         string? ConfiguredPath,
