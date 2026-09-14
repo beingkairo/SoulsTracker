@@ -25,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SoulsTracker.Desktop\SoulsTracker.Desktop.csproj" />
     <ProjectReference Include="..\..\src\SoulsTracker.Infrastructure\SoulsTracker.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SoulsTracker.Overlay\SoulsTracker.Overlay.csproj" />
 
   </ItemGroup>
 
