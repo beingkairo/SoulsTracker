@@ -291,14 +291,8 @@ public partial class App : System.Windows.Application, IDisposable
         Task? pollingTask = runtimeReaderPollingTask;
         try
         {
-            if (textExportPublisher is not null)
-            {
-                await textExportPublisher.DisposeAsync().ConfigureAwait(false);
-                textExportPublisher = null;
-            }
-            // Polling observes this token both while reading and during its normal
-            // interval delay. Awaiting the owned task prevents a read from racing
-            // the coordinator/repository disposal that follows.
+            // Stop polling before completing the publisher so its final callback
+            // cannot enqueue work after the publisher has drained.
             readerCancellation?.Cancel();
             try
             {
@@ -315,9 +309,14 @@ public partial class App : System.Windows.Application, IDisposable
                 runtimeReaders = null;
                 eldenRingSaveReader = null;
                 blackMythWukongSaveReader = null;
+                liesOfPSaveReader = null;
             }
 
-
+            if (textExportPublisher is not null)
+            {
+                await textExportPublisher.DisposeAsync().ConfigureAwait(false);
+                textExportPublisher = null;
+            }
             if (coordinator is not null)
             {
                 await coordinator.DisposeAsync().ConfigureAwait(false);
