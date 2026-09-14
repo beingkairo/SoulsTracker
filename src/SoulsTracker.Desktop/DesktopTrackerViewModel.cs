@@ -38,6 +38,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
 
     private readonly SerializedTrackerCoordinator coordinator;
+    private readonly SaveGameConfigurationWorkflow saveGameConfigurationWorkflow;
     private readonly IEldenRingSaveProfileReader eldenRingSaveProfileReader;
     private readonly ILocalSaveDiscovery eldenRingSaveDiscovery;
     private readonly ILocalSaveDiscovery blackMythWukongSaveDiscovery;
@@ -149,6 +150,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         IUpdateReleasePageLauncher? updateReleasePageLauncher = null)
     {
         this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+        saveGameConfigurationWorkflow = new SaveGameConfigurationWorkflow(this.coordinator);
         this.eldenRingSaveProfileReader = eldenRingSaveProfileReader ?? new EldenRingSaveProfileReader();
         this.eldenRingSaveDiscovery = eldenRingSaveDiscovery ?? new EldenRingSaveDiscovery();
         this.blackMythWukongSaveDiscovery = blackMythWukongSaveDiscovery ?? new BlackMythWukongSaveDiscovery();
@@ -1500,7 +1502,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private async Task SaveEldenRingSaveAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken)
     {
         IsBusy = true;
-        try { ApplyCommittedState(await coordinator.SetEldenRingSaveConfigurationAsync(configuration, cancellationToken)); }
+        try { ApplyCommittedState(await saveGameConfigurationWorkflow.SaveEldenRingAsync(configuration, cancellationToken)); }
         catch { ErrorMessage = "The Elden Ring save selection could not be saved."; }
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
@@ -1562,7 +1564,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         try
         {
             ApplyCommittedState(
-                await coordinator.SetBlackMythWukongSaveConfigurationAsync(configuration, cancellationToken),
+                await saveGameConfigurationWorkflow.SaveWukongAsync(configuration, cancellationToken),
                 preserveWukongMetadataOperation: true);
         }
         catch { ErrorMessage = "The Black Myth: Wukong save selection could not be saved."; }
@@ -1572,7 +1574,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private async Task SaveLiesOfPSaveAsync(LiesOfPSaveConfiguration configuration, CancellationToken cancellationToken)
     {
         IsBusy = true;
-        try { ApplyCommittedState(await coordinator.SetLiesOfPSaveConfigurationAsync(configuration, cancellationToken)); }
+        try { ApplyCommittedState(await saveGameConfigurationWorkflow.SaveLiesOfPAsync(configuration, cancellationToken)); }
         catch { ErrorMessage = "The Lies of P save selection could not be saved."; }
         finally { IsBusy = false; NotifyTrackerProperties(); }
     }
