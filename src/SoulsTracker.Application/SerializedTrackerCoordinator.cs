@@ -99,6 +99,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
             if (!initialized) { request.RejectNotInitialized(); continue; }
             if (request is EndpointRequest endpointRequest)
             {
+                // Endpoint configuration is startup-only and does not change the overlay snapshot, so this branch intentionally does not publish.
                 try
                 {
                     PersistentTrackerState updated = WithEndpoint(committedState!, endpointRequest.Endpoint);
@@ -106,11 +107,13 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                     committedState = updated;
                     endpointRequest.Completion.TrySetResult(committedState);
                 }
+                catch (OperationCanceledException) { endpointRequest.Completion.TrySetCanceled(endpointRequest.CancellationToken); }
                 catch (Exception) { endpointRequest.Completion.TrySetException(new InvalidOperationException("The local overlay endpoint could not be saved.")); }
                 continue;
             }
             if (request is HotkeyRequest hotkeyRequest)
             {
+                // Manual hotkeys affect command input only and do not change overlay/TXT output, so this branch intentionally does not publish.
                 try
                 {
                     PersistentTrackerState current = committedState!;
