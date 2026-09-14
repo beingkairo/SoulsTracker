@@ -197,7 +197,14 @@ public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(4));
         RuntimeGameReadResult updated = (await reader.ReadAsync(default))!;
         Assert.Equal(8, updated.Observation!.TotalDeaths.Value);
-        Assert.Same(updated, await reader.ReadAsync(default));
+        RuntimeGameReadResult cached = (await reader.ReadAsync(default))!;
+        Assert.Equal(RuntimeGameReaderStatus.Cached, cached.Status);
+        Assert.NotNull(cached.Observation);
+        Assert.Equal(updated.Observation, cached.Observation);
+        Assert.Equal(updated.Observation!.ObservedAtUtc, cached.Observation.ObservedAtUtc);
+        Assert.Equal(updated.Observation.TotalDeaths, cached.Observation.TotalDeaths);
+        Assert.Equal(updated.BlackMythWukongSavePath, cached.BlackMythWukongSavePath);
+        Assert.Equal(updated.BlackMythWukongSaveMetadata, cached.BlackMythWukongSaveMetadata);
     }
 
     public void Dispose()
