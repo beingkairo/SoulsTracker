@@ -750,11 +750,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         string? configuredAtStart = state?.BlackMythWukongSave.LocalPath;
         try
         {
-            candidates = await SaveGameConfigurationWorkflow.DiscoverAsync(blackMythWukongSaveDiscovery, cancellationToken);
-            if (configuredAtStart is not null && File.Exists(configuredAtStart) && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredAtStart)))
-            {
-                candidates = await Task.Run(() => BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(configuredAtStart), cancellationToken);
-            }
+            SaveGameConfigurationWorkflow.SaveDiscoveryResult discoveryResult = await SaveGameConfigurationWorkflow.DiscoverWithConfiguredFallbackAsync(
+                blackMythWukongSaveDiscovery,
+                BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder,
+                configuredAtStart,
+                cancellationToken);
+            candidates = discoveryResult.Candidates;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -910,11 +911,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         string? configuredAtStart = state?.LiesOfPSave.LocalPath;
         try
         {
-            candidates = await SaveGameConfigurationWorkflow.DiscoverAsync(liesOfPSaveDiscovery, cancellationToken);
-            if (configuredAtStart is not null && File.Exists(configuredAtStart) && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredAtStart)))
-            {
-                candidates = await Task.Run(() => LiesOfPSaveDiscovery.DiscoverInSelectedFolder(configuredAtStart), cancellationToken);
-            }
+            SaveGameConfigurationWorkflow.SaveDiscoveryResult discoveryResult = await SaveGameConfigurationWorkflow.DiscoverWithConfiguredFallbackAsync(
+                liesOfPSaveDiscovery,
+                LiesOfPSaveDiscovery.DiscoverInSelectedFolder,
+                configuredAtStart,
+                cancellationToken);
+            candidates = discoveryResult.Candidates;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
         catch { SetLiesOfPSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…"); LiesOfPSaveSourceState = LocalSaveSourceState.NoCandidate; return; }

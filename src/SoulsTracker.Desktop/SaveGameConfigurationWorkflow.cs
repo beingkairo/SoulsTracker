@@ -1,12 +1,18 @@
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
+using System.IO;
 
 namespace SoulsTracker.Desktop;
 
 /// <summary>Owns persistence of game-specific save configuration changes.</summary>
 internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator coordinator)
 {
+    internal readonly record struct SaveDiscoveryResult(
+        IReadOnlyList<DiscoveredLocalSave> Candidates,
+        string? ConfiguredPath,
+        bool ConfiguredPathExists);
+
     public static Task<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(ILocalSaveDiscovery discovery, CancellationToken cancellationToken) =>
         Task.Run(async () => await discovery.DiscoverAsync(cancellationToken).ConfigureAwait(false), cancellationToken);
 
@@ -15,6 +21,27 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
         string localPath,
         CancellationToken cancellationToken) =>
         Task.Run(() => discover(localPath), cancellationToken);
+
+    public static async Task<SaveDiscoveryResult> DiscoverWithConfiguredFallbackAsync(
+        ILocalSaveDiscovery discovery,
+        Func<string, IReadOnlyList<DiscoveredLocalSave>> discoverInSelectedFolder,
+        string? configuredPath,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<DiscoveredLocalSave> candidates = await DiscoverAsync(discovery, cancellationToken).ConfigureAwait(false);
+        bool configuredPathExists = configuredPath is not null && File.Exists(configuredPath);
+        if (configuredPathExists && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredPath!)))
+        {
+            candidates = await DiscoverInSelectedFolderAsync(discoverInSelectedFolder, configuredPath!, cancellationToken).ConfigureAwait(false);
+        }
+        return new SaveDiscoveryResult(candidates, configuredPath, configuredPathExists);
+    }
+
+    public static bool IsConfiguredSelectionAvailable(string? configuredPath, bool configuredPathExists) =>
+        configuredPath is not null && configuredPathExists;
+
+    private static bool PathsEqual(string left, string right) =>
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
     public static Task<IReadOnlyList<EldenRingProfileSlotChoice>> ReadEldenRingProfileSlotsAsync(
         IEldenRingSaveProfileReader reader,
