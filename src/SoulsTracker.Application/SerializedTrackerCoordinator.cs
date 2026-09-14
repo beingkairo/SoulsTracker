@@ -173,6 +173,7 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
                 catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.SaveFailed, committedState, "The tracker state could not be saved. No change was committed.")); continue; }
                 committedState = transition.State;
                 try { await publisher.PublishAsync(new TrackerStateChanged(committedState, transition.CommandType), commandRequest.CancellationToken).ConfigureAwait(false); commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.Applied, committedState, null)); }
+                catch (OperationCanceledException) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.Applied, committedState, "The tracker state was saved, but update delivery was canceled.")); }
                 catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.DeliveryFailed, committedState, "The tracker state was saved, but the update could not be delivered.")); }
             }
             catch (Exception ex) { commandRequest.Completion.TrySetException(ex); }
