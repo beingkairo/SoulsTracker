@@ -1,4 +1,4 @@
-type OverlayRoute = "total-deaths" | "boss-list";
+type OverlayRoute = "total-deaths";
 
 type TotalDeathsSource = "Unavailable" | "ManualBloodborne" | "GameLifetimeReader";
 
@@ -11,30 +11,14 @@ interface TotalDeathsDisplayValue {
   Value: number | null;
 }
 
-interface OverlayBossEntry {
-  DisplayName: string;
-  DlcLabel: string | null;
-  IsDefeated: boolean;
-}
-
-type BossListVisibilityMode = "All" | "Remaining" | "Defeated";
-
 interface OverlayPresentationConfiguration {
   IsTotalDeathsEnabled: boolean;
   ShowGameName: boolean;
-  IsBossListEnabled: boolean;
-  BossListVisibilityMode: BossListVisibilityMode;
+
   TotalDeathsCompactTitle: boolean;
   TotalDeathsTitleIconMode: "Off" | "PrefixSkull" | "SkullOnly";
   TotalDeathsAppearance: OverlayAppearance;
-  BossListAppearance: OverlayAppearance;
-  BossListDefeatedColor: string;
-  BossListDefeatedTreatment: "Nothing" | "Dimmed" | "Strikethrough" | "Both";
-  BossListShowCheckmark: boolean;
-  BossListCheckmarkAccent: string;
-  BossListMaximumVisibleCount: number;
-  BossListShowDefeatedSkull: boolean;
-  BossListCenterMarkerAlignment?: "Left" | "Right";
+
 }
 interface OverlayAppearance { Title: string; FontFamily: string; FontSize: number; TextColor: string; AccentColor: string; BackgroundColor: string; BackgroundOpacity: number; Padding: number; CornerRadius: number; Alignment: "Left" | "Center" | "Right"; OutlineEnabled: boolean; OutlineColor: string; OutlineWidth: number; ShadowEnabled: boolean; ShadowColor: string; ShadowOffsetX: number; ShadowOffsetY: number; ShadowBlur: number; TextOpacity?: number; IconColor?: string; }
 
@@ -43,7 +27,7 @@ interface OverlaySnapshot {
   SequenceNumber: number;
   SelectedGame: OverlayGameMetadata | null;
   TotalDeaths: TotalDeathsDisplayValue;
-  Bosses: OverlayBossEntry[];
+
   Presentation: OverlayPresentationConfiguration;
   HostStatus?: string;
 }
@@ -117,10 +101,8 @@ class OverlayClient {
     this.acceptedSequence = candidate.SequenceNumber;
     if (candidate.HostStatus === "Please open SoulsTracker") {
       this.renderHostStatus(candidate.HostStatus);
-    } else if (this.route === "total-deaths") {
-      this.renderTotalDeaths(candidate);
     } else {
-      this.renderBossList(candidate);
+      this.renderTotalDeaths(candidate);
     }
   }
 
@@ -177,79 +159,10 @@ class OverlayClient {
     replaceContent(this.target, panel);
   }
 
-  private renderBossList(snapshot: OverlaySnapshot): void {
-    if (snapshot.SelectedGame === null || !snapshot.Presentation.IsBossListEnabled) {
-      replaceContent(this.target);
-      return;
-    }
-
-    const bosses = visibleBosses(snapshot.Bosses, snapshot.Presentation.BossListVisibilityMode);
-    if (bosses.length === 0) {
-      replaceContent(this.target);
-      return;
-    }
-
-    const panel = panelFor("boss-list-overlay", snapshot.Presentation.BossListAppearance);
-    this.target.className = "";
-    delete this.target.dataset.alignment;
-    if (snapshot.Presentation.BossListAppearance.Title.trim().length > 0) panel.append(heading(snapshot.Presentation.BossListAppearance.Title));
-
-    {
-      const list = document.createElement("ul");
-      list.className = `overlay-boss-list overlay-boss-list-${snapshot.Presentation.BossListAppearance.Alignment.toLowerCase()}`;
-      list.dataset.testid = "boss-list";
-      for (const boss of bosses.slice(0, snapshot.Presentation.BossListMaximumVisibleCount)) {
-        const item = document.createElement("li");
-        item.className = boss.IsDefeated ? "is-defeated" : "is-remaining";
-        item.dataset.defeatedTreatment = snapshot.Presentation.BossListDefeatedTreatment;
-        item.style.setProperty("--defeated-color", snapshot.Presentation.BossListDefeatedColor);
-        item.dataset.testid = "boss-entry";
-
-        const copy = document.createElement("span");
-        copy.className = "overlay-boss-copy";
-        const row = document.createElement("span");
-        row.className = "overlay-boss-row";
-        const name = document.createElement("span");
-        name.className = "overlay-boss-name";
-        name.textContent = boss.DisplayName;
-        // Treatments control color/decoration only.  Explicitly set the applied
-        // effects on boss text so a treatment cannot accidentally sever inheritance.
-        name.style.textShadow = textEffectsFor(snapshot.Presentation.BossListAppearance);
-        const markersAllowed = snapshot.Presentation.BossListAppearance.Alignment !== "Center";
-        const markerAfterName = snapshot.Presentation.BossListAppearance.Alignment === "Right" ||
-          (snapshot.Presentation.BossListAppearance.Alignment === "Center" && snapshot.Presentation.BossListCenterMarkerAlignment === "Right");
-        const appendMarker = () => { if (markersAllowed && boss.IsDefeated && snapshot.Presentation.BossListShowDefeatedSkull) {
-          item.dataset.marker = "skull";
-          // Markers are deliberately color-tinted only.  Text effects belong to
-          // text; applying a silhouette filter to this raster would erase its
-          // eye and nose details when an outline is disabled.
-          const skull = skullMark("Defeated boss", snapshot.Presentation.BossListAppearance.IconColor ?? snapshot.Presentation.BossListCheckmarkAccent);
-          skull.className = "overlay-defeated-skull";
-          row.append(skull);
-        } else if (markersAllowed && snapshot.Presentation.BossListShowCheckmark) {
-          item.dataset.marker = "checkmark";
-          const check = document.createElement("span"); check.className = "overlay-checkmark"; check.style.color = safeColor(snapshot.Presentation.BossListAppearance.IconColor ?? snapshot.Presentation.BossListCheckmarkAccent, snapshot.Presentation.BossListCheckmarkAccent); check.textContent = boss.IsDefeated ? "✓" : "○"; row.append(check);
-        }};
-        if (!markerAfterName) appendMarker();
-        row.append(name);
-        copy.append(row);
-        item.append(copy);
-        if (markerAfterName) appendMarker();
-
-        list.append(item);
-      }
-      list.style.rowGap = `${snapshot.Presentation.BossListAppearance.Padding}px`;
-      panel.append(list);
-    }
-
-    replaceContent(this.target, panel);
-  }
 }
 
 function routeForPath(pathname: string): OverlayRoute {
-  return pathname === "/overlay/boss_list" || pathname === "/overlay/boss-progress"
-    ? "boss-list"
-    : "total-deaths";
+  return "total-deaths";
 }
 
 function webSocketUrl(): string {
@@ -387,26 +300,17 @@ function isOverlaySnapshot(value: unknown): value is OverlaySnapshot {
   }
 
   if (!(value.SelectedGame === null || (isRecord(value.SelectedGame) && typeof value.SelectedGame.DisplayName === "string")) ||
-      !Array.isArray(value.Bosses) || !isPresentationConfiguration(value.Presentation)) {
+      !isPresentationConfiguration(value.Presentation)) {
     return false;
   }
 
-  return value.Bosses.every((boss) => isRecord(boss) && typeof boss.DisplayName === "string" &&
-    (typeof boss.DlcLabel === "string" || boss.DlcLabel === null) && typeof boss.IsDefeated === "boolean");
+  return true;
 }
 
-function visibleBosses(bosses: OverlayBossEntry[], visibilityMode: BossListVisibilityMode): OverlayBossEntry[] {
-  switch (visibilityMode) {
-    case "All": return bosses;
-    case "Remaining": return bosses.filter((boss) => !boss.IsDefeated);
-    case "Defeated": return bosses.filter((boss) => boss.IsDefeated);
-  }
-}
 
 function isPresentationConfiguration(value: unknown): value is OverlayPresentationConfiguration {
   return isRecord(value) && typeof value.IsTotalDeathsEnabled === "boolean" &&
-    typeof value.ShowGameName === "boolean" && typeof value.IsBossListEnabled === "boolean" &&
-    (value.BossListVisibilityMode === "All" || value.BossListVisibilityMode === "Remaining" || value.BossListVisibilityMode === "Defeated");
+    typeof value.ShowGameName === "boolean";
 }
 function normalizePresentation(value: OverlayPresentationConfiguration): OverlayPresentationConfiguration {
   const candidate = value as unknown as Record<string, unknown>;
@@ -415,14 +319,7 @@ function normalizePresentation(value: OverlayPresentationConfiguration): Overlay
     TotalDeathsCompactTitle: true,
     TotalDeathsTitleIconMode: candidate.TotalDeathsTitleIconMode === "PrefixSkull" || candidate.TotalDeathsTitleIconMode === "SkullOnly" ? candidate.TotalDeathsTitleIconMode : "Off",
     TotalDeathsAppearance: isAppearance(candidate.TotalDeathsAppearance) ? normalizeAppearance(candidate.TotalDeathsAppearance, defaultAppearance) : defaultAppearance,
-    BossListAppearance: isAppearance(candidate.BossListAppearance) ? normalizeAppearance(candidate.BossListAppearance, { ...defaultAppearance, Title: "BOSS LIST" }) : { ...defaultAppearance, Title: "BOSS LIST" },
-    BossListDefeatedColor: typeof candidate.BossListDefeatedColor === "string" ? candidate.BossListDefeatedColor : "#8C8C96",
-    BossListDefeatedTreatment: candidate.BossListDefeatedTreatment === "Nothing" || candidate.BossListDefeatedTreatment === "Dimmed" || candidate.BossListDefeatedTreatment === "Strikethrough" || candidate.BossListDefeatedTreatment === "Both" ? candidate.BossListDefeatedTreatment : "Nothing",
-    BossListShowCheckmark: candidate.BossListShowCheckmark !== false,
-    BossListCheckmarkAccent: typeof candidate.BossListCheckmarkAccent === "string" ? candidate.BossListCheckmarkAccent : "#A78BFA",
-    BossListMaximumVisibleCount: isNonNegativeInteger(candidate.BossListMaximumVisibleCount) && candidate.BossListMaximumVisibleCount > 0 ? candidate.BossListMaximumVisibleCount : 25,
-    BossListShowDefeatedSkull: candidate.BossListShowDefeatedSkull === true,
-    BossListCenterMarkerAlignment: candidate.BossListCenterMarkerAlignment === "Right" ? "Right" : "Left",
+
   };
 }
 /** Valid URL query values override saved defaults only in that browser source. */
@@ -449,7 +346,7 @@ function applySceneStyle(presentation: OverlayPresentationConfiguration, route: 
   } catch { return presentation; }
 }
 function applyStyleFields(presentation: OverlayPresentationConfiguration, route: OverlayRoute, fields: URLSearchParams): OverlayPresentationConfiguration {
-  const raw = route === "total-deaths" ? presentation.TotalDeathsAppearance : presentation.BossListAppearance;
+  const raw = presentation.TotalDeathsAppearance;
   const bounded = (name: string, fallback: number, min: number, max: number): number => { const value = Number(fields.get(name)); return Number.isInteger(value) && value >= min && value <= max ? value : fallback; };
   const color = (name: string, fallback: string): string => { const value = fields.get(name); return value !== null && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback; };
   const boolean = (name: string, fallback: boolean): boolean => fields.get(name) === "true" ? true : fields.get(name) === "false" ? false : fallback;
@@ -460,7 +357,7 @@ function applyStyleFields(presentation: OverlayPresentationConfiguration, route:
     FontFamily: font !== null && isSafeFontFamily(font) ? font : raw.FontFamily,
     FontSize: bounded("size", raw.FontSize, 12, 96), TextColor: color("textColor", raw.TextColor),
     BackgroundColor: color("backgroundColor", raw.BackgroundColor), BackgroundOpacity: bounded("backgroundOpacity", raw.BackgroundOpacity, 0, 100),
-    Padding: route === "boss-list" ? bounded("bossRowSpacing", raw.Padding, 0, 48) : raw.Padding,
+    Padding: raw.Padding,
     Alignment: (alignment === "Left" || alignment === "Center" || alignment === "Right") ? alignment : raw.Alignment,
     OutlineEnabled: boolean("outline", raw.OutlineEnabled), OutlineColor: color("outlineColor", raw.OutlineColor), OutlineWidth: bounded("outlineWidth", raw.OutlineWidth, 0, 8),
     ShadowEnabled: boolean("shadow", raw.ShadowEnabled), ShadowColor: color("shadowColor", raw.ShadowColor), ShadowOffsetX: bounded("shadowX", raw.ShadowOffsetX, -20, 20), ShadowOffsetY: bounded("shadowY", raw.ShadowOffsetY, -20, 20), ShadowBlur: bounded("shadowBlur", raw.ShadowBlur, 0, 20), TextOpacity: bounded("textOpacity", raw.TextOpacity ?? 100, 0, 100), IconColor: color("iconColor", raw.IconColor ?? raw.TextColor),
@@ -468,18 +365,7 @@ function applyStyleFields(presentation: OverlayPresentationConfiguration, route:
   if (route === "total-deaths") return { ...presentation, TotalDeathsAppearance: appearance,
     TotalDeathsCompactTitle: true, ShowGameName: false,
     TotalDeathsTitleIconMode: fields.get("titleIcon") === "PrefixSkull" || fields.get("titleIcon") === "SkullOnly" ? fields.get("titleIcon")! as "PrefixSkull" | "SkullOnly" : fields.get("titleIcon") === "Off" ? "Off" : presentation.TotalDeathsTitleIconMode };
-  const marker = fields.get("marker"); const treatment = fields.get("treatment"); const mode = fields.get("mode");
-  const centered = appearance.Alignment === "Center";
-  return { ...presentation, BossListAppearance: appearance,
-    BossListVisibilityMode: mode === "All" || mode === "Remaining" || mode === "Defeated" ? mode : presentation.BossListVisibilityMode,
-    BossListDefeatedColor: color("defeatedColor", presentation.BossListDefeatedColor),
-    BossListDefeatedTreatment: treatment === "Nothing" || treatment === "Dimmed" || treatment === "Strikethrough" || treatment === "Both" ? treatment : presentation.BossListDefeatedTreatment,
-    BossListMaximumVisibleCount: bounded("maximumVisible", presentation.BossListMaximumVisibleCount, 1, 100),
-    // A centered list has no markers by product decision, including when a
-    // streamer edits an older scene URL by hand.
-    BossListShowCheckmark: !centered && (marker === "Checkmark" ? true : marker === "Skull" || marker === "None" ? false : presentation.BossListShowCheckmark),
-    BossListShowDefeatedSkull: !centered && (marker === "Skull" ? true : marker === "Checkmark" || marker === "None" ? false : presentation.BossListShowDefeatedSkull),
-    BossListCenterMarkerAlignment: fields.get("centerMarkerAlignment") === "Right" ? "Right" : fields.get("centerMarkerAlignment") === "Left" ? "Left" : presentation.BossListCenterMarkerAlignment };
+  return presentation;
 }
 function isAppearance(value: unknown): value is OverlayAppearance { return isRecord(value) && typeof value.Title === "string" && typeof value.FontFamily === "string" && isSafeFontFamily(value.FontFamily) && isNonNegativeInteger(value.FontSize) && typeof value.TextColor === "string" && typeof value.AccentColor === "string" && typeof value.BackgroundColor === "string" && isNonNegativeInteger(value.BackgroundOpacity) && isNonNegativeInteger(value.Padding) && isNonNegativeInteger(value.CornerRadius) && (value.Alignment === "Left" || value.Alignment === "Center" || value.Alignment === "Right"); }
 function normalizeAppearance(value: OverlayAppearance, fallback: OverlayAppearance): OverlayAppearance {

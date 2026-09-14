@@ -43,12 +43,6 @@ body {
   background: rgb(12 12 16 / 88%);
 }
 
-/* Boss List is a fixed-size browser widget.  Streamers can position the
-   600px-wide source once in OBS and lock it; longer names wrap within the
-   widget instead of changing its scene footprint. */
-.souls-tracker-overlay-panel[data-testid="boss-list-overlay"] {
-  width: 600px;
-}
 
 .overlay-heading,
 .overlay-game-name,
