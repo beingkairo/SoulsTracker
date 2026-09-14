@@ -9,7 +9,7 @@ public static class OverlaySnapshotFactory
     {
         ArgumentNullException.ThrowIfNull(state);
         OverlayGameMetadata game = new(state.SelectedGameId);
-        bool usable = observation?.GameId == state.SelectedGameId &&
+        bool usable = EffectiveDeathTotalResult.Resolve(state, observation).Status is not EffectiveDeathTotalStatus.SourceMismatch && observation?.GameId == state.SelectedGameId &&
             (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
             (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null);
         TotalDeathsDisplayValue deaths = usable

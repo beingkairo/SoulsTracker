@@ -14,7 +14,7 @@ public sealed record EffectiveDeathTotalResult
         ArgumentNullException.ThrowIfNull(state);
         string source = SourceIdentityFor(state);
         if (observation is null) return Unavailable(state.SelectedGameId, source);
-        if (!string.Equals(source, SourceIdentityFor(state, observation), StringComparison.Ordinal))
+        if (!string.Equals(source, observation.SourceIdentity ?? source, StringComparison.Ordinal))
             return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };
 
         long baseValue = observation.TotalDeaths.Value;
