@@ -149,21 +149,7 @@ public partial class App : System.Windows.Application, IDisposable
             runtimeReaderCancellation = new CancellationTokenSource();
             runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
         }
-
-        if (stateSelection.BenchmarkReadinessPipeName is { } readinessPipeName)
-        {
-            SecureOverlayService readyOverlay = overlayService ??
-                throw new InvalidOperationException("The overlay service is required for benchmark readiness.");
-
-            await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ContextIdle);
-            await PackagedBenchmarkReadinessReporter.ReportAsync(
-                readinessPipeName,
-                readyOverlay.TotalDeathsUrl,
-                () => readyOverlay.ActiveWebSocketConnectionCount);
-        }
     }
-
-
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
