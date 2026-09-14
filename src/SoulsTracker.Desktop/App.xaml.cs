@@ -363,9 +363,12 @@ public partial class App : System.Windows.Application, IDisposable
     private static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
         if (result is null || result.GameId != state.SelectedGameId) return null;
-        if (state.SelectedGameId == GameId.BlackMythWukong &&
-            !string.Equals(result.BlackMythWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase)) return null;
         if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
+        if (result.Observation is not null &&
+            EffectiveDeathTotalResult.Resolve(state, result.Observation).Status == EffectiveDeathTotalStatus.SourceMismatch)
+        {
+            return null;
+        }
         return result;
     }
 
