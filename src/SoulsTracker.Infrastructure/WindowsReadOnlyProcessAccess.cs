@@ -180,7 +180,7 @@ public sealed class ReadOnlyMemoryReadResult
 }
 
 /// <summary>
-/// Describes a virtual-memory read without exposing its contents in diagnostics.
+/// Describes a virtual-memory read without exposing its contents to callers.
 /// </summary>
 public enum ReadOnlyMemoryReadOutcome
 {

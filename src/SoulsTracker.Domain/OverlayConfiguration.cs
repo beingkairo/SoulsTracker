@@ -45,7 +45,7 @@ public sealed class OverlayAccessToken : IEquatable<OverlayAccessToken>
     public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(value);
 
     /// <summary>
-    /// Returns a non-secret diagnostic representation.
+    /// Returns a non-secret redacted representation.
     /// </summary>
     public override string ToString() => "[redacted]";
 
