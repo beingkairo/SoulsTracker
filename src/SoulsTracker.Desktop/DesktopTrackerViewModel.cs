@@ -1847,5 +1847,3 @@ public sealed class GameChoice
     public bool IsSelectable => definition!.IsSelectable;
     public string AvailabilityLabel => IsSelectable ? string.Empty : "SOON";
 }
-
-

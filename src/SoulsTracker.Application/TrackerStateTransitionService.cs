@@ -206,7 +206,7 @@ public static class TrackerStateTransitionService
         ArgumentNullException.ThrowIfNull(command.Configuration);
         if (state.LiesOfPSave == command.Configuration) return Unchanged(state, TrackerCommandType.UpdateLiesOfPSaveConfiguration);
         return Changed(new PersistentTrackerState(
-            state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, 
+            state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter,
             state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
             state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments,
@@ -229,7 +229,7 @@ public static class TrackerStateTransitionService
         }
 
         return Changed(new PersistentTrackerState(
-            state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter, 
+            state.SchemaVersion, state.SelectedGameId, state.ManualBloodborneDeathCounter,
             state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
             state.BlackMythWukongSave, updated, state.LiesOfPSave), TrackerCommandType.AdjustEldenRingMissedDeaths);
