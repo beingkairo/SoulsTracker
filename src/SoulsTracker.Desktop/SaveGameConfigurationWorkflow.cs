@@ -2,6 +2,7 @@ using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
 using System.IO;
+using System.Collections.Immutable;
 
 namespace SoulsTracker.Desktop;
 
@@ -10,6 +11,14 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
 {
     internal readonly record struct SelectionValidationResult(bool IsValid, string Status);
     internal readonly record struct SelectionDiscoveryResult(IReadOnlyList<DiscoveredLocalSave> Candidates, SelectionValidationResult Validation);
+    internal sealed record LiesSelectionOutcome(
+        PersistentTrackerState? CommittedState,
+        ImmutableArray<DiscoveredLocalSave>? Candidates,
+        DiscoveredLocalSave? SelectedChoice,
+        LocalSaveSourceState SourceState,
+        string Status,
+        string? Error,
+        bool ExitChangeMode);
     private long operationVersion;
     private long wukongDiscoveryVersion;
     private long liesSelectionVersion;
@@ -136,4 +145,38 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
 
     public Task<PersistentTrackerState> SaveLiesOfPAsync(LiesOfPSaveConfiguration configuration, CancellationToken cancellationToken) =>
         coordinator.SetLiesOfPSaveConfigurationAsync(configuration, cancellationToken);
+
+    public async Task<LiesSelectionOutcome?> BrowseLiesOfPSaveAsync(string localPath, CancellationToken cancellationToken)
+    {
+        long version = BeginLiesSelection();
+        SelectionValidationResult validation = ValidateLiesOfPSelectionResult(localPath);
+        if (!validation.IsValid)
+            return new(null, null, null, LocalSaveSourceState.UnavailableSelection, validation.Status, null, false);
+        IReadOnlyList<DiscoveredLocalSave> candidates = await DiscoverInSelectedFolderAsync(LiesOfPSaveDiscovery.DiscoverInSelectedFolder, localPath, cancellationToken).ConfigureAwait(false);
+        if (!IsCurrentLiesSelection(version)) return null;
+        try
+        {
+            PersistentTrackerState state = await SaveLiesOfPAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken).ConfigureAwait(false);
+            if (!IsCurrentLiesSelection(version)) return null;
+            DiscoveredLocalSave? selected = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, localPath));
+            return new(state, [.. candidates], selected, LocalSaveSourceState.CustomSelection, CustomSaveStatus(localPath), null, true);
+        }
+        catch { return new(null, [.. candidates], null, LocalSaveSourceState.UnavailableSelection, string.Empty, "The Lies of P save selection could not be saved.", false); }
+    }
+
+    public async Task<LiesSelectionOutcome?> SelectLiesOfPSaveAsync(DiscoveredLocalSave choice, CancellationToken cancellationToken)
+    {
+        long version = BeginLiesSelection();
+        try
+        {
+            PersistentTrackerState state = await SaveLiesOfPAsync(new LiesOfPSaveConfiguration(choice.LocalPath), cancellationToken).ConfigureAwait(false);
+            return IsCurrentLiesSelection(version)
+                ? new(state, null, choice, LocalSaveSourceState.PersistedDiscovered, $"Tracking {choice.Label}", null, true)
+                : null;
+        }
+        catch { return new(null, null, null, LocalSaveSourceState.UnavailableSelection, string.Empty, "The Lies of P save selection could not be saved.", false); }
+    }
+
+    private static string CustomSaveStatus(string localPath) =>
+        string.IsNullOrEmpty(Path.GetFileName(localPath)) ? "Tracking custom save." : $"Tracking custom save: {Path.GetFileName(localPath)}";
 }

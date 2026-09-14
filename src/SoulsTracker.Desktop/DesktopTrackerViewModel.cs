@@ -869,42 +869,14 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     public async Task SetLiesOfPSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
     {
-        SaveGameConfigurationWorkflow.SelectionValidationResult validation = SaveGameConfigurationWorkflow.ValidateLiesOfPSelectionResult(localPath);
-        if (!ControlsEnabled || !validation.IsValid)
-        {
-            SetLiesOfPSaveDiscoveryStatus(validation.Status);
-            return;
-        }
-        long selectionVersion = saveGameConfigurationWorkflow.BeginLiesSelection();
-        SaveGameConfigurationWorkflow.SelectionDiscoveryResult discovery = await Task.Run(
-            () => saveGameConfigurationWorkflow.DiscoverLiesOfPSelectionResult(localPath),
-            cancellationToken);
-        IReadOnlyList<DiscoveredLocalSave> candidates = discovery.Candidates;
-        if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
-        await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken);
-        if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
-        if (!IsLiesOfPSelected || !PathsEqual(localPath, state?.LiesOfPSave.LocalPath)) return;
-        LiesOfPSaveChoices.Clear();
-        foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
-        SelectedLiesOfPSaveChoice = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, localPath));
-        IsLiesOfPChangeMode = false;
-        LiesOfPSaveSourceState = LocalSaveSourceState.CustomSelection;
-        SetLiesOfPSaveDiscoveryStatus(CustomSaveTrackingStatus(localPath));
-        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
+        if (!ControlsEnabled) return;
+        ApplyLiesSelectionOutcome(await saveGameConfigurationWorkflow.BrowseLiesOfPSaveAsync(localPath, cancellationToken));
     }
 
     public async Task SelectLiesOfPSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || choice is null || !LiesOfPSaveChoices.Contains(choice)) return;
-        long selectionVersion = saveGameConfigurationWorkflow.BeginLiesSelection();
-        await SaveLiesOfPSaveAsync(new LiesOfPSaveConfiguration(choice.LocalPath), cancellationToken);
-        if (!saveGameConfigurationWorkflow.IsCurrentLiesSelection(selectionVersion)) return;
-        if (!IsLiesOfPSelected || !PathsEqual(choice.LocalPath, state?.LiesOfPSave.LocalPath)) return;
-        SelectedLiesOfPSaveChoice = choice;
-        IsLiesOfPChangeMode = false;
-        LiesOfPSaveSourceState = LocalSaveSourceState.PersistedDiscovered;
-        SetLiesOfPSaveDiscoveryStatus($"Tracking {choice.Label}");
-        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
+        ApplyLiesSelectionOutcome(await saveGameConfigurationWorkflow.SelectLiesOfPSaveAsync(choice, cancellationToken));
     }
 
     public async Task RescanLiesOfPSavesAsync(CancellationToken cancellationToken = default)
@@ -1587,6 +1559,24 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         try { ApplyCommittedState(await saveGameConfigurationWorkflow.SaveLiesOfPAsync(configuration, cancellationToken)); }
         catch { ErrorMessage = "The Lies of P save selection could not be saved."; }
         finally { IsBusy = false; NotifyTrackerProperties(); }
+    }
+
+    private void ApplyLiesSelectionOutcome(SaveGameConfigurationWorkflow.LiesSelectionOutcome? outcome)
+    {
+        if (outcome is null) return;
+        if (outcome.Error is not null) { ErrorMessage = outcome.Error; return; }
+        if (outcome.CommittedState is not null) ApplyCommittedState(outcome.CommittedState);
+        if (outcome.Candidates is { } candidates)
+        {
+            LiesOfPSaveChoices.Clear();
+            foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
+        }
+        SelectedLiesOfPSaveChoice = outcome.SelectedChoice;
+        LiesOfPSaveSourceState = outcome.SourceState;
+        SetLiesOfPSaveDiscoveryStatus(outcome.Status);
+        if (outcome.ExitChangeMode) IsLiesOfPChangeMode = false;
+        OnPropertyChanged(nameof(SelectedLiesOfPSaveChoice));
+        NotifyLiesOfPSaveSourceProperties();
     }
 
     private static async Task<WukongSaveMetadataReadResult> ReadBlackMythWukongSaveMetadataCoreAsync(
