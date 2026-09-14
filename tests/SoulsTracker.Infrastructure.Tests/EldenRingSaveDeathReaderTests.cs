@@ -9,6 +9,22 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
     private readonly string root = Path.Combine(Path.GetTempPath(), "SoulsTrackerTests", Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public async Task ReaderCachesWithinTenSecondsThenRevalidates()
+    {
+        string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 22)));
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var reader = new EldenRingSaveDeathReader(clock);
+        reader.Configure(new EldenRingSaveConfiguration(path, 0));
+        RuntimeGameReadResult first = (await reader.ReadAsync(default))!;
+        clock.Advance(TimeSpan.FromSeconds(9));
+        RuntimeGameReadResult cached = (await reader.ReadAsync(default))!;
+        Assert.Equal(RuntimeGameReaderStatus.Cached, cached.Status);
+        Assert.Equal(first.Observation, cached.Observation);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(RuntimeGameReaderStatus.Synced, (await reader.ReadAsync(default))!.Status);
+    }
+
+    [Fact]
     public void ParserReadsOnlyTheRequestedSlotFromCurrentV252Fixture()
     {
         byte[] fixture = EldenRingSaveFixture.Create((0, 37), (1, 104));
@@ -110,6 +126,13 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
         string path = Path.Combine(root, fileName);
         File.WriteAllBytes(path, contents);
         return path;
+    }
+
+    private sealed class TestTimeProvider(DateTimeOffset value) : TimeProvider
+    {
+        private DateTimeOffset current = value;
+        public override DateTimeOffset GetUtcNow() => current;
+        public void Advance(TimeSpan value) => current += value;
     }
 
     /// <summary>Creates synthetic test fixtures only; it never includes a user save.</summary>
