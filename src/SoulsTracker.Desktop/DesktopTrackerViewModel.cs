@@ -1114,12 +1114,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public Task IncrementManualDeathsAsync(CancellationToken cancellationToken = default) =>
         !IsManualGameSelected || !ControlsEnabled
             ? Task.CompletedTask
-            : SubmitAsync(new IncrementManualBloodborneDeathsCommand(), cancellationToken);
+            : SubmitAsync(new IncrementManualDeathsCommand(), cancellationToken);
 
     public Task DecrementManualDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanDecrementManualDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new DecrementManualBloodborneDeathsCommand(), cancellationToken);
+            : SubmitAsync(new DecrementManualDeathsCommand(), cancellationToken);
 
     /// <summary>Routes the shared global increment binding to the active supported counter.</summary>
     public Task IncrementGlobalTrackedDeathsAsync(CancellationToken cancellationToken = default) =>

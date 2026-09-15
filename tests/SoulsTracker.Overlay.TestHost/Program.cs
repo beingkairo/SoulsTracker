@@ -39,7 +39,7 @@ await Task.Delay(Timeout.InfiniteTimeSpan);
 static async Task PublishManualIncrementAsync(SerializedTrackerCoordinator coordinator)
 {
     await Task.Delay(TimeSpan.FromSeconds(2));
-    await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
+    await coordinator.SubmitAsync(new IncrementManualDeathsCommand());
 }
 
 static int FindAvailablePort()

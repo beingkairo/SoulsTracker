@@ -77,9 +77,9 @@ public sealed class EffectiveDeathTotalConsumerTests
         {
             await coordinator.InitializeAsync();
             await coordinator.SubmitAsync(new SelectGameCommand(GameId.DemonsSouls));
-            await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
-            await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
-            await coordinator.SubmitAsync(new DecrementManualBloodborneDeathsCommand());
+            await coordinator.SubmitAsync(new IncrementManualDeathsCommand());
+            await coordinator.SubmitAsync(new IncrementManualDeathsCommand());
+            await coordinator.SubmitAsync(new DecrementManualDeathsCommand());
         }
 
         Assert.Equal(GameId.DemonsSouls, repository.State.SelectedGameId);

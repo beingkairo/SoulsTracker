@@ -13,14 +13,14 @@ public interface ITrackerCommand;
 public sealed record SelectGameCommand(GameId GameId) : ITrackerCommand;
 
 /// <summary>
-/// Adds exactly one streamer-controlled Bloodborne death.
+/// Adds exactly one streamer-controlled manual death.
 /// </summary>
-public sealed record IncrementManualBloodborneDeathsCommand : ITrackerCommand;
+public sealed record IncrementManualDeathsCommand : ITrackerCommand;
 
 /// <summary>
-/// Removes exactly one streamer-controlled Bloodborne death when above zero.
+/// Removes exactly one streamer-controlled manual death when above zero.
 /// </summary>
-public sealed record DecrementManualBloodborneDeathsCommand : ITrackerCommand;
+public sealed record DecrementManualDeathsCommand : ITrackerCommand;
 
 
 
@@ -64,8 +64,8 @@ public sealed record UpdateLiesOfPSaveConfigurationCommand(LiesOfPSaveConfigurat
 public enum TrackerCommandType
 {
     SelectGame,
-    IncrementManualBloodborneDeaths,
-    DecrementManualBloodborneDeaths,
+    IncrementManualDeaths,
+    DecrementManualDeaths,
 
     UpdateOverlayPresentation,
     ResetOverlayAppearance,

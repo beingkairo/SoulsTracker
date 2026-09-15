@@ -19,8 +19,8 @@ public static class TrackerStateTransitionService
         return command switch
         {
             SelectGameCommand selectGame => ApplySelectGame(state, selectGame),
-            IncrementManualBloodborneDeathsCommand increment => ApplyIncrementManualDeaths(state, increment),
-            DecrementManualBloodborneDeathsCommand decrement => ApplyDecrementManualDeaths(state, decrement),
+            IncrementManualDeathsCommand increment => ApplyIncrementManualDeaths(state, increment),
+            DecrementManualDeathsCommand decrement => ApplyDecrementManualDeaths(state, decrement),
             UpdateOverlayPresentationCommand updatePresentation => ApplyUpdateOverlayPresentation(state, updatePresentation),
             ResetOverlayAppearanceCommand resetAppearance => ResetOverlayAppearance(state, resetAppearance),
             UpdateOverlayAppearanceCommand updateAppearance => ApplyUpdateOverlayAppearance(state, updateAppearance),
@@ -56,7 +56,7 @@ public static class TrackerStateTransitionService
 
     private static TrackerTransitionResult ApplyIncrementManualDeaths(
         PersistentTrackerState state,
-        IncrementManualBloodborneDeathsCommand _)
+        IncrementManualDeathsCommand _)
     {
         RequireManualGameSelected(state);
         return Changed(
@@ -67,19 +67,19 @@ public static class TrackerStateTransitionService
                 state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
                 state.ManualDemonsSoulsDeathCounter.Increment(), state.EldenRingNoticeAcknowledged, state.EldenRingSave,
                 state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
-            TrackerCommandType.IncrementManualBloodborneDeaths);
+            TrackerCommandType.IncrementManualDeaths);
     }
 
     private static TrackerTransitionResult ApplyDecrementManualDeaths(
         PersistentTrackerState state,
-        DecrementManualBloodborneDeathsCommand _)
+        DecrementManualDeathsCommand _)
     {
         RequireManualGameSelected(state);
         ManualBloodborneDeathCounter currentCounter = state.GetManualDeathCounter(state.SelectedGameId!);
         ManualBloodborneDeathCounter updatedCounter = currentCounter.Decrement();
         if (ReferenceEquals(updatedCounter, currentCounter))
         {
-            return Unchanged(state, TrackerCommandType.DecrementManualBloodborneDeaths);
+            return Unchanged(state, TrackerCommandType.DecrementManualDeaths);
         }
 
         return Changed(
@@ -90,7 +90,7 @@ public static class TrackerStateTransitionService
                 state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
                 state.SelectedGameId == GameId.DemonsSouls ? updatedCounter : state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
                 state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
-            TrackerCommandType.DecrementManualBloodborneDeaths);
+            TrackerCommandType.DecrementManualDeaths);
     }
 
     private static TrackerTransitionResult ApplyUpdateOverlayPresentation(
