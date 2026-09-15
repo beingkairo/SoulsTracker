@@ -185,9 +185,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
     {
         if (state.SelectedGameId != GameId.DemonsSouls) return ConfirmedLegacyImportCommitOutcome.DestinationHasSelectedGame;
 
-        return state.ManualBloodborneDeathCounter.Value != 0 ||
-            state.ManualDemonsSoulsDeathCounter.Value != 0 ||
-            false
+        return state.ManualDemonsSoulsDeathCounter.Value != 0
             ? ConfirmedLegacyImportCommitOutcome.DestinationHasManualBloodborneDeaths
             : null;
     }
@@ -258,6 +256,6 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 
 
     public ValueTask DisposeAsync() { if (!disposed) { disposed = true; writerLock.Dispose(); } return ValueTask.CompletedTask; }
-    private sealed record StoredState(string? SelectedGameId, long ManualDeaths, int? Port, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
+    private sealed record StoredState(string? SelectedGameId, [property: JsonIgnore] long ManualDeaths, int? Port, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
     private sealed record StoredEldenRingMissedDeathAdjustment(string LocalSavePath, int SlotIndex, long Value);
 }
