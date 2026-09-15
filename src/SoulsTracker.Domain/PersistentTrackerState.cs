@@ -69,7 +69,9 @@ public sealed class PersistentTrackerState
 
         SchemaVersion = schemaVersion;
         SelectedGameId = selectedGameId;
-        ManualBloodborneDeathCounter = manualBloodborneDeathCounter;
+        // Retained only so older persisted documents can be read. Bloodborne is
+        // automatic and its former manual value is never part of live state.
+        ManualBloodborneDeathCounter = ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne);
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
         BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
         LiesOfPSave = liesOfPSave ?? LiesOfPSaveConfiguration.Default;
@@ -96,9 +98,7 @@ public sealed class PersistentTrackerState
     /// </summary>
     public GameId SelectedGameId { get; }
 
-    /// <summary>
-    /// Gets the persisted Bloodborne manual death counter.
-    /// </summary>
+    /// <summary>Gets the zero-valued compatibility shim for removed Bloodborne manual state.</summary>
     public ManualBloodborneDeathCounter ManualBloodborneDeathCounter { get; }
 
     /// <summary>Gets the persisted Demon’s Souls manual death counter.</summary>
@@ -111,9 +111,7 @@ public sealed class PersistentTrackerState
     public LiesOfPSaveConfiguration LiesOfPSave { get; }
 
     /// <summary>Returns the independent manual counter for a supported manual profile.</summary>
-    public ManualBloodborneDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.Bloodborne
-        ? ManualBloodborneDeathCounter
-        : gameId == GameId.DemonsSouls
+    public ManualBloodborneDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.DemonsSouls
             ? ManualDemonsSoulsDeathCounter
             : throw new InvalidOperationException("The selected game does not use a manual death counter.");
 
