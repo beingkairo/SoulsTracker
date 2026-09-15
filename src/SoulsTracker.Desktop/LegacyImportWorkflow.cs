@@ -64,7 +64,6 @@ public sealed class LegacyImportWorkflow
 
     private static bool IsEligible(PersistentTrackerState state) =>
         state.SelectedGameId == GameId.DemonsSouls &&
-        state.ManualBloodborneDeathCounter.Value == 0 &&
         state.ManualDemonsSoulsDeathCounter.Value == 0 &&
         true;
 
