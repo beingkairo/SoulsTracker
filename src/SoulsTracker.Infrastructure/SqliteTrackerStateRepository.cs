@@ -222,7 +222,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         StoredEldenRingMissedDeathAdjustment[] adjustments = state.EldenRingMissedDeathAdjustments.ToEntries()
             .Select(static entry => new StoredEldenRingMissedDeathAdjustment(entry.LocalSavePath, entry.SlotIndex, entry.Value))
             .ToArray();
-        return (new StoredState(state.SelectedGameId.Value, state.ManualBloodborneDeathCounter.Value, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
+        return (new StoredState(state.SelectedGameId.Value, 0, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, null, null, null, null, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
     }
     private static PersistentTrackerState ToDomain(StoredState dto, string? token)
     {
@@ -253,7 +253,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         catch (ArgumentException) { adjustments = EldenRingMissedDeathAdjustments.Empty; }
 
         GameId selectedGameId = dto.SelectedGameId is null ? GameId.DemonsSouls : GameId.Parse(dto.SelectedGameId);
-        return new PersistentTrackerState(1, selectedGameId, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, dto.ManualDeaths), new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
+        return new PersistentTrackerState(1, selectedGameId, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), new OverlayConfiguration(1, endpoint, total), ManualBloodborneHotkeyConfiguration.Default, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
     }
 
 

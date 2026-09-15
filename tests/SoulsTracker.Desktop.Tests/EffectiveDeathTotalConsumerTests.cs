@@ -76,18 +76,18 @@ public sealed class EffectiveDeathTotalConsumerTests
         await using (var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher()))
         {
             await coordinator.InitializeAsync();
-            await coordinator.SubmitAsync(new SelectGameCommand(GameId.Bloodborne));
+            await coordinator.SubmitAsync(new SelectGameCommand(GameId.DemonsSouls));
             await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
             await coordinator.SubmitAsync(new IncrementManualBloodborneDeathsCommand());
             await coordinator.SubmitAsync(new DecrementManualBloodborneDeathsCommand());
         }
 
-        Assert.Equal(GameId.Bloodborne, repository.State.SelectedGameId);
-        Assert.Equal(1, repository.State.ManualBloodborneDeathCounter.Value);
+        Assert.Equal(GameId.DemonsSouls, repository.State.SelectedGameId);
+        Assert.Equal(1, repository.State.ManualDemonsSoulsDeathCounter.Value);
         await using var reloaded = new SerializedTrackerCoordinator(repository, new NullPublisher());
         TrackerStateLoadResult load = await reloaded.InitializeAsync();
         Assert.True(load.IsSuccess);
-        Assert.Equal(1, load.State!.GetManualDeathCounter(GameId.Bloodborne).Value);
+        Assert.Equal(1, load.State!.GetManualDeathCounter(GameId.DemonsSouls).Value);
     }
 
     [Fact]

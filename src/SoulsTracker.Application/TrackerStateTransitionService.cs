@@ -63,9 +63,9 @@ public static class TrackerStateTransitionService
             new PersistentTrackerState(
                 state.SchemaVersion,
                 state.SelectedGameId,
-                state.SelectedGameId == GameId.Bloodborne ? state.ManualBloodborneDeathCounter.Increment() : state.ManualBloodborneDeathCounter,
+                state.ManualBloodborneDeathCounter,
                 state.OverlayConfiguration, state.ManualBloodborneHotkeys, state.TextExports,
-                state.SelectedGameId == GameId.DemonsSouls ? state.ManualDemonsSoulsDeathCounter.Increment() : state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
+                state.ManualDemonsSoulsDeathCounter.Increment(), state.EldenRingNoticeAcknowledged, state.EldenRingSave,
                 state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave),
             TrackerCommandType.IncrementManualBloodborneDeaths);
     }
@@ -257,9 +257,9 @@ public static class TrackerStateTransitionService
 
     private static void RequireManualGameSelected(PersistentTrackerState state)
     {
-        if (state.SelectedGameId != GameId.Bloodborne && state.SelectedGameId != GameId.DemonsSouls)
+        if (state.SelectedGameId != GameId.DemonsSouls)
         {
-            throw new ArgumentException("Manual death commands require Bloodborne or Demon Souls to be selected.", nameof(state));
+            throw new ArgumentException("Manual death commands require Demon Souls to be selected.", nameof(state));
         }
     }
 
