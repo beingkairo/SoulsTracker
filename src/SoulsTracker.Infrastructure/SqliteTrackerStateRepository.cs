@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
@@ -220,7 +219,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         StoredEldenRingMissedDeathAdjustment[] adjustments = state.EldenRingMissedDeathAdjustments.ToEntries()
             .Select(static entry => new StoredEldenRingMissedDeathAdjustment(entry.LocalSavePath, entry.SlotIndex, entry.Value))
             .ToArray();
-        return (new StoredState(state.SelectedGameId.Value, 0, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
+        return (new StoredState(state.SelectedGameId.Value, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
     }
     private static PersistentTrackerState ToDomain(StoredState dto, string? token)
     {
@@ -256,6 +255,6 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 
 
     public ValueTask DisposeAsync() { if (!disposed) { disposed = true; writerLock.Dispose(); } return ValueTask.CompletedTask; }
-    private sealed record StoredState(string? SelectedGameId, [property: JsonIgnore] long ManualDeaths, int? Port, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
+    private sealed record StoredState(string? SelectedGameId, int? Port, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
     private sealed record StoredEldenRingMissedDeathAdjustment(string LocalSavePath, int SlotIndex, long Value);
 }
