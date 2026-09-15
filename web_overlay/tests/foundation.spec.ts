@@ -22,3 +22,23 @@ test("legacy deaths alias selects Total Deaths", async ({ page }) => {
   await page.goto("http://overlay.test/overlay/deaths");
   await expect(page.locator("#souls-tracker-overlay")).toHaveCount(1);
 });
+
+for (const [game, source, total] of [
+  ["Demon Souls", "Manual", 7],
+  ["Bloodborne", "GameLifetimeReader", 42],
+  ["Bloodborne", "GameLifetimeReader", 0],
+] as const) {
+  test(`${game} ${source} renders ${total}`, async ({ page }) => {
+    await page.routeWebSocket("ws://overlay.test/overlay/ws", (socket) => {
+      socket.send(JSON.stringify({
+        SchemaVersion: 1,
+        SequenceNumber: 1,
+        SelectedGame: { DisplayName: game },
+        TotalDeaths: { Source: source, Value: total },
+        Presentation: { IsTotalDeathsEnabled: true, ShowGameName: false },
+      }));
+    });
+    await page.goto("http://overlay.test/overlay/total_deaths");
+    await expect(page.getByTestId("total-deaths-overlay")).toHaveText(`TOTAL DEATHS: ${total}`);
+  });
+}

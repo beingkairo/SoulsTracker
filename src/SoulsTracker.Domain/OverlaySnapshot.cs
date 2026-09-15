@@ -8,7 +8,7 @@ namespace SoulsTracker.Domain;
 public enum TotalDeathsDisplaySource
 {
     Unavailable,
-    ManualBloodborne,
+    Manual,
     GameLifetimeReader,
 }
 
@@ -80,27 +80,20 @@ public sealed class TotalDeathsDisplayValue
         return new TotalDeathsDisplayValue(TotalDeathsDisplaySource.Unavailable, gameId, null);
     }
 
-    /// <summary>
-    /// Creates a manual display value from the sole approved manual counter.
-    /// </summary>
-    public static TotalDeathsDisplayValue FromManualBloodborneCounter(
-        ManualBloodborneDeathCounter manualBloodborneDeathCounter)
-        => FromManualCounter(GameId.Bloodborne, manualBloodborneDeathCounter);
-
-    /// <summary>Creates a manual display value for either supported manual profile.</summary>
+    /// <summary>Creates a manual display value for Demon Souls.</summary>
     public static TotalDeathsDisplayValue FromManualCounter(
         GameId gameId,
-        ManualBloodborneDeathCounter manualDeathCounter)
+        ManualDeathCounter manualDeathCounter)
     {
         ArgumentNullException.ThrowIfNull(gameId);
         ArgumentNullException.ThrowIfNull(manualDeathCounter);
-        if (gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls)
+        if (gameId != GameId.DemonsSouls)
         {
             throw new ArgumentException("Manual Total Deaths is available only for the supported manual profiles.", nameof(gameId));
         }
 
         return new TotalDeathsDisplayValue(
-            TotalDeathsDisplaySource.ManualBloodborne,
+            TotalDeathsDisplaySource.Manual,
             gameId,
             manualDeathCounter.Value);
     }
@@ -351,8 +344,8 @@ public sealed class OverlaySnapshot
 
                 return;
 
-            case TotalDeathsDisplaySource.ManualBloodborne:
-                if ((selectedDefinition.Id != GameId.Bloodborne && selectedDefinition.Id != GameId.DemonsSouls) ||
+            case TotalDeathsDisplaySource.Manual:
+                if (selectedDefinition.Id != GameId.DemonsSouls ||
                     totalDeaths.GameId != selectedDefinition.Id ||
                     totalDeaths.Value is null ||
                     totalDeaths.Value < 0)

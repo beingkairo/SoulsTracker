@@ -21,7 +21,7 @@ public sealed class PersistentTrackerState
         GlobalHotkeyConfiguration.Default,
 
         TextExportConfiguration.Default,
-        ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
+        ManualDeathCounter.CreateFor(GameId.DemonsSouls),
         eldenRingNoticeAcknowledged: false,
         EldenRingSaveConfiguration.Default,
 
@@ -41,7 +41,7 @@ public sealed class PersistentTrackerState
         GlobalHotkeyConfiguration? globalHotkeys = null,
 
         TextExportConfiguration? textExports = null,
-        ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
+        ManualDeathCounter? manualDemonsSoulsDeathCounter = null,
         bool eldenRingNoticeAcknowledged = false,
         EldenRingSaveConfiguration? eldenRingSave = null,
 
@@ -64,7 +64,7 @@ public sealed class PersistentTrackerState
         SchemaVersion = schemaVersion;
         SelectedGameId = selectedGameId;
 
-        ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
+        ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualDeathCounter.CreateFor(GameId.DemonsSouls);
         BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
         LiesOfPSave = liesOfPSave ?? LiesOfPSaveConfiguration.Default;
 
@@ -92,7 +92,7 @@ public sealed class PersistentTrackerState
 
 
     /// <summary>Gets the persisted Demon’s Souls manual death counter.</summary>
-    public ManualBloodborneDeathCounter ManualDemonsSoulsDeathCounter { get; }
+    public ManualDeathCounter ManualDemonsSoulsDeathCounter { get; }
 
     /// <summary>Local configuration for the separate read-only Black Myth: Wukong save reader.</summary>
     public BlackMythWukongSaveConfiguration BlackMythWukongSave { get; }
@@ -101,7 +101,7 @@ public sealed class PersistentTrackerState
     public LiesOfPSaveConfiguration LiesOfPSave { get; }
 
     /// <summary>Returns the independent manual counter for a supported manual profile.</summary>
-    public ManualBloodborneDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.DemonsSouls
+    public ManualDeathCounter GetManualDeathCounter(GameId gameId) => gameId == GameId.DemonsSouls
             ? ManualDemonsSoulsDeathCounter
             : throw new InvalidOperationException("The selected game does not use a manual death counter.");
 

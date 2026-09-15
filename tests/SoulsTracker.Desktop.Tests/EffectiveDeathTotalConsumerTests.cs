@@ -205,6 +205,53 @@ public sealed class EffectiveDeathTotalConsumerTests
         }
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(42)]
+    public async Task BloodborneAutomaticTotalAgreesAcrossDesktopOverlayAndTextAfterManualRequests(long observed)
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"souls-tracker-{Guid.NewGuid():N}.txt");
+        try
+        {
+            PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion, GameId.Bloodborne,
+                OverlayConfiguration.Default, textExports: new TextExportConfiguration(path, true),
+                manualDemonsSoulsDeathCounter: ManualDeathCounter.CreateFor(GameId.DemonsSouls, 7));
+            var repository = new MemoryRepository(state);
+            await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            var tracker = new DesktopTrackerViewModel(coordinator);
+            await tracker.InitializeAsync();
+            RuntimeGameReadResult read = RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Bloodborne,
+                new GameLifetimeDeathTotal(observed), DateTimeOffset.UtcNow, EffectiveDeathTotalResult.SourceIdentityFor(state)));
+            tracker.ApplyRuntimeReaderResult(read);
+
+            Assert.False(tracker.IsManualGameSelected);
+            Assert.False(tracker.CanDecrementManualDeaths);
+            Assert.False(tracker.IsGlobalHotkeyConfigurationAvailable);
+            await tracker.IncrementManualDeathsAsync();
+            await tracker.DecrementManualDeathsAsync();
+            await tracker.IncrementGlobalTrackedDeathsAsync();
+            await tracker.DecrementGlobalTrackedDeathsAsync();
+            Assert.Same(state, repository.State);
+            Assert.Equal(7, repository.State.ManualDemonsSoulsDeathCounter.Value);
+            Assert.Equal(observed.ToString(System.Globalization.CultureInfo.InvariantCulture), tracker.TotalDeathsText);
+            Assert.True(tracker.IsTotalDeathsValueNumeric);
+
+            OverlaySnapshot snapshot = OverlaySnapshotFactory.Create(repository.State, read.Observation, 1);
+            Assert.Equal(GameId.Bloodborne, snapshot.TotalDeaths.GameId);
+            Assert.Equal(TotalDeathsDisplaySource.GameLifetimeReader, snapshot.TotalDeaths.Source);
+            Assert.Equal(observed, snapshot.TotalDeaths.Value);
+            await using (var publisher = new TextExportStatePublisher())
+            {
+                publisher.PublishRuntimeObservation(repository.State, read);
+            }
+            Assert.Equal($"Total Deaths: {observed}", await File.ReadAllTextAsync(path));
+
+            await tracker.SelectGameAsync(tracker.GameChoices.Single(choice => choice.GameId == GameId.DemonsSouls));
+            Assert.Equal("7", tracker.TotalDeathsText);
+        }
+        finally { File.Delete(path); }
+    }
+
     private sealed class NullPublisher : ITrackerStateChangePublisher
     {
         public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default) => Task.CompletedTask;

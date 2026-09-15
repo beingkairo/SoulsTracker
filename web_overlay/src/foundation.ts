@@ -1,6 +1,6 @@
 type OverlayRoute = "total-deaths";
 
-type TotalDeathsSource = "Unavailable" | "ManualBloodborne" | "GameLifetimeReader";
+type TotalDeathsSource = "Unavailable" | "Manual" | "GameLifetimeReader";
 
 interface OverlayGameMetadata {
   DisplayName: string;
@@ -412,7 +412,7 @@ function isNonNegativeInteger(value: unknown): value is number {
 }
 
 function isTotalDeathsSource(value: unknown): value is TotalDeathsSource {
-  return value === "Unavailable" || value === "ManualBloodborne" || value === "GameLifetimeReader";
+  return value === "Unavailable" || value === "Manual" || value === "GameLifetimeReader";
 }
 
 const root = document.getElementById("souls-tracker-overlay");

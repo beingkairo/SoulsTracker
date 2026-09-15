@@ -373,7 +373,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ? state.GetManualDeathCounter(selectedGame).Value
         : 0;
 
-    public bool IsBloodborneSelected => state?.SelectedGameId == GameId.Bloodborne;
+
     public bool IsEldenRingSelected => state?.SelectedGameId == GameId.EldenRing;
     public ObservableCollection<DiscoveredLocalSave> EldenRingSaveChoices { get; }
     public DiscoveredLocalSave? SelectedEldenRingSaveChoice { get; private set; }
@@ -1387,7 +1387,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(ControlsEnabled));
         OnPropertyChanged(nameof(ManualDeaths));
-        OnPropertyChanged(nameof(IsBloodborneSelected));
+
         OnPropertyChanged(nameof(IsEldenRingSelected));
         OnPropertyChanged(nameof(IsBlackMythWukongSelected));
         OnPropertyChanged(nameof(IsLiesOfPSelected));

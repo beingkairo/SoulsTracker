@@ -16,12 +16,12 @@ PersistentTrackerState state = publishManualIncrement
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.DemonsSouls,
         configuration,
-        manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls))
+        manualDemonsSoulsDeathCounter: ManualDeathCounter.CreateFor(GameId.DemonsSouls))
     : new(
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.DemonsSouls,
         configuration,
-        manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, initialValue: 6));
+        manualDemonsSoulsDeathCounter: ManualDeathCounter.CreateFor(GameId.DemonsSouls, initialValue: 6));
 var publisher = new OverlayStateChangePublisher();
 await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(state), publisher);
 await using var service = new SecureOverlayService(coordinator, new EndpointAccessFactory());

@@ -73,8 +73,8 @@ public static class TrackerStateTransitionService
         DecrementManualDeathsCommand _)
     {
         RequireManualGameSelected(state);
-        ManualBloodborneDeathCounter currentCounter = state.GetManualDeathCounter(state.SelectedGameId!);
-        ManualBloodborneDeathCounter updatedCounter = currentCounter.Decrement();
+        ManualDeathCounter currentCounter = state.GetManualDeathCounter(state.SelectedGameId!);
+        ManualDeathCounter updatedCounter = currentCounter.Decrement();
         if (ReferenceEquals(updatedCounter, currentCounter))
         {
             return Unchanged(state, TrackerCommandType.DecrementManualDeaths);

@@ -81,6 +81,6 @@ public enum ConfirmedLegacyImportCommitOutcome
     InvalidAuditMetadata,
     DestinationHasSelectedGame,
 
-    DestinationHasManualBloodborneDeaths,
+    DestinationHasManualDeaths,
     StorageUnavailable,
 }

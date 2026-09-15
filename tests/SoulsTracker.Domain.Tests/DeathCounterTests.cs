@@ -6,40 +6,54 @@ namespace SoulsTracker.Domain.Tests;
 public sealed class DeathCounterTests
 {
     [Fact]
-    public void ManualBloodborneCounterStartsAtZeroAndNeverBecomesNegative()
+    public void ManualCounterStartsAtZeroAndNeverBecomesNegative()
     {
-        ManualBloodborneDeathCounter counter = ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne);
-        ManualBloodborneDeathCounter incrementedCounter = counter.Increment();
-        ManualBloodborneDeathCounter decrementedCounter = incrementedCounter.Decrement();
+        ManualDeathCounter counter = ManualDeathCounter.CreateFor(GameId.DemonsSouls);
+        ManualDeathCounter incrementedCounter = counter.Increment();
+        ManualDeathCounter decrementedCounter = incrementedCounter.Decrement();
 
         Assert.Equal(0L, counter.Value);
         Assert.Equal(1L, incrementedCounter.Value);
         Assert.Equal(0L, decrementedCounter.Value);
         Assert.Equal(0L, decrementedCounter.Decrement().Value);
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, -1));
+            ManualDeathCounter.CreateFor(GameId.DemonsSouls, -1));
     }
 
     [Fact]
     public void ManualCounterSupportsEachApprovedManualProfileOnly()
     {
-        foreach (GameId gameId in GameId.All.Where(static gameId => gameId != GameId.Bloodborne && gameId != GameId.DemonsSouls))
+        foreach (GameId gameId in GameId.All.Where(static gameId => gameId != GameId.DemonsSouls))
         {
             Assert.Throws<InvalidOperationException>(() =>
-                ManualBloodborneDeathCounter.CreateFor(gameId));
+                ManualDeathCounter.CreateFor(gameId));
         }
     }
 
     [Fact]
-    public void ManualBloodborneCounterCannotExistAsAUsableDefaultValue()
+    public void ManualDisplayRejectsEveryAutomaticGame()
     {
-        ManualBloodborneDeathCounter defaultCounter = default!;
-        ConstructorInfo[] publicInstanceConstructors = typeof(ManualBloodborneDeathCounter)
+        var counter = ManualDeathCounter.CreateFor(GameId.DemonsSouls, 7);
+        foreach (GameId gameId in GameId.All.Where(static gameId => gameId != GameId.DemonsSouls))
+        {
+            Assert.Throws<ArgumentException>(() => TotalDeathsDisplayValue.FromManualCounter(gameId, counter));
+        }
+
+        TotalDeathsDisplayValue display = TotalDeathsDisplayValue.FromManualCounter(GameId.DemonsSouls, counter);
+        Assert.Equal(GameId.DemonsSouls, display.GameId);
+        Assert.Equal(7, display.Value);
+    }
+
+    [Fact]
+    public void ManualCounterCannotExistAsAUsableDefaultValue()
+    {
+        ManualDeathCounter defaultCounter = default!;
+        ConstructorInfo[] publicInstanceConstructors = typeof(ManualDeathCounter)
             .GetConstructors(BindingFlags.Public | BindingFlags.Instance);
 
         Assert.Null(defaultCounter);
-        Assert.True(typeof(ManualBloodborneDeathCounter).IsClass);
-        Assert.True(typeof(ManualBloodborneDeathCounter).IsSealed);
+        Assert.True(typeof(ManualDeathCounter).IsClass);
+        Assert.True(typeof(ManualDeathCounter).IsSealed);
         Assert.Empty(publicInstanceConstructors);
     }
 

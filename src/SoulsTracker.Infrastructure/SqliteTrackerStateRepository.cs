@@ -185,7 +185,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         if (state.SelectedGameId != GameId.DemonsSouls) return ConfirmedLegacyImportCommitOutcome.DestinationHasSelectedGame;
 
         return state.ManualDemonsSoulsDeathCounter.Value != 0
-            ? ConfirmedLegacyImportCommitOutcome.DestinationHasManualBloodborneDeaths
+            ? ConfirmedLegacyImportCommitOutcome.DestinationHasManualDeaths
             : null;
     }
     private async Task UpsertStateAsync(SqliteConnection connection, SqliteTransaction transaction, StoredState dto, string? token, CancellationToken cancellationToken)
@@ -250,7 +250,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         catch (ArgumentException) { adjustments = EldenRingMissedDeathAdjustments.Empty; }
 
         GameId selectedGameId = dto.SelectedGameId is null ? GameId.DemonsSouls : GameId.Parse(dto.SelectedGameId);
-        return new PersistentTrackerState(1, selectedGameId, new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
+        return new PersistentTrackerState(1, selectedGameId, new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
     }
 
 

@@ -88,6 +88,38 @@ public sealed class ManualStatePersistenceTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public async Task LegacyImportPreservesNonzeroDemonSoulsStateAtBothGuards()
+    {
+        LegacyStateAnalysis analysis = LegacyStateAnalyzer.Analyze(
+            """{"settings":{"selected_game":"bloodborne"},"death_count":123}"""u8.ToArray());
+        PersistentTrackerState destination = new(PersistentTrackerState.CurrentSchemaVersion, GameId.DemonsSouls,
+            OverlayConfiguration.Default, manualDemonsSoulsDeathCounter: ManualDeathCounter.CreateFor(GameId.DemonsSouls, 7));
+        LegacyProposalApplicationResult refused = ConfirmedLegacyProposalApplication.Apply(analysis, destination);
+        Assert.Equal(LegacyProposalApplicationOutcome.DestinationHasManualDeaths, refused.Outcome);
+        Assert.Null(refused.CandidateState);
+
+        LegacyProposalApplicationResult candidate = ConfirmedLegacyProposalApplication.Apply(analysis, PersistentTrackerState.Default);
+        Assert.Equal(LegacyProposalApplicationOutcome.Applied, candidate.Outcome);
+        Assert.Equal(GameId.Bloodborne, candidate.CandidateState!.SelectedGameId);
+        Assert.Equal(0, candidate.CandidateState.ManualDemonsSoulsDeathCounter.Value);
+        string root = Path.Combine(Path.GetTempPath(), $"souls-manual-state-{Guid.NewGuid():N}");
+        try
+        {
+            await using var repository = new SqliteTrackerStateRepository(root, "test.db");
+            await repository.SaveAsync(destination);
+            var audit = new ConfirmedLegacyImportAuditMetadata(ConfirmedLegacyImportAuditMetadata.CurrentContractVersion,
+                LegacyImportPreflightOutcome.Prepared, new string('A', 64), new string('B', 64));
+            ConfirmedLegacyImportCommitResult result = await repository.CommitConfirmedLegacyImportAsync(candidate, audit);
+            Assert.Equal(ConfirmedLegacyImportCommitOutcome.DestinationHasManualDeaths, result.Outcome);
+            TrackerStateLoadResult loaded = await repository.LoadAsync();
+            Assert.True(loaded.IsSuccess);
+            Assert.Equal(GameId.DemonsSouls, loaded.State!.SelectedGameId);
+            Assert.Equal(7, loaded.State.ManualDemonsSoulsDeathCounter.Value);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private sealed class NullPublisher : ITrackerStateChangePublisher
     {
         public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default) => Task.CompletedTask;
