@@ -14,7 +14,7 @@ public sealed class EffectiveDeathTotalConsumerTests
     public void OverlayAndEffectiveResultAgreeForNamedSyncedMatrixScenarios(int observed, EffectiveDeathTotalStatus status, int total)
     {
         PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion, GameId.BlackMythWukong,
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+            OverlayConfiguration.Default,
             blackMythWukongSave: new BlackMythWukongSaveConfiguration("/saves/ArchiveSaveFile.1.sav"));
         RuntimeGameObservation observation = new(GameId.BlackMythWukong, new GameLifetimeDeathTotal(observed), DateTimeOffset.UtcNow, EffectiveDeathTotalResult.SourceIdentityFor(state));
         EffectiveDeathTotalResult result = EffectiveDeathTotalResult.Resolve(state, observation);
@@ -56,7 +56,6 @@ public sealed class EffectiveDeathTotalConsumerTests
             PersistentTrackerState state = new(
                 PersistentTrackerState.CurrentSchemaVersion,
                 GameId.DemonsSouls,
-                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne, 4),
                 OverlayConfiguration.Default,
                 textExports: new TextExportConfiguration(path, true));
 
@@ -120,7 +119,7 @@ public sealed class EffectiveDeathTotalConsumerTests
         try
         {
             PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion, GameId.BlackMythWukong,
-                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+                OverlayConfiguration.Default,
                 textExports: new TextExportConfiguration(path, true),
                 blackMythWukongSave: new BlackMythWukongSaveConfiguration("C:/saves/ArchiveSaveFile.1.sav"));
             RuntimeGameObservation observation = new(GameId.BlackMythWukong, new GameLifetimeDeathTotal(scenario == "zero" ? 0 : 12),
@@ -171,7 +170,7 @@ public sealed class EffectiveDeathTotalConsumerTests
         try
         {
             PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion, GameId.EldenRing,
-                ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+                OverlayConfiguration.Default,
                 textExports: new TextExportConfiguration(path, true), eldenRingNoticeAcknowledged: true,
                 eldenRingSave: new EldenRingSaveConfiguration("C:/saves/ER0000.sl2", 1),
                 eldenRingMissedDeathAdjustments: new EldenRingMissedDeathAdjustments([new EldenRingMissedDeathAdjustment("C:/saves/ER0000.sl2", 1, 3)]));

@@ -17,8 +17,6 @@ public sealed class PersistentTrackerState
     public static PersistentTrackerState Default { get; } = new(
         CurrentSchemaVersion,
         selectedGameId: GameId.DemonsSouls,
-        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
-
         OverlayConfiguration.Default,
         GlobalHotkeyConfiguration.Default,
 
@@ -39,8 +37,6 @@ public sealed class PersistentTrackerState
     public PersistentTrackerState(
         int schemaVersion,
         GameId? selectedGameId,
-        ManualBloodborneDeathCounter manualBloodborneDeathCounter,
-
         OverlayConfiguration overlayConfiguration,
         GlobalHotkeyConfiguration? globalHotkeys = null,
 
@@ -63,15 +59,11 @@ public sealed class PersistentTrackerState
 
         selectedGameId ??= GameId.DemonsSouls;
         ValidateSelectedGame(selectedGameId, eldenRingNoticeAcknowledged);
-        ArgumentNullException.ThrowIfNull(manualBloodborneDeathCounter);
-
         ArgumentNullException.ThrowIfNull(overlayConfiguration);
 
         SchemaVersion = schemaVersion;
         SelectedGameId = selectedGameId;
-        // Retained only so older persisted documents can be read. Bloodborne is
-        // automatic and its former manual value is never part of live state.
-        ManualBloodborneDeathCounter = ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne);
+
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls);
         BlackMythWukongSave = blackMythWukongSave ?? BlackMythWukongSaveConfiguration.Default;
         LiesOfPSave = liesOfPSave ?? LiesOfPSaveConfiguration.Default;
@@ -98,8 +90,6 @@ public sealed class PersistentTrackerState
     /// </summary>
     public GameId SelectedGameId { get; }
 
-    /// <summary>Gets the zero-valued compatibility shim for removed Bloodborne manual state.</summary>
-    public ManualBloodborneDeathCounter ManualBloodborneDeathCounter { get; }
 
     /// <summary>Gets the persisted Demon’s Souls manual death counter.</summary>
     public ManualBloodborneDeathCounter ManualDemonsSoulsDeathCounter { get; }

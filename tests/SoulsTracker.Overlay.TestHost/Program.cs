@@ -15,13 +15,11 @@ PersistentTrackerState state = publishManualIncrement
     ? new(
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.DemonsSouls,
-        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
         configuration,
         manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls))
     : new(
         PersistentTrackerState.CurrentSchemaVersion,
         GameId.DemonsSouls,
-        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
         configuration,
         manualDemonsSoulsDeathCounter: ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, initialValue: 6));
 var publisher = new OverlayStateChangePublisher();

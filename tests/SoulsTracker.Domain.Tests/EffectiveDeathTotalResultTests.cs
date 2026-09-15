@@ -34,7 +34,7 @@ public sealed class EffectiveDeathTotalResultTests
     public void EldenRingSaveOrSlotMismatchCannotApplyAdjustment()
     {
         PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion, GameId.EldenRing,
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+            OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true, eldenRingSave: new EldenRingSaveConfiguration("C:/saves/ER0000.sl2", 1),
             eldenRingMissedDeathAdjustments: new EldenRingMissedDeathAdjustments([new EldenRingMissedDeathAdjustment("C:/saves/ER0000.sl2", 1, 3)]));
         EffectiveDeathTotalResult result = EffectiveDeathTotalResult.Resolve(state,
@@ -45,10 +45,10 @@ public sealed class EffectiveDeathTotalResultTests
     }
 
     private static PersistentTrackerState Wukong(string path) => new(PersistentTrackerState.CurrentSchemaVersion, GameId.BlackMythWukong,
-        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+        OverlayConfiguration.Default,
         blackMythWukongSave: new BlackMythWukongSaveConfiguration(path));
 
     private static PersistentTrackerState Lies(string path) => new(PersistentTrackerState.CurrentSchemaVersion, GameId.LiesOfP,
-        ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+        OverlayConfiguration.Default,
         liesOfPSave: new LiesOfPSaveConfiguration(path));
 }

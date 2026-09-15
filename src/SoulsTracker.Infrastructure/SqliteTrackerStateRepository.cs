@@ -251,7 +251,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         catch (ArgumentException) { adjustments = EldenRingMissedDeathAdjustments.Empty; }
 
         GameId selectedGameId = dto.SelectedGameId is null ? GameId.DemonsSouls : GameId.Parse(dto.SelectedGameId);
-        return new PersistentTrackerState(1, selectedGameId, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
+        return new PersistentTrackerState(1, selectedGameId, new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
     }
 
 

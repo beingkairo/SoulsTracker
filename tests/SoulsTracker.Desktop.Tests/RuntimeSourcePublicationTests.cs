@@ -103,7 +103,7 @@ public sealed class RuntimeSourcePublicationTests
 
     private static PersistentTrackerState State(bool lies, string profile, int character = 1, int member = 1, string? export = null) =>
         new(PersistentTrackerState.CurrentSchemaVersion, lies ? GameId.LiesOfP : GameId.BlackMythWukong,
-            ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), OverlayConfiguration.Default,
+            OverlayConfiguration.Default,
             textExports: new TextExportConfiguration(export, export is not null),
             blackMythWukongSave: new BlackMythWukongSaveConfiguration($"C:/saves/{profile}/ArchiveSaveFile.1.sav"),
             liesOfPSave: new LiesOfPSaveConfiguration($"C:/saves/{profile}/SaveData-{character}_Character_{member}.sav"));
@@ -127,7 +127,7 @@ public sealed class RuntimeSourcePublicationTests
         try
         {
             PersistentTrackerState exportState = new(state.SchemaVersion, state.SelectedGameId,
-                state.ManualBloodborneDeathCounter, state.OverlayConfiguration,
+                state.OverlayConfiguration,
                 textExports: new TextExportConfiguration(export, true),
                 blackMythWukongSave: state.BlackMythWukongSave, liesOfPSave: state.LiesOfPSave);
             await File.WriteAllTextAsync(export, "Total Deaths: 42");
