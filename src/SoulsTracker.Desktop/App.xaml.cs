@@ -194,7 +194,7 @@ public partial class App : System.Windows.Application, IDisposable
         {
             messageSink = new HwndGlobalHotkeyMessageSink(window);
             hotkeys = new DesktopGlobalHotkeyService(messageSink, new WindowsGlobalHotkeyNative(), viewModel);
-            GlobalHotkeySettings storedSettings = ToDesktopHotkeys(viewModel.CurrentState!.ManualBloodborneHotkeys);
+            GlobalHotkeySettings storedSettings = ToDesktopHotkeys(viewModel.CurrentState!.GlobalHotkeys);
             _ = hotkeys.Start(storedSettings);
             globalHotkeys = hotkeys;
             viewModel.ConfigureGlobalHotkeys(hotkeys.ActiveSettings, async settings =>
@@ -204,7 +204,7 @@ public partial class App : System.Windows.Application, IDisposable
                     if (!replacement.IsRegistered) return replacement;
                     try
                     {
-                        await coordinator!.SetManualBloodborneHotkeysAsync(ToDomainHotkeys(settings));
+                        await coordinator!.SetGlobalHotkeysAsync(ToDomainHotkeys(settings));
                         return replacement;
                     }
                     catch
@@ -237,7 +237,7 @@ public partial class App : System.Windows.Application, IDisposable
         return ValueTask.CompletedTask;
     }
 
-    private static GlobalHotkeySettings ToDesktopHotkeys(SoulsTracker.Domain.ManualBloodborneHotkeyConfiguration source)
+    private static GlobalHotkeySettings ToDesktopHotkeys(SoulsTracker.Domain.GlobalHotkeyConfiguration source)
     {
         if (GlobalHotkeyBinding.TryFromPersisted(source.IncrementModifiers, source.IncrementVirtualKey, out GlobalHotkeyBinding? increment) &&
             GlobalHotkeyBinding.TryFromPersisted(source.DecrementModifiers, source.DecrementVirtualKey, out GlobalHotkeyBinding? decrement))
@@ -246,7 +246,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
         return GlobalHotkeySettings.Default;
     }
-    private static SoulsTracker.Domain.ManualBloodborneHotkeyConfiguration ToDomainHotkeys(GlobalHotkeySettings source) => new(source.Increment.Modifiers, source.Increment.VirtualKey, source.Decrement.Modifiers, source.Decrement.VirtualKey);
+    private static SoulsTracker.Domain.GlobalHotkeyConfiguration ToDomainHotkeys(GlobalHotkeySettings source) => new(source.Increment.Modifiers, source.Increment.VirtualKey, source.Decrement.Modifiers, source.Decrement.VirtualKey);
 
     private async ValueTask DisposeOverlayServiceAsync()
     {

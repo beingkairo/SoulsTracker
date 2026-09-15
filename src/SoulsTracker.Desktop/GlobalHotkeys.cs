@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -46,12 +47,19 @@ internal sealed class GlobalHotkeyController : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
+        if (!viewModel.IsGlobalHotkeyConfigurationAvailable)
+        {
+            activeSettings = settings ?? activeSettings;
+            Suspend();
+            return GlobalHotkeyRegistrationResult.NotApplicable;
+        }
+
         if (registrationResult is not null)
         {
             return registrationResult;
         }
 
-        settings ??= GlobalHotkeySettings.Default;
+        settings ??= activeSettings;
         try
         {
             if (!native.RegisterHotKey(
@@ -89,6 +97,10 @@ internal sealed class GlobalHotkeyController : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(candidate);
+        if (!viewModel.IsGlobalHotkeyConfigurationAvailable)
+        {
+            return GlobalHotkeyRegistrationResult.NotApplicable;
+        }
         if (candidate.Increment == candidate.Decrement)
         {
             return GlobalHotkeyRegistrationResult.Invalid("Increment and decrement cannot use the same binding.");
@@ -113,7 +125,7 @@ internal sealed class GlobalHotkeyController : IDisposable
     /// <summary>Maps a native hotkey message to the existing guarded view-model command methods.</summary>
     public Task<bool> HandleMessageAsync(int message, nint wParam)
     {
-        if (!IsRegistered || message != WindowsHotkeyMessage)
+        if (!viewModel.IsGlobalHotkeyConfigurationAvailable || !IsRegistered || message != WindowsHotkeyMessage)
         {
             return Task.FromResult(false);
         }
@@ -136,6 +148,12 @@ internal sealed class GlobalHotkeyController : IDisposable
 
         _ = HandleMessageAsync(message, wParam);
         return true;
+    }
+
+    public void Suspend()
+    {
+        UnregisterAcquiredHotkeys();
+        registrationResult = null;
     }
 
     public void Dispose()
@@ -163,6 +181,7 @@ internal sealed class GlobalHotkeyController : IDisposable
     }
 
     private bool CanHandleMessage(int message, nint wParam) =>
+        viewModel.IsGlobalHotkeyConfigurationAvailable &&
         IsRegistered &&
         message == WindowsHotkeyMessage &&
         unchecked((int)wParam.ToInt64()) is IncrementHotkeyId or DecrementHotkeyId;
@@ -215,6 +234,10 @@ internal enum GlobalHotkeyRegistrationStatus
 
 internal sealed record GlobalHotkeyRegistrationResult(GlobalHotkeyRegistrationStatus Status, string StatusMessage)
 {
+    public static GlobalHotkeyRegistrationResult NotApplicable { get; } = new(
+        GlobalHotkeyRegistrationStatus.Unavailable,
+        "Global hotkeys do not apply to the selected game.");
+
     public static GlobalHotkeyRegistrationResult Registered { get; } = new(
         GlobalHotkeyRegistrationStatus.Registered,
         "Global hotkeys are active.");
@@ -336,6 +359,8 @@ internal sealed class DesktopGlobalHotkeyService : IDisposable
 {
     private readonly GlobalHotkeyController controller;
     private readonly IGlobalHotkeyMessageSink messageSink;
+    private readonly DesktopTrackerViewModel viewModel;
+    private bool started;
     private bool disposed;
     private bool messageSinkDisposed;
 
@@ -347,12 +372,15 @@ internal sealed class DesktopGlobalHotkeyService : IDisposable
         this.messageSink = messageSink ?? throw new ArgumentNullException(nameof(messageSink));
         controller = new GlobalHotkeyController(messageSink.WindowHandle, native, viewModel);
         messageSink.SetMessageHandler(controller.TryDispatchWindowMessage);
+        this.viewModel = viewModel;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
     public GlobalHotkeyRegistrationResult Start(GlobalHotkeySettings? settings = null)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
+        started = true;
         return controller.Register(settings);
     }
 
@@ -367,6 +395,20 @@ internal sealed class DesktopGlobalHotkeyService : IDisposable
 
     public Task<bool> HandleMessageAsync(int message, nint wParam) => controller.HandleMessageAsync(message, wParam);
 
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!started || disposed || e.PropertyName != nameof(DesktopTrackerViewModel.IsGlobalHotkeyConfigurationAvailable)) return;
+        if (viewModel.IsGlobalHotkeyConfigurationAvailable)
+        {
+            _ = controller.Register();
+        }
+        else
+        {
+            controller.Suspend();
+            viewModel.SetGlobalHotkeyStatus(GlobalHotkeyRegistrationResult.NotApplicable.StatusMessage);
+        }
+    }
+
     public void Dispose()
     {
         if (disposed)
@@ -375,6 +417,7 @@ internal sealed class DesktopGlobalHotkeyService : IDisposable
         }
 
         disposed = true;
+        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         try
         {
             DisposeMessageSink();

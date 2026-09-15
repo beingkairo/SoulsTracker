@@ -11,7 +11,7 @@ public static class ConfirmedLegacyProposalApplication
         if (destination.ManualDemonsSoulsDeathCounter.Value != 0) return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.DestinationHasManualBloodborneDeaths);
         GameId? selected = analysis.Proposal.SelectedGameId;
         if (selected is null || selected == GameId.EldenRing || !GameCatalog.TryGet(selected.ToString(), out GameDefinition? game) || !game.IsSelectable) return LegacyProposalApplicationResult.Refused(LegacyProposalApplicationOutcome.InvalidProposal);
-        return LegacyProposalApplicationResult.Applied(new PersistentTrackerState(destination.SchemaVersion, selected, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), destination.OverlayConfiguration, destination.ManualBloodborneHotkeys, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave, destination.BlackMythWukongSave, destination.EldenRingMissedDeathAdjustments, destination.LiesOfPSave));
+        return LegacyProposalApplicationResult.Applied(new PersistentTrackerState(destination.SchemaVersion, selected, ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne), destination.OverlayConfiguration, destination.GlobalHotkeys, destination.TextExports, ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls), destination.EldenRingNoticeAcknowledged, destination.EldenRingSave, destination.BlackMythWukongSave, destination.EldenRingMissedDeathAdjustments, destination.LiesOfPSave));
     }
 }
 public sealed class LegacyProposalApplicationResult(LegacyProposalApplicationOutcome outcome, PersistentTrackerState? candidateState)

@@ -26,15 +26,15 @@ public sealed class SerializedTrackerCoordinatorTests
         await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
         await coordinator.InitializeAsync();
         var endpoint = new OverlayEndpointConfiguration(4321, OverlayAccessToken.Parse(new string('A', 43)));
-        var hotkeys = new ManualBloodborneHotkeyConfiguration(2, 118, 2, 119);
+        var hotkeys = new GlobalHotkeyConfiguration(2, 118, 2, 119);
 
         PersistentTrackerState endpointState = await coordinator.SetOverlayEndpointAsync(endpoint);
-        PersistentTrackerState hotkeyState = await coordinator.SetManualBloodborneHotkeysAsync(hotkeys);
+        PersistentTrackerState hotkeyState = await coordinator.SetGlobalHotkeysAsync(hotkeys);
 
         Assert.Equal(endpoint, endpointState.OverlayConfiguration.Endpoint);
-        Assert.Equal(hotkeys, hotkeyState.ManualBloodborneHotkeys);
+        Assert.Equal(hotkeys, hotkeyState.GlobalHotkeys);
         Assert.Equal(0, publisher.PublishCount);
-        Assert.Equal(hotkeys, repository.State.ManualBloodborneHotkeys);
+        Assert.Equal(hotkeys, repository.State.GlobalHotkeys);
     }
 
     private sealed class Repository : ITrackerStateRepository

@@ -30,7 +30,7 @@ internal sealed record GlobalHotkeyBinding(uint Modifiers, uint VirtualKey, stri
         }
 
         int value = KeyInterop.VirtualKeyFromKey(key);
-        if (value <= 0 || !ManualBloodborneHotkeyConfiguration.IsSupportedVirtualKey((uint)value))
+        if (value <= 0 || !GlobalHotkeyConfiguration.IsSupportedVirtualKey((uint)value))
         {
             message = "Choose one supported non-modifier key.";
             return false;
@@ -48,7 +48,7 @@ internal sealed record GlobalHotkeyBinding(uint Modifiers, uint VirtualKey, stri
     {
         binding = null;
         if (modifiers > (ControlAltModifier | ShiftModifier) ||
-            !ManualBloodborneHotkeyConfiguration.IsSupportedVirtualKey(virtualKey))
+            !GlobalHotkeyConfiguration.IsSupportedVirtualKey(virtualKey))
         {
             return false;
         }

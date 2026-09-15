@@ -1,9 +1,9 @@
 namespace SoulsTracker.Domain;
 
-/// <summary>Validated, local-only bindings for the manual Bloodborne counter.</summary>
-public sealed record ManualBloodborneHotkeyConfiguration(uint IncrementModifiers, uint IncrementVirtualKey, uint DecrementModifiers, uint DecrementVirtualKey)
+/// <summary>Validated, local-only bindings shared by supported manual adjustments.</summary>
+public sealed record GlobalHotkeyConfiguration(uint IncrementModifiers, uint IncrementVirtualKey, uint DecrementModifiers, uint DecrementVirtualKey)
 {
-    public static ManualBloodborneHotkeyConfiguration Default { get; } = new(0x0007, 0x26, 0x0007, 0x28);
+    public static GlobalHotkeyConfiguration Default { get; } = new(0x0007, 0x26, 0x0007, 0x28);
 
     public bool IsValid => IsBindingValid(IncrementModifiers, IncrementVirtualKey) &&
                            IsBindingValid(DecrementModifiers, DecrementVirtualKey) &&

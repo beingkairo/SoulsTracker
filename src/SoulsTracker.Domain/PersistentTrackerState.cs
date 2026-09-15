@@ -20,7 +20,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneDeathCounter.CreateFor(GameId.Bloodborne),
 
         OverlayConfiguration.Default,
-        ManualBloodborneHotkeyConfiguration.Default,
+        GlobalHotkeyConfiguration.Default,
 
         TextExportConfiguration.Default,
         ManualBloodborneDeathCounter.CreateFor(GameId.DemonsSouls),
@@ -42,7 +42,7 @@ public sealed class PersistentTrackerState
         ManualBloodborneDeathCounter manualBloodborneDeathCounter,
 
         OverlayConfiguration overlayConfiguration,
-        ManualBloodborneHotkeyConfiguration? manualBloodborneHotkeys = null,
+        GlobalHotkeyConfiguration? globalHotkeys = null,
 
         TextExportConfiguration? textExports = null,
         ManualBloodborneDeathCounter? manualDemonsSoulsDeathCounter = null,
@@ -77,9 +77,9 @@ public sealed class PersistentTrackerState
         LiesOfPSave = liesOfPSave ?? LiesOfPSaveConfiguration.Default;
 
         OverlayConfiguration = overlayConfiguration;
-        ManualBloodborneHotkeys = manualBloodborneHotkeys is { IsValid: true } validHotkeys
+        GlobalHotkeys = globalHotkeys is { IsValid: true } validHotkeys
             ? validHotkeys
-            : ManualBloodborneHotkeyConfiguration.Default;
+            : GlobalHotkeyConfiguration.Default;
 
         TextExports = textExports ?? TextExportConfiguration.Default;
         EldenRingNoticeAcknowledged = eldenRingNoticeAcknowledged;
@@ -121,7 +121,7 @@ public sealed class PersistentTrackerState
     /// </summary>
     public OverlayConfiguration OverlayConfiguration { get; }
 
-    public ManualBloodborneHotkeyConfiguration ManualBloodborneHotkeys { get; }
+    public GlobalHotkeyConfiguration GlobalHotkeys { get; }
 
 
     public TextExportConfiguration TextExports { get; }
