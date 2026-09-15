@@ -97,6 +97,23 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task ReaderDetectsSameLengthRewriteWhenTimestampIsRestored()
+    {
+        string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 5)));
+        DateTime originalTimestamp = File.GetLastWriteTimeUtc(path);
+        var reader = new EldenRingSaveDeathReader();
+        reader.Configure(new EldenRingSaveConfiguration(path, 0));
+        Assert.Equal(5, (await reader.ReadAsync(default))!.Observation!.TotalDeaths.Value);
+
+        await File.WriteAllBytesAsync(path, EldenRingSaveFixture.Create((0, 6)));
+        File.SetLastWriteTimeUtc(path, originalTimestamp);
+
+        RuntimeGameReadResult changed = (await reader.ReadAsync(default))!;
+        Assert.Equal(6, changed.Observation!.TotalDeaths.Value);
+        Assert.Equal(RuntimeGameReaderStatus.Synced, changed.Status);
+    }
+
+    [Fact]
     public async Task ReaderFailsClosedForMissingMalformedAndLockedFixtureFiles()
     {
         var reader = new EldenRingSaveDeathReader();

@@ -518,14 +518,17 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 runtimeObservation = result.Observation;
             }
-            SetBlackMythWukongSaveMetadata(
-                result.GameId == GameId.BlackMythWukong &&
-                result.Status == RuntimeGameReaderStatus.Synced &&
-                result.BlackMythWukongSaveMetadata is not null &&
-                result.BlackMythWukongSavePath is { } metadataPath &&
-                PathsEqual(metadataPath, state.BlackMythWukongSave.LocalPath)
-                    ? result.BlackMythWukongSaveMetadata
-                    : null);
+            if (result.Status is not RuntimeGameReaderStatus.Cached)
+            {
+                SetBlackMythWukongSaveMetadata(
+                    result.GameId == GameId.BlackMythWukong &&
+                    result.Status == RuntimeGameReaderStatus.Synced &&
+                    result.BlackMythWukongSaveMetadata is not null &&
+                    result.BlackMythWukongSavePath is { } metadataPath &&
+                    PathsEqual(metadataPath, state.BlackMythWukongSave.LocalPath)
+                        ? result.BlackMythWukongSaveMetadata
+                        : null);
+            }
         }
         else if (blackMythWukongSaveIsUnconfigured)
         {

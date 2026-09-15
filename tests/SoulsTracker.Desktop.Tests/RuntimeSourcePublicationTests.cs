@@ -78,6 +78,26 @@ public sealed class RuntimeSourcePublicationTests
         await AssertConsumersAsync(state, publication, 12);
     }
 
+    [Fact]
+    public async Task CachedWukongResultRetainsConfirmedMetadata()
+    {
+        PersistentTrackerState state = State(false, "metadata");
+        await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(state), new NullPublisher());
+        var tracker = new DesktopTrackerViewModel(coordinator);
+        await tracker.InitializeAsync();
+        RuntimeGameObservation observation = new(GameId.BlackMythWukong, 12, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(state));
+        RuntimeGameReadResult synced = RuntimeGameReadResult.Synced(observation,
+            new BlackMythWukongSaveMetadata(42, TimeSpan.FromHours(3), DateTimeOffset.UtcNow),
+            state.BlackMythWukongSave.LocalPath);
+
+        tracker.ApplyRuntimeReaderResult(synced);
+        string? metadata = tracker.BlackMythWukongSaveMetadataText;
+        tracker.ApplyRuntimeReaderResult(RuntimeGameReadResult.Cached(synced));
+
+        Assert.Equal(metadata, tracker.BlackMythWukongSaveMetadataText);
+    }
+
     private static RuntimeGameReadResult? Normalize(PersistentTrackerState state, RuntimeGameReadResult? read) =>
         App.NormalizeRuntimePublication(state, read);
 

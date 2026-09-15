@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using SoulsTracker.Domain;
 
 namespace SoulsTracker.Infrastructure;
@@ -120,13 +121,14 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
         return bytes;
     }
 
-    private readonly record struct SaveFingerprint(long Length, DateTime LastWriteUtc)
+    private readonly record struct SaveFingerprint(long Length, DateTime LastWriteUtc, string ContentHash)
     {
         public static SaveFingerprint From(string path)
         {
             var info = new FileInfo(path);
             if (!info.Exists) throw new IOException("Selected save file is unavailable.");
-            return new(info.Length, info.LastWriteTimeUtc);
+            using FileStream stream = info.Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return new(info.Length, info.LastWriteTimeUtc, Convert.ToHexString(SHA256.HashData(stream)));
         }
     }
 }
