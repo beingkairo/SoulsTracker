@@ -60,14 +60,22 @@ function death(value: unknown): HostedDeath {
 function trimTitle(value: string): string {
   return value.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, "");
 }
+function wellFormed(value: string): boolean {
+  // Iteration combines valid surrogate pairs, leaving isolated code units visible.
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!;
+    if (codePoint >= 0xd800 && codePoint <= 0xdfff) return false;
+  }
+  return true;
+}
 function appearance(value: unknown): HostedAppearance {
   const a = object(value, appearanceFields);
   decimal(a.revision);
   for (const field of ["enabled", "outlineEnabled", "shadowEnabled"]) if (typeof a[field] !== "boolean") invalid();
-  if (typeof a.title !== "string" || /[<>]/.test(a.title)) return invalid();
+  if (typeof a.title !== "string" || !wellFormed(a.title) || /[<>]/.test(a.title)) return invalid();
   const title = trimTitle(a.title);
   if (title.length > 40) return invalid();
-  if (typeof a.fontFamily !== "string" || a.fontFamily.length === 0 || a.fontFamily.length > 128 ||
+  if (typeof a.fontFamily !== "string" || !wellFormed(a.fontFamily) || a.fontFamily.length === 0 || a.fontFamily.length > 128 ||
     /[\u0000-\u001f\u007f-\u009f;{}<>'"\\:()]/.test(a.fontFamily)) return invalid();
   const ranges: Record<string, [number, number]> = {
     fontSize: [12, 96], textOpacity: [0, 100], backgroundOpacity: [0, 100], padding: [0, 64], cornerRadius: [0, 32],

@@ -25,6 +25,21 @@
   "invalidDecimals": ["", "00", "01", "-1", "+1", "1.0", "1e1", " 1", "1 ", "1\n", "1\r", "1\u2028", "9223372036854775808", "99999999999999999999", "١"],
   "forbiddenFields": ["sourceIdentity", "game", "savePath", "slotIndex", "rawBase", "adjustment", "credentials", "readerErrors", "observedAtUtc", "accentColor", "alignment", "compactTitle", "showGameName"],
   "invalidDeath": {"revision": [null, 1, true], "value": [1, 1.5, true, {}], "availability": [null, 0, "Synced", "Available"]},
+  "invalidUnicode": [
+    {"name":"lone high", "json":"\"\\ud800\"", "codeUnits":[55296]},
+    {"name":"lone low", "json":"\"\\udc00\"", "codeUnits":[56320]},
+    {"name":"reversed", "json":"\"\\udc00\\ud800\"", "codeUnits":[56320,55296]},
+    {"name":"high high", "json":"\"\\ud800\\ud800\"", "codeUnits":[55296,55296]},
+    {"name":"low low", "json":"\"\\udc00\\udc00\"", "codeUnits":[56320,56320]},
+    {"name":"interrupted pair", "json":"\"\\ud800A\\udc00\"", "codeUnits":[55296,65,56320]},
+    {"name":"pair then high", "json":"\"\\ud800\\udc00\\ud800\"", "codeUnits":[55296,56320,55296]},
+    {"name":"pair then low", "json":"\"\\ud800\\udc00\\udc00\"", "codeUnits":[55296,56320,56320]}
+  ],
+  "validUnicode": [
+    {"json":"\"\\ud800\\udc00\"", "codeUnits":[55296,56320]},
+    {"json":"\"\\udbff\\udfff\"", "codeUnits":[56319,57343]},
+    {"json":"\"A\\ud83d\\udc80B\"", "codeUnits":[65,55357,56448,66]}
+  ],
   "invalidAppearance": {
     "revision": [null, 1, "-1"],
     "enabled": [null, 1, "true"],

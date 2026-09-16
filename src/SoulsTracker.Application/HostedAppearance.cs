@@ -58,6 +58,9 @@ public sealed record HostedAppearance
         if (Title is null || Title.IndexOfAny(['<', '>']) >= 0 ||
             FontFamily is null || FontFamily.IndexOfAny([':', '(', ')']) >= 0 ||
             TitleIconMode is not ("off" or "prefixSkull" or "skullOnly")) throw new JsonException("Unsafe appearance.");
+        // Reject before JSON serialization can silently replace malformed UTF-16.
+        ValidateUnicode(Title);
+        ValidateUnicode(FontFamily);
         try
         {
             // Domain is the range/default authority; the wire additionally excludes HTML and URLs.
@@ -74,5 +77,16 @@ public sealed record HostedAppearance
             };
         }
         catch (ArgumentException) { throw new JsonException("Invalid appearance."); }
+    }
+
+    private static void ValidateUnicode(string value)
+    {
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (!char.IsSurrogate(value[i])) continue;
+            if (!char.IsHighSurrogate(value[i]) || i + 1 == value.Length || !char.IsLowSurrogate(value[i + 1]))
+                throw new JsonException("Invalid Unicode appearance.");
+            i++;
+        }
     }
 }

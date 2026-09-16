@@ -4,6 +4,47 @@ import { parseHostedOverlay, serializeHostedOverlay, diffHostedOverlay } from ".
 
 const corpus = JSON.parse(readFileSync(new URL("../../tests/fixtures/hosted-overlay/contracts.json", import.meta.url), "utf8"));
 
+for (const field of ["title", "fontFamily"] as const) {
+  test(`hosted rejects malformed Unicode ${field} on parse and serialize`, () => {
+    for (const sample of corpus.invalidUnicode) {
+      const changed = structuredClone(corpus.valid[4]);
+      changed.appearance[field] = "UNICODE";
+      const raw = JSON.stringify(changed).replace('"UNICODE"', sample.json);
+      expect(() => parseHostedOverlay(raw), sample.name).toThrow();
+      changed.appearance[field] = String.fromCharCode(...sample.codeUnits);
+      expect(JSON.parse(sample.json)).toBe(changed.appearance[field]);
+      expect(() => serializeHostedOverlay(changed), sample.name).toThrow();
+    }
+  });
+  test(`hosted preserves supplementary Unicode and UTF-16 bounds ${field}`, () => {
+    const limit = field === "title" ? 40 : 128;
+    for (const sample of corpus.validUnicode) {
+      for (const repeat of [1, limit / sample.codeUnits.length]) {
+        const expected = String.fromCharCode(...sample.codeUnits).repeat(repeat);
+        const changed = structuredClone(corpus.valid[4]);
+        changed.appearance[field] = "UNICODE";
+        const token = sample.json.slice(1, -1).repeat(repeat);
+        const raw = JSON.stringify(changed).replace('"UNICODE"', `"${token}"`);
+        const parsed = parseHostedOverlay(raw);
+        expect(parsed.appearance![field]).toBe(expected);
+        expect(parseHostedOverlay(serializeHostedOverlay(parsed))).toEqual(parsed);
+        changed.appearance[field] = expected;
+        expect(parseHostedOverlay(serializeHostedOverlay(changed))).toEqual(parsed);
+        if (field === "title") {
+          changed.appearance.title = `\u0085 ${expected} \u0085`;
+          expect(parseHostedOverlay(JSON.stringify(changed)).appearance!.title).toBe(expected);
+          changed.appearance.title = expected;
+        }
+        if (expected.length === limit) {
+          expect(() => parseHostedOverlay(raw.replace(`"${token}"`, `"${token}A"`))).toThrow();
+          changed.appearance[field] += "A";
+          expect(() => serializeHostedOverlay(changed)).toThrow();
+        }
+      }
+    }
+  });
+}
+
 test("hosted exact byte, Unicode, title and font bounds", () => {
   const json = JSON.stringify(corpus.valid[0]);
   const exact = json + " ".repeat(8192 - new TextEncoder().encode(json).length);

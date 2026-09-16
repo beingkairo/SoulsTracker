@@ -10,6 +10,65 @@ public sealed class HostedOverlayContractTests
 {
     private static JsonObject Corpus => JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "contracts.json")))!.AsObject();
 
+    [Theory]
+    [InlineData("title")]
+    [InlineData("fontFamily")]
+    public void MalformedUnicodeIsRejectedOnParseAndSerialize(string field)
+    {
+        foreach (JsonNode? sample in Corpus["invalidUnicode"]!.AsArray())
+        {
+            JsonNode changed = Corpus["valid"]![4]!.DeepClone();
+            changed["appearance"]![field] = "UNICODE";
+            string raw = changed.ToJsonString().Replace("\"UNICODE\"", sample!["json"]!.GetValue<string>(), StringComparison.Ordinal);
+            Assert.ThrowsAny<JsonException>(() => HostedOverlayJson.Parse(raw));
+            string malformed = new(sample["codeUnits"]!.AsArray().Select(n => (char)n!.GetValue<int>()).ToArray());
+            var envelope = HostedOverlayJson.Parse(Corpus["valid"]![4]!.ToJsonString());
+            var appearance = field == "title" ? envelope.Appearance! with { Title = malformed }
+                : envelope.Appearance! with { FontFamily = malformed };
+            Assert.ThrowsAny<JsonException>(() => HostedOverlayJson.Serialize(envelope with { Appearance = appearance }));
+        }
+    }
+
+    [Theory]
+    [InlineData("title", 40)]
+    [InlineData("fontFamily", 128)]
+    public void SupplementaryUnicodePreservesValuesAndUtf16Bounds(string field, int limit)
+    {
+        foreach (JsonNode? sample in Corpus["validUnicode"]!.AsArray())
+        {
+            string value = new(sample!["codeUnits"]!.AsArray().Select(n => (char)n!.GetValue<int>()).ToArray());
+            string token = sample["json"]!.GetValue<string>()[1..^1];
+            foreach (int repeat in new[] { 1, limit / value.Length })
+            {
+                string expected = string.Concat(Enumerable.Repeat(value, repeat));
+                string repeatedToken = string.Concat(Enumerable.Repeat(token, repeat));
+                JsonNode changed = Corpus["valid"]![4]!.DeepClone();
+                changed["appearance"]![field] = "UNICODE";
+                string template = changed.ToJsonString();
+                string raw = template.Replace("\"UNICODE\"", $"\"{repeatedToken}\"", StringComparison.Ordinal);
+                var parsed = HostedOverlayJson.Parse(raw);
+                Assert.Equal(expected, field == "title" ? parsed.Appearance!.Title : parsed.Appearance!.FontFamily);
+                Assert.Equal(parsed, HostedOverlayJson.Parse(HostedOverlayJson.Serialize(parsed)));
+                var appearance = field == "title" ? parsed.Appearance! with { Title = expected }
+                    : parsed.Appearance! with { FontFamily = expected };
+                Assert.Equal(parsed, HostedOverlayJson.Parse(HostedOverlayJson.Serialize(parsed with { Appearance = appearance })));
+                if (field == "title")
+                {
+                    string padded = template.Replace("\"UNICODE\"", $"\"\\u0085 {repeatedToken} \\u0085\"", StringComparison.Ordinal);
+                    Assert.Equal(expected, HostedOverlayJson.Parse(padded).Appearance!.Title);
+                }
+                if (expected.Length == limit)
+                {
+                    string oversized = template.Replace("\"UNICODE\"", $"\"{repeatedToken}A\"", StringComparison.Ordinal);
+                    Assert.ThrowsAny<JsonException>(() => HostedOverlayJson.Parse(oversized));
+                    appearance = field == "title" ? appearance with { Title = expected + "A" }
+                        : appearance with { FontFamily = expected + "A" };
+                    Assert.ThrowsAny<JsonException>(() => HostedOverlayJson.Serialize(parsed with { Appearance = appearance }));
+                }
+            }
+        }
+    }
+
     [Fact]
     public void DefaultAndNormalizedAppearanceMatchesDomainAndGoldenFields()
     {
