@@ -1,0 +1,51 @@
+{
+  "valid": [
+    {"v":1,"type":"update","death":{"revision":"0","value":"0","availability":"available"}},
+    {"v":1,"type":"update","death":{"revision":"9223372036854775807","value":"9223372036854775807","availability":"available"}},
+    {"v":1,"type":"update","death":{"revision":"1","value":null,"availability":"unavailable"}},
+    {"v":1,"type":"update","death":{"revision":"2","value":"0","availability":"unavailable"}},
+    {"v":1,"type":"snapshot","death":null,"appearance":{"revision":"0","enabled":true,"title":"Total Deaths","fontFamily":"Arial","fontSize":24,"textColor":"#F7F6FF","textOpacity":100,"backgroundColor":"#15171B","backgroundOpacity":0,"padding":0,"cornerRadius":0,"outlineEnabled":true,"outlineColor":"#000000","outlineWidth":0,"shadowEnabled":false,"shadowColor":"#000000","shadowOffsetX":2,"shadowOffsetY":2,"shadowBlur":4,"titleIconMode":"off","iconColor":"#FFFFFF"}},
+    {"v":1,"type":"update","appearance":{"revision":"9223372036854775807","enabled":false,"title":"   ","fontFamily":"Segoe UI","fontSize":96,"textColor":"#abcdef","textOpacity":0,"backgroundColor":"#123456","backgroundOpacity":100,"padding":64,"cornerRadius":32,"outlineEnabled":false,"outlineColor":"#abcdef","outlineWidth":8,"shadowEnabled":true,"shadowColor":"#123456","shadowOffsetX":-20,"shadowOffsetY":20,"shadowBlur":20,"titleIconMode":"prefixSkull","iconColor":"#ffffff"}},
+    {"v":1,"type":"snapshot","death":{"revision":"3","value":"9007199254740993","availability":"available"},"appearance":{"revision":"4","enabled":true,"title":"Deaths","fontFamily":"Verdana","fontSize":12,"textColor":"#000000","textOpacity":50,"backgroundColor":"#FFFFFF","backgroundOpacity":50,"padding":1,"cornerRadius":1,"outlineEnabled":true,"outlineColor":"#FFFFFF","outlineWidth":1,"shadowEnabled":true,"shadowColor":"#000000","shadowOffsetX":20,"shadowOffsetY":-20,"shadowBlur":0,"titleIconMode":"skullOnly","iconColor":"#123456"}}
+  ],
+  "invalid": [
+    "null", "[]", "{}", "{", "{\"v\":1,}",
+    "{\"v\":1,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":null,\"availability\":\"available\"}}",
+    "{\"v\":1,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":\"0\",\"availability\":\"available\",\"\\u0076alue\":\"1\"}}",
+    "{\"v\":1.0,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":\"1\",\"availability\":\"available\"}}",
+    "{\"v\":1,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":\"1\",\"availability\":\"unavailable\"}}",
+    "{\"v\":2,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":\"1\",\"availability\":\"available\"}}",
+    "{\"v\":1,\"type\":\"update\"}",
+    "{\"v\":1,\"type\":\"snapshot\",\"death\":null}",
+    "{\"v\":1,\"type\":\"update\",\"death\":null}",
+    "{\"v\":1,\"type\":\"update\",\"appearance\":null}",
+    "{\"v\":1,\"v\":1,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":\"1\",\"availability\":\"available\"}}",
+    "{\"v\":1,\"type\":\"update\",\"death\":{\"revision\":\"1\",\"value\":\"1\",\"value\":\"2\",\"availability\":\"available\"}}"
+  ],
+  "invalidDecimals": ["", "00", "01", "-1", "+1", "1.0", "1e1", " 1", "1 ", "1\n", "1\r", "1\u2028", "9223372036854775808", "99999999999999999999", "١"],
+  "forbiddenFields": ["sourceIdentity", "game", "savePath", "slotIndex", "rawBase", "adjustment", "credentials", "readerErrors", "observedAtUtc", "accentColor", "alignment", "compactTitle", "showGameName"],
+  "invalidDeath": {"revision": [null, 1, true], "value": [1, 1.5, true, {}], "availability": [null, 0, "Synced", "Available"]},
+  "invalidAppearance": {
+    "revision": [null, 1, "-1"],
+    "enabled": [null, 1, "true"],
+    "title": [null, "12345678901234567890123456789012345678901", "<b>Deaths</b>"],
+    "fontFamily": [null, "", "Arial; color:red", "url(https://example.invalid/font)", "<font>", "a\nb", "a\\b", "'Arial'"],
+    "fontSize": [11, 97, 24.5, "24", null],
+    "textColor": ["red", "#FFF", "#GG0000", "#FFFFFF\n", "#FFFFFF\r", "#FFFFFF\u2028", null],
+    "textOpacity": [-1, 101, 1.5],
+    "backgroundColor": ["transparent"],
+    "backgroundOpacity": [-1, 101],
+    "padding": [-1, 65],
+    "cornerRadius": [-1, 33],
+    "outlineEnabled": [0],
+    "outlineColor": ["#12345678"],
+    "outlineWidth": [-1, 9],
+    "shadowEnabled": ["false"],
+    "shadowColor": ["black"],
+    "shadowOffsetX": [-21, 21],
+    "shadowOffsetY": [-21, 21],
+    "shadowBlur": [-1, 21],
+    "titleIconMode": ["Off", "hidden", null],
+    "iconColor": ["#xyzxyz"]
+  }
+}
