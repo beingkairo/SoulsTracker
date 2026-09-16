@@ -33,14 +33,25 @@ public sealed record HostedAppearance
         OverlayAppearance a = presentation.TotalDeathsAppearance;
         return new HostedAppearance
         {
-            Revision = revision, Enabled = presentation.IsTotalDeathsEnabled,
-            Title = a.Title, FontFamily = a.FontFamily, FontSize = a.FontSize,
-            TextColor = a.TextColor, TextOpacity = a.TextOpacity,
-            BackgroundColor = a.BackgroundColor, BackgroundOpacity = a.BackgroundOpacity,
-            Padding = a.Padding, CornerRadius = a.CornerRadius,
-            OutlineEnabled = a.OutlineEnabled, OutlineColor = a.OutlineColor, OutlineWidth = a.OutlineWidth,
-            ShadowEnabled = a.ShadowEnabled, ShadowColor = a.ShadowColor,
-            ShadowOffsetX = a.ShadowOffsetX, ShadowOffsetY = a.ShadowOffsetY, ShadowBlur = a.ShadowBlur,
+            Revision = revision,
+            Enabled = presentation.IsTotalDeathsEnabled,
+            Title = a.Title,
+            FontFamily = a.FontFamily,
+            FontSize = a.FontSize,
+            TextColor = a.TextColor,
+            TextOpacity = a.TextOpacity,
+            BackgroundColor = a.BackgroundColor,
+            BackgroundOpacity = a.BackgroundOpacity,
+            Padding = a.Padding,
+            CornerRadius = a.CornerRadius,
+            OutlineEnabled = a.OutlineEnabled,
+            OutlineColor = a.OutlineColor,
+            OutlineWidth = a.OutlineWidth,
+            ShadowEnabled = a.ShadowEnabled,
+            ShadowColor = a.ShadowColor,
+            ShadowOffsetX = a.ShadowOffsetX,
+            ShadowOffsetY = a.ShadowOffsetY,
+            ShadowBlur = a.ShadowBlur,
             TitleIconMode = presentation.TotalDeathsTitleIconMode switch
             {
                 OverlayTitleIconMode.Off => "off",
@@ -71,8 +82,10 @@ public sealed record HostedAppearance
             return this with
             {
                 Title = appearance.Title,
-                TextColor = TextColor.ToUpperInvariant(), BackgroundColor = BackgroundColor.ToUpperInvariant(),
-                OutlineColor = OutlineColor.ToUpperInvariant(), ShadowColor = ShadowColor.ToUpperInvariant(),
+                TextColor = TextColor.ToUpperInvariant(),
+                BackgroundColor = BackgroundColor.ToUpperInvariant(),
+                OutlineColor = OutlineColor.ToUpperInvariant(),
+                ShadowColor = ShadowColor.ToUpperInvariant(),
                 IconColor = IconColor.ToUpperInvariant(),
             };
         }

@@ -45,6 +45,7 @@ Game updates can change saved data. Keep SoulsTracker current and follow each ga
 ```powershell
 dotnet restore SoulsTracker.sln --locked-mode
 npm ci --prefix web_overlay
+npm ci --prefix cloud_overlay
 dotnet build SoulsTracker.sln --configuration Release --no-restore
 dotnet test SoulsTracker.sln --configuration Release --no-build
 npm run check --prefix web_overlay

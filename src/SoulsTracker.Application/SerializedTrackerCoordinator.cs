@@ -96,92 +96,92 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
             await mutationGate.WaitAsync().ConfigureAwait(false);
             try
             {
-            if (!initialized) { request.RejectNotInitialized(); continue; }
-            if (request is EndpointRequest endpointRequest)
-            {
-                // Endpoint configuration is startup-only and does not change the overlay snapshot, so this branch intentionally does not publish.
+                if (!initialized) { request.RejectNotInitialized(); continue; }
+                if (request is EndpointRequest endpointRequest)
+                {
+                    // Endpoint configuration is startup-only and does not change the overlay snapshot, so this branch intentionally does not publish.
+                    try
+                    {
+                        PersistentTrackerState updated = WithEndpoint(committedState!, endpointRequest.Endpoint);
+                        if (!ReferenceEquals(updated, committedState)) await repository.SaveAsync(updated, endpointRequest.CancellationToken).ConfigureAwait(false);
+                        committedState = updated;
+                        endpointRequest.Completion.TrySetResult(committedState);
+                    }
+                    catch (OperationCanceledException) { endpointRequest.Completion.TrySetCanceled(endpointRequest.CancellationToken); }
+                    catch (Exception) { endpointRequest.Completion.TrySetException(new InvalidOperationException("The local overlay endpoint could not be saved.")); }
+                    continue;
+                }
+                if (request is HotkeyRequest hotkeyRequest)
+                {
+                    // Manual hotkeys affect command input only and do not change overlay/TXT output, so this branch intentionally does not publish.
+                    try
+                    {
+                        PersistentTrackerState current = committedState!;
+                        PersistentTrackerState updated = new(
+                            current.SchemaVersion,
+                            current.SelectedGameId,
+                            current.OverlayConfiguration,
+                            hotkeyRequest.Hotkeys,
+
+                            current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave);
+                        await repository.SaveAsync(updated, hotkeyRequest.CancellationToken).ConfigureAwait(false);
+                        committedState = updated;
+                        hotkeyRequest.Completion.TrySetResult(updated);
+                    }
+                    catch (OperationCanceledException) { hotkeyRequest.Completion.TrySetCanceled(hotkeyRequest.CancellationToken); }
+                    catch
+                    {
+                        hotkeyRequest.Completion.TrySetException(new InvalidOperationException("The manual hotkeys could not be saved."));
+                    }
+
+                    continue;
+                }
+
+                if (request is TextExportRequest exportRequest)
+                {
+                    try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
+                    catch { exportRequest.Completion.TrySetException(new InvalidOperationException("The text export settings could not be saved.")); }
+                    continue;
+                }
+                if (request is EldenRingSaveRequest eldenRingSaveRequest)
+                {
+                    try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, eldenRingSaveRequest.Configuration, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateEldenRingSaveConfiguration), eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); eldenRingSaveRequest.Completion.TrySetResult(updated); }
+                    catch { eldenRingSaveRequest.Completion.TrySetException(new InvalidOperationException("The Elden Ring save selection could not be saved.")); }
+                    continue;
+                }
+                if (request is BlackMythWukongSaveRequest blackMythWukongSaveRequest)
+                {
+                    try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, blackMythWukongSaveRequest.Configuration, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateBlackMythWukongSaveConfiguration), blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); blackMythWukongSaveRequest.Completion.TrySetResult(updated); }
+                    catch { blackMythWukongSaveRequest.Completion.TrySetException(new InvalidOperationException("The Black Myth: Wukong save selection could not be saved.")); }
+                    continue;
+                }
+                if (request is LiesOfPSaveRequest liesOfPSaveRequest)
+                {
+                    try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, liesOfPSaveRequest.Configuration); await repository.SaveAsync(updated, liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateLiesOfPSaveConfiguration), liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); liesOfPSaveRequest.Completion.TrySetResult(updated); }
+                    catch { liesOfPSaveRequest.Completion.TrySetException(new InvalidOperationException("The Lies of P save selection could not be saved.")); }
+                    continue;
+                }
+                if (request is LegacyImportRequest importRequest)
+                {
+                    await ProcessLegacyImportAsync(importRequest).ConfigureAwait(false);
+                    continue;
+                }
+                CommandRequest commandRequest = (CommandRequest)request;
                 try
                 {
-                    PersistentTrackerState updated = WithEndpoint(committedState!, endpointRequest.Endpoint);
-                    if (!ReferenceEquals(updated, committedState)) await repository.SaveAsync(updated, endpointRequest.CancellationToken).ConfigureAwait(false);
-                    committedState = updated;
-                    endpointRequest.Completion.TrySetResult(committedState);
+                    TrackerTransitionResult transition = TrackerStateTransitionService.Apply(committedState!, commandRequest.Command);
+                    if (!transition.StateChanged) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.NoChange, committedState, null)); continue; }
+                    try { await repository.SaveAsync(transition.State, commandRequest.CancellationToken).ConfigureAwait(false); }
+                    catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.SaveFailed, committedState, "The tracker state could not be saved. No change was committed.")); continue; }
+                    committedState = transition.State;
+                    try { await publisher.PublishAsync(new TrackerStateChanged(committedState, transition.CommandType), commandRequest.CancellationToken).ConfigureAwait(false); commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.Applied, committedState, null)); }
+                    catch (OperationCanceledException) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.Applied, committedState, "The tracker state was saved, but update delivery was canceled.")); }
+                    catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.DeliveryFailed, committedState, "The tracker state was saved, but the update could not be delivered.")); }
                 }
-                catch (OperationCanceledException) { endpointRequest.Completion.TrySetCanceled(endpointRequest.CancellationToken); }
-                catch (Exception) { endpointRequest.Completion.TrySetException(new InvalidOperationException("The local overlay endpoint could not be saved.")); }
-                continue;
-            }
-            if (request is HotkeyRequest hotkeyRequest)
-            {
-                // Manual hotkeys affect command input only and do not change overlay/TXT output, so this branch intentionally does not publish.
-                try
-                {
-                    PersistentTrackerState current = committedState!;
-                    PersistentTrackerState updated = new(
-                        current.SchemaVersion,
-                        current.SelectedGameId,
-                        current.OverlayConfiguration,
-                        hotkeyRequest.Hotkeys,
-
-                        current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave);
-                    await repository.SaveAsync(updated, hotkeyRequest.CancellationToken).ConfigureAwait(false);
-                    committedState = updated;
-                    hotkeyRequest.Completion.TrySetResult(updated);
-                }
-                catch (OperationCanceledException) { hotkeyRequest.Completion.TrySetCanceled(hotkeyRequest.CancellationToken); }
-                catch
-                {
-                    hotkeyRequest.Completion.TrySetException(new InvalidOperationException("The manual hotkeys could not be saved."));
-                }
-
-                continue;
-            }
-
-            if (request is TextExportRequest exportRequest)
-            {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, exportRequest.Configuration, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, exportRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateTextExports), exportRequest.CancellationToken).ConfigureAwait(false); exportRequest.Completion.TrySetResult(updated); }
-                catch { exportRequest.Completion.TrySetException(new InvalidOperationException("The text export settings could not be saved.")); }
-                continue;
-            }
-            if (request is EldenRingSaveRequest eldenRingSaveRequest)
-            {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, eldenRingSaveRequest.Configuration, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateEldenRingSaveConfiguration), eldenRingSaveRequest.CancellationToken).ConfigureAwait(false); eldenRingSaveRequest.Completion.TrySetResult(updated); }
-                catch { eldenRingSaveRequest.Completion.TrySetException(new InvalidOperationException("The Elden Ring save selection could not be saved.")); }
-                continue;
-            }
-            if (request is BlackMythWukongSaveRequest blackMythWukongSaveRequest)
-            {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, blackMythWukongSaveRequest.Configuration, current.EldenRingMissedDeathAdjustments, current.LiesOfPSave); await repository.SaveAsync(updated, blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateBlackMythWukongSaveConfiguration), blackMythWukongSaveRequest.CancellationToken).ConfigureAwait(false); blackMythWukongSaveRequest.Completion.TrySetResult(updated); }
-                catch { blackMythWukongSaveRequest.Completion.TrySetException(new InvalidOperationException("The Black Myth: Wukong save selection could not be saved.")); }
-                continue;
-            }
-            if (request is LiesOfPSaveRequest liesOfPSaveRequest)
-            {
-                try { PersistentTrackerState current = committedState!; PersistentTrackerState updated = new(current.SchemaVersion, current.SelectedGameId, current.OverlayConfiguration, current.GlobalHotkeys, current.TextExports, current.ManualDemonsSoulsDeathCounter, current.EldenRingNoticeAcknowledged, current.EldenRingSave, current.BlackMythWukongSave, current.EldenRingMissedDeathAdjustments, liesOfPSaveRequest.Configuration); await repository.SaveAsync(updated, liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); committedState = updated; await publisher.PublishAsync(new TrackerStateChanged(updated, TrackerCommandType.UpdateLiesOfPSaveConfiguration), liesOfPSaveRequest.CancellationToken).ConfigureAwait(false); liesOfPSaveRequest.Completion.TrySetResult(updated); }
-                catch { liesOfPSaveRequest.Completion.TrySetException(new InvalidOperationException("The Lies of P save selection could not be saved.")); }
-                continue;
-            }
-            if (request is LegacyImportRequest importRequest)
-            {
-                await ProcessLegacyImportAsync(importRequest).ConfigureAwait(false);
-                continue;
-            }
-            CommandRequest commandRequest = (CommandRequest)request;
-            try
-            {
-                TrackerTransitionResult transition = TrackerStateTransitionService.Apply(committedState!, commandRequest.Command);
-                if (!transition.StateChanged) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.NoChange, committedState, null)); continue; }
-                try { await repository.SaveAsync(transition.State, commandRequest.CancellationToken).ConfigureAwait(false); }
-                catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.SaveFailed, committedState, "The tracker state could not be saved. No change was committed.")); continue; }
-                committedState = transition.State;
-                try { await publisher.PublishAsync(new TrackerStateChanged(committedState, transition.CommandType), commandRequest.CancellationToken).ConfigureAwait(false); commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.Applied, committedState, null)); }
-                catch (OperationCanceledException) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.Applied, committedState, "The tracker state was saved, but update delivery was canceled.")); }
-                catch (Exception) { commandRequest.Completion.TrySetResult(new(TrackerCommandExecutionStatus.DeliveryFailed, committedState, "The tracker state was saved, but the update could not be delivered.")); }
-            }
-            catch (Exception ex) { commandRequest.Completion.TrySetException(ex); }
+                catch (Exception ex) { commandRequest.Completion.TrySetException(ex); }
             }
             finally { mutationGate.Release(); }
-            }
+        }
     }
 
     private async Task ProcessLegacyImportAsync(LegacyImportRequest request)

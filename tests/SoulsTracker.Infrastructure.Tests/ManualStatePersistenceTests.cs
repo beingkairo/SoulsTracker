@@ -24,7 +24,8 @@ public sealed class ManualStatePersistenceTests
             await repository.SaveAsync(PersistentTrackerState.Default);
             await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
-                DataSource = Path.Combine(root, "test.db"), Pooling = false,
+                DataSource = Path.Combine(root, "test.db"),
+                Pooling = false,
             }.ToString());
             await connection.OpenAsync();
             await using (var command = connection.CreateCommand())

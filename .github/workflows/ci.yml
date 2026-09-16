@@ -27,7 +27,9 @@ jobs:
         with:
           node-version-file: web_overlay/.nvmrc
           cache: npm
-          cache-dependency-path: web_overlay/package-lock.json
+          cache-dependency-path: |
+            web_overlay/package-lock.json
+            cloud_overlay/package-lock.json
 
       - name: Verify version source
         shell: pwsh
@@ -39,6 +41,9 @@ jobs:
 
       - name: Restore locked overlay dependencies
         run: npm ci --prefix web_overlay
+
+      - name: Restore locked local Worker dependencies
+        run: npm ci --prefix cloud_overlay
 
       - name: Install Playwright Chromium
         run: npm exec --prefix web_overlay playwright install chromium
@@ -57,6 +62,15 @@ jobs:
 
       - name: Type-check overlay workspace
         run: npm run check --prefix web_overlay
+
+      - name: Type-check local Worker workspace
+        run: npm run check --prefix cloud_overlay
+
+      - name: Build local Worker bundle (dry run)
+        run: npm run build --prefix cloud_overlay
+
+      - name: Run local Worker tests
+        run: npm test --prefix cloud_overlay
 
       - name: Run overlay foundation tests
         run: npm test --prefix web_overlay

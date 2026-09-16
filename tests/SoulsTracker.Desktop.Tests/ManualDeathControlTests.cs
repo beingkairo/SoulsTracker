@@ -154,7 +154,8 @@ public sealed class ManualDeathControlTests
                 finally { dispatcher.BeginInvokeShutdown(DispatcherPriority.Background); }
             });
             Dispatcher.Run();
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         await completion.Task.WaitAsync(TimeSpan.FromSeconds(60));
