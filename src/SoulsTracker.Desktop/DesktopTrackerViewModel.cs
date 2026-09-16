@@ -333,6 +333,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 return null;
             }
 
+            if (runtimeReaderStatus == RuntimeGameReaderStatus.PendingLowerValue)
+            {
+                return "Confirming lower death count";
+            }
+
             if (runtimeReaderHasNoRecordedDeaths)
             {
                 return NoDeathsRecordedMessage;
@@ -480,6 +485,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool CanClearDeathsExport => CanChooseDeathsExport && state?.TextExports.DeathsPath is not null;
 
     internal PersistentTrackerState? CurrentState => state;
+
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
         if (result is
@@ -522,7 +528,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 SetBlackMythWukongSaveMetadata(
                     result.GameId == GameId.BlackMythWukong &&
-                    result.Status == RuntimeGameReaderStatus.Synced &&
+                    result.Status is RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.PendingLowerValue &&
                     result.BlackMythWukongSaveMetadata is not null &&
                     result.BlackMythWukongSavePath is { } metadataPath &&
                     PathsEqual(metadataPath, state.BlackMythWukongSave.LocalPath)
@@ -1235,11 +1241,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             InvalidateWukongOperations();
         }
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
-        EldenRingSaveConfiguration? previousEldenRingSave = state?.EldenRingSave;
-        LiesOfPSaveConfiguration? previousLiesOfPSave = state?.LiesOfPSave;
+        string? previousSource = state is null ? null : EffectiveDeathTotalResult.SourceIdentityFor(state);
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
+
         if (state.SelectedGameId != GameId.BlackMythWukong ||
-            !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.Ordinal))
         {
             SetBlackMythWukongSaveMetadata(null);
         }
@@ -1254,9 +1260,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
                 : RuntimeGameReaderStatus.Unavailable;
             runtimeReaderGameId = blackMythWukongSaveIsUnconfigured ? GameId.BlackMythWukong : liesOfPSaveIsUnconfigured ? GameId.LiesOfP : null;
         }
-        else if ((state.SelectedGameId == GameId.EldenRing && previousEldenRingSave != state.EldenRingSave) ||
-                 (state.SelectedGameId == GameId.BlackMythWukong && !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.OrdinalIgnoreCase)) ||
-                 (state.SelectedGameId == GameId.LiesOfP && previousLiesOfPSave != state.LiesOfPSave))
+        else if (!string.Equals(previousSource, EffectiveDeathTotalResult.SourceIdentityFor(state), StringComparison.Ordinal))
         {
             runtimeObservation = null;
             runtimeReaderHasNoRecordedDeaths = false;

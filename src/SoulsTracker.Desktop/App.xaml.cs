@@ -27,6 +27,7 @@ public partial class App : System.Windows.Application, IDisposable
     private LiesOfPSaveDeathReader? liesOfPSaveReader;
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
+    private readonly RuntimePublicationSession runtimePublication = new();
 
     private DesktopDataRootSelection? dataRootSelection;
 
@@ -80,9 +81,13 @@ public partial class App : System.Windows.Application, IDisposable
         overlayPublisher = new OverlayStateChangePublisher();
         textExportPublisher = new TextExportStatePublisher();
         var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
-        coordinator = new SerializedTrackerCoordinator(repository, new CompositeTrackerStateChangePublisher(overlayPublisher, textExportPublisher), new SqliteConfirmedLegacyImportCommitter(repository));
+        coordinator = new SerializedTrackerCoordinator(repository,
+            new DesktopStateChangePublisher(Dispatcher, runtimePublication,
+                new CompositeTrackerStateChangePublisher(overlayPublisher, textExportPublisher)),
+            new SqliteConfirmedLegacyImportCommitter(repository));
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
+
         textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() => viewModel.SetTextExportStatus(succeeded));
 
         if (!stateSelection.IsDevelopmentOverride)
@@ -95,6 +100,7 @@ public partial class App : System.Windows.Application, IDisposable
         MainWindow = window;
         window.Show();
         await viewModel.InitializeAsync();
+        if (viewModel.CurrentState is { } initializedState) runtimePublication.SelectState(initializedState);
         if (!mainWindowCloseRequested && viewModel.CurrentState is not null && viewModel.LegacyImport is not null)
         {
             viewModel.LegacyImport!.OfferIfEligible(viewModel.CurrentState);
@@ -335,25 +341,28 @@ public partial class App : System.Windows.Application, IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (viewModel.CurrentState is { } currentState)
+                var read = await Dispatcher.InvokeAsync(() =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    PersistentTrackerState currentState = runtimePublication.CurrentState!;
                     eldenRingSaveReader?.Configure(currentState.EldenRingSave);
                     blackMythWukongSaveReader?.Configure(currentState.BlackMythWukongSave);
                     liesOfPSaveReader?.Configure(currentState.LiesOfPSave);
-                }
+                    return (Ticket: runtimePublication.BeginRead(currentState), currentState.SelectedGameId);
+                });
                 RuntimeGameReadResult? result = await runtimeReaders!
-                    .PollAsync(viewModel.CurrentState?.SelectedGameId, cancellationToken)
+                    .PollAsync(read.SelectedGameId, cancellationToken)
                     .ConfigureAwait(false);
                 await Dispatcher.InvokeAsync(() =>
                 {
+                    if (mainWindowCloseRequested) return;
                     PersistentTrackerState currentState = viewModel.CurrentState!;
-                    RuntimeGameReadResult? publication = NormalizeRuntimePublication(currentState, result);
-                    viewModel.ApplyRuntimeReaderResult(publication);
-                    if (publication?.Status is not RuntimeGameReaderStatus.Cached)
-                    {
-                        textExportPublisher?.PublishRuntimeObservation(currentState, publication);
-                        overlayService?.PublishRuntimeObservation(publication?.Observation);
-                    }
+                    runtimePublication.CompleteRead(read.Ticket, currentState, result,
+                        viewModel.ApplyRuntimeReaderResult, publication =>
+                        {
+                            textExportPublisher?.PublishRuntimeObservation(runtimePublication.CurrentState!, publication);
+                            overlayService?.PublishRuntimeObservation(publication?.Observation);
+                        }, cancellationToken);
                 });
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
             }

@@ -9,6 +9,31 @@ namespace SoulsTracker.Desktop.Tests;
 
 public sealed class RuntimeSourcePublicationTests
 {
+    [Fact]
+    public void LowerValueRequiresASecondFreshRead()
+    {
+        PersistentTrackerState state = State(false, "confirmation");
+        var session = new RuntimePublicationSession();
+        RuntimeGameReadResult Read(long value, int second) => RuntimeGameReadResult.Synced(
+            new RuntimeGameObservation(state.SelectedGameId, value,
+                DateTimeOffset.UnixEpoch.AddSeconds(second), EffectiveDeathTotalResult.SourceIdentityFor(state)));
+        RuntimeGameReadResult? desktop = null;
+        RuntimeGameReadResult? output = null;
+        void Publish(RuntimeGameReadResult result) => session.CompleteRead(
+            session.BeginRead(state), state, result, r => desktop = r, r => output = r);
+
+        RuntimeGameReadResult confirmed = Read(100, 1);
+        Publish(confirmed);
+        Publish(Read(90, 2));
+        Assert.Equal("PendingLowerValue", desktop?.Status.ToString());
+        Assert.Same(confirmed.Observation, desktop?.Observation);
+        Assert.Same(confirmed, output);
+        RuntimeGameReadResult second = Read(90, 3);
+        Publish(second);
+        Assert.Same(second, desktop);
+        Assert.Same(second, output);
+    }
+
     [Theory]
     [InlineData(false, null)]
     [InlineData(true, null)]

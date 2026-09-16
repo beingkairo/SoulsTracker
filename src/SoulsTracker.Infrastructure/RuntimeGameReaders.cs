@@ -21,6 +21,7 @@ public enum RuntimeGameReaderStatus
     WaitingForActiveCharacter,
     Synced,
     Cached,
+    PendingLowerValue,
 }
 
 /// <summary>Contains only a safe reader status and, when synced, its runtime-only observation.</summary>
@@ -85,6 +86,10 @@ public sealed record RuntimeGameReadResult
     public static RuntimeGameReadResult Cached(RuntimeGameReadResult result) =>
         new(result.GameId, RuntimeGameReaderStatus.Cached, result.Observation,
             result.BlackMythWukongSaveMetadata, result.BlackMythWukongSavePath, result.HasNoRecordedDeaths);
+
+    public static RuntimeGameReadResult PendingLowerValue(RuntimeGameReadResult accepted) =>
+        new(accepted.GameId, RuntimeGameReaderStatus.PendingLowerValue, accepted.Observation,
+            accepted.BlackMythWukongSaveMetadata, accepted.BlackMythWukongSavePath, accepted.HasNoRecordedDeaths);
 
     /// <summary>Reports a parser-validated zero-death save without treating an unavailable reader as zero.</summary>
     public static RuntimeGameReadResult NoDeathsRecorded(
@@ -259,7 +264,7 @@ public sealed class DarkSoulsRemasteredActiveCharacterDeathReader : IRuntimeGame
             int value = BinaryPrimitives.ReadInt32LittleEndian(valueBytes);
             return value is < 0 or > MaximumPlausibleValue
                 ? null
-                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow));
+                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow, GameId.Value));
         }
         catch (Exception exception) when (IsExpectedUnavailable(exception, cancellationToken)) { return null; }
         finally { foreach (IDarkSoulsRemasteredProcessCandidate candidate in candidates) await candidate.DisposeAsync().ConfigureAwait(false); }
@@ -379,7 +384,7 @@ public sealed class DarkSoulsIIScholarActiveCharacterDeathReader : IRuntimeGameD
             int value = BinaryPrimitives.ReadInt32LittleEndian(valueBytes);
             return value is < 0 or > MaximumPlausibleValue
                 ? null
-                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow));
+                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow, GameId.Value));
         }
         catch (Exception exception) when (IsExpectedUnavailable(exception, cancellationToken)) { return null; }
         finally { foreach (IDarkSoulsIIScholarProcessCandidate candidate in candidates) await candidate.DisposeAsync().ConfigureAwait(false); }
@@ -499,7 +504,7 @@ public sealed class DarkSoulsIIIActiveCharacterDeathReader : IRuntimeGameDeathRe
             int value = BinaryPrimitives.ReadInt32LittleEndian(valueBytes);
             return value is < 0 or > 1_000_000
                 ? null
-                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow));
+                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow, GameId.Value));
         }
         catch (Exception ex) when (Unavailable(ex, cancellationToken)) { return null; }
         finally
@@ -677,7 +682,7 @@ public sealed class SekiroActiveCharacterDeathReader : IRuntimeGameDeathReader
             int value = BinaryPrimitives.ReadInt32LittleEndian(valueBytes);
             return value is < 0 or > MaximumPlausibleValue
                 ? null
-                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow));
+                : RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId, value, DateTimeOffset.UtcNow, GameId.Value));
         }
         catch (Exception exception) when (IsExpectedUnavailable(exception, cancellationToken))
         {
@@ -863,7 +868,7 @@ public sealed class BloodborneActiveCharacterDeathReader : IRuntimeGameDeathRead
                 return RuntimeGameReadResult.WaitingForActiveCharacter(GameId);
             }
 
-            RuntimeGameObservation observation = new(GameId, value, DateTimeOffset.UtcNow);
+            RuntimeGameObservation observation = new(GameId, value, DateTimeOffset.UtcNow, GameId.Value);
             return value == 0
                 ? RuntimeGameReadResult.NoDeathsRecorded(observation)
                 : RuntimeGameReadResult.Synced(observation);

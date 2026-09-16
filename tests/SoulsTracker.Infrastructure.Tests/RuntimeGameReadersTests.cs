@@ -19,6 +19,7 @@ public sealed class RuntimeGameReadersTests
 
         Assert.Equal(RuntimeGameReaderStatus.Synced, result!.Status);
         Assert.Equal(GameId.Ds1, result.Observation!.GameId);
+        Assert.Equal(GameId.Ds1.Value, result.Observation.SourceIdentity);
         Assert.Equal(17, result.Observation.TotalDeaths.Value);
         Assert.Equal([8, 4], attachment.BufferLengths);
         Assert.True(candidate.Disposed);
@@ -149,6 +150,7 @@ public sealed class RuntimeGameReadersTests
 
         RuntimeGameReadResult? result = await reader.ReadAsync(default);
         Assert.Equal(GameId.Ds2, result!.Observation!.GameId);
+        Assert.Equal(GameId.Ds2.Value, result.Observation.SourceIdentity);
         Assert.Equal([8, 8, 8, 4], attachment.BufferLengths);
         Assert.True(candidate.Disposed);
         Assert.True(attachment.Disposed);
@@ -225,6 +227,7 @@ public sealed class RuntimeGameReadersTests
         RuntimeGameReadResult? result = await new DarkSoulsIIIActiveCharacterDeathReader(new Ds3Enumerator(candidate), new AttachmentFactory(attachment), new ExactDarkSoulsIIIIdentityValidator(ds3)).ReadAsync(default);
 
         Assert.Equal(GameId.Ds3, result!.Observation!.GameId);
+        Assert.Equal(GameId.Ds3.Value, result.Observation.SourceIdentity);
         Assert.Equal([8, 4], attachment.BufferLengths);
         Assert.True(candidate.Disposed);
 
@@ -329,6 +332,7 @@ public sealed class RuntimeGameReadersTests
         RuntimeGameReadResult? result = await reader.ReadAsync(default);
 
         Assert.Equal(GameId.Sekiro, result!.Observation!.GameId);
+        Assert.Equal(GameId.Sekiro.Value, result.Observation.SourceIdentity);
         Assert.Equal(10, result.Observation.TotalDeaths.Value);
         Assert.Equal([8, 4], attachment.BufferLengths);
         Assert.True(candidate.Disposed);

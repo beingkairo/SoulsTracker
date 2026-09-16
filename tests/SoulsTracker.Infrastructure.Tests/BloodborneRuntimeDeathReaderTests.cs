@@ -22,6 +22,7 @@ public sealed class BloodborneRuntimeDeathReaderTests
         Assert.Equal(RuntimeGameReaderStatus.Synced, result.Status);
         Assert.True(result.HasNoRecordedDeaths);
         Assert.Equal(0, result.Observation!.TotalDeaths.Value);
+        Assert.Equal(GameId.Bloodborne.Value, result.Observation.SourceIdentity);
         Assert.Equal([0x0000002080673B8UL], attachment.ReadAddresses);
         Assert.Equal([sizeof(uint)], attachment.BufferLengths);
         Assert.Equal(0, attachment.IdentityQueries);
@@ -43,6 +44,7 @@ public sealed class BloodborneRuntimeDeathReaderTests
         Assert.Equal(RuntimeGameReaderStatus.Synced, result!.Status);
         Assert.False(result.HasNoRecordedDeaths);
         Assert.Equal(44, result.Observation!.TotalDeaths.Value);
+        Assert.Equal(GameId.Bloodborne.Value, result.Observation.SourceIdentity);
         Assert.True(candidate.Disposed);
         Assert.True(attachment.Disposed);
     }
