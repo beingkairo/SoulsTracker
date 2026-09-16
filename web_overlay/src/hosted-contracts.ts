@@ -32,6 +32,9 @@ export type HostedEnvelope =
   | { readonly v: 1; readonly type: "update"; readonly death?: HostedDeath; readonly appearance?: HostedAppearance };
 
 export const maximumHostedBytes = 8192;
+// Shared by the write protocol; callers still validate their own envelope shape.
+export { decimal as validateHostedDecimal, death as normalizeHostedDeath,
+  appearance as normalizeHostedAppearance, rejectDuplicateFields as validateHostedJsonTokens };
 const appearanceFields = ["revision", "enabled", "title", "fontFamily", "fontSize", "textColor", "textOpacity",
   "backgroundColor", "backgroundOpacity", "padding", "cornerRadius", "outlineEnabled", "outlineColor", "outlineWidth",
   "shadowEnabled", "shadowColor", "shadowOffsetX", "shadowOffsetY", "shadowBlur", "titleIconMode", "iconColor"];
