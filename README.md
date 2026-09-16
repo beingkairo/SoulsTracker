@@ -1,6 +1,6 @@
 # SoulsTracker
 
-SoulsTracker is a Windows app for streams: total death tracking and local OBS overlays.
+SoulsTracker is a Windows app for streams: total death tracking, optional TXT output, and opt-in hosted OBS overlays.
 
 ## Games
 
@@ -12,11 +12,18 @@ Demon Souls uses a manual counter.
 
 1. Open SoulsTracker, choose your game on the **Main** tab, and pick a save or character when prompted.
 2. Configure the retained overlay appearance and optional local text export.
-3. Open the **Overlay** tab, enable Total Deaths, then copy the URL into an OBS **Browser Source**.
+3. For hosted overlays, read the disclosure on the **Overlay** tab, explicitly consent, and import an operator-issued pairing JSON file.
+4. Enable **Total Deaths** for visibility, then use **Copy OBS URL** and paste into an OBS **Browser Source**. Visibility is separate from publication consent.
+
+This development build has no authorized production host. Pairing is default-deny until an exact HTTPS host is authorized and configured; no deployed service or OBS validation is promised. Local tracking and TXT output do not require pairing or an internet connection.
 
 The Total Deaths overlay works at any size.
 
-Keep SoulsTracker running while OBS uses the local Browser Source.
+With an authorized hosted service, SoulsTracker publishes accepted death display and applied appearance while running. Closing it leaves the last published state hosted. Automatic readers do not overwrite that state until a current accepted observation arrives. An already open browser retains its last display during a disconnect; a cold offline reload cannot hydrate it.
+
+Existing local OBS URLs need one deliberate replacement. Styles embedded in old URLs are not migrated: reproduce them in Desktop appearance settings before switching. The hosted URL has no style overrides. Fonts must be installed on the OBS machine; existing title-icon Apply and number-only font-size limitations remain.
+
+Keep the pairing file and read-only OBS URL private. The original pairing file contains write authority and is not deleted by import. **Reconnect** explicitly starts a new publisher session; close another publisher first if a conflict is reported. **Import / Replace pairing** is the recovery entry for a new operator-issued bundle. **Remove pairing** stops publication and deletes only this PC's protected pairing, not cloud state or remote capabilities. Contact the operator for revocation or deletion.
 
 Browse and Rescan help with save locations. Save-based counters update after the game saves.
 
@@ -28,9 +35,9 @@ The **Settings** tab includes TXT output for OBS text sources, update checks, an
 
 ## Privacy and read-only use
 
-Everything stays on your PC. SoulsTracker reads approved game data and save data, then leaves game files and game memory untouched.
+SoulsTracker reads approved game data and save data, then leaves game files and game memory untouched. Local settings, save selection and counters remain on your PC.
 
-The overlay uses `127.0.0.1` on your computer. Keep generated overlay URLs private because they include a local access token.
+Opt-in hosted publication sends the accepted display value/availability and applied appearance, including custom title and font name, to Cloudflare. It sends no game/save paths, character/slot names or raw observations. Cloudflare processes connection metadata and retains the latest published state. Successful protected pairing records consent across restarts. No localhost fallback is used.
 
 Game updates can change saved data. Keep SoulsTracker current and follow each game's online and anti-cheat rules.
 

@@ -513,15 +513,36 @@
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="OVERLAY CONNECTION" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Add these links to your streaming software as Browser Sources to show the overlays." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Pairing sends the accepted death display and applied appearance, including your title and font name, to Cloudflare. Cloudflare retains the last published state and processes connection metadata. Game saves, paths and character details stay local." />
+                                <CheckBox x:Name="HostedConsentCheckBox" Content="I agree to hosted publication when importing pairing" IsEnabled="{Binding HostedOverlay.CanImport, FallbackValue=False}" AutomationProperties.Name="Consent to hosted publication" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. No production host is authorized in this build." />
+                                <Button x:Name="ImportHostedPairingButton" Content="Import / Replace pairing" Click="ImportHostedPairing_Click" AutomationProperties.Name="Import or replace hosted pairing">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Setter Property="IsEnabled" Value="False" />
+                                            <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding HostedOverlay.CanImport}" Value="True" />
+                                                <Condition Binding="{Binding IsChecked, ElementName=HostedConsentCheckBox}" Value="True" />
+                                            </MultiDataTrigger.Conditions><Setter Property="IsEnabled" Value="True" /></MultiDataTrigger></Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <TextBlock x:Name="HostedHostTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,4" Text="{Binding HostedOverlay.Host}" AutomationProperties.Name="Hosted overlay host" />
+                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.Name="Hosted delivery status" />
+                                <WrapPanel Margin="0,8,0,8">
+                                    <Button x:Name="CopyTotalDeathsOverlayUrlButton" Content="Copy OBS URL" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" AutomationProperties.Name="Copy read-only OBS URL" />
+                                    <Button Content="Reconnect" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanReconnect, FallbackValue=False}" Click="ReconnectHosted_Click" AutomationProperties.Name="Reconnect hosted publisher" />
+                                    <Button Content="Remove pairing" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanRemove, FallbackValue=False}" Click="RemoveHostedPairing_Click" AutomationProperties.Name="Remove local hosted pairing" />
+                                </WrapPanel>
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Replace the old OBS Browser Source URL once. The new URL is read-only and private. Reproduce old URL styles with Desktop appearance settings. Total Deaths below controls visibility only; it does not withdraw publication consent." />
                                 <CheckBox x:Name="TotalDeathsOverlayEnabledCheckBox" Content="Total Deaths" IsChecked="{Binding IsTotalDeathsOverlayEnabled, Mode=OneWay}" IsEnabled="{Binding PresentationControlsEnabled}" Checked="TotalDeathsOverlayEnabled_Checked" Unchecked="TotalDeathsOverlayEnabled_Unchecked" AutomationProperties.Name="Show Total Deaths overlay" />
-                                <Grid Margin="0,4,0,8" Visibility="{Binding IsTotalDeathsOverlayEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="TotalDeathsOverlayUrlTextBox" MinWidth="0" IsReadOnly="True" Text="{Binding TotalDeathsSceneUrlDisplay, Mode=OneWay}" AutomationProperties.Name="Applied Total Deaths URL settings" ToolTip="Shortened display. Copy provides the complete URL for editing in OBS." /><Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" Margin="8,0,0,0" Content="Copy" Click="CopyTotalDeathsOverlayUrl_Click" AutomationProperties.Name="Copy full Total Deaths OBS URL" ToolTip="Copy the complete URL to edit in OBS" /></Grid>
+
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Overlay appearance panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="APPEARANCE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="OBS URLs use applied settings. Draft edits stay local until Apply." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="The hosted overlay uses applied Desktop settings. Draft edits stay local until Apply; the OBS URL does not change." />
                                 <TabControl x:Name="OverlayTypeTabs" SelectionChanged="OverlayTypeTabs_SelectionChanged">
                                     <TabItem Header="Total Deaths">
                                         <StackPanel Margin="12">

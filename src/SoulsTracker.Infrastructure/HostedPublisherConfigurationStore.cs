@@ -43,6 +43,39 @@ public sealed class HostedPublisherConfigurationStore
         }
     }
 
+    /// <summary>Reads only the explicitly chosen file; never removes the operator's source.</summary>
+    public async Task<HostedPublisherConfiguration> ReadPairingAsync(string sourcePath, CancellationToken cancellationToken = default)
+    {
+        byte[]? bytes = null;
+        try
+        {
+            await using var stream = File.OpenRead(sourcePath);
+            if (stream.Length is 0 or > 8192) throw new InvalidDataException();
+            bytes = new byte[8193];
+            int used = 0;
+            while (used < bytes.Length)
+            {
+                int read = await stream.ReadAsync(bytes.AsMemory(used), cancellationToken).ConfigureAwait(false);
+                if (read == 0) break;
+                used += read;
+            }
+            if (used > 8192) throw new InvalidDataException();
+            byte[] payload = bytes[..used];
+            try { return HostedPublisherConfiguration.Decode(payload, origins); }
+            finally { CryptographicOperations.ZeroMemory(payload); }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { throw new InvalidOperationException("Unable to import pairing. Choose a valid version 1 bundle for an approved HTTPS host."); }
+        finally { if (bytes is not null) CryptographicOperations.ZeroMemory(bytes); }
+    }
+
+    public Task RemoveAsync(CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try { File.Delete(path); }
+        catch { throw new InvalidOperationException("Unable to remove protected pairing; previous configuration retained."); }
+    }, cancellationToken);
+
     public async Task<HostedPublisherConfiguration?> LoadAsync(CancellationToken cancellationToken = default)
     {
         byte[]? plaintext = null;

@@ -5,22 +5,36 @@ using SoulsTracker.Infrastructure;
 namespace SoulsTracker.Desktop;
 
 /// <summary>
-/// Test-composed hosted output. Committed notifications run behind DesktopStateChangePublisher;
+/// Hosted output. Committed notifications run behind DesktopStateChangePublisher;
 /// runtime calls run only at RuntimePublicationSession.publishOutputs, on the same dispatcher.
 /// </summary>
 internal sealed class HostedDesktopPublisher : ITrackerStateChangePublisher, IAsyncDisposable
 {
-    private readonly HostedOverlayPublisher sender;
+    private HostedOverlayPublisher? sender;
+    private HostedOverlayEnvelope latest;
     private readonly HostedOverlayProjection projection = new();
     private PersistentTrackerState state;
     private RuntimeGameReadResult? acceptedPresentation;
     private bool stopped;
 
-    internal HostedDesktopPublisher(HostedOverlayPublisher sender, PersistentTrackerState initial)
+    internal HostedDesktopPublisher(HostedOverlayPublisher? sender, PersistentTrackerState initial)
     {
         this.sender = sender;
         state = initial;
-        sender.Offer(projection.Initialize(initial));
+        latest = projection.Initialize(initial);
+        sender?.Offer(latest);
+    }
+
+    internal void Attach(HostedOverlayPublisher? next)
+    {
+        sender = next;
+        if (!stopped) sender?.Offer(latest);
+    }
+
+    private void Offer(HostedOverlayEnvelope envelope)
+    {
+        latest = envelope;
+        sender?.Offer(envelope);
     }
 
     internal void PublishAccepted(PersistentTrackerState current, RuntimeGameReadResult? accepted)
@@ -28,7 +42,7 @@ internal sealed class HostedDesktopPublisher : ITrackerStateChangePublisher, IAs
         if (stopped) return;
         state = current;
         acceptedPresentation = accepted;
-        sender.Offer(projection.FromAcceptedPublication(current, accepted));
+        Offer(projection.FromAcceptedPublication(current, accepted));
     }
 
     public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
@@ -40,9 +54,9 @@ internal sealed class HostedDesktopPublisher : ITrackerStateChangePublisher, IAs
         if (sourceChanged)
         {
             acceptedPresentation = null;
-            sender.Offer(projection.FromExplicitSourceChange(next));
+            Offer(projection.FromExplicitSourceChange(next));
         }
-        else sender.Offer(projection.FromAcceptedPublication(next, acceptedPresentation));
+        else Offer(projection.FromAcceptedPublication(next, acceptedPresentation));
         return Task.CompletedTask;
     }
 
@@ -51,6 +65,6 @@ internal sealed class HostedDesktopPublisher : ITrackerStateChangePublisher, IAs
     public ValueTask DisposeAsync()
     {
         StopOffering();
-        return sender.DisposeAsync();
+        return sender?.DisposeAsync() ?? ValueTask.CompletedTask;
     }
 }

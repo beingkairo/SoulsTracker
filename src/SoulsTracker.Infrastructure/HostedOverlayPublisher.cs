@@ -8,7 +8,7 @@ namespace SoulsTracker.Infrastructure;
 
 public enum HostedPublisherStatus { Starting, Sending, Ready, Retrying, CredentialsRequired, Conflict, InvalidProtocol, CounterExhausted, Stopped }
 
-/// <summary>One owned sender with two bounded immutable latest-value slots. Uncomposed in production.</summary>
+/// <summary>One owned sender with two bounded immutable latest-value slots.</summary>
 public sealed class HostedOverlayPublisher : IAsyncDisposable
 {
     private readonly object gate = new();
@@ -27,6 +27,14 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
     private long deathGeneration, appearanceGeneration, deathAcknowledged, appearanceAcknowledged;
     private HostedPublisherStatus status = HostedPublisherStatus.Starting;
     public HostedPublisherStatus Status { get { lock (gate) return status; } }
+    public event EventHandler? StatusChanged;
+
+    private void NotifyStatus()
+    {
+        // Never call subscribers under the sender lock or let UI errors stop delivery.
+        try { StatusChanged?.Invoke(this, EventArgs.Empty); }
+        catch { }
+    }
 
     public HostedOverlayPublisher(HostedPublisherConfiguration configuration)
         : this(configuration, CreateHandler()) { }
@@ -45,6 +53,12 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
     internal static HttpClientHandler CreateHandler() => new() { AllowAutoRedirect = false, UseCookies = false };
 
     public bool Offer(HostedOverlayEnvelope offer)
+    {
+        try { return OfferCore(offer); }
+        finally { NotifyStatus(); }
+    }
+
+    private bool OfferCore(HostedOverlayEnvelope offer)
     {
         lock (gate)
         {
@@ -78,7 +92,11 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
     private static bool IsPaused(HostedPublisherStatus value) => value is HostedPublisherStatus.CredentialsRequired or
         HostedPublisherStatus.Conflict or HostedPublisherStatus.InvalidProtocol or HostedPublisherStatus.CounterExhausted or HostedPublisherStatus.Stopped;
     private void Signal() { if (wake.CurrentCount == 0) wake.Release(); }
-    private void SetStatus(HostedPublisherStatus value) { lock (gate) { if (!IsPaused(status)) status = value; } }
+    private void SetStatus(HostedPublisherStatus value)
+    {
+        lock (gate) { if (!IsPaused(status)) status = value; }
+        NotifyStatus();
+    }
 
     private async Task RunAsync()
     {
@@ -111,6 +129,7 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
                     if (candidate is null && closing) return;
                     status = candidate is null ? HostedPublisherStatus.Ready : HostedPublisherStatus.Sending;
                 }
+                NotifyStatus();
                 if (candidate is null) { await wake.WaitAsync(stop.Token).ConfigureAwait(false); continue; }
                 bool deathWasUncertain = uncertainDeath, appearanceWasUncertain = uncertainAppearance;
                 uncertainDeath |= candidate.Death is not null;
@@ -264,5 +283,6 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
         stop.Dispose();
         wake.Dispose();
         lock (gate) status = HostedPublisherStatus.Stopped;
+        NotifyStatus();
     }
 }

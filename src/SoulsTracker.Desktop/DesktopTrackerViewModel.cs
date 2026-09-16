@@ -581,6 +581,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ReconcileWukongSaveSourceFromCommittedState();
     }
     public void SetOverlayUrls(string totalDeathsUrl) { TotalDeathsOverlayUrl = totalDeathsUrl; }
+    public HostedOverlayConnection? HostedOverlay { get; private set; }
+    internal void ConfigureHostedOverlay(HostedOverlayConnection connection)
+    {
+        HostedOverlay = connection;
+        OnPropertyChanged(nameof(HostedOverlay));
+    }
     internal void SetOverlayReady() => LocalOverlayStatus = LocalOverlayReadyMessage;
     public void SetOverlayUnavailable()
     {

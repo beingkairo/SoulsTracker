@@ -7,6 +7,23 @@ namespace SoulsTracker.Infrastructure.Tests;
 public sealed class HostedPublisherLifetimeTests
 {
     [Fact]
+    public async Task StatusNotificationsNeverRunUnderSenderLockEvenAfterWorkerStops()
+    {
+        var server = new Server { Intercept = (_, _, _) => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.Conflict)) };
+        await using var sender = new HostedOverlayPublisher(Configuration(), server);
+        await WaitUntil(() => sender.Status == HostedPublisherStatus.Conflict);
+        // Join the actual owned worker so disposal takes its synchronous-completion path.
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        await (Task)typeof(HostedOverlayPublisher).GetField("worker", flags)!.GetValue(sender)!;
+        object gate = typeof(HostedOverlayPublisher).GetField("gate", flags)!.GetValue(sender)!;
+        bool notified = false, underLock = false;
+        sender.StatusChanged += (_, _) => { notified = true; underLock |= Monitor.IsEntered(gate); };
+        await sender.DisposeAsync();
+        Assert.True(notified);
+        Assert.False(underLock);
+    }
+
+    [Fact]
     public async Task TenSecondTimeoutCancelsRequestBeforeRetryAndDisposalCancelsDelay()
     {
         var clock = new Clock();

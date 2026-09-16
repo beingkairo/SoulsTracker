@@ -9,6 +9,7 @@ public sealed class HostedPublisherConfiguration
     internal string OverlayId { get; }
     internal string ReadCapability { get; }
     internal string WriteCapability { get; }
+    public string DisplayOrigin => Origin;
 
     private HostedPublisherConfiguration(string origin, string overlayId, string readCapability, string writeCapability)
     {

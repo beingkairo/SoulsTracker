@@ -1,8 +1,9 @@
 # Hosted overlay state service
 
-This package contains an unconnected Worker API, SQLite-backed Durable Object,
-and isolated hosted browser assets from `web_overlay`. The desktop application
-and current local overlay do not use it. There are no deployment scripts,
+This package contains a Worker API, SQLite-backed Durable Object,
+and hosted browser assets from `web_overlay`. Desktop composes the hosted publisher
+behind explicit protected pairing; production origins remain empty/default-deny
+and no live service is configured. There are no deployment scripts,
 public provisioning endpoints or account credentials in the production entry.
 
 ## Local verification

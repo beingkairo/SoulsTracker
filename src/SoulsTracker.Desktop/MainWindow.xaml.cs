@@ -488,7 +488,29 @@ public partial class MainWindow : Window
     }
 
 
-    private void CopyTotalDeathsOverlayUrl_Click(object sender, RoutedEventArgs e) => CopyOverlayUrl(sender as System.Windows.Controls.Button, (DataContext as DesktopTrackerViewModel)?.TotalDeathsSceneUrl);
+    private void CopyTotalDeathsOverlayUrl_Click(object sender, RoutedEventArgs e) =>
+        (DataContext as DesktopTrackerViewModel)?.HostedOverlay?.CopyReadUrl(System.Windows.Clipboard.SetText);
+
+    private async void ImportHostedPairing_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel { HostedOverlay: { CanImport: true } connection } || HostedConsentCheckBox.IsChecked != true) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Pairing JSON (*.json)|*.json", CheckFileExists = true, Multiselect = false };
+        if (dialog.ShowDialog(this) == true) await connection.ImportAsync(dialog.FileName, HostedConsentCheckBox.IsChecked == true);
+    }
+
+    private async void ReconnectHosted_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.ReconnectAsync();
+    }
+
+    private async void RemoveHostedPairing_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel { HostedOverlay: { CanRemove: true } connection }) return;
+        bool confirmed = System.Windows.MessageBox.Show(this,
+            "Stop hosted publication and remove protected pairing from this PC? Cloud state and read/write capabilities will NOT be revoked or deleted. Contact the operator for remote revocation or deletion.",
+            "Remove local pairing", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+        await connection.RemoveAsync(confirmed);
+    }
 
     private static void CopyOverlayUrl(System.Windows.Controls.Button? button, string? value)
     {

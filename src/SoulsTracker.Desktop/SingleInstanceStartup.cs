@@ -197,7 +197,8 @@ internal sealed class DesktopShutdownCoordinator(
     Func<ValueTask> disposeOverlayAsync,
     Func<ValueTask> disposeCoordinatorAsync,
     IDisposable singleInstanceLease,
-    TimeSpan? totalShutdownTimeout = null) : IDisposable
+    TimeSpan? totalShutdownTimeout = null,
+    Action? cancelPending = null) : IDisposable
 {
     private readonly Func<ValueTask> disposeGlobalHotkeysAsync = disposeGlobalHotkeysAsync ?? throw new ArgumentNullException(nameof(disposeGlobalHotkeysAsync));
     private readonly Func<ValueTask> disposeOverlayAsync = disposeOverlayAsync ?? throw new ArgumentNullException(nameof(disposeOverlayAsync));
@@ -205,10 +206,8 @@ internal sealed class DesktopShutdownCoordinator(
     private readonly IDisposable singleInstanceLease = singleInstanceLease ?? throw new ArgumentNullException(nameof(singleInstanceLease));
     private readonly TimeSpan totalShutdownTimeout = totalShutdownTimeout is { } configured && configured > TimeSpan.Zero
         ? configured
-        // The title-bar close path disposes three independent components in sequence.
-        // Use one deadline for the entire operation rather than waiting a full timeout for
-        // every component: a stalled browser/server teardown must not keep the process alive.
-        : TimeSpan.FromSeconds(1);
+        // Allow the hosted sender's two-second flush after producer quiescence.
+        : TimeSpan.FromSeconds(5);
     private readonly object sync = new();
     private Task? shutdownTask;
     private Task? applicationShutdownTask;
@@ -282,6 +281,14 @@ internal sealed class DesktopShutdownCoordinator(
     {
         Task disposal = disposeComponentAsync().AsTask();
         TimeSpan remaining = totalShutdownTimeout - shutdownStopwatch.Elapsed;
-        await disposal.WaitAsync(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero).ConfigureAwait(false);
+        try { await disposal.WaitAsync(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero).ConfigureAwait(false); }
+        catch (TimeoutException)
+        {
+            // A deadline requests cooperative cancellation. It cannot abandon a
+            // producer or sender and release the single-instance lease underneath it.
+            cancelPending?.Invoke();
+            await disposal.ConfigureAwait(false);
+            throw;
+        }
     }
 }

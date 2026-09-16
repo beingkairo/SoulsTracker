@@ -18,6 +18,7 @@ public partial class App : System.Windows.Application, IDisposable
     private SerializedTrackerCoordinator? coordinator;
     private DesktopGlobalHotkeyService? globalHotkeys;
     private bool mainWindowCloseRequested;
+    private bool finalShutdownRequested;
     private SecureOverlayService? overlayService;
     private OverlayStateChangePublisher? overlayPublisher;
     private TextExportStatePublisher? textExportPublisher;
@@ -28,6 +29,9 @@ public partial class App : System.Windows.Application, IDisposable
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
     private readonly RuntimePublicationSession runtimePublication = new();
+    private HostedOverlayConnection? hostedConnection;
+    private Task? startupTask;
+    private readonly CancellationTokenSource startupCancellation = new();
 
     private DesktopDataRootSelection? dataRootSelection;
 
@@ -36,9 +40,10 @@ public partial class App : System.Windows.Application, IDisposable
         singleInstanceStartup = new DesktopStartupController(new WindowsSingleInstanceLeaseFactory());
         shutdownCoordinator = new DesktopShutdownCoordinator(
             DisposeGlobalHotkeysAsync,
-            DisposeOverlayServiceAsync,
             DisposeCoordinatorAsync,
-            new DispatcherBoundDisposable(Dispatcher, singleInstanceStartup));
+            DisposeOutputsAsync,
+            new DispatcherBoundDisposable(Dispatcher, singleInstanceStartup),
+            cancelPending: () => runtimeReaderCancellation?.Cancel());
     }
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -70,25 +75,33 @@ public partial class App : System.Windows.Application, IDisposable
         }
         catch
         {
-            Dispose();
-            throw;
+            mainWindowCloseRequested = true;
+            await shutdownCoordinator.RequestApplicationShutdownAsync(FinalShutdown);
         }
     }
 
-    private async Task StartTrackerAsync()
+    private Task StartTrackerAsync() => startupTask = StartTrackerCoreAsync();
+
+    private async Task StartTrackerCoreAsync()
     {
         DesktopDataRootSelection stateSelection = dataRootSelection ?? throw new InvalidOperationException("The desktop data root was not initialized.");
-        overlayPublisher = new OverlayStateChangePublisher();
+        hostedConnection = new HostedOverlayConnection(Dispatcher,
+            new HostedPublisherConfigurationStore(Path.Combine(stateSelection.RootPath, "hosted-pairing.private"),
+                new CurrentUserDpapiSecretProtector(), HostedProductionOrigins.Approved));
         textExportPublisher = new TextExportStatePublisher();
         var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
         coordinator = new SerializedTrackerCoordinator(repository,
             new DesktopStateChangePublisher(Dispatcher, runtimePublication,
-                new CompositeTrackerStateChangePublisher(overlayPublisher, textExportPublisher)),
+                new CompositeTrackerStateChangePublisher(hostedConnection, textExportPublisher)),
             new SqliteConfirmedLegacyImportCommitter(repository));
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
+        viewModel.ConfigureHostedOverlay(hostedConnection);
 
-        textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() => viewModel.SetTextExportStatus(succeeded));
+        textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() =>
+        {
+            if (!mainWindowCloseRequested) viewModel.SetTextExportStatus(succeeded);
+        });
 
         if (!stateSelection.IsDevelopmentOverride)
         {
@@ -99,8 +112,12 @@ public partial class App : System.Windows.Application, IDisposable
         window.Closing += MainWindow_Closing;
         MainWindow = window;
         window.Show();
-        await viewModel.InitializeAsync();
-        if (viewModel.CurrentState is { } initializedState) runtimePublication.SelectState(initializedState);
+        await viewModel.InitializeAsync(startupCancellation.Token);
+        if (!mainWindowCloseRequested && viewModel.CurrentState is { } initializedState)
+        {
+            runtimePublication.SelectState(initializedState);
+            await hostedConnection.InitializeAsync(initializedState);
+        }
         if (!mainWindowCloseRequested && viewModel.CurrentState is not null && viewModel.LegacyImport is not null)
         {
             viewModel.LegacyImport!.OfferIfEligible(viewModel.CurrentState);
@@ -161,12 +178,20 @@ public partial class App : System.Windows.Application, IDisposable
     {
         if (mainWindowCloseRequested)
         {
+            e.Cancel = !finalShutdownRequested;
             return;
         }
 
         e.Cancel = true;
         mainWindowCloseRequested = true;
-        await shutdownCoordinator.RequestApplicationShutdownAsync(Shutdown);
+        try { await shutdownCoordinator.RequestApplicationShutdownAsync(FinalShutdown); }
+        catch { /* Components have been awaited; final shutdown already ran. */ }
+    }
+
+    private void FinalShutdown()
+    {
+        finalShutdownRequested = true;
+        Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -231,6 +256,9 @@ public partial class App : System.Windows.Application, IDisposable
 
     private ValueTask DisposeGlobalHotkeysAsync()
     {
+        startupCancellation.Cancel();
+        if (MainWindow is not null) MainWindow.IsEnabled = false;
+        hostedConnection?.StopSetup();
         try
         {
             globalHotkeys?.Dispose();
@@ -293,6 +321,11 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async ValueTask DisposeCoordinatorAsync()
     {
+        if (startupTask is not null)
+        {
+            try { await startupTask.ConfigureAwait(false); }
+            catch { /* Failed startup still requires complete disposal of created owners. */ }
+        }
         CancellationTokenSource? readerCancellation = runtimeReaderCancellation;
         Task? pollingTask = runtimeReaderPollingTask;
         try
@@ -307,6 +340,10 @@ public partial class App : System.Windows.Application, IDisposable
                     await pollingTask.ConfigureAwait(false);
                 }
             }
+            catch
+            {
+                // A terminated reader must not skip draining committed producers.
+            }
             finally
             {
                 readerCancellation?.Dispose();
@@ -318,11 +355,6 @@ public partial class App : System.Windows.Application, IDisposable
                 liesOfPSaveReader = null;
             }
 
-            if (textExportPublisher is not null)
-            {
-                await textExportPublisher.DisposeAsync().ConfigureAwait(false);
-                textExportPublisher = null;
-            }
             if (coordinator is not null)
             {
                 await coordinator.DisposeAsync().ConfigureAwait(false);
@@ -332,6 +364,25 @@ public partial class App : System.Windows.Application, IDisposable
         {
             coordinator = null;
             overlayPublisher = null;
+        }
+    }
+
+    private async ValueTask DisposeOutputsAsync()
+    {
+        try
+        {
+            Task hosted = Dispatcher.CheckAccess()
+                ? hostedConnection?.DisposeAsync().AsTask() ?? Task.CompletedTask
+                : Dispatcher.InvokeAsync(() => hostedConnection?.DisposeAsync().AsTask() ?? Task.CompletedTask).Task.Unwrap();
+            Task text = textExportPublisher?.DisposeAsync().AsTask() ?? Task.CompletedTask;
+            await Task.WhenAll(hosted, text).ConfigureAwait(false);
+        }
+        finally
+        {
+            hostedConnection = null;
+            textExportPublisher = null;
+            startupCancellation.Dispose();
+            await DisposeOverlayServiceAsync().ConfigureAwait(false);
         }
     }
 
@@ -361,7 +412,7 @@ public partial class App : System.Windows.Application, IDisposable
                         viewModel.ApplyRuntimeReaderResult, publication =>
                         {
                             textExportPublisher?.PublishRuntimeObservation(runtimePublication.CurrentState!, publication);
-                            overlayService?.PublishRuntimeObservation(publication?.Observation);
+                            hostedConnection?.PublishAccepted(runtimePublication.CurrentState!, publication);
                         }, cancellationToken);
                 });
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);

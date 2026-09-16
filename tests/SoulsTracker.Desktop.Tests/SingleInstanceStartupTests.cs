@@ -199,12 +199,14 @@ public sealed class SingleInstanceStartupTests
     {
         var events = new List<string>();
         var lease = new RecordingLease(() => events.Add("lease-released"));
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var shutdown = new DesktopShutdownCoordinator(
             () => ValueTask.CompletedTask,
-            () => new ValueTask(new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task),
+            () => new ValueTask(cancelled.Task),
             () => { events.Add("coordinator-disposed"); return ValueTask.CompletedTask; },
             lease,
-            TimeSpan.FromMilliseconds(20));
+            TimeSpan.FromMilliseconds(20),
+            () => cancelled.SetResult());
 
         await Assert.ThrowsAsync<TimeoutException>(
             () => shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown")));
@@ -223,7 +225,8 @@ public sealed class SingleInstanceStartupTests
             () => DisposeStalledAsync("overlay"),
             () => DisposeStalledAsync("coordinator"),
             lease,
-            TimeSpan.FromMilliseconds(40));
+            TimeSpan.FromMilliseconds(40),
+            () => neverCompletes.TrySetResult(true));
         var stopwatch = Stopwatch.StartNew();
 
         await Assert.ThrowsAsync<TimeoutException>(
