@@ -514,7 +514,9 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="OVERLAY CONNECTION" />
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Pairing sends the accepted death display and applied appearance, including your title and font name, to Cloudflare. Cloudflare retains the last published state and processes connection metadata. Game saves, paths and character details stay local." />
-                                <CheckBox x:Name="HostedConsentCheckBox" Content="I agree to hosted publication when importing pairing" IsEnabled="{Binding HostedOverlay.CanImport, FallbackValue=False}" AutomationProperties.Name="Consent to hosted publication" />
+                                <CheckBox x:Name="HostedConsentCheckBox" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsEnabled="{Binding HostedOverlay.CanImport, FallbackValue=False}" AutomationProperties.Name="Consent to hosted publication">
+                                    <TextBlock Text="I agree to hosted publication when importing pairing" TextWrapping="Wrap" />
+                                </CheckBox>
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. No production host is authorized in this build." />
                                 <Button x:Name="ImportHostedPairingButton" Content="Import / Replace pairing" Click="ImportHostedPairing_Click" AutomationProperties.Name="Import or replace hosted pairing">
                                     <Button.Style>
@@ -534,6 +536,7 @@
                                     <Button Content="Reconnect" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanReconnect, FallbackValue=False}" Click="ReconnectHosted_Click" AutomationProperties.Name="Reconnect hosted publisher" />
                                     <Button Content="Remove pairing" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanRemove, FallbackValue=False}" Click="RemoveHostedPairing_Click" AutomationProperties.Name="Remove local hosted pairing" />
                                 </WrapPanel>
+                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding HostedOverlay.CopyFeedbackText}" AutomationProperties.Name="Hosted URL copy feedback" />
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Replace the old OBS Browser Source URL once. The new URL is read-only and private. Reproduce old URL styles with Desktop appearance settings. Total Deaths below controls visibility only; it does not withdraw publication consent." />
                                 <CheckBox x:Name="TotalDeathsOverlayEnabledCheckBox" Content="Total Deaths" IsChecked="{Binding IsTotalDeathsOverlayEnabled, Mode=OneWay}" IsEnabled="{Binding PresentationControlsEnabled}" Checked="TotalDeathsOverlayEnabled_Checked" Unchecked="TotalDeathsOverlayEnabled_Unchecked" AutomationProperties.Name="Show Total Deaths overlay" />
 

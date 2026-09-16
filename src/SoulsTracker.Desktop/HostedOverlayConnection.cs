@@ -20,6 +20,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     private bool closing, busy, setupStopped;
     private bool pairingMayExist;
     private string statusText = "Not paired. Import an operator-issued pairing file to connect.";
+    private string copyFeedbackText = string.Empty;
 
     internal HostedOverlayConnection(Dispatcher dispatcher, HostedPublisherConfigurationStore store,
         Func<HostedPublisherConfiguration, HostedOverlayPublisher>? createSender = null)
@@ -32,6 +33,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     public event PropertyChangedEventHandler? PropertyChanged;
     public string Host => configuration?.DisplayOrigin ?? "No hosted connection";
     public string StatusText => statusText;
+    public string CopyFeedbackText => copyFeedbackText;
     public bool CanImport => adapter is not null && !closing && !setupStopped && !busy;
     public bool CanCopy => CanImport && configuration is not null;
     public bool CanReconnect => CanCopy;
@@ -92,13 +94,13 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         try
         {
             copy(configuration!.BuildReadUrl());
-            statusText = "Read-only OBS URL copied. Keep the URL private.";
+            copyFeedbackText = "Read-only OBS URL copied. Keep the URL private.";
             Changed();
             return true;
         }
         catch
         {
-            statusText = "Could not copy the URL. Try Copy OBS URL again.";
+            copyFeedbackText = "Could not copy the URL. Try Copy OBS URL again.";
             Changed();
             return false;
         }
@@ -109,6 +111,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         dispatcher.VerifyAccess();
         if (closing || busy) return Task.CompletedTask;
         busy = true;
+        copyFeedbackText = string.Empty;
         Changed();
         return operation = RunAsync();
         async Task RunAsync()
@@ -178,6 +181,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         dispatcher.VerifyAccess();
         if (disposal is not null) return new(disposal);
         closing = true;
+        copyFeedbackText = string.Empty;
         adapter?.StopOffering();
         stop.Cancel();
         Changed();
@@ -189,6 +193,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         dispatcher.VerifyAccess();
         if (setupStopped || closing) return;
         setupStopped = true;
+        copyFeedbackText = string.Empty;
         stop.Cancel();
         Changed();
     }
