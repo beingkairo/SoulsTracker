@@ -71,7 +71,7 @@ it("denies cross-identity, swapped-role, missing and malformed credentials on ev
   });
   const before = await stored();
   for (const [route, method, body] of [["publisher", "GET", undefined], ["session", "POST", acquisition],
-    ["state", "PUT", candidate("2")], ["credentials", "POST", { v: 1, rotationId: "8".repeat(32), readCapability: read }]] as const) {
+    ["state", "PUT", candidate("2")], ["credentials", "POST", { v: 1, rotationId: "8".repeat(32), expectedGeneration: "0", readCapability: read }]] as const) {
     for (const token of [read, "", "bad", `${write}, ${write}`]) {
       const result = await request(route, method, body, token);
       expect(result.status).toBe(403);
@@ -185,8 +185,10 @@ it("fails session and rotation counter exhaustion without changing any state", a
     await replaceRecord("control", value => ({ ...value, epoch: "0", generation: "0", readGeneration: "0", [field]: "9223372036854775807" }));
     const before = await stored();
     if (field === "epoch") expect((await acquire({ ...acquisition, expectedEpoch: "9223372036854775807" })).status).toBe(409);
-    const result = await request("credentials", "POST", { v: 1, rotationId: "8".repeat(32), readCapability: Buffer.from(randomBytes(32)).toString("hex") });
+    const result = await request("credentials", "POST", { v: 1, rotationId: "8".repeat(32),
+      expectedGeneration: field === "generation" ? "9223372036854775807" : "0", readCapability: Buffer.from(randomBytes(32)).toString("hex") });
     expect(result.status).toBe(409);
+    expect(await result.json()).toEqual({ error: "counter_exhausted" });
     expect(await stored()).toEqual(before);
   }
 });
@@ -236,7 +238,7 @@ it("rolls back credential rotation on storage failure and fences racing old writ
   await provision(); await acquire(); await publish();
   const before = await stored();
   const nextWrite = Buffer.from(randomBytes(32)).toString("hex");
-  const rotate = { v: 1, rotationId: "a".repeat(32), writeCapability: nextWrite };
+  const rotate = { v: 1, rotationId: "a".repeat(32), expectedGeneration: "0", writeCapability: nextWrite };
   await runInDurableObject(stub(), (_instance, state) => {
     state.storage.sql.exec("CREATE TRIGGER fail_rotation BEFORE UPDATE ON records WHEN NEW.key = 'control' BEGIN SELECT RAISE(ABORT, 'synthetic'); END");
   });
@@ -261,7 +263,7 @@ it("rejects session and rotation schema errors and capabilities reused across ro
   for (const body of [null, {}, { ...acquisition, v: 2 }, { ...acquisition, expectedEpoch: "01" },
     { ...acquisition, sessionRequestId: "wrong" }, { ...acquisition, total: "1" }])
     expect((await request("session", "POST", body)).status).toBe(400);
-  const rotation = { v: 1, rotationId: "b".repeat(32) };
+  const rotation = { v: 1, rotationId: "b".repeat(32), expectedGeneration: "0" };
   const same = Buffer.from(randomBytes(32)).toString("hex");
   for (const body of [rotation, { ...rotation, v: 2, readCapability: same }, { ...rotation, writeCapability: null },
     { ...rotation, writeCapability: "a".repeat(63) }, { ...rotation, readCapability: write },
@@ -298,11 +300,81 @@ const candidate = (sequence = "1", value = "9007199254740993") => ({ v: 1, epoch
 const publish = (body: unknown = candidate()) => request("state", "PUT", body);
 const style = () => { const { revision: _revision, ...appearance } = corpus.valid[4].appearance!; return appearance; };
 
+it("rejects invalid or stale generation before the first mutation initializes channels", async () => {
+  await provision();
+  const before = await stored();
+  const rotation = { v: 1, rotationId: "a".repeat(32), readCapability: Buffer.from(randomBytes(32)).toString("hex") };
+  for (const value of [undefined, ...corpus.invalidDecimals]) {
+    expect((await request("credentials", "POST", { ...rotation, expectedGeneration: value })).status).toBe(400);
+    expect(await stored()).toEqual(before);
+  }
+  for (const expectedGeneration of ["1", "9223372036854775807"]) {
+    const rejected = await request("credentials", "POST", { ...rotation, expectedGeneration });
+    expect(rejected.status).toBe(409);
+    expect(await rejected.json()).toEqual({ error: "rotation_conflict" });
+    expect(await stored()).toEqual(before);
+  }
+  await runInDurableObject(stub(), (_instance, state) => {
+    state.storage.sql.exec("CREATE TRIGGER fail_first_rotation BEFORE UPDATE ON records WHEN NEW.key = 'control' BEGIN SELECT RAISE(ABORT, 'synthetic'); END");
+  });
+  expect((await request("credentials", "POST", { ...rotation, expectedGeneration: "0" })).status).toBe(500);
+  expect(await stored()).toEqual(before);
+  await runInDurableObject(stub(), (_instance, state) => { state.storage.sql.exec("DROP TRIGGER fail_first_rotation"); });
+  expect((await request("credentials", "POST", { ...rotation, expectedGeneration: "0" })).status).toBe(200);
+});
+
+for (const mode of ["read", "write", "both"]) {
+  it(`serializes same-generation ${mode} rotations and permits an explicit fresh rotation`, async () => {
+    await provision(); await acquire(); await publish();
+    const channels = (await stored()).filter(row => row.key !== "control");
+    const rotations = ["a", "b"].map(c => ({ v: 1, rotationId: c.repeat(32), expectedGeneration: "0",
+      ...(mode !== "write" ? { readCapability: Buffer.from(randomBytes(32)).toString("hex") } : {}),
+      ...(mode !== "read" ? { writeCapability: Buffer.from(randomBytes(32)).toString("hex") } : {}) }));
+    const raced = await Promise.all(rotations.map(body => request("credentials", "POST", body)));
+    // Replaced write authority is rejected before the generation precondition.
+    expect(raced.map(result => result.status).sort()).toEqual(mode === "read" ? [200, 409] : [200, 403]);
+    const winnerIndex = raced.findIndex(result => result.status === 200);
+    const winner = rotations[winnerIndex], loser = rotations[1 - winnerIndex];
+    const currentWrite = winner.writeCapability ?? write;
+    const before = await stored();
+    expect((await request("credentials", "POST", loser, currentWrite)).status).toBe(409);
+    expect(await stored()).toEqual(before);
+    expect(await (await request("publisher", "GET", undefined, currentWrite)).json()).toMatchObject({ generation: "1" });
+    const next = await request("credentials", "POST", { ...loser, expectedGeneration: "1" }, currentWrite);
+    expect(next.status).toBe(200);
+    expect(await next.json()).toMatchObject({ generation: "2", readGeneration: mode === "write" ? "0" : "2" });
+    const after = await stored();
+    expect(after.filter(row => row.key !== "control")).toEqual(channels);
+    const control = JSON.parse(after[1].value as string);
+    expect(control.readVerifier).toBe(verifier("read", loser.readCapability ?? read));
+    expect(control.writeVerifier).toBe(verifier("write", loser.writeCapability ?? write));
+  });
+}
+
+it("rejects superseded read rotation replay without fencing a newer publisher", async () => {
+  await provision(); await acquire(); await publish();
+  const first = { v: 1, rotationId: "a".repeat(32), expectedGeneration: "0",
+    readCapability: Buffer.from(randomBytes(32)).toString("hex") };
+  const second = { ...first, rotationId: "b".repeat(32), expectedGeneration: "1",
+    readCapability: Buffer.from(randomBytes(32)).toString("hex") };
+  expect((await request("credentials", "POST", first)).status).toBe(200);
+  expect((await request("credentials", "POST", second)).status).toBe(200);
+  expect((await acquire({ ...acquisition, expectedEpoch: "3" })).status).toBe(200);
+  const before = await stored();
+  await abortAllDurableObjects();
+  expect((await request("credentials", "POST", first)).status).toBe(409);
+  expect(await stored()).toEqual(before);
+  expect(JSON.parse(before[1].value as string).readVerifier).toBe(verifier("read", second.readCapability));
+  const published = await publish({ ...candidate("1", "42"), epoch: "4" });
+  expect(published.status).toBe(200);
+  expect(await published.json()).toMatchObject({ generation: "2" });
+});
+
 for (const mode of ["read", "write", "both"]) {
   it(`rotates ${mode} authority atomically and recovers only the matching retry`, async () => {
     await provision(); await acquire(); await publish();
     const newRead = Buffer.from(randomBytes(32)).toString("hex"), newWrite = Buffer.from(randomBytes(32)).toString("hex");
-    const rotation = { v: 1, rotationId: "6".repeat(32),
+    const rotation = { v: 1, rotationId: "6".repeat(32), expectedGeneration: "0",
       ...(mode !== "write" ? { readCapability: newRead } : {}),
       ...(mode !== "read" ? { writeCapability: newWrite } : {}) };
     const currentWrite = mode === "read" ? write : newWrite;
@@ -327,10 +399,14 @@ for (const mode of ["read", "write", "both"]) {
     }
     expect((await request("state", "PUT", candidate("2"), currentWrite)).status).toBe(409);
     expect((await request("credentials", "POST", { ...rotation, readCapability: read }, currentWrite)).status).toBe(409);
+    expect((await request("credentials", "POST", { ...rotation, expectedGeneration: "1" }, currentWrite)).status).toBe(409);
     expect(await (await request("publisher", "GET", undefined, currentWrite)).json()).toMatchObject({ epoch: "2", death: { revision: "1" }, appearance: { revision: "0" } });
     const acquired = await request("session", "POST", { ...acquisition, expectedEpoch: "2", sessionRequestId: "7".repeat(32) }, currentWrite);
     expect(acquired.status).toBe(200);
+    const afterSession = await stored();
+    await abortAllDurableObjects();
     expect(await (await request("credentials", "POST", rotation, currentWrite)).json()).toEqual(ack);
+    expect(await stored()).toEqual(afterSession);
     expect(await (await request("publisher", "GET", undefined, currentWrite)).json()).toMatchObject({ epoch: "3" });
   });
 }
@@ -395,7 +471,7 @@ it("authenticates provisioned write authority and persists default channels acro
   const response = await request();
   expect(response.status).toBe(200);
   const initial = await response.json();
-  expect(initial).toEqual({ v: 1, epoch: "0", death: { revision: "0", digest: hash("null") },
+  expect(initial).toEqual({ v: 1, epoch: "0", generation: "0", death: { revision: "0", digest: hash("null") },
     appearance: { revision: "0", digest: hash(JSON.stringify(corpus.valid[4].appearance)) } });
   const rows = await stored();
   expect(rows.map(row => row.key)).toEqual(["appearance", "control", "death"]);

@@ -4,7 +4,7 @@ import type { Env } from "./index";
 import { acquisition, authorize, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, stateWrite, verifier } from "./protocol";
 
 interface Status {
-  v: 1; epoch: string;
+  v: 1; epoch: string; generation: string;
   death: ReturnType<typeof channelStatus>; appearance: ReturnType<typeof channelStatus>;
 }
 interface StateAck extends Status { sessionRequestId: string; sequence: string; changed: string[] }
@@ -52,15 +52,17 @@ export class OverlayState extends DurableObject<Env> {
         let appearance = this.load<HostedAppearance>("appearance") ?? defaultAppearance;
         if (this.load("death") === undefined) this.save("death", death);
         if (this.load("appearance") === undefined) this.save("appearance", appearance);
-        const status = (): Status => ({ v: 1, epoch: control.epoch, death: channelStatus(death), appearance: channelStatus(appearance) });
+        const status = (): Status => ({ v: 1, epoch: control.epoch, generation: control.generation,
+          death: channelStatus(death), appearance: channelStatus(appearance) });
         if (rotate) {
           const readVerifier = rotate.readCapability ? verifier(id, "read", rotate.readCapability) : undefined;
           const writeVerifier = rotate.writeCapability ? verifier(id, "write", rotate.writeCapability) : undefined;
-          const requestDigest = digest({ v: 1, rotationId: rotate.rotationId, readVerifier, writeVerifier });
+          const requestDigest = digest({ v: 1, rotationId: rotate.rotationId, expectedGeneration: rotate.expectedGeneration, readVerifier, writeVerifier });
           if (control.rotation?.rotationId === rotate.rotationId) {
             if (control.rotation.digest !== requestDigest) return reject(409, "rotation_conflict");
             return { ack: control.rotation.ack, changed: null };
           }
+          if (rotate.expectedGeneration !== control.generation) return reject(409, "rotation_conflict");
           // Keep capabilities distinct across roles and require actual replacements.
           if ((readVerifier && equalVerifier(readVerifier, control.readVerifier)) ||
             (writeVerifier && equalVerifier(writeVerifier, control.writeVerifier)) ||

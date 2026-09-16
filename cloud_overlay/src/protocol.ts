@@ -108,13 +108,13 @@ export interface StateWrite {
   v: 1; epoch: string; sessionRequestId: string; sequence: string;
   death?: HostedDeath; appearance?: HostedAppearance;
 }
-export interface Rotation { v: 1; rotationId: string; readCapability?: string; writeCapability?: string }
+export interface Rotation { v: 1; rotationId: string; expectedGeneration: string; readCapability?: string; writeCapability?: string }
 export function rotation(value: unknown): Rotation {
   try {
-    const body = shape(value, ["v", "rotationId", "readCapability", "writeCapability"], ["v", "rotationId"]);
+    const body = shape(value, ["v", "rotationId", "expectedGeneration", "readCapability", "writeCapability"], ["v", "rotationId", "expectedGeneration"]);
     const read = Object.hasOwn(body, "readCapability"), write = Object.hasOwn(body, "writeCapability");
     if (body.v !== 1 || (!read && !write)) return reject(400, "invalid_body");
-    return { v: 1, rotationId: identity(body.rotationId),
+    return { v: 1, rotationId: identity(body.rotationId), expectedGeneration: validateHostedDecimal(body.expectedGeneration),
       ...(read ? { readCapability: capability(body.readCapability) } : {}),
       ...(write ? { writeCapability: capability(body.writeCapability) } : {}) };
   } catch { return reject(400, "invalid_body"); }

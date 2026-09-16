@@ -39,10 +39,10 @@ behavior. No live infrastructure is needed for these tests.
 
 Only these HTTPS endpoints exist under `/api/v1/overlays/{id}`:
 
-- `GET /publisher`: epoch, channel revisions and normalized content digests.
+- `GET /publisher`: epoch, credential generation, channel revisions and normalized content digests.
 - `POST /session`: `{v, expectedEpoch, sessionRequestId}`.
 - `PUT /state`: `{v, epoch, sessionRequestId, sequence, death?, appearance?}`.
-- `POST /credentials`: `{v, rotationId, readCapability?, writeCapability?}`.
+- `POST /credentials`: `{v, rotationId, expectedGeneration, readCapability?, writeCapability?}`.
 
 Every endpoint requires `Authorization: Bearer <write-capability>`. Query
 credentials, cookie authentication, CORS access and other routes/methods are not
@@ -53,7 +53,7 @@ role are stored; equality checks use the runtime's timing-safe primitive.
 
 Mutations require `Content-Type: application/json`, version `1`, strict field
 allowlists, valid UTF-8, unique JSON keys, and at most 8192 bytes. Compressed bodies
-are rejected. Epoch, sequence and revisions are canonical nonnegative Int64
+are rejected. Epoch, sequence, credential generation and revisions are canonical nonnegative Int64
 decimal strings. Exhausted counters return a conflict and never wrap.
 
 Channel values use the shared hosted contract, without caller-assigned revisions.
@@ -79,14 +79,24 @@ returns the same acknowledgement, but its internal committed-change result is
 null. That internal result is the future broadcast boundary; no broadcaster or
 event history exists here.
 
-Rotation requires the current write capability and one or both replacements.
+Rotation requires the current write capability, the observed credential generation
+from publisher status as `expectedGeneration`, and one or both replacements.
+Missing or invalid generation is rejected with 400. A new rotation atomically
+compares its expected generation with the current generation; a mismatch returns
+409 without changing any records. Never rebase an old request automatically.
 It advances the epoch and credential generation, clears the writer session and
 sequence, and preserves both channels and their revisions. Read generation
 advances only when the read capability changes, so a write-only rotation does not
 invalidate the eventual read URL. Retry the latest rotation with its identical
 ID/body and current (new, when replaced) write capability. Old write credentials
 have no recovery exception. Rotation retries never fence a subsequently acquired
-session again. There is no read-capability recovery path.
+session again. Only the latest exact ID and normalized body (including the original
+expected generation) can return the saved acknowledgement before the generation
+comparison. Reusing that latest ID with changed content returns 409. A superseded
+rotation with its old generation returns 409 under current write authority; a
+deliberate new rotation using the current generation can proceed. Publisher status
+and session/state acknowledgements include `generation`; public snapshot contracts
+do not. There is no read-capability recovery path.
 
 The database contains only three bounded latest-value records: control/auth,
 death and appearance. Session, write and rotation acknowledgements in control
