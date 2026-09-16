@@ -1,7 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
+import { maximumHostedBytes, validateHostedJsonTokens } from "../../web_overlay/src/hosted-contracts";
 import type { HostedAppearance, HostedDeath, HostedEnvelope } from "../../web_overlay/src/hosted-contracts";
 import type { Env } from "./index";
-import { acquisition, authorize, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, stateWrite, verifier } from "./protocol";
+import { acquisition, authorize, capability, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, shape, stateWrite, verifier } from "./protocol";
 
 interface Status {
   v: 1; epoch: string; generation: string;
@@ -22,10 +23,91 @@ interface Control {
   rotation: { rotationId: string; digest: string; ack: RotationAck } | null;
 }
 
+type ReaderAttachment = { phase: "pending"; id: string; deadline: number } |
+  { phase: "authenticated"; generation: string };
+
 export class OverlayState extends DurableObject<Env> {
+  private pendingTimer: ReturnType<typeof setTimeout> | undefined;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY CHECK (key IN ('control','death','appearance')), value TEXT NOT NULL)");
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.cleanReaders();
+  }
+
+  // Attachments and storage survive wake. Only pending authentication owns a
+  // bounded timer; fixed automatic ping responses cannot extend its deadline.
+  private cleanReaders(): void {
+    if (this.pendingTimer !== undefined) clearTimeout(this.pendingTimer);
+    this.pendingTimer = undefined;
+    const control = this.load<Control>("control");
+    let deadline = Infinity;
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      const attachment = socket.deserializeAttachment() as ReaderAttachment | null;
+      if (!attachment) { socket.close(4400, "Invalid protocol"); continue; }
+      if (attachment.phase === "pending") {
+        if (attachment.deadline <= Date.now()) socket.close(4401, "Authentication expired");
+        else deadline = Math.min(deadline, attachment.deadline);
+      } else if (!control || attachment.generation !== control.readGeneration) socket.close(4401, "Read access revoked");
+    }
+    if (deadline !== Infinity) this.pendingTimer = setTimeout(() => this.cleanReaders(), Math.max(1, deadline - Date.now()));
+  }
+
+  private live(id: string): Response {
+    this.cleanReaders();
+    if (!this.load<Control>("control")) return reject(403, "forbidden");
+    const pair = new WebSocketPair();
+    const socket = pair[1];
+    const pending = this.ctx.getWebSockets().filter(s => s.readyState === WebSocket.OPEN &&
+      (s.deserializeAttachment() as ReaderAttachment).phase === "pending").length;
+    this.ctx.acceptWebSocket(socket);
+    socket.serializeAttachment({ phase: "pending", id, deadline: Date.now() + 5000 } satisfies ReaderAttachment);
+    if (pending >= 2) socket.close(4429, "Socket capacity");
+    this.cleanReaders();
+    return new Response(null, { status: 101, webSocket: pair[0], headers: {
+      "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"
+    } });
+  }
+
+  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+    this.cleanReaders();
+    if (socket.readyState !== WebSocket.OPEN) return;
+    try {
+      if (typeof message !== "string" || new TextEncoder().encode(message).length > maximumHostedBytes) throw new Error();
+      const parsed: unknown = JSON.parse(message);
+      validateHostedJsonTokens(message);
+      const auth = shape(parsed, ["v", "type", "readCapability"]);
+      if (auth.v !== 1 || auth.type !== "auth") throw new Error();
+      const token = capability(auth.readCapability);
+      const attachment = socket.deserializeAttachment() as ReaderAttachment;
+      if (attachment.phase !== "pending") throw new Error();
+      const control = this.load<Control>("control");
+      if (!control || !equalVerifier(control.readVerifier, verifier(attachment.id, "read", token))) {
+        socket.close(4401, "Invalid read access"); return;
+      }
+      const count = this.ctx.getWebSockets().filter(s => s.readyState === WebSocket.OPEN &&
+        (s.deserializeAttachment() as ReaderAttachment).phase === "authenticated").length;
+      if (count >= 8) { socket.close(4429, "Socket capacity"); return; }
+      socket.serializeAttachment({ phase: "authenticated", generation: control.readGeneration } satisfies ReaderAttachment);
+      socket.send(JSON.stringify({ v: 1, type: "snapshot", death: this.load<HostedDeath>("death") ?? null,
+        appearance: this.load<HostedAppearance>("appearance") ?? defaultAppearance }));
+    } catch { socket.close(4400, "Invalid protocol"); }
+    finally { this.cleanReaders(); }
+  }
+
+  webSocketClose(socket: WebSocket): void { socket.close(1000); this.cleanReaders(); }
+  webSocketError(socket: WebSocket): void { socket.close(1011, "Connection failure"); this.cleanReaders(); }
+
+  private broadcast(envelope: HostedEnvelope): void {
+    this.cleanReaders();
+    const generation = this.load<Control>("control")?.readGeneration;
+    for (const socket of this.ctx.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as ReaderAttachment;
+      if (socket.readyState === WebSocket.OPEN && attachment.phase === "authenticated" && attachment.generation === generation) {
+        try { socket.send(JSON.stringify(envelope)); } catch { socket.close(1011, "Connection failure"); }
+      }
+    }
   }
 
   private load<T>(key: string): T | undefined {
@@ -40,6 +122,7 @@ export class OverlayState extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     try {
       const { id, action } = route(request);
+      if (action === "live") return this.live(id);
       const token = authorize(request);
       const body = action === "publisher" ? undefined : await readBody(request);
       const session = action === "session" ? acquisition(body) : undefined;
@@ -119,8 +202,8 @@ export class OverlayState extends DurableObject<Env> {
         if (action !== "publisher") return reject(404, "not_found");
         return { ack: status(), changed: null };
       });
-      // Only this committed result may feed a future socket broadcaster. Retry
-      // acknowledgements retain their original body but have no changed channels.
+      this.cleanReaders();
+      if (committed.changed) this.broadcast(committed.changed);
       return response(200, committed.ack);
     } catch (error) { return failure(error); }
   }

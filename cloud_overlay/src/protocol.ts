@@ -24,20 +24,20 @@ export function authorize(request: Request): string {
 }
 export function response(status: number, body: unknown): Response {
   return Response.json(body, { status, headers: {
-    "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"
+    "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"
   } });
 }
 export function failure(error: unknown): Response {
   return error instanceof Rejection ? response(error.status, { error: error.code }) : response(500, { error: "storage_failure" });
 }
-export type Route = "publisher" | "session" | "state" | "credentials";
+export type Route = "publisher" | "session" | "state" | "credentials" | "live";
 export function route(request: Request): { id: string; action: Route } {
   const url = new URL(request.url);
   if (url.protocol !== "https:") return reject(400, "https_required");
-  const match = /^\/api\/v1\/overlays\/([0-9a-f]{32})\/(publisher|session|state|credentials)$/.exec(url.pathname);
+  const match = /^\/api\/v1\/overlays\/([0-9a-f]{32})\/(publisher|session|state|credentials|live)$/.exec(url.pathname);
   if (!match || url.search || url.hash) return reject(404, "not_found");
   const action = match[2] as Route;
-  const methods = { publisher: "GET", session: "POST", state: "PUT", credentials: "POST" };
+  const methods = { publisher: "GET", session: "POST", state: "PUT", credentials: "POST", live: "GET" };
   if (request.method !== methods[action]) return reject(405, "method_not_allowed");
   return { id: match[1], action };
 }

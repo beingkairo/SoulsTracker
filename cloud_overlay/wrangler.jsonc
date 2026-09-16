@@ -9,6 +9,7 @@
   "send_metrics": false,
   "observability": { "enabled": false },
   "vars": { "PROVISIONED_IDS": [] },
+  "assets": { "directory": "../web_overlay/dist/hosted", "run_worker_first": ["/api/*"] },
   "durable_objects": {
     "bindings": [{ "name": "OVERLAYS", "class_name": "OverlayState" }]
   },

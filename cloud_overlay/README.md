@@ -1,9 +1,9 @@
 # Hosted overlay state service
 
-This package contains an unconnected Worker API and SQLite-backed Durable Object.
-The desktop application and current local overlay do not use it. There are no
-browser assets, sockets, deployment scripts, public provisioning endpoints, or
-account credentials in this package.
+This package contains an unconnected Worker API, SQLite-backed Durable Object,
+and isolated hosted browser assets from `web_overlay`. The desktop application
+and current local overlay do not use it. There are no deployment scripts,
+public provisioning endpoints or account credentials in the production entry.
 
 ## Local verification
 
@@ -11,9 +11,13 @@ Use Node 22.23.2 or a compatible supported Node release. From this directory:
 
 ```sh
 npm ci
+npm ci --prefix ../web_overlay
+npm run build --prefix ../web_overlay
 npm run check
 npm run build
 npm test
+npm run check --prefix ../web_overlay
+npm test --prefix ../web_overlay
 npm audit
 ```
 
@@ -21,8 +25,12 @@ npm audit
 It does not deploy. Do not omit that flag. Tests use the official Cloudflare
 Vitest pool and local workerd with SQLite storage. They inject synthetic
 verifiers through `runInDurableObject`; no application database is accessed.
-The checked-in configuration admits no overlay identities. There is no local
-provisioning command or production HTTP override.
+The production configuration admits no overlay identities or browser origins.
+There is no production HTTP override. Playwright starts a separate test-only
+Wrangler configuration on local TLS at port 8799. That harness injects synthetic
+credentials into isolated workerd storage and can disconnect readers; its entry
+and test routes are never bundled by the production configuration. Both npm
+packages must be installed before the browser suite can start this harness.
 
 The pool is pinned with its matching Wrangler version and compatibility date.
 Vitest 4.1 is required by this pool; Vitest 5 is outside its supported peer range.
@@ -37,7 +45,7 @@ behavior. No live infrastructure is needed for these tests.
 
 ## Write API
 
-Only these HTTPS endpoints exist under `/api/v1/overlays/{id}`:
+These write-authorized HTTPS endpoints exist under `/api/v1/overlays/{id}`:
 
 - `GET /publisher`: epoch, credential generation, channel revisions and normalized content digests.
 - `POST /session`: `{v, expectedEpoch, sessionRequestId}`.
@@ -76,8 +84,8 @@ field order and normalization, with revision replaced by `"0"`; initial death
 uses the JSON literal `null`. State acknowledgements include status, session ID,
 sequence and the channel names changed by that original acceptance. A retry
 returns the same acknowledgement, but its internal committed-change result is
-null. That internal result is the future broadcast boundary; no broadcaster or
-event history exists here.
+null. Only a changed committed result broadcasts complete changed channels to
+authenticated readers. No event history is stored.
 
 Rotation requires the current write capability, the observed credential generation
 from publisher status as `expectedGeneration`, and one or both replacements.
@@ -87,7 +95,7 @@ compares its expected generation with the current generation; a mismatch returns
 It advances the epoch and credential generation, clears the writer session and
 sequence, and preserves both channels and their revisions. Read generation
 advances only when the read capability changes, so a write-only rotation does not
-invalidate the eventual read URL. Retry the latest rotation with its identical
+invalidate the read URL or disconnect current read clients. Retry the latest rotation with its identical
 ID/body and current (new, when replaced) write capability. Old write credentials
 have no recovery exception. Rotation retries never fence a subsequently acquired
 session again. Only the latest exact ID and normalized body (including the original
@@ -103,10 +111,62 @@ death and appearance. Session, write and rotation acknowledgements in control
 are latest-only retry metadata. No application history, expiration, alarm, queue,
 KV, D1 or second service is used.
 
+## Read sockets and static assets
+
+`GET /api/v1/overlays/{id}/live` upgrades a same-origin TLS WebSocket. Admission
+requires a provisioned routing ID and the exact explicitly configured HTTPS
+`BROWSER_ORIGIN`, before obtaining a Durable Object stub. Missing or malformed
+configuration denies access. The deployment configuration supplies no origin.
+Cookies, Authorization headers, query credentials and WebSocket subprotocols
+are rejected on this route.
+
+The credential-free `/overlay/` page accepts only the fragment shape
+`#id=<overlay-id>&read=<read-capability>`, with canonical lowercase hexadecimal
+values. Queries, duplicate/extra fields and old style fragments are invalid.
+The read capability is sent in the first socket message as
+`{v:1,type:"auth",readCapability:<read-capability>}`; it never goes into a socket
+URL, DOM or static asset. Read credentials cannot write state.
+
+Hibernatable sockets use persisted attachments, two pending slots, eight
+authenticated slots and a five-second pending authentication deadline. Fixed
+`ping`/`pong` responses do not extend pending authentication. After authentication
+the object sends one complete snapshot in the same serialized event. It reads
+durable latest state independently of Desktop; before the first death publication
+the page remains transparent. Every broadcast checks the current read generation.
+Read rotation closes revoked clients, while write-only rotation retains readers.
+
+The browser holds channels and Int64 revisions in memory, renders combined
+updates once, ignores older/equal revisions and retains its DOM on disconnect.
+One owner handles full-jitter reconnect from one second to a thirty-second cap,
+reset after valid hydration only, with thirty-second pings and a ninety-second
+no-response deadline. Close code 4401 stops retries until reload or a corrected
+fragment; 4400 is malformed protocol and 4429 is capacity. No state polling,
+local storage, service worker or local transport fallback is used. Cold offline
+loading cannot recover a state it has never received.
+
+Appearance comes only from the validated wire values. The hosted entry adapts
+the existing compact, left-aligned title/icon/text effects and fixed 2.5rem
+number-only size. Fonts use standard local resolution with sans-serif fallback;
+no font service or upload is involved. The existing local entry stays separate.
+
+The build produces content-hashed JS/CSS and the existing bundled skull raster.
+The stable shell revalidates with an ETag; hashed assets are immutable for one
+year. Builds retain earlier hashed files in `web_overlay/dist/hosted/assets`.
+Keep that asset directory with the preceding build when preparing a rollout
+artifact; a clean checkout alone does not contain prior hashes. Do not delete
+previously referenced hashes during rollout overlap. This package does not
+automate publishing or a retention/deletion policy for deployed assets.
+
+Static headers restrict content and connections to the same origin, prohibit
+referrers and set nosniff. Rendering uses textContent and typed CSS properties,
+without inline scripts, style text or external resources. Dynamic responses are
+no-store and do not enable CORS or authentication cookies. Local browser tests
+check actual CSP behavior, asset loading and cache headers.
+
 ## Before any live use
 
 Live deployment, operator provisioning/recovery, pairing delivery, host approval,
-edge abuse/rate controls and socket authorization remain external prerequisites.
+edge abuse/rate controls and real network/OBS parity remain external prerequisites.
 The configuration disables worker/preview URLs and observability and contains
 neither account IDs nor domains. Do not treat passing local tests as authorization
 to deploy or to connect the desktop application.

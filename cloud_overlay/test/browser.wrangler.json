@@ -1,0 +1,14 @@
+{
+  "name": "soulstracker-local-browser-test",
+  "main": "browser-worker.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "vars": { "PROVISIONED_IDS": ["11111111111111111111111111111111"], "BROWSER_ORIGIN": "https://localhost:8799" },
+  "durable_objects": { "bindings": [{ "name": "OVERLAYS", "class_name": "OverlayState" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OverlayState"] }],
+  "assets": { "directory": "../../web_overlay/dist/hosted", "run_worker_first": ["/api/*", "/__test/*"] }
+}

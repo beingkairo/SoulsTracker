@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [cloudflareTest({
     wrangler: { configPath: "./wrangler.jsonc" },
-    miniflare: { bindings: { PROVISIONED_IDS: ["11111111111111111111111111111111", "22222222222222222222222222222222"] } }
+    miniflare: { bindings: { BROWSER_ORIGIN: "https://overlay.test", PROVISIONED_IDS: ["11111111111111111111111111111111", "22222222222222222222222222222222"] } }
   })],
   test: { include: ["test/**/*.test.ts"] }
 });
