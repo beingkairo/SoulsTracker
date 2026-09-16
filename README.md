@@ -15,7 +15,7 @@ Demon Souls uses a manual counter.
 3. For hosted overlays, read the disclosure on the **Overlay** tab, explicitly consent, and import an operator-issued pairing JSON file.
 4. Enable **Total Deaths** for visibility, then use **Copy OBS URL** and paste into an OBS **Browser Source**. Visibility is separate from publication consent.
 
-This development build has no authorized production host. Pairing is default-deny until an exact HTTPS host is authorized and configured; no deployed service or OBS validation is promised. Local tracking and TXT output do not require pairing or an internet connection.
+This development build accepts pairing only for https://overlay.beingkairo.com. The service requires operator provisioning; deployment and OBS validation are not established by a source build. Local tracking and TXT output do not require pairing or an internet connection.
 
 The Total Deaths overlay works at any size.
 

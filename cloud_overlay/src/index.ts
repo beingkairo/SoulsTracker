@@ -6,6 +6,7 @@ export interface Env {
   OVERLAYS: DurableObjectNamespace<OverlayState>;
   PROVISIONED_IDS: string[];
   BROWSER_ORIGIN?: string;
+  BOOTSTRAP?: unknown;
 }
 
 export default {
@@ -26,6 +27,8 @@ export default {
         if (request.headers.has("Cookie") || request.headers.has("Sec-WebSocket-Protocol") || request.headers.has("Authorization"))
           return reject(400, "invalid_protocol");
       } else authorize(request);
+      if (!env.BROWSER_ORIGIN || new URL(request.url).origin !== env.BROWSER_ORIGIN)
+        return reject(403, "forbidden");
       return await env.OVERLAYS.getByName(id).fetch(request);
     } catch (error) { return failure(error); }
   }

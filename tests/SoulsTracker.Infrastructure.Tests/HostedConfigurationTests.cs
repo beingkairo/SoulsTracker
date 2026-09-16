@@ -6,6 +6,23 @@ namespace SoulsTracker.Infrastructure.Tests;
 
 public sealed class HostedConfigurationTests
 {
+    [Theory]
+    [InlineData("https://overlay.beingkairo.com", true)]
+    [InlineData("http://overlay.beingkairo.com", false)]
+    [InlineData("https://overlay.beingkairo.com/", false)]
+    [InlineData("https://overlay.beingkairo.com.evil.test", false)]
+    [InlineData("https://other.beingkairo.com", false)]
+    [InlineData("https://OVERLAY.beingkairo.com", false)]
+    [InlineData("https://overlay.beingkairo.com:443", false)]
+    [InlineData("https://arbitrary.test", false)]
+    public void ProductionOriginIsExact(string origin, bool accepted)
+    {
+        if (accepted)
+            Assert.Equal(origin, HostedPublisherConfiguration.Create(origin, new('a', 32), new('b', 64), new('c', 64), HostedProductionOrigins.Approved).DisplayOrigin);
+        else
+            Assert.Throws<ArgumentException>(() => HostedPublisherConfiguration.Create(origin, new('a', 32), new('b', 64), new('c', 64), HostedProductionOrigins.Approved));
+    }
+
     [Fact]
     public async Task ImportIsBoundedAndRemovalOnlyTouchesProtectedPairing()
     {
@@ -29,7 +46,7 @@ public sealed class HostedConfigurationTests
             Assert.True(File.Exists(source));
             await File.WriteAllBytesAsync(source, new byte[8193]);
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.ReadPairingAsync(source));
-            Assert.Empty(HostedProductionOrigins.Approved);
+            Assert.Equal(["https://overlay.beingkairo.com"], HostedProductionOrigins.Approved);
         }
         finally { Directory.Delete(directory, true); }
     }

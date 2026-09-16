@@ -119,6 +119,25 @@ export class OverlayState extends DurableObject<Env> {
     this.ctx.storage.sql.exec("INSERT INTO records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", key, JSON.stringify(value));
   }
 
+  private initialControl(id: string, token: string): Control {
+    // Installed only through authenticated deployment; ignored once control exists.
+    try {
+      const config = shape(this.env.BOOTSTRAP, ["v", "overlayId", "readVerifier", "writeVerifier"]);
+      if (this.ctx.storage.sql.exec("SELECT key FROM records LIMIT 1").toArray().length) return reject(403, "forbidden");
+      if (config.v !== 1 || config.overlayId !== id ||
+        !this.ctx.id.equals(this.env.OVERLAYS.idFromName(id)) ||
+        typeof config.readVerifier !== "string" || typeof config.writeVerifier !== "string" ||
+        !/^[0-9a-f]{64}$/.test(config.readVerifier) || !/^[0-9a-f]{64}$/.test(config.writeVerifier) ||
+        config.readVerifier === config.writeVerifier ||
+        !equalVerifier(config.writeVerifier, verifier(id, "write", token)) ||
+        equalVerifier(config.readVerifier, verifier(id, "read", token))) return reject(403, "forbidden");
+      const control: Control = { readVerifier: config.readVerifier, writeVerifier: config.writeVerifier,
+        epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null };
+      this.ctx.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?)", JSON.stringify(control));
+      return control;
+    } catch { return reject(403, "forbidden"); }
+  }
+
   async fetch(request: Request): Promise<Response> {
     try {
       const { id, action } = route(request);
@@ -129,7 +148,8 @@ export class OverlayState extends DurableObject<Env> {
       const write = action === "state" ? stateWrite(body) : undefined;
       const rotate = action === "credentials" ? rotation(body) : undefined;
       const committed = this.ctx.storage.transactionSync((): CommitResult => {
-        const control = this.load<Control>("control");
+        const control = this.load<Control>("control") ??
+          (action === "publisher" ? this.initialControl(id, token) : reject(403, "forbidden"));
         if (!control || !equalVerifier(control.writeVerifier, verifier(id, "write", token))) return reject(403, "forbidden");
         let death = this.load<HostedDeath | null>("death") ?? null;
         let appearance = this.load<HostedAppearance>("appearance") ?? defaultAppearance;

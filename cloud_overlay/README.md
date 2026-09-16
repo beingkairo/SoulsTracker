@@ -2,9 +2,9 @@
 
 This package contains a Worker API, SQLite-backed Durable Object,
 and hosted browser assets from `web_overlay`. Desktop composes the hosted publisher
-behind explicit protected pairing; production origins remain empty/default-deny
-and no live service is configured. There are no deployment scripts,
-public provisioning endpoints or account credentials in the production entry.
+behind explicit protected pairing to https://overlay.beingkairo.com only.
+The configuration admits no identities until operator provisioning. There are
+no public provisioning endpoints or account credentials in the production entry.
 
 ## Local verification
 
@@ -26,7 +26,7 @@ npm audit
 It does not deploy. Do not omit that flag. Tests use the official Cloudflare
 Vitest pool and local workerd with SQLite storage. They inject synthetic
 verifiers through `runInDurableObject`; no application database is accessed.
-The production configuration admits no overlay identities or browser origins.
+The production configuration admits no overlay identities by default.
 There is no production HTTP override. Playwright starts a separate test-only
 Wrangler configuration on local TLS at port 8799. That harness injects synthetic
 credentials into isolated workerd storage and can disconnect readers; its entry
@@ -117,7 +117,7 @@ KV, D1 or second service is used.
 `GET /api/v1/overlays/{id}/live` upgrades a same-origin TLS WebSocket. Admission
 requires a provisioned routing ID and the exact explicitly configured HTTPS
 `BROWSER_ORIGIN`, before obtaining a Durable Object stub. Missing or malformed
-configuration denies access. The deployment configuration supplies no origin.
+configuration denies access. Request origins must also match the configured origin.
 Cookies, Authorization headers, query credentials and WebSocket subprotocols
 are rejected on this route.
 
@@ -166,8 +166,29 @@ check actual CSP behavior, asset loading and cache headers.
 
 ## Before any live use
 
-Live deployment, operator provisioning/recovery, pairing delivery, host approval,
-edge abuse/rate controls and real network/OBS parity remain external prerequisites.
-The configuration disables worker/preview URLs and observability and contains
-neither account IDs nor domains. Do not treat passing local tests as authorization
-to deploy or to connect the desktop application.
+Live deployment, operator provisioning/recovery, pairing delivery, edge abuse/rate
+controls and real network/OBS parity require separate verification. The configuration
+disables worker/preview URLs and observability and contains no account ID.
+Do not treat passing local tests as proof of deployed or OBS behavior.
+
+The bounded Windows operator tool in `operator/provision.py` prepares a new
+owner-only directory under LocalAppData/SoulsTrackerOperator. It generates one
+random identity and independent read/write capabilities only when explicitly run.
+The pairing file is ready for the existing consent-based Desktop import; never
+copy its contents into a command, log or report. It is not deleted automatically.
+The tool is not part of the Worker bundle and never deploys resources.
+
+Temporary `BOOTSTRAP` deployment configuration contains only version, exact
+overlayId and role/ID-bound read/write verifiers. An authenticated GET publisher
+can initialize an empty matching object transactionally. Existing control always
+takes precedence; replay cannot replace credentials, sessions or channels.
+Remove the binding by deploying the generated runtime configuration without
+`--keep-vars`, then verify persisted status again before importing pairing.
+Never deploy test entries. Keep the Worker name, class, binding and v1 migration
+unchanged across deployments. A custom domain must not replace an existing DNS
+resource. Account selection, DNS inspection and deployment access are operator
+prerequisites, not application settings.
+
+Run operator checks with `python -m unittest discover -s cloud_overlay/operator -v`
+from the repository root. They use synthetic capabilities and no network access;
+the Windows ACL case creates and removes an empty private test directory.

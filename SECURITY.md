@@ -4,4 +4,4 @@ Do not open a public issue for a security vulnerability. In particular, never in
 
 Report suspected vulnerabilities privately to the repository maintainer. Include a minimal reproduction, affected version, impact, and any mitigation you have identified. You will receive an acknowledgement and coordinated disclosure plan before public discussion.
 
-SoulsTracker uses read-only game access and explicit opt-in hosted publication to approved HTTPS origins. No production host is authorized in this development build. Pairing files contain write authority; OBS URLs contain separate read authority. Reports involving leaked capabilities, unauthorized publication, memory writes, input automation, code injection or save editing are treated as high priority.
+SoulsTracker uses read-only game access and explicit opt-in hosted publication to https://overlay.beingkairo.com only. Pairing requires operator provisioning. Pairing files contain write authority; OBS URLs contain separate read authority. Reports involving leaked capabilities, unauthorized publication, memory writes, input automation, code injection or save editing are treated as high priority.
