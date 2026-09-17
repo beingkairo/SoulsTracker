@@ -65,6 +65,10 @@ def prepare(inputs, directory, artifact):
         "routes": [{"pattern": "overlay.beingkairo.com", "custom_domain": True}],
         "vars": {"PROVISIONED_IDS": [identity], "BROWSER_ORIGIN": ORIGIN},
         "assets": {"directory": str(artifact / "assets"), "run_worker_first": ["/api/*"]},
+        "ratelimits": [
+            {"name": "PUBLISHER_RATE_LIMITER", "namespace_id": "450501", "simple": {"limit": 60, "period": 60}},
+            {"name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": {"limit": 120, "period": 60}}
+        ],
         "durable_objects": {"bindings": [{"name": "OVERLAYS", "class_name": "OverlayState"}]},
         "migrations": [{"tag": "v1", "new_sqlite_classes": ["OverlayState"]}]
     }

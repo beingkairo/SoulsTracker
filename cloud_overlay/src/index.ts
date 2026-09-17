@@ -1,5 +1,5 @@
 import { OverlayState } from "./overlay-state";
-import { authorize, failure, reject, route } from "./protocol";
+import { authorize, failure, reject, response, route } from "./protocol";
 export { OverlayState };
 
 export interface Env {
@@ -7,6 +7,8 @@ export interface Env {
   PROVISIONED_IDS: string[];
   BROWSER_ORIGIN?: string;
   BOOTSTRAP?: unknown;
+  PUBLISHER_RATE_LIMITER: RateLimit;
+  LIVE_RATE_LIMITER: RateLimit;
 }
 
 export default {
@@ -29,6 +31,21 @@ export default {
       } else authorize(request);
       if (!env.BROWSER_ORIGIN || new URL(request.url).origin !== env.BROWSER_ORIGIN)
         return reject(403, "forbidden");
+      const limiter = action === "live" ? env.LIVE_RATE_LIMITER : env.PUBLISHER_RATE_LIMITER;
+      let admitted: boolean;
+      try {
+        admitted = (await limiter.limit({ key: `overlay-v1:${id}` })).success;
+        if (typeof admitted !== "boolean") throw new Error();
+      } catch {
+        const unavailable = response(503, { error: "admission_unavailable" });
+        unavailable.headers.set("Retry-After", "60");
+        return unavailable;
+      }
+      if (!admitted) {
+        const limited = response(429, { error: "rate_limited" });
+        limited.headers.set("Retry-After", "60");
+        return limited;
+      }
       return await env.OVERLAYS.getByName(id).fetch(request);
     } catch (error) { return failure(error); }
   }

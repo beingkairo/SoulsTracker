@@ -127,6 +127,12 @@ it("bounds raw bodies, rejects duplicates and malformed UTF-8 without writes or 
 
 it("preserves the accepted complete-channel, Int64 and Unicode validation corpus", async () => {
   await provision(); await acquire(); const before = await stored();
+  // Exercise every validator at the authority boundary without exhausting the
+  // router's intentionally smaller admission budget in this single corpus.
+  const publish = (body: unknown) => stub().fetch(`https://overlay.test/api/v1/overlays/${id}/state`, {
+    method: "PUT", headers: { Authorization: `Bearer ${write}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   const invalid: unknown[] = [ { ...candidate(), v: 2 }, { ...candidate(), death: null }, { ...candidate(), appearance: null },
     { ...candidate(), death: { ...candidate().death, revision: "0" } }, { ...candidate(), source: "synthetic" } ];
   const { death: _death, ...base } = candidate();

@@ -101,6 +101,10 @@ class ProvisionTests(unittest.TestCase):
             self.assertNotIn("BOOTSTRAP", runtime["vars"])
             self.assertEqual(bootstrap["vars"]["BOOTSTRAP"]["writeVerifier"], provision.verifier("1" * 32, "write", "3" * 64))
             for config in [bootstrap, runtime]:
+                self.assertEqual(config["ratelimits"], [
+                    {"name": "PUBLISHER_RATE_LIMITER", "namespace_id": "450501", "simple": {"limit": 60, "period": 60}},
+                    {"name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": {"limit": 120, "period": 60}}
+                ])
                 text = json.dumps(config)
                 self.assertNotIn("2" * 64, text)
                 self.assertNotIn("3" * 64, text)
