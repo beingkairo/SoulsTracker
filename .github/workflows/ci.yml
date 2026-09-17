@@ -63,6 +63,9 @@ jobs:
       - name: Type-check overlay workspace
         run: npm run check --prefix web_overlay
 
+      - name: Build hosted browser assets
+        run: npm run build --prefix web_overlay
+
       - name: Type-check local Worker workspace
         run: npm run check --prefix cloud_overlay
 
@@ -72,7 +75,7 @@ jobs:
       - name: Run local Worker tests
         run: npm test --prefix cloud_overlay
 
-      - name: Run overlay foundation tests
+      - name: Run hosted overlay tests
         run: npm test --prefix web_overlay
 
       - name: Publish desktop smoke artifact

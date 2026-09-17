@@ -23,7 +23,7 @@ public sealed class OverlaySnapshotTests
         Assert.Contains("\"SchemaVersion\":1", json);
         Assert.DoesNotContain("\"AccessToken\"", json);
         Assert.DoesNotContain("\"Endpoint\"", json);
-        Assert.DoesNotContain(properties, static property => property.PropertyType == typeof(OverlayAccessToken) || property.PropertyType == typeof(OverlayEndpointConfiguration) || property.PropertyType == typeof(OverlayConfiguration));
+        Assert.DoesNotContain(properties, static property => property.PropertyType == typeof(OverlayConfiguration));
         Assert.Empty(mutationMethods);
     }
 }

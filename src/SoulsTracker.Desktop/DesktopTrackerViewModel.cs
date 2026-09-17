@@ -22,8 +22,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 {
     internal const string LocalTrackerStateReadyMessage = "Local tracker state is ready.";
     internal const string LocalTrackerStateUnavailableMessage = "Local tracker state is unavailable. Tracker controls remain disabled.";
-    internal const string LocalOverlayReadyMessage = "Local OBS overlay is ready.";
-    internal const string LocalOverlayUnavailableMessage = "Local OBS overlay is unavailable. Local tracker controls remain available.";
+
     internal const string GameUnavailableMessage = "Game unavailable";
     internal const string GameWaitingForActiveCharacterMessage = "Game detected — waiting for active character";
     internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save file";
@@ -63,11 +62,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool isBusy;
     private string? errorMessage;
     private string totalDeathsText = "Load tracker state before using controls.";
-    private string? totalDeathsOverlayUrl;
+
 
     private string? globalHotkeyStatus;
     private string? localTrackerStateStatus;
-    private string? localOverlayStatus;
+
     private bool isTotalDeathsOverlayEnabled;
     private bool showTotalDeathsGameName;
 
@@ -447,16 +446,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string EldenRingSavedDeathsText => runtimeObservation?.GameId == GameId.EldenRing
         ? runtimeObservation.TotalDeaths.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
         : "Unavailable";
-    public string? TotalDeathsOverlayUrl { get => totalDeathsOverlayUrl; private set { if (SetField(ref totalDeathsOverlayUrl, value)) { OnPropertyChanged(nameof(TotalDeathsSceneUrl)); OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay)); } } }
-
-    /// <summary>Each generated URL contains only its own bounded, applied presentation values.</summary>
-    public string? TotalDeathsSceneUrl => AppendStyleQuery(TotalDeathsOverlayUrl, totalDeaths: true);
-
-    /// <summary>Safe, compact presentation of a canonical URL. Copy always uses the full URL.</summary>
-    public string? TotalDeathsSceneUrlDisplay => ShortenUrlForDisplay(TotalDeathsSceneUrl);
-    /// <summary>Safe, compact presentation of a canonical URL. Copy always uses the full URL.</summary>
-
-
 
     public string? GlobalHotkeyStatus { get => globalHotkeyStatus; private set => SetField(ref globalHotkeyStatus, value); }
     public string PendingIncrementHotkey { get => pendingIncrementHotkey; set => SetField(ref pendingIncrementHotkey, value); }
@@ -468,7 +457,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public string ActiveIncrementHotkey => hotkeySettings.Increment.DisplayText;
     public string ActiveDecrementHotkey => hotkeySettings.Decrement.DisplayText;
     public string? LocalTrackerStateStatus { get => localTrackerStateStatus; private set => SetField(ref localTrackerStateStatus, value); }
-    public string? LocalOverlayStatus { get => localOverlayStatus; private set => SetField(ref localOverlayStatus, value); }
+
     public bool IsTotalDeathsOverlayEnabled { get => isTotalDeathsOverlayEnabled; private set => SetField(ref isTotalDeathsOverlayEnabled, value); }
     public bool ShowTotalDeathsGameName { get => showTotalDeathsGameName; private set => SetField(ref showTotalDeathsGameName, value); }
 
@@ -580,19 +569,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         ApplyCommittedState(committedState);
         ReconcileWukongSaveSourceFromCommittedState();
     }
-    public void SetOverlayUrls(string totalDeathsUrl) { TotalDeathsOverlayUrl = totalDeathsUrl; }
+
     public HostedOverlayConnection? HostedOverlay { get; private set; }
     internal void ConfigureHostedOverlay(HostedOverlayConnection connection)
     {
         HostedOverlay = connection;
         OnPropertyChanged(nameof(HostedOverlay));
-    }
-    internal void SetOverlayReady() => LocalOverlayStatus = LocalOverlayReadyMessage;
-    public void SetOverlayUnavailable()
-    {
-        TotalDeathsOverlayUrl = "Overlay endpoint unavailable. Close the conflicting local application and restart SoulsTracker.";
-
-        LocalOverlayStatus = LocalOverlayUnavailableMessage;
     }
 
     internal void SetGlobalHotkeyStatus(string status) => GlobalHotkeyStatus = string.IsNullOrWhiteSpace(status)
@@ -1294,8 +1276,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         NotifyEldenRingSaveSourceProperties();
         NotifyWukongSaveSourceProperties();
         NotifyLiesOfPSaveSourceProperties();
-        OnPropertyChanged(nameof(TotalDeathsSceneUrl));
-        OnPropertyChanged(nameof(TotalDeathsSceneUrlDisplay));
+
 
     }
 
@@ -1341,44 +1322,6 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private string ResolveLocalFont(string fontFamily) => LocalFontFamilies.Contains(fontFamily, StringComparer.OrdinalIgnoreCase) ? fontFamily : "Segoe UI";
 
-    private string? AppendStyleQuery(string? url, bool totalDeaths)
-    {
-        if (string.IsNullOrWhiteSpace(url) || url.StartsWith("Overlay endpoint unavailable", StringComparison.Ordinal)) return url;
-        if (state is null) return url;
-        OverlayAppearance appearance = state.OverlayConfiguration.TotalDeaths.Appearance;
-        var values = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["styleVersion"] = "1",
-            ["title"] = appearance.Title,
-            ["font"] = appearance.FontFamily,
-            ["size"] = appearance.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["textColor"] = appearance.TextColor,
-            ["backgroundColor"] = appearance.BackgroundColor,
-            ["backgroundOpacity"] = appearance.BackgroundOpacity.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["textOpacity"] = appearance.TextOpacity.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["iconColor"] = appearance.IconColor,
-            ["outline"] = appearance.OutlineEnabled ? "true" : "false",
-            ["outlineColor"] = appearance.OutlineColor,
-            ["outlineWidth"] = appearance.OutlineWidth.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["shadow"] = appearance.ShadowEnabled ? "true" : "false",
-            ["shadowColor"] = appearance.ShadowColor,
-            ["shadowX"] = appearance.ShadowOffsetX.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["shadowY"] = appearance.ShadowOffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["shadowBlur"] = appearance.ShadowBlur.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-        values["inline"] = "true";
-        values["titleIcon"] = state.OverlayConfiguration.TotalDeaths.TitleIconMode.ToString();
-        string separator = url.Contains('?') ? "&" : "?";
-        return url + separator + string.Join("&", values.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)));
-    }
-
-    internal static string? ShortenUrlForDisplay(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)) return url;
-        string[] visible = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
-            .Where(static pair => !pair.StartsWith("token=", StringComparison.OrdinalIgnoreCase)).ToArray();
-        return visible.Length == 0 ? "…" : "…&" + string.Join("&", visible);
-    }
 
     private void SetAppearanceFeedback(bool totalDeaths, string message)
     {

@@ -3,11 +3,6 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const output = resolve(root, "dist", "assets");
-
-await mkdir(output, { recursive: true });
-await copyFile(resolve(root, "dist", "src", "foundation.js"), resolve(output, "overlay-bootstrap.js"));
-await copyFile(resolve(root, "src", "overlay.css"), resolve(output, "overlay-bootstrap.css"));
 await mkdir(resolve(root, "dist/hosted/overlay"), { recursive: true });
 const hosted = resolve(root, "dist/hosted");
 await mkdir(resolve(hosted, "assets"), { recursive: true });

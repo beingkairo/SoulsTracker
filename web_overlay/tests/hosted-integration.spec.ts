@@ -22,6 +22,15 @@ async function publish(request: any, channels: object) {
   });
   expect(response.status()).toBe(200);
 }
+// The hosted wire carries display values, not the local game or reader identity.
+for (const value of ["7", "42", "0"]) {
+  test(`retained counter rendering displays ${value} through the hosted transport`, async ({ page, request }) => {
+    await publish(request, { death: { value, availability: "available" } });
+    await page.goto(address());
+    await expect(page.getByTestId("total-deaths-overlay")).toHaveText(`Total Deaths: ${value}`);
+  });
+}
+
 test("real Worker hydrates transparently then pushes exact totals and reloads without Desktop", async ({ page, request }) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });

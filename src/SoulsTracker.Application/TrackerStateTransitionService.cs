@@ -97,7 +97,6 @@ public static class TrackerStateTransitionService
         OverlayConfiguration existing = state.OverlayConfiguration;
         var updatedConfiguration = new OverlayConfiguration(
             existing.SchemaVersion,
-            existing.Endpoint,
             new TotalDeathsOverlayOptions(command.IsTotalDeathsEnabled, command.ShowGameName, existing.TotalDeaths.CompactTitle, existing.TotalDeaths.Appearance, existing.TotalDeaths.TitleIconMode));
 
         if (PresentationEquals(existing, updatedConfiguration))
@@ -116,7 +115,7 @@ public static class TrackerStateTransitionService
     private static TrackerTransitionResult ResetOverlayAppearance(PersistentTrackerState state, ResetOverlayAppearanceCommand command)
     {
         OverlayConfiguration existing = state.OverlayConfiguration;
-        OverlayConfiguration updated = new OverlayConfiguration(existing.SchemaVersion, existing.Endpoint,
+        OverlayConfiguration updated = new OverlayConfiguration(existing.SchemaVersion,
             new TotalDeathsOverlayOptions(existing.TotalDeaths.IsEnabled, existing.TotalDeaths.ShowGameName, existing.TotalDeaths.CompactTitle, OverlayAppearance.Default, existing.TotalDeaths.TitleIconMode));
         return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, updated, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.ResetOverlayAppearance);
     }
@@ -125,7 +124,7 @@ public static class TrackerStateTransitionService
     {
         ArgumentNullException.ThrowIfNull(command.Appearance);
         OverlayConfiguration existing = state.OverlayConfiguration;
-        OverlayConfiguration updated = new OverlayConfiguration(existing.SchemaVersion, existing.Endpoint,
+        OverlayConfiguration updated = new OverlayConfiguration(existing.SchemaVersion,
             new TotalDeathsOverlayOptions(existing.TotalDeaths.IsEnabled, command.TotalDeathsShowGameName, command.TotalDeathsCompactTitle, command.Appearance, command.TotalDeathsTitleIconMode));
         return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, updated, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave), TrackerCommandType.UpdateOverlayAppearance);
     }

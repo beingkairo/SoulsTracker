@@ -55,14 +55,6 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
         return request.Completion.Task;
     }
 
-    /// <summary>Persists the assigned loopback endpoint through the same serialized commit path.</summary>
-    public Task<PersistentTrackerState> SetOverlayEndpointAsync(OverlayEndpointConfiguration endpoint, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(endpoint);
-        var request = new EndpointRequest(endpoint, cancellationToken);
-        if (!requests.Writer.TryWrite(request)) ObjectDisposedException.ThrowIf(true, this);
-        return request.Completion.Task;
-    }
     public Task<PersistentTrackerState> SetGlobalHotkeysAsync(GlobalHotkeyConfiguration hotkeys, CancellationToken cancellationToken = default)
     {
         var request = new HotkeyRequest(hotkeys, cancellationToken); if (!requests.Writer.TryWrite(request)) ObjectDisposedException.ThrowIf(true, this); return request.Completion.Task;
@@ -97,20 +89,6 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
             try
             {
                 if (!initialized) { request.RejectNotInitialized(); continue; }
-                if (request is EndpointRequest endpointRequest)
-                {
-                    // Endpoint configuration is startup-only and does not change the overlay snapshot, so this branch intentionally does not publish.
-                    try
-                    {
-                        PersistentTrackerState updated = WithEndpoint(committedState!, endpointRequest.Endpoint);
-                        if (!ReferenceEquals(updated, committedState)) await repository.SaveAsync(updated, endpointRequest.CancellationToken).ConfigureAwait(false);
-                        committedState = updated;
-                        endpointRequest.Completion.TrySetResult(committedState);
-                    }
-                    catch (OperationCanceledException) { endpointRequest.Completion.TrySetCanceled(endpointRequest.CancellationToken); }
-                    catch (Exception) { endpointRequest.Completion.TrySetException(new InvalidOperationException("The local overlay endpoint could not be saved.")); }
-                    continue;
-                }
                 if (request is HotkeyRequest hotkeyRequest)
                 {
                     // Manual hotkeys affect command input only and do not change overlay/TXT output, so this branch intentionally does not publish.
@@ -228,12 +206,10 @@ public sealed class SerializedTrackerCoordinator : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() { requests.Writer.TryComplete(); await processor.ConfigureAwait(false); await repository.DisposeAsync().ConfigureAwait(false); }
-    private static PersistentTrackerState WithEndpoint(PersistentTrackerState state, OverlayEndpointConfiguration endpoint) =>
-        state.OverlayConfiguration.Endpoint.Equals(endpoint) ? state : new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, new OverlayConfiguration(state.OverlayConfiguration.SchemaVersion, endpoint, state.OverlayConfiguration.TotalDeaths), state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave);
 
     private abstract class CoordinatorRequest(CancellationToken cancellationToken) { public CancellationToken CancellationToken { get; } = cancellationToken; public abstract void RejectNotInitialized(); }
     private sealed class CommandRequest(ITrackerCommand command, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public ITrackerCommand Command { get; } = command; public TaskCompletionSource<TrackerCommandExecutionResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetResult(new(TrackerCommandExecutionStatus.NotInitialized, null, "Tracker state has not loaded.")); }
-    private sealed class EndpointRequest(OverlayEndpointConfiguration endpoint, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public OverlayEndpointConfiguration Endpoint { get; } = endpoint; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
+
     private sealed class HotkeyRequest(GlobalHotkeyConfiguration hotkeys, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public GlobalHotkeyConfiguration Hotkeys { get; } = hotkeys; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }
 
     private sealed class TextExportRequest(TextExportConfiguration configuration, CancellationToken cancellationToken) : CoordinatorRequest(cancellationToken) { public TextExportConfiguration Configuration { get; } = configuration; public TaskCompletionSource<PersistentTrackerState> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously); public override void RejectNotInitialized() => Completion.TrySetException(new InvalidOperationException("Tracker state has not loaded.")); }

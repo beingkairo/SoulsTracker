@@ -148,7 +148,7 @@ loading cannot recover a state it has never received.
 Appearance comes only from the validated wire values. The hosted entry adapts
 the existing compact, left-aligned title/icon/text effects and fixed 2.5rem
 number-only size. Fonts use standard local resolution with sans-serif fallback;
-no font service or upload is involved. The existing local entry stays separate.
+no font service or upload is involved.
 
 The build produces content-hashed JS/CSS and the existing bundled skull raster.
 The stable shell revalidates with an ETag; hashed assets are immutable for one

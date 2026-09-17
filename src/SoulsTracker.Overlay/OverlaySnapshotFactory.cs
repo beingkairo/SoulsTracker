@@ -2,7 +2,7 @@ using SoulsTracker.Domain;
 
 namespace SoulsTracker.Overlay;
 
-/// <summary>Creates the browser-safe snapshot shared by the in-app and sign-in hosts.</summary>
+/// <summary>Creates the display snapshot used by hosted overlay projection.</summary>
 public static class OverlaySnapshotFactory
 {
     public static OverlaySnapshot Create(PersistentTrackerState state, RuntimeGameObservation? observation, long sequenceNumber)
@@ -24,9 +24,5 @@ public static class OverlaySnapshotFactory
         return new OverlaySnapshot(OverlaySnapshot.CurrentSchemaVersion, sequenceNumber, DateTimeOffset.UtcNow, game, deaths, OverlayPresentationConfiguration.From(state.OverlayConfiguration));
     }
 
-    public static bool CanUseRuntimeObservation(PersistentTrackerState state, RuntimeGameObservation? observation) =>
-        observation?.GameId == state.SelectedGameId &&
-        EffectiveDeathTotalResult.Resolve(state, observation).Status is not EffectiveDeathTotalStatus.SourceMismatch &&
-        (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
-        (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null);
+
 }

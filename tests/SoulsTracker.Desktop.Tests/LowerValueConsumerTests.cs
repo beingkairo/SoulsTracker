@@ -4,7 +4,7 @@ using System.Windows.Threading;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
-using SoulsTracker.Overlay;
+
 
 namespace SoulsTracker.Desktop.Tests;
 
@@ -25,8 +25,7 @@ public sealed class LowerValueConsumerTests
             await using var coordinator = new SerializedTrackerCoordinator(new Repository(state), new NullPublisher());
             var desktop = new DesktopTrackerViewModel(coordinator);
             await desktop.InitializeAsync();
-            await using var overlay = new SecureOverlayService(coordinator, new OverlayEndpointAccessFactory());
-            overlay.Publish(state);
+            await using var overlay = new HostedDesktopPublisher(null, state);
             await using var text = new TextExportStatePublisher();
             var session = new RuntimePublicationSession();
             TaskCompletionSource<bool> written = NewCompletion();
@@ -44,13 +43,13 @@ public sealed class LowerValueConsumerTests
                 desktop.ApplyRuntimeReaderResult, publication =>
                 {
                     text.PublishRuntimeObservation(state, publication);
-                    overlay.PublishRuntimeObservation(publication?.Observation);
+                    overlay.PublishAccepted(state, publication);
                 });
 
             Deliver(Read(100, 1, 10));
             Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
             string? metadata = desktop.BlackMythWukongSaveMetadataText;
-            OverlaySnapshot confirmed = Snapshot(overlay);
+            HostedOverlayEnvelope confirmed = Snapshot(overlay);
             RuntimeGameReadResult lower = Read(lowerValue, 2, 20);
             Deliver(lower);
             Assert.Equal("100", desktop.TotalDeathsText);
@@ -71,8 +70,8 @@ public sealed class LowerValueConsumerTests
             Assert.Equal(lowerValue == 0 ? DesktopTrackerViewModel.NoDeathsRecordedMessage : "90", desktop.TotalDeathsText);
             Assert.Equal(lowerValue == 0 ? DesktopTrackerViewModel.NoDeathsRecordedMessage : "Synced", desktop.RuntimeReaderStatusText);
             Assert.NotEqual(metadata, desktop.BlackMythWukongSaveMetadataText);
-            Assert.Equal(lowerValue, Snapshot(overlay).TotalDeaths.Value);
-            Assert.True(Snapshot(overlay).SequenceNumber > confirmed.SequenceNumber);
+            Assert.Equal(lowerValue.ToString(System.Globalization.CultureInfo.InvariantCulture), Snapshot(overlay).Death!.Value);
+            Assert.NotSame(confirmed, Snapshot(overlay));
             Assert.Equal($"Total Deaths: {lowerValue}", await File.ReadAllTextAsync(path));
         }
         finally { File.Delete(path); }
@@ -114,16 +113,13 @@ public sealed class LowerValueConsumerTests
         {
             PersistentTrackerState state = RuntimePublicationSessionTests.Selected(GameId.Parse(game));
             await using var text = new TextExportStatePublisher();
-            var overlayPublisher = new OverlayStateChangePublisher();
+            await using var overlay = new HostedDesktopPublisher(null, state);
             var session = new RuntimePublicationSession();
             await using var coordinator = new SerializedTrackerCoordinator(new Repository(state),
                 new DesktopStateChangePublisher(Dispatcher.CurrentDispatcher, session,
-                    new CompositeTrackerStateChangePublisher(overlayPublisher, text)));
+                    new CompositeTrackerStateChangePublisher(overlay, text)));
             var desktop = new DesktopTrackerViewModel(coordinator);
             await desktop.InitializeAsync();
-            await using var overlay = new SecureOverlayService(coordinator, new OverlayEndpointAccessFactory());
-            overlayPublisher.Attach(overlay);
-            overlay.Publish(state);
             TaskCompletionSource<bool> written = NewCompletion();
             text.WriteCompleted += (_, success) => written.TrySetResult(success);
             state = await coordinator.SetTextExportConfigurationAsync(new TextExportConfiguration(path, true));
@@ -136,12 +132,12 @@ public sealed class LowerValueConsumerTests
                 desktop.ApplyRuntimeReaderResult, publication =>
                 {
                     text.PublishRuntimeObservation(state, publication);
-                    overlay.PublishRuntimeObservation(publication?.Observation);
+                    overlay.PublishAccepted(state, publication);
                 });
             written = NewCompletion();
             Deliver(Read(100));
             Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
-            OverlaySnapshot original = Snapshot(overlay);
+            HostedOverlayEnvelope original = Snapshot(overlay);
             RuntimeGameReadResult lower = Read(90);
             Deliver(lower);
             Deliver(RuntimeGameReadResult.Cached(lower));
@@ -172,13 +168,13 @@ public sealed class LowerValueConsumerTests
             desktop.ApplyImportedCommittedState(state);
             Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Equal((100 + adjustment).ToString(System.Globalization.CultureInfo.InvariantCulture), desktop.TotalDeathsText);
-            Assert.Equal(100 + adjustment, Snapshot(overlay).TotalDeaths.Value);
+            Assert.Equal((100 + adjustment).ToString(System.Globalization.CultureInfo.InvariantCulture), Snapshot(overlay).Death!.Value);
             Assert.Equal($"Total Deaths: {100 + adjustment}", await File.ReadAllTextAsync(path));
             written = NewCompletion();
             Deliver(Read(90));
             Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Equal((90 + adjustment).ToString(System.Globalization.CultureInfo.InvariantCulture), desktop.TotalDeathsText);
-            Assert.Equal(90 + adjustment, Snapshot(overlay).TotalDeaths.Value);
+            Assert.Equal((90 + adjustment).ToString(System.Globalization.CultureInfo.InvariantCulture), Snapshot(overlay).Death!.Value);
             Assert.Equal($"Total Deaths: {90 + adjustment}", await File.ReadAllTextAsync(path));
             if (state.SelectedGameId == GameId.EldenRing || state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP)
             {
@@ -195,8 +191,8 @@ public sealed class LowerValueConsumerTests
                 Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
                 Assert.False(desktop.IsTotalDeathsValueNumeric);
                 Assert.NotEqual("Confirming lower death count", desktop.RuntimeReaderStatusText);
-                OverlaySnapshot unavailable = Snapshot(overlay);
-                Assert.Equal(TotalDeathsDisplaySource.Unavailable, unavailable.TotalDeaths.Source);
+                HostedOverlayEnvelope unavailable = Snapshot(overlay);
+                Assert.Equal("unavailable", unavailable.Death!.Availability);
                 if (state.SelectedGameId != GameId.EldenRing) Assert.Equal(string.Empty, await File.ReadAllTextAsync(path));
                 session.CompleteRead(delayed, state, oldSource, _ => Assert.Fail("Old source resurrected in Desktop"),
                     _ => Assert.Fail("Old source resurrected in outputs"));
@@ -205,7 +201,7 @@ public sealed class LowerValueConsumerTests
                 Deliver(Read(5));
                 Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
                 Assert.Equal("5", desktop.TotalDeathsText);
-                Assert.Equal(5, Snapshot(overlay).TotalDeaths.Value);
+                Assert.Equal("5", Snapshot(overlay).Death!.Value);
                 Assert.Equal("Total Deaths: 5", await File.ReadAllTextAsync(path));
             }
         }
@@ -276,10 +272,9 @@ public sealed class LowerValueConsumerTests
         await completion.Task.WaitAsync(TimeSpan.FromSeconds(60));
     }
 
-    // Inspect the actual service's immutable published snapshot without starting a
-    // listener or exposing its endpoint credentials in test output.
-    private static OverlaySnapshot Snapshot(SecureOverlayService service) =>
-        (OverlaySnapshot)typeof(SecureOverlayService).GetField("snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(service)!;
+    // Inspect the actual hosted publisher's latest envelope without network I/O.
+    private static HostedOverlayEnvelope Snapshot(HostedDesktopPublisher publisher) =>
+        (HostedOverlayEnvelope)typeof(HostedDesktopPublisher).GetField("latest", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(publisher)!;
     private static TaskCompletionSource<bool> NewCompletion() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     private sealed class NullPublisher : ITrackerStateChangePublisher
     {

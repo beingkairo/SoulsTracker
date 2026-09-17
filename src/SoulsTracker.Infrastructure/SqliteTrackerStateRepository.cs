@@ -218,8 +218,6 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
     }
     private static PersistentTrackerState ToDomain(StoredState dto)
     {
-        var endpoint = OverlayEndpointConfiguration.Unassigned;
-
         var candidateHotkeys = dto.IncrementModifiers is uint incrementModifiers && dto.IncrementVirtualKey is uint incrementKey && dto.DecrementModifiers is uint decrementModifiers && dto.DecrementVirtualKey is uint decrementKey ? new GlobalHotkeyConfiguration(incrementModifiers, incrementKey, decrementModifiers, decrementKey) : null;
         var hotkeys = candidateHotkeys is { IsValid: true } ? candidateHotkeys : GlobalHotkeyConfiguration.Default;
         OverlayAppearance totalAppearance = dto.TotalAppearance ?? OverlayAppearance.Default;
@@ -244,7 +242,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         catch (ArgumentException) { adjustments = EldenRingMissedDeathAdjustments.Empty; }
 
         GameId selectedGameId = dto.SelectedGameId is null ? GameId.DemonsSouls : GameId.Parse(dto.SelectedGameId);
-        return new PersistentTrackerState(1, selectedGameId, new OverlayConfiguration(1, endpoint, total), hotkeys, exports, ManualDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
+        return new PersistentTrackerState(1, selectedGameId, new OverlayConfiguration(1, total), hotkeys, exports, ManualDeathCounter.CreateFor(GameId.DemonsSouls, dto.ManualDemonsSoulsDeaths ?? 0), dto.EldenRingNoticeAcknowledged ?? false, eldenRingSave, blackMythWukongSave, adjustments, liesOfPSave);
     }
 
 

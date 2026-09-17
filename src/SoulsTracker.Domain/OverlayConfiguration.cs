@@ -1,139 +1,4 @@
-using System.Text.Json.Serialization;
-
 namespace SoulsTracker.Domain;
-
-/// <summary>
-/// Holds an opaque, validated overlay access token without exposing its value.
-/// </summary>
-public sealed class OverlayAccessToken : IEquatable<OverlayAccessToken>
-{
-    private const int TokenLength = 43;
-    private const int DecodedByteLength = 32;
-    private readonly string value;
-
-    private OverlayAccessToken(string value)
-    {
-        this.value = value;
-    }
-
-    /// <summary>
-    /// Parses a canonical unpadded base64url token for exactly 32 bytes.
-    /// </summary>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="value"/> is not a valid token.</exception>
-    public static OverlayAccessToken Parse(string value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-
-        if (!IsCanonicalBase64UrlToken(value))
-        {
-            throw new ArgumentException(
-                "The overlay access token must be a canonical 43-character base64url value.",
-                nameof(value));
-        }
-
-        return new OverlayAccessToken(value);
-    }
-
-    /// <inheritdoc />
-    public bool Equals(OverlayAccessToken? other) =>
-        other is not null && string.Equals(value, other.value, StringComparison.Ordinal);
-
-    /// <inheritdoc />
-    public override bool Equals(object? obj) => Equals(obj as OverlayAccessToken);
-
-    /// <inheritdoc />
-    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(value);
-
-    /// <summary>
-    /// Returns a non-secret redacted representation.
-    /// </summary>
-    public override string ToString() => "[redacted]";
-
-    // Persistence-only bridge. This assembly exposes it to Infrastructure, not public consumers.
-    internal string PersistenceValue => value;
-
-    private static bool IsCanonicalBase64UrlToken(string value)
-    {
-        if (value.Length != TokenLength || value.Any(static character => !IsBase64UrlCharacter(character)))
-        {
-            return false;
-        }
-
-        try
-        {
-            byte[] decoded = Convert.FromBase64String(value.Replace('-', '+').Replace('_', '/') + "=");
-            string canonical = Convert.ToBase64String(decoded)
-                .TrimEnd('=')
-                .Replace('+', '-')
-                .Replace('/', '_');
-
-            return decoded.Length == DecodedByteLength &&
-                string.Equals(canonical, value, StringComparison.Ordinal);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    private static bool IsBase64UrlCharacter(char character) =>
-        (character >= 'A' && character <= 'Z') ||
-        (character >= 'a' && character <= 'z') ||
-        (character >= '0' && character <= '9') ||
-        character is '-' or '_';
-}
-
-/// <summary>
-/// Configures the optional local overlay endpoint without binding a port or
-/// generating a token.
-/// </summary>
-public sealed class OverlayEndpointConfiguration
-{
-    /// <summary>
-    /// Gets the immutable unassigned endpoint configuration.
-    /// </summary>
-    public static OverlayEndpointConfiguration Unassigned { get; } = new(port: null, accessToken: null);
-
-    /// <summary>
-    /// Initializes an unassigned endpoint or a complete assigned endpoint.
-    /// </summary>
-    /// <exception cref="ArgumentException">Thrown when only one assignment value is supplied.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when an assigned port is outside the approved range.</exception>
-    public OverlayEndpointConfiguration(int? port, OverlayAccessToken? accessToken)
-    {
-        if (port.HasValue != (accessToken is not null))
-        {
-            throw new ArgumentException("An overlay endpoint must provide both a port and an access token, or neither.");
-        }
-
-        if (port is < 1024 or > 65535)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(port),
-                port,
-                "An overlay endpoint port must be between 1024 and 65535.");
-        }
-
-        Port = port;
-        AccessToken = accessToken;
-    }
-
-    /// <summary>
-    /// Gets the assigned local port, or <see langword="null"/> when unassigned.
-    /// </summary>
-    public int? Port { get; }
-
-    /// <summary>
-    /// Gets whether both required endpoint values are assigned.
-    /// </summary>
-    public bool IsAssigned => Port.HasValue;
-
-    /// <summary>
-    /// Gets the modeled token without allowing standard JSON serialization to expose it.
-    /// </summary>
-    [JsonIgnore]
-    public OverlayAccessToken? AccessToken { get; }
-}
 
 /// <summary>
 /// Configures the Total Deaths overlay presentation.
@@ -173,8 +38,7 @@ public sealed class TotalDeathsOverlayOptions
 }
 
 /// <summary>
-/// Holds immutable, validated overlay configuration. It models configuration
-/// only; it does not generate tokens, bind ports, or perform I/O.
+/// Holds immutable, validated overlay presentation configuration.
 /// </summary>
 public sealed class OverlayConfiguration
 {
@@ -188,7 +52,6 @@ public sealed class OverlayConfiguration
     /// </summary>
     public static OverlayConfiguration Default { get; } = new(
         CurrentSchemaVersion,
-        OverlayEndpointConfiguration.Unassigned,
         TotalDeathsOverlayOptions.Default);
 
     /// <summary>
@@ -197,7 +60,6 @@ public sealed class OverlayConfiguration
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the schema version is unsupported.</exception>
     public OverlayConfiguration(
         int schemaVersion,
-        OverlayEndpointConfiguration endpoint,
         TotalDeathsOverlayOptions totalDeaths)
     {
         if (schemaVersion != CurrentSchemaVersion)
@@ -208,12 +70,10 @@ public sealed class OverlayConfiguration
                 "The overlay configuration schema version is unsupported.");
         }
 
-        ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(totalDeaths);
 
 
         SchemaVersion = schemaVersion;
-        Endpoint = endpoint;
         TotalDeaths = totalDeaths;
 
     }
@@ -223,10 +83,6 @@ public sealed class OverlayConfiguration
     /// </summary>
     public int SchemaVersion { get; }
 
-    /// <summary>
-    /// Gets the validated optional endpoint configuration.
-    /// </summary>
-    public OverlayEndpointConfiguration Endpoint { get; }
 
     /// <summary>
     /// Gets the Total Deaths overlay options.

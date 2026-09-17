@@ -6,7 +6,6 @@ using System.Windows.Threading;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
-using SoulsTracker.Overlay;
 
 namespace SoulsTracker.Desktop;
 
@@ -19,8 +18,6 @@ public partial class App : System.Windows.Application, IDisposable
     private DesktopGlobalHotkeyService? globalHotkeys;
     private bool mainWindowCloseRequested;
     private bool finalShutdownRequested;
-    private SecureOverlayService? overlayService;
-    private OverlayStateChangePublisher? overlayPublisher;
     private TextExportStatePublisher? textExportPublisher;
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private EldenRingSaveDeathReader? eldenRingSaveReader;
@@ -282,42 +279,6 @@ public partial class App : System.Windows.Application, IDisposable
     }
     private static SoulsTracker.Domain.GlobalHotkeyConfiguration ToDomainHotkeys(GlobalHotkeySettings source) => new(source.Increment.Modifiers, source.Increment.VirtualKey, source.Decrement.Modifiers, source.Decrement.VirtualKey);
 
-    private async ValueTask DisposeOverlayServiceAsync()
-    {
-        try
-        {
-            if (overlayService is not null)
-            {
-                await overlayService.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            overlayService = null;
-        }
-    }
-
-    private async Task StartInAppOverlayAsync(DesktopTrackerViewModel viewModel)
-    {
-        for (int attempt = 0; attempt < 10; attempt++)
-        {
-            try
-            {
-                overlayService = new SecureOverlayService(coordinator!, new OverlayEndpointAccessFactory());
-                await overlayService.StartAsync();
-                overlayPublisher!.Attach(overlayService);
-                viewModel.SetOverlayUrls(overlayService.TotalDeathsUrl);
-                viewModel.SetOverlayReady();
-                return;
-            }
-            catch
-            {
-                overlayService = null;
-                if (attempt < 9) await Task.Delay(150);
-            }
-        }
-        viewModel.SetOverlayUnavailable();
-    }
 
     private async ValueTask DisposeCoordinatorAsync()
     {
@@ -363,7 +324,6 @@ public partial class App : System.Windows.Application, IDisposable
         finally
         {
             coordinator = null;
-            overlayPublisher = null;
         }
     }
 
@@ -382,7 +342,6 @@ public partial class App : System.Windows.Application, IDisposable
             hostedConnection = null;
             textExportPublisher = null;
             startupCancellation.Dispose();
-            await DisposeOverlayServiceAsync().ConfigureAwait(false);
         }
     }
 

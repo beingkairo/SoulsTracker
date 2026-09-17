@@ -19,19 +19,16 @@ public sealed class SerializedTrackerCoordinatorTests
     }
 
     [Fact]
-    public async Task EndpointAndHotkeyChangesPersistWithoutPublishing()
+    public async Task HotkeyChangesPersistWithoutPublishing()
     {
         var repository = new Repository();
         var publisher = new Publisher();
         await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
         await coordinator.InitializeAsync();
-        var endpoint = new OverlayEndpointConfiguration(4321, OverlayAccessToken.Parse(new string('A', 43)));
         var hotkeys = new GlobalHotkeyConfiguration(2, 118, 2, 119);
 
-        PersistentTrackerState endpointState = await coordinator.SetOverlayEndpointAsync(endpoint);
         PersistentTrackerState hotkeyState = await coordinator.SetGlobalHotkeysAsync(hotkeys);
 
-        Assert.Equal(endpoint, endpointState.OverlayConfiguration.Endpoint);
         Assert.Equal(hotkeys, hotkeyState.GlobalHotkeys);
         Assert.Equal(0, publisher.PublishCount);
         Assert.Equal(hotkeys, repository.State.GlobalHotkeys);
