@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using SoulsTracker.Application;
@@ -8,18 +7,19 @@ namespace SoulsTracker.Infrastructure;
 
 public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 {
-
+    // Retain the nullable historical token column to avoid a schema rewrite.
+    // It is never read; all writes clear it. Pairing is stored separately.
     private const string TableSql = "CREATE TABLE IF NOT EXISTS tracker_state (id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL, payload TEXT NOT NULL, token BLOB NULL);";
     private const string ImportAuditTableSql = "CREATE TABLE IF NOT EXISTS legacy_import_audit (import_id TEXT PRIMARY KEY NOT NULL, committed_at_utc TEXT NOT NULL, contract_version INTEGER NOT NULL, preflight_outcome INTEGER NOT NULL, outcome INTEGER NOT NULL, source_fingerprint TEXT NOT NULL, backup_fingerprint TEXT NOT NULL);";
     private readonly string path;
-    private readonly IStateSecretProtector protector;
+
     private readonly FileStream writerLock;
     private readonly ISqliteMigrationBackup migrationBackup;
     private readonly ISqliteStateMigration migration;
     private readonly ISqliteSaveInterruption? saveInterruption;
     private bool disposed;
 
-    public SqliteTrackerStateRepository(string applicationDataRoot, string databaseFileName, IStateSecretProtector? protector = null, ISqliteMigrationBackup? migrationBackup = null, ISqliteStateMigration? migration = null, ISqliteSaveInterruption? saveInterruption = null)
+    public SqliteTrackerStateRepository(string applicationDataRoot, string databaseFileName, ISqliteMigrationBackup? migrationBackup = null, ISqliteStateMigration? migration = null, ISqliteSaveInterruption? saveInterruption = null)
     {
         if (string.IsNullOrWhiteSpace(applicationDataRoot) || string.IsNullOrWhiteSpace(databaseFileName) || Path.IsPathRooted(databaseFileName) || databaseFileName.Contains("..", StringComparison.Ordinal)) throw new ArgumentException("The database path must remain under the supplied application-data root.");
         string root = Path.GetFullPath(applicationDataRoot);
@@ -28,7 +28,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         Directory.CreateDirectory(root);
         try { writerLock = new FileStream(path + ".writer.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
         catch (IOException ex) { throw new InvalidOperationException("Another SoulsTracker repository writer already owns this database path.", ex); }
-        this.protector = protector ?? CreateDefaultProtector();
+
         this.migrationBackup = migrationBackup ?? new TimestampedSqliteMigrationBackup();
         this.migration = migration ?? new NoSupportedSqliteStateMigration();
         this.saveInterruption = saveInterruption;
@@ -44,7 +44,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
             await ExecuteAsync(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;", cancellationToken).ConfigureAwait(false);
             await ValidateIntegrityAsync(connection, cancellationToken).ConfigureAwait(false);
             await ExecuteAsync(connection, TableSql, cancellationToken).ConfigureAwait(false);
-            await using SqliteCommand command = connection.CreateCommand(); command.CommandText = "SELECT schema_version, payload, token FROM tracker_state WHERE id=1";
+            await using SqliteCommand command = connection.CreateCommand(); command.CommandText = "SELECT schema_version, payload FROM tracker_state WHERE id=1";
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { PersistentTrackerState state = PersistentTrackerState.Default; await SaveAsync(state, cancellationToken).ConfigureAwait(false); return TrackerStateLoadResult.Loaded(state); }
             int version = reader.GetInt32(0);
@@ -56,8 +56,8 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
                 await migration.MigrateAsync(path, version, PersistentTrackerState.CurrentSchemaVersion, cancellationToken).ConfigureAwait(false);
                 return await LoadAsync(cancellationToken).ConfigureAwait(false);
             }
-            StoredState dto = JsonSerializer.Deserialize<StoredState>(reader.GetString(1)) ?? throw new InvalidDataException(); string? token = reader.IsDBNull(2) ? null : Encoding.UTF8.GetString(protector.Unprotect((byte[])reader[2]));
-            PersistentTrackerState loadedState = ToDomain(dto, token);
+            StoredState dto = JsonSerializer.Deserialize<StoredState>(reader.GetString(1)) ?? throw new InvalidDataException();
+            PersistentTrackerState loadedState = ToDomain(dto);
             await reader.DisposeAsync().ConfigureAwait(false);
 
             return TrackerStateLoadResult.Loaded(loadedState);
@@ -69,7 +69,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
     public async Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this); ArgumentNullException.ThrowIfNull(state);
-        (StoredState dto, string? token) = FromDomain(state);
+        StoredState dto = FromDomain(state);
         await using SqliteConnection connection = Open(); await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await ExecuteAsync(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;", cancellationToken).ConfigureAwait(false);
         await ExecuteAsync(connection, TableSql, cancellationToken).ConfigureAwait(false);
@@ -77,7 +77,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         await using SqliteCommand command = connection.CreateCommand(); command.Transaction = transaction;
         command.CommandText = "INSERT INTO tracker_state(id,schema_version,payload,token) VALUES(1,$version,$payload,$token) ON CONFLICT(id) DO UPDATE SET schema_version=$version,payload=$payload,token=$token";
         command.Parameters.AddWithValue("$version", PersistentTrackerState.CurrentSchemaVersion); command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(dto));
-        command.Parameters.AddWithValue("$token", token is null ? DBNull.Value : protector.Protect(Encoding.UTF8.GetBytes(token)));
+        command.Parameters.AddWithValue("$token", DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false); if (saveInterruption is not null) await saveInterruption.BeforeCommitAsync(cancellationToken).ConfigureAwait(false); await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -108,7 +108,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         try
         {
             PersistentTrackerState candidate = applicationResult.CandidateState;
-            (StoredState candidateDto, string? candidateToken) = FromDomain(candidate);
+            StoredState candidateDto = FromDomain(candidate);
             await using SqliteConnection connection = Open();
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             await ExecuteAsync(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;", cancellationToken).ConfigureAwait(false);
@@ -126,7 +126,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 
             string importId = Guid.NewGuid().ToString("N");
             DateTimeOffset committedAtUtc = DateTimeOffset.UtcNow;
-            await UpsertStateAsync(connection, transaction, candidateDto, candidateToken, cancellationToken).ConfigureAwait(false);
+            await UpsertStateAsync(connection, transaction, candidateDto, cancellationToken).ConfigureAwait(false);
             await InsertAuditAsync(connection, transaction, importId, committedAtUtc, auditMetadata, cancellationToken).ConfigureAwait(false);
             if (saveInterruption is not null)
             {
@@ -143,11 +143,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
     }
 
     private SqliteConnection Open() => new(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Cache = SqliteCacheMode.Private, Pooling = false }.ToString());
-    private static CurrentUserDpapiSecretProtector CreateDefaultProtector()
-    {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Current-user DPAPI is required on Windows.");
-        return new CurrentUserDpapiSecretProtector();
-    }
+
     private static async Task ExecuteAsync(SqliteConnection c, string sql, CancellationToken ct) { await using SqliteCommand command = c.CreateCommand(); command.CommandText = sql; await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
     private static async Task ValidateIntegrityAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
@@ -160,11 +156,11 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         }
     }
     private static async Task ExecuteAsync(SqliteConnection c, string sql, SqliteTransaction transaction, CancellationToken ct) { await using SqliteCommand command = c.CreateCommand(); command.Transaction = transaction; command.CommandText = sql; await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false); }
-    private async Task<PersistentTrackerState> ReadStoredStateAsync(SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
+    private static async Task<PersistentTrackerState> ReadStoredStateAsync(SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT schema_version, payload, token FROM tracker_state WHERE id=1";
+        command.CommandText = "SELECT schema_version, payload FROM tracker_state WHERE id=1";
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -177,8 +173,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         }
 
         StoredState dto = JsonSerializer.Deserialize<StoredState>(reader.GetString(1)) ?? throw new InvalidDataException();
-        string? token = reader.IsDBNull(2) ? null : Encoding.UTF8.GetString(protector.Unprotect((byte[])reader[2]));
-        return ToDomain(dto, token);
+        return ToDomain(dto);
     }
     private static ConfirmedLegacyImportCommitOutcome? GetDestinationRefusal(PersistentTrackerState state)
     {
@@ -188,14 +183,14 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
             ? ConfirmedLegacyImportCommitOutcome.DestinationHasManualDeaths
             : null;
     }
-    private async Task UpsertStateAsync(SqliteConnection connection, SqliteTransaction transaction, StoredState dto, string? token, CancellationToken cancellationToken)
+    private static async Task UpsertStateAsync(SqliteConnection connection, SqliteTransaction transaction, StoredState dto, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = "INSERT INTO tracker_state(id,schema_version,payload,token) VALUES(1,$version,$payload,$token) ON CONFLICT(id) DO UPDATE SET schema_version=$version,payload=$payload,token=$token";
         command.Parameters.AddWithValue("$version", PersistentTrackerState.CurrentSchemaVersion);
         command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(dto));
-        command.Parameters.AddWithValue("$token", token is null ? DBNull.Value : protector.Protect(Encoding.UTF8.GetBytes(token)));
+        command.Parameters.AddWithValue("$token", DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
     private static async Task InsertAuditAsync(SqliteConnection connection, SqliteTransaction transaction, string importId, DateTimeOffset committedAtUtc, ConfirmedLegacyImportAuditMetadata auditMetadata, CancellationToken cancellationToken)
@@ -212,19 +207,18 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         command.Parameters.AddWithValue("$backupFingerprint", auditMetadata.BackupFingerprint);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
-    private static (StoredState, string?) FromDomain(PersistentTrackerState state)
+    private static StoredState FromDomain(PersistentTrackerState state)
     {
         OverlayConfiguration config = state.OverlayConfiguration;
         GlobalHotkeyConfiguration hotkeys = state.GlobalHotkeys;
         StoredEldenRingMissedDeathAdjustment[] adjustments = state.EldenRingMissedDeathAdjustments.ToEntries()
             .Select(static entry => new StoredEldenRingMissedDeathAdjustment(entry.LocalSavePath, entry.SlotIndex, entry.Value))
             .ToArray();
-        return (new StoredState(state.SelectedGameId.Value, config.Endpoint.Port, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath), config.Endpoint.AccessToken?.PersistenceValue);
+        return new StoredState(state.SelectedGameId.Value, config.TotalDeaths.IsEnabled, config.TotalDeaths.ShowGameName, hotkeys.IncrementModifiers, hotkeys.IncrementVirtualKey, hotkeys.DecrementModifiers, hotkeys.DecrementVirtualKey, config.TotalDeaths.CompactTitle, config.TotalDeaths.Appearance, state.TextExports.DeathsPath, state.TextExports.DeathsEnabled, (int)config.TotalDeaths.TitleIconMode, state.ManualDemonsSoulsDeathCounter.Value, state.EldenRingNoticeAcknowledged, state.EldenRingSave.LocalPath, state.EldenRingSave.SlotIndex, state.BlackMythWukongSave.LocalPath, adjustments, state.LiesOfPSave.LocalPath);
     }
-    private static PersistentTrackerState ToDomain(StoredState dto, string? token)
+    private static PersistentTrackerState ToDomain(StoredState dto)
     {
-        OverlayAccessToken? accessToken = token is null ? null : OverlayAccessToken.Parse(token);
-        var endpoint = new OverlayEndpointConfiguration(dto.Port, accessToken);
+        var endpoint = OverlayEndpointConfiguration.Unassigned;
 
         var candidateHotkeys = dto.IncrementModifiers is uint incrementModifiers && dto.IncrementVirtualKey is uint incrementKey && dto.DecrementModifiers is uint decrementModifiers && dto.DecrementVirtualKey is uint decrementKey ? new GlobalHotkeyConfiguration(incrementModifiers, incrementKey, decrementModifiers, decrementKey) : null;
         var hotkeys = candidateHotkeys is { IsValid: true } ? candidateHotkeys : GlobalHotkeyConfiguration.Default;
@@ -255,6 +249,6 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
 
 
     public ValueTask DisposeAsync() { if (!disposed) { disposed = true; writerLock.Dispose(); } return ValueTask.CompletedTask; }
-    private sealed record StoredState(string? SelectedGameId, int? Port, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
+    private sealed record StoredState(string? SelectedGameId, bool TotalEnabled, bool ShowGameName, uint? IncrementModifiers = null, uint? IncrementVirtualKey = null, uint? DecrementModifiers = null, uint? DecrementVirtualKey = null, bool? TotalCompactTitle = null, OverlayAppearance? TotalAppearance = null, string? DeathsExportPath = null, bool? DeathsExportEnabled = null, int? TotalTitleIconMode = null, long? ManualDemonsSoulsDeaths = null, bool? EldenRingNoticeAcknowledged = null, string? EldenRingSavePath = null, int? EldenRingSaveSlotIndex = null, string? BlackMythWukongSavePath = null, StoredEldenRingMissedDeathAdjustment[]? EldenRingMissedDeathAdjustments = null, string? LiesOfPSavePath = null);
     private sealed record StoredEldenRingMissedDeathAdjustment(string LocalSavePath, int SlotIndex, long Value);
 }
