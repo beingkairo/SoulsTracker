@@ -52,7 +52,7 @@ try {
             if ($process.ExitCode -ne 0 -or -not $output.Contains("Release guide verified.")) {
                 throw "Current hosted guide must pass the actual release-guide verifier."
             }
-        } elseif ($process.ExitCode -eq 0 -or -not $output.Contains("Expected '$currentStatement' in '")) {
+        } elseif ($process.ExitCode -eq 0 -or -not $output.Contains("Expected '$currentStatement'")) {
             throw "Obsolete-only guidance must fail for the missing current startup-order statement."
         }
     }
