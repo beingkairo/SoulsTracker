@@ -1,7 +1,6 @@
 import type { HostedAppearance, HostedDeath } from "./hosted-contracts.js";
 
 // The retained compact renderer layout, with wire-validated appearance only.
-// Keep the local transport renderer independent until hosted cutover.
 export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string): void {
   if (!death || !appearance.enabled) { target.replaceChildren(); return; }
   const panel = document.createElement("section");

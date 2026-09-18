@@ -25,7 +25,7 @@ public sealed record DecrementManualDeathsCommand : ITrackerCommand;
 
 
 /// <summary>
-/// Updates the persisted presentation choices for the two read-only browser overlays.
+/// Updates the persisted presentation choices for the Total Deaths overlay.
 /// </summary>
 public sealed record UpdateOverlayPresentationCommand(
     bool IsTotalDeathsEnabled,

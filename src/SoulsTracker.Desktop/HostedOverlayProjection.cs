@@ -7,7 +7,7 @@ using SoulsTracker.Overlay;
 namespace SoulsTracker.Desktop;
 
 /// <summary>
-/// Uncomposed projection seam. Call runtime projection only from
+/// Projects accepted state for hosted publication. Call runtime projection only from
 /// RuntimePublicationSession.publishOutputs, never from a reader completion.
 /// Startup eligibility is local; hosted values are never imported.
 /// </summary>
