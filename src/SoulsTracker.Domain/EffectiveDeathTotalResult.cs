@@ -35,16 +35,13 @@ public sealed record EffectiveDeathTotalResult
     }
 
     public static string SourceIdentityFor(PersistentTrackerState state) =>
-        SourceIdentityFor(state, null);
-
-    private static string SourceIdentityFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
-        observation?.SourceIdentity ?? (state.SelectedGameId == GameId.EldenRing
+        state.SelectedGameId == GameId.EldenRing
             ? $"{state.SelectedGameId.Value}:{state.EldenRingSave.LocalPath}:{state.EldenRingSave.SlotIndex}"
             : state.SelectedGameId == GameId.BlackMythWukong
                 ? $"{state.SelectedGameId.Value}:{state.BlackMythWukongSave.LocalPath}"
                 : state.SelectedGameId == GameId.LiesOfP
                     ? $"{state.SelectedGameId.Value}:{state.LiesOfPSave.LocalPath}"
-                    : state.SelectedGameId.Value);
+                    : state.SelectedGameId.Value;
 
     public static EffectiveDeathTotalResult Unavailable(GameId gameId, string? sourceIdentity = null) => new()
     {
