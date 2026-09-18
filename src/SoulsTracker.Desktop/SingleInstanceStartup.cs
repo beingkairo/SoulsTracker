@@ -193,16 +193,16 @@ internal sealed class NamedMutexLease(INamedMutexHandle mutex) : IDesktopSingleI
 
 /// <summary>Serializes desktop component shutdown so the single-instance lease is released only after component disposal completes.</summary>
 internal sealed class DesktopShutdownCoordinator(
-    Func<ValueTask> disposeGlobalHotkeysAsync,
-    Func<ValueTask> disposeOverlayAsync,
-    Func<ValueTask> disposeCoordinatorAsync,
+    Func<ValueTask> stopInputsAsync,
+    Func<ValueTask> drainProducersAsync,
+    Func<ValueTask> drainOutputsAsync,
     IDisposable singleInstanceLease,
     TimeSpan? totalShutdownTimeout = null,
     Action? cancelPending = null) : IDisposable
 {
-    private readonly Func<ValueTask> disposeGlobalHotkeysAsync = disposeGlobalHotkeysAsync ?? throw new ArgumentNullException(nameof(disposeGlobalHotkeysAsync));
-    private readonly Func<ValueTask> disposeOverlayAsync = disposeOverlayAsync ?? throw new ArgumentNullException(nameof(disposeOverlayAsync));
-    private readonly Func<ValueTask> disposeCoordinatorAsync = disposeCoordinatorAsync ?? throw new ArgumentNullException(nameof(disposeCoordinatorAsync));
+    private readonly Func<ValueTask> stopInputsAsync = stopInputsAsync ?? throw new ArgumentNullException(nameof(stopInputsAsync));
+    private readonly Func<ValueTask> drainProducersAsync = drainProducersAsync ?? throw new ArgumentNullException(nameof(drainProducersAsync));
+    private readonly Func<ValueTask> drainOutputsAsync = drainOutputsAsync ?? throw new ArgumentNullException(nameof(drainOutputsAsync));
     private readonly IDisposable singleInstanceLease = singleInstanceLease ?? throw new ArgumentNullException(nameof(singleInstanceLease));
     private readonly TimeSpan totalShutdownTimeout = totalShutdownTimeout is { } configured && configured > TimeSpan.Zero
         ? configured
@@ -255,19 +255,19 @@ internal sealed class DesktopShutdownCoordinator(
         var shutdownStopwatch = Stopwatch.StartNew();
         try
         {
-            await DisposeComponentAsync(disposeGlobalHotkeysAsync, shutdownStopwatch).ConfigureAwait(false);
+            await DisposeComponentAsync(stopInputsAsync, shutdownStopwatch).ConfigureAwait(false);
         }
         finally
         {
             try
             {
-                await DisposeComponentAsync(disposeOverlayAsync, shutdownStopwatch).ConfigureAwait(false);
+                await DisposeComponentAsync(drainProducersAsync, shutdownStopwatch).ConfigureAwait(false);
             }
             finally
             {
                 try
                 {
-                    await DisposeComponentAsync(disposeCoordinatorAsync, shutdownStopwatch).ConfigureAwait(false);
+                    await DisposeComponentAsync(drainOutputsAsync, shutdownStopwatch).ConfigureAwait(false);
                 }
                 finally
                 {

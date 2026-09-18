@@ -160,36 +160,36 @@ public sealed class SingleInstanceStartupTests
     public async Task AsyncShutdownCompletesComponentsBeforeLeaseReleaseAndFinalApplicationShutdown()
     {
         var events = new List<string>();
-        var overlayCanComplete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var producersCanComplete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var lease = new RecordingLease(() => events.Add("lease-released"));
         var shutdown = new DesktopShutdownCoordinator(
             () => ValueTask.CompletedTask,
-            DisposeOverlayAsync,
-            DisposeCoordinatorAsync,
+            DrainProducersAsync,
+            DrainOutputsAsync,
             lease);
 
         Task closeTask = shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown"));
 
-        Assert.Equal(["overlay-dispose-started"], events);
+        Assert.Equal(["producers-dispose-started"], events);
         Assert.Equal(0, lease.DisposeCount);
 
-        overlayCanComplete.SetResult(true);
+        producersCanComplete.SetResult(true);
         await closeTask;
 
         Assert.Equal(
-            ["overlay-dispose-started", "overlay-dispose-completed", "coordinator-disposed", "lease-released", "application-shutdown"],
+            ["producers-dispose-started", "producers-dispose-completed", "outputs-drained", "lease-released", "application-shutdown"],
             events);
 
-        async ValueTask DisposeOverlayAsync()
+        async ValueTask DrainProducersAsync()
         {
-            events.Add("overlay-dispose-started");
-            await overlayCanComplete.Task;
-            events.Add("overlay-dispose-completed");
+            events.Add("producers-dispose-started");
+            await producersCanComplete.Task;
+            events.Add("producers-dispose-completed");
         }
 
-        ValueTask DisposeCoordinatorAsync()
+        ValueTask DrainOutputsAsync()
         {
-            events.Add("coordinator-disposed");
+            events.Add("outputs-drained");
             return ValueTask.CompletedTask;
         }
     }
@@ -203,7 +203,7 @@ public sealed class SingleInstanceStartupTests
         var shutdown = new DesktopShutdownCoordinator(
             () => ValueTask.CompletedTask,
             () => new ValueTask(cancelled.Task),
-            () => { events.Add("coordinator-disposed"); return ValueTask.CompletedTask; },
+            () => { events.Add("outputs-drained"); return ValueTask.CompletedTask; },
             lease,
             TimeSpan.FromMilliseconds(20),
             () => cancelled.SetResult());
@@ -211,7 +211,7 @@ public sealed class SingleInstanceStartupTests
         await Assert.ThrowsAsync<TimeoutException>(
             () => shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown")));
 
-        Assert.Equal(["coordinator-disposed", "lease-released", "application-shutdown"], events);
+        Assert.Equal(["outputs-drained", "lease-released", "application-shutdown"], events);
     }
 
     [Fact]
@@ -221,9 +221,9 @@ public sealed class SingleInstanceStartupTests
         var lease = new RecordingLease(() => events.Add("lease-released"));
         var neverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var shutdown = new DesktopShutdownCoordinator(
-            () => DisposeStalledAsync("hotkeys"),
-            () => DisposeStalledAsync("overlay"),
-            () => DisposeStalledAsync("coordinator"),
+            () => DisposeStalledAsync("inputs"),
+            () => DisposeStalledAsync("producers"),
+            () => DisposeStalledAsync("outputs"),
             lease,
             TimeSpan.FromMilliseconds(40),
             () => neverCompletes.TrySetResult(true));
@@ -236,7 +236,7 @@ public sealed class SingleInstanceStartupTests
 
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1.5), $"Shutdown took {stopwatch.Elapsed}.");
         Assert.Equal(
-            ["hotkeys-dispose-started", "overlay-dispose-started", "coordinator-dispose-started", "lease-released", "application-shutdown"],
+            ["inputs-dispose-started", "producers-dispose-started", "outputs-dispose-started", "lease-released", "application-shutdown"],
             events);
 
         async ValueTask DisposeStalledAsync(string component)
@@ -266,74 +266,74 @@ public sealed class SingleInstanceStartupTests
     }
 
     [Fact]
-    public async Task HotkeyDisposalCompletesBeforeOverlayCoordinatorLeaseReleaseAndFinalApplicationShutdown()
+    public async Task InputsStopBeforeProducersOutputsLeaseReleaseAndFinalApplicationShutdown()
     {
         var events = new List<string>();
         var lease = new RecordingLease(() => events.Add("lease-released"));
         var shutdown = new DesktopShutdownCoordinator(
-            DisposeHotkeysAsync,
-            DisposeOverlayAsync,
-            DisposeCoordinatorAsync,
+            StopInputsAsync,
+            DrainProducersAsync,
+            DrainOutputsAsync,
             lease);
 
         await shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown"));
 
         Assert.Equal(
-            ["hotkeys-disposed", "overlay-disposed", "coordinator-disposed", "lease-released", "application-shutdown"],
+            ["inputs-stopped", "producers-drained", "outputs-drained", "lease-released", "application-shutdown"],
             events);
 
-        ValueTask DisposeHotkeysAsync()
+        ValueTask StopInputsAsync()
         {
-            events.Add("hotkeys-disposed");
+            events.Add("inputs-stopped");
             return ValueTask.CompletedTask;
         }
 
-        ValueTask DisposeOverlayAsync()
+        ValueTask DrainProducersAsync()
         {
-            events.Add("overlay-disposed");
+            events.Add("producers-drained");
             return ValueTask.CompletedTask;
         }
 
-        ValueTask DisposeCoordinatorAsync()
+        ValueTask DrainOutputsAsync()
         {
-            events.Add("coordinator-disposed");
+            events.Add("outputs-drained");
             return ValueTask.CompletedTask;
         }
     }
 
     [Fact]
-    public async Task HotkeyDisposalFailureStillDisposesLaterComponentsReleasesLeaseAndRequestsFinalShutdown()
+    public async Task InputStopFailureStillDrainsLaterPhasesReleasesLeaseAndRequestsFinalShutdown()
     {
         var events = new List<string>();
         var lease = new RecordingLease(() => events.Add("lease-released"));
         var shutdown = new DesktopShutdownCoordinator(
-            DisposeFailingHotkeysAsync,
-            DisposeOverlayAsync,
-            DisposeCoordinatorAsync,
+            StopFailingInputsAsync,
+            DrainProducersAsync,
+            DrainOutputsAsync,
             lease);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown")));
 
         Assert.Equal(
-            ["hotkeys-dispose-failed", "overlay-disposed", "coordinator-disposed", "lease-released", "application-shutdown"],
+            ["inputs-stop-failed", "producers-drained", "outputs-drained", "lease-released", "application-shutdown"],
             events);
 
-        ValueTask DisposeFailingHotkeysAsync()
+        ValueTask StopFailingInputsAsync()
         {
-            events.Add("hotkeys-dispose-failed");
-            return ValueTask.FromException(new InvalidOperationException("test hotkey disposal failure"));
+            events.Add("inputs-stop-failed");
+            return ValueTask.FromException(new InvalidOperationException("test input stop failure"));
         }
 
-        ValueTask DisposeOverlayAsync()
+        ValueTask DrainProducersAsync()
         {
-            events.Add("overlay-disposed");
+            events.Add("producers-drained");
             return ValueTask.CompletedTask;
         }
 
-        ValueTask DisposeCoordinatorAsync()
+        ValueTask DrainOutputsAsync()
         {
-            events.Add("coordinator-disposed");
+            events.Add("outputs-drained");
             return ValueTask.CompletedTask;
         }
     }
@@ -341,20 +341,20 @@ public sealed class SingleInstanceStartupTests
     [Fact]
     public async Task DuplicateCloseAndDisposeDoNotRepeatComponentDisposalLeaseReleaseOrFinalShutdown()
     {
-        var overlayDisposeCount = 0;
-        var coordinatorDisposeCount = 0;
+        var producersDrainCount = 0;
+        var outputsDrainCount = 0;
         var applicationShutdownCount = 0;
         var lease = new RecordingLease();
         var shutdown = new DesktopShutdownCoordinator(
             () => ValueTask.CompletedTask,
             () =>
             {
-                overlayDisposeCount++;
+                producersDrainCount++;
                 return ValueTask.CompletedTask;
             },
             () =>
             {
-                coordinatorDisposeCount++;
+                outputsDrainCount++;
                 return ValueTask.CompletedTask;
             },
             lease);
@@ -367,37 +367,37 @@ public sealed class SingleInstanceStartupTests
         shutdown.Dispose();
         shutdown.Dispose();
 
-        Assert.Equal(1, overlayDisposeCount);
-        Assert.Equal(1, coordinatorDisposeCount);
+        Assert.Equal(1, producersDrainCount);
+        Assert.Equal(1, outputsDrainCount);
         Assert.Equal(1, lease.DisposeCount);
         Assert.Equal(1, applicationShutdownCount);
     }
 
     [Fact]
-    public async Task ShutdownFailureStillDisposesCoordinatorReleasesLeaseAndRequestsApplicationShutdown()
+    public async Task ProducerDrainFailureStillDrainsOutputsReleasesLeaseAndRequestsApplicationShutdown()
     {
         var events = new List<string>();
         var lease = new RecordingLease(() => events.Add("lease-released"));
         var shutdown = new DesktopShutdownCoordinator(
             () => ValueTask.CompletedTask,
-            DisposeFailingOverlayAsync,
-            DisposeCoordinatorAsync,
+            DrainFailingProducersAsync,
+            DrainOutputsAsync,
             lease);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => shutdown.RequestApplicationShutdownAsync(() => events.Add("application-shutdown")));
 
-        Assert.Equal(["overlay-dispose-failed", "coordinator-disposed", "lease-released", "application-shutdown"], events);
+        Assert.Equal(["producers-drain-failed", "outputs-drained", "lease-released", "application-shutdown"], events);
 
-        ValueTask DisposeFailingOverlayAsync()
+        ValueTask DrainFailingProducersAsync()
         {
-            events.Add("overlay-dispose-failed");
-            return ValueTask.FromException(new InvalidOperationException("test overlay shutdown failure"));
+            events.Add("producers-drain-failed");
+            return ValueTask.FromException(new InvalidOperationException("test producer drain failure"));
         }
 
-        ValueTask DisposeCoordinatorAsync()
+        ValueTask DrainOutputsAsync()
         {
-            events.Add("coordinator-disposed");
+            events.Add("outputs-drained");
             return ValueTask.CompletedTask;
         }
     }

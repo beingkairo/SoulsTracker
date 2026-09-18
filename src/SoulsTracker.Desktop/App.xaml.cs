@@ -36,9 +36,9 @@ public partial class App : System.Windows.Application, IDisposable
     {
         singleInstanceStartup = new DesktopStartupController(new WindowsSingleInstanceLeaseFactory());
         shutdownCoordinator = new DesktopShutdownCoordinator(
-            DisposeGlobalHotkeysAsync,
-            DisposeCoordinatorAsync,
-            DisposeOutputsAsync,
+            stopInputsAsync: DisposeGlobalHotkeysAsync,
+            drainProducersAsync: DisposeCoordinatorAsync,
+            drainOutputsAsync: DisposeOutputsAsync,
             new DispatcherBoundDisposable(Dispatcher, singleInstanceStartup),
             cancelPending: () => runtimeReaderCancellation?.Cancel());
     }
