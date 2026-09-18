@@ -82,7 +82,7 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) for (const titl
     await expect(panel).toHaveCSS("padding", "12px"); await expect(panel).toHaveCSS("border-radius", "8px");
     await expect(panel).toHaveCSS("text-align", "left");
     await expect(panel.locator(heading ? "h1" : "p")).toHaveCSS("opacity", "0.45");
-    if (!heading) await expect(panel.locator("p")).toHaveCSS("font-size", "40px");
+    if (!heading) await expect(panel.locator("p")).toHaveCSS("font-size", "160px");
     expect(await panel.evaluate(node => getComputedStyle(node).textShadow.includes("-3px 4px 6px"))).toBe(true);
     const skull = panel.locator("img");
     await expect(skull).toHaveCount(heading && titleIconMode !== "off" ? 1 : 0);
@@ -93,6 +93,88 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) for (const titl
     }
     const bounds = await panel.boundingBox(); expect(bounds?.x).toBe(0); expect(bounds?.y).toBe(0);
     expect(errors).toEqual([]);
+  });
+}
+
+for (const value of ["0", "42", "9223372036854775807", null]) {
+  test(`appearance sizing preserves ${value ?? "Unavailable"} through title and size changes`, async ({ page, request }, testInfo) => {
+    test.setTimeout(90000);
+    // Leave room for the largest exact total at the maximum selected size.
+    await page.setViewportSize({ width: 4096, height: 720 });
+    await publish(request, { death: { value, availability: value === null ? "unavailable" : "available" } });
+    await page.goto(address());
+    const panel = page.getByTestId("total-deaths-overlay");
+    const measurements = [];
+    for (const variant of [
+      { title: "", titleIconMode: "off", padding: 0 },
+      { title: "", titleIconMode: "off", padding: 12 },
+      { title: "   ", titleIconMode: "off", padding: 12 },
+      { title: "", titleIconMode: "prefixSkull", padding: 12 },
+      { title: "Custom", titleIconMode: "off", padding: 12 },
+      { title: "Custom", titleIconMode: "prefixSkull", padding: 12 },
+      { title: "", titleIconMode: "skullOnly", padding: 12 }
+    ]) {
+      let previous: { width: number; height: number } | undefined;
+      for (const fontSize of [12, 24, 48, 96]) {
+        // Respect the local Worker's retained 60/minute publisher admission budget.
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await publish(request, { appearance: { ...style, ...variant, fontSize, backgroundOpacity: 100 } });
+        await expect(panel).toHaveCSS("font-size", `${fontSize}px`);
+        await expect(panel).toHaveCSS("padding", `${variant.padding}px`);
+        await expect(panel).toHaveCSS("background-color", "rgb(21, 23, 27)");
+        const heading = variant.title.trim() !== "" || variant.titleIconMode === "skullOnly";
+        const skull = heading && variant.titleIconMode !== "off";
+        const text = value ?? "Unavailable";
+        await expect(panel).toHaveText(variant.title.trim() && variant.titleIconMode !== "skullOnly" ? `Custom: ${text}` : text);
+        await expect(panel.locator("h1")).toHaveCount(heading ? 1 : 0);
+        await expect(panel.locator("p")).toHaveCount(heading ? 0 : 1);
+        await expect(panel.locator("img")).toHaveCount(skull ? 1 : 0);
+        const metrics = await panel.evaluate(node => {
+          const content = node.querySelector("h1, p")!;
+          const range = document.createRange(); range.selectNodeContents(content.lastChild!);
+          const glyph = range.getBoundingClientRect();
+          const bounds = node.getBoundingClientRect();
+          const image = node.querySelector("img")?.getBoundingClientRect();
+          return { font: parseFloat(getComputedStyle(content).fontSize), minimum: getComputedStyle(node).minWidth,
+            x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+            textX: glyph.x, textRight: glyph.right, textWidth: glyph.width, textHeight: glyph.height,
+            contentHeight: content.getBoundingClientRect().height,
+            skullWidth: image?.width, skullHeight: image?.height };
+        });
+        measurements.push({ value, ...variant, fontSize, ...metrics });
+        expect.soft(metrics.font).toBeCloseTo(fontSize * (heading ? 1.15 : 2.5), 2);
+        expect(metrics.x).toBe(0); expect(metrics.y).toBe(0);
+        expect.soft(metrics.minimum).toBe(heading ? "256px" : "0px");
+        expect(metrics.textX).toBeGreaterThanOrEqual(variant.padding - 0.1);
+        expect.soft(metrics.textRight).toBeLessThanOrEqual(metrics.width - variant.padding + 0.1);
+        if (!heading) {
+          expect.soft(metrics.width).toBeCloseTo(metrics.textWidth + 2 * variant.padding, 1);
+          expect(metrics.height).toBeCloseTo(metrics.contentHeight + 2 * variant.padding, 1);
+          if (value === "42" && fontSize === 12) expect.soft(metrics.width).toBeLessThan(256);
+        } else {
+          expect(metrics.width).toBeGreaterThanOrEqual(256);
+          if (!skull) expect(metrics.width).toBeCloseTo(Math.max(256, metrics.textWidth + 2 * variant.padding), 1);
+          if (skull) {
+            expect(metrics.skullWidth).toBeCloseTo(fontSize * 1.15 * 2, 1);
+            expect(metrics.skullHeight).toBeCloseTo(fontSize * 1.15 * 2, 1);
+            await expect(panel.locator("img")).toHaveAttribute("alt", "SoulsTracker skull");
+          }
+        }
+        if (previous) {
+          expect.soft(metrics.textWidth).toBeCloseTo(previous.width * 2, 1);
+          expect.soft(metrics.textHeight).toBeGreaterThan(previous.height * 1.8);
+        }
+        previous = { width: metrics.textWidth, height: metrics.textHeight };
+        if (!heading && value === "42") {
+          await page.setViewportSize({ width: 640, height: 480 });
+          const compact = await panel.boundingBox();
+          expect(compact?.x).toBe(0); expect(compact?.y).toBe(0);
+          expect(compact?.width).toBeCloseTo(metrics.width, 1);
+          await page.setViewportSize({ width: 4096, height: 720 });
+        }
+      }
+    }
+    await testInfo.attach("sizing-metrics", { body: JSON.stringify(measurements, null, 2), contentType: "application/json" });
   });
 }
 

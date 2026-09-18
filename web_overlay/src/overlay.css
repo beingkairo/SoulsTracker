@@ -44,6 +44,10 @@ body {
 }
 
 
+.souls-tracker-overlay-panel:has(> .overlay-total-deaths) {
+  min-width: 0;
+}
+
 .overlay-heading,
 .overlay-game-name,
 .overlay-total-deaths,
@@ -79,7 +83,7 @@ body {
 }
 
 .overlay-total-deaths {
-  font-size: 2.5rem;
+  font-size: 2.5em;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
 }
