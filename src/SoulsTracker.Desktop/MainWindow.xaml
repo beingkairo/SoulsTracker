@@ -517,7 +517,7 @@
                                 <CheckBox x:Name="HostedConsentCheckBox" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsEnabled="{Binding HostedOverlay.CanImport, FallbackValue=False}" AutomationProperties.Name="Consent to hosted publication">
                                     <TextBlock Text="I agree to hosted publication when importing pairing" TextWrapping="Wrap" />
                                 </CheckBox>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. No production host is authorized in this build." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. Pairing must use https://overlay.beingkairo.com." />
                                 <Button x:Name="ImportHostedPairingButton" Content="Import / Replace pairing" Click="ImportHostedPairing_Click" AutomationProperties.Name="Import or replace hosted pairing">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

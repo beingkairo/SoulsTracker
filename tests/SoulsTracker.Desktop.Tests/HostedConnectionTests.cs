@@ -95,11 +95,17 @@ public sealed class HostedConnectionTests
             try
             {
                 window.Show();
+                ((System.Windows.Controls.TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
                 await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                var guidance = ConnectionText(window).Single(text => text.StartsWith("Import an operator-issued", StringComparison.Ordinal));
+                Assert.Equal("Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. Pairing must use https://overlay.beingkairo.com.", guidance);
+                Assert.Contains("https://overlay.beingkairo.com", HostedProductionOrigins.Approved);
+                Assert.DoesNotContain("No production host is authorized in this build.", guidance);
                 var copy = (System.Windows.Controls.Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
                 var import = (System.Windows.Controls.Button)window.FindName("ImportHostedPairingButton");
                 var consent = (System.Windows.Controls.CheckBox)window.FindName("HostedConsentCheckBox");
+                Assert.Equal("I agree to hosted publication when importing pairing", Assert.IsType<System.Windows.Controls.TextBlock>(consent.Content).Text);
                 Assert.False(copy.IsEnabled);
                 Assert.False(import.IsEnabled);
                 consent.IsChecked = true;
@@ -114,6 +120,9 @@ public sealed class HostedConnectionTests
                 var host = (System.Windows.Controls.TextBlock)window.FindName("HostedHostTextBlock");
                 Assert.Equal(Configuration().DisplayOrigin, host.Text);
                 Assert.DoesNotContain(new string('b', 64), host.Text);
+                string visibleText = string.Join(" ", ConnectionText(window));
+                Assert.DoesNotContain(new string('b', 64), visibleText);
+                Assert.DoesNotContain(new string('c', 64), visibleText);
                 Assert.Null(window.FindName("TotalDeathsOverlayUrlTextBox"));
                 await connection.DisposeAsync();
                 await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -170,6 +179,13 @@ public sealed class HostedConnectionTests
         }
         finally { Directory.Delete(root, true); }
     });
+
+    private static IEnumerable<string> ConnectionText(System.Windows.DependencyObject root)
+    {
+        if (root is System.Windows.Controls.TextBlock text) yield return text.Text;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            foreach (string value in ConnectionText(System.Windows.Media.VisualTreeHelper.GetChild(root, i))) yield return value;
+    }
 
     internal static async Task OnDispatcher(Func<Task> test)
     {

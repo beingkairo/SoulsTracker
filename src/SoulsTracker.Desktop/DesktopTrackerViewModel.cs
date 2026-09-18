@@ -1168,7 +1168,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
             // Appearance drafts are isolated from Main-tab operational errors.
             // A failed Apply must leave the last applied style/URL/preview intact.
-            await SubmitAsync(new UpdateOverlayAppearanceCommand(totalDeaths, appearance, false, false, OverlayTitleIconMode.Off), cancellationToken);
+            await SubmitAsync(new UpdateOverlayAppearanceCommand(totalDeaths, appearance, false, false, DraftTitleIconModeChoice.Value), cancellationToken);
             SetAppearanceFeedback(totalDeaths, ErrorMessage is null
                 ? "Total Deaths appearance applied."
                 : "Total Deaths appearance could not be applied.");
