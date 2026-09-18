@@ -74,11 +74,7 @@ public sealed class SqliteTrackerStateRepository : ITrackerStateRepository
         await ExecuteAsync(connection, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;", cancellationToken).ConfigureAwait(false);
         await ExecuteAsync(connection, TableSql, cancellationToken).ConfigureAwait(false);
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await using SqliteCommand command = connection.CreateCommand(); command.Transaction = transaction;
-        command.CommandText = "INSERT INTO tracker_state(id,schema_version,payload,token) VALUES(1,$version,$payload,$token) ON CONFLICT(id) DO UPDATE SET schema_version=$version,payload=$payload,token=$token";
-        command.Parameters.AddWithValue("$version", PersistentTrackerState.CurrentSchemaVersion); command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(dto));
-        command.Parameters.AddWithValue("$token", DBNull.Value);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false); if (saveInterruption is not null) await saveInterruption.BeforeCommitAsync(cancellationToken).ConfigureAwait(false); await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await UpsertStateAsync(connection, transaction, dto, cancellationToken).ConfigureAwait(false); if (saveInterruption is not null) await saveInterruption.BeforeCommitAsync(cancellationToken).ConfigureAwait(false); await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
