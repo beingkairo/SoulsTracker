@@ -10,6 +10,77 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class RuntimeSourcePublicationTests
 {
     [Fact]
+    public void NormalizationReturnsNullForNoResult()
+    {
+        Assert.Null(Normalize(State(false, "null"), null));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NormalizationRejectsWrongGameWithOrWithoutObservation(bool hasObservation)
+    {
+        PersistentTrackerState state = State(false, "wrong-game");
+        RuntimeGameReadResult read = hasObservation
+            ? RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Bloodborne, 12,
+                DateTimeOffset.UnixEpoch, EffectiveDeathTotalResult.SourceIdentityFor(state)))
+            : RuntimeGameReadResult.WaitingForActiveCharacter(GameId.Bloodborne);
+
+        Assert.Null(Normalize(state, read));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NormalizationRejectsUnconfiguredLiesWithOrWithoutObservation(bool hasObservation)
+    {
+        PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP, OverlayConfiguration.Default);
+        RuntimeGameReadResult read = hasObservation
+            ? RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.LiesOfP, 0,
+                DateTimeOffset.UnixEpoch, EffectiveDeathTotalResult.SourceIdentityFor(state)))
+            : RuntimeGameReadResult.WaitingForSaveFile(GameId.LiesOfP);
+
+        Assert.Null(Normalize(state, read));
+    }
+
+    [Theory]
+    [InlineData("synced")]
+    [InlineData("zero")]
+    [InlineData("cached")]
+    [InlineData("cached-zero")]
+    [InlineData("pending")]
+    [InlineData("waiting-save")]
+    [InlineData("waiting-character")]
+    [InlineData("unreadable")]
+    [InlineData("unavailable")]
+    [InlineData("retained-unavailable")]
+    public void NormalizationPreservesMatchingResultIdentityAndMetadata(string scenario)
+    {
+        PersistentTrackerState state = State(false, "identity");
+        RuntimeGameObservation observation = new(state.SelectedGameId,
+            scenario is "zero" or "cached-zero" ? 0 : 12, DateTimeOffset.UnixEpoch,
+            EffectiveDeathTotalResult.SourceIdentityFor(state));
+        var metadata = new BlackMythWukongSaveMetadata(42, TimeSpan.FromHours(3), DateTimeOffset.UnixEpoch);
+        RuntimeGameReadResult synced = scenario is "zero" or "cached-zero"
+            ? RuntimeGameReadResult.NoDeathsRecorded(observation, metadata, state.BlackMythWukongSave.LocalPath)
+            : RuntimeGameReadResult.Synced(observation, metadata, state.BlackMythWukongSave.LocalPath);
+        RuntimeGameReadResult read = scenario switch
+        {
+            "cached" or "cached-zero" => RuntimeGameReadResult.Cached(synced),
+            "pending" => RuntimeGameReadResult.PendingLowerValue(synced),
+            "waiting-save" => RuntimeGameReadResult.WaitingForSaveFile(state.SelectedGameId),
+            "waiting-character" => RuntimeGameReadResult.WaitingForActiveCharacter(state.SelectedGameId),
+            "unreadable" => RuntimeGameReadResult.SelectedSaveUnreadable(state.SelectedGameId),
+            "unavailable" => RuntimeGameReadResult.Unavailable(state.SelectedGameId),
+            "retained-unavailable" => RuntimeGameReadResult.Unavailable(state.SelectedGameId, observation),
+            _ => synced,
+        };
+
+        Assert.Same(read, Normalize(state, read));
+    }
+
+    [Fact]
     public void LowerValueRequiresASecondFreshRead()
     {
         PersistentTrackerState state = State(false, "confirmation");
@@ -124,7 +195,7 @@ public sealed class RuntimeSourcePublicationTests
     }
 
     private static RuntimeGameReadResult? Normalize(PersistentTrackerState state, RuntimeGameReadResult? read) =>
-        App.NormalizeRuntimePublication(state, read);
+        RuntimePublicationSession.NormalizeRuntimePublication(state, read);
 
     private static PersistentTrackerState State(bool lies, string profile, int character = 1, int member = 1, string? export = null) =>
         new(PersistentTrackerState.CurrentSchemaVersion, lies ? GameId.LiesOfP : GameId.BlackMythWukong,

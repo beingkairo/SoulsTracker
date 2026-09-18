@@ -382,18 +382,6 @@ public partial class App : System.Windows.Application, IDisposable
         }
     }
 
-    internal static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
-    {
-        if (result is null || result.GameId != state.SelectedGameId) return null;
-        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
-        if (result.Observation is not null &&
-            EffectiveDeathTotalResult.Resolve(state, result.Observation).Status == EffectiveDeathTotalStatus.SourceMismatch)
-        {
-            return null;
-        }
-        return result;
-    }
-
     /// <summary>
     /// A named mutex may only be released by the thread that acquired it. Startup
     /// acquires the single-instance lease on the WPF dispatcher, while awaited

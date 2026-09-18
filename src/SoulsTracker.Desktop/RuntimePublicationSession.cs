@@ -50,7 +50,7 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
             (state.SelectedGameId == GameId.EldenRing && state.EldenRingMissedDeathAdjustments.Get(state.EldenRingSave) !=
                 CurrentState.EldenRingMissedDeathAdjustments.Get(CurrentState.EldenRingSave)) || read.Generation != generation ||
             read.Sequence > sequence || read.Sequence <= completedSequence) return;
-        RuntimeGameReadResult? publication = App.NormalizeRuntimePublication(state, result);
+        RuntimeGameReadResult? publication = NormalizeRuntimePublication(state, result);
         if (result is not null && publication is null) return;
         completedSequence = read.Sequence;
         if (publication?.Status == RuntimeGameReaderStatus.Cached)
@@ -95,5 +95,17 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         }
         applyDesktop(publication);
         publishOutputs(publication);
+    }
+
+    internal static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
+    {
+        if (result is null || result.GameId != state.SelectedGameId) return null;
+        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
+        if (result.Observation is not null &&
+            EffectiveDeathTotalResult.Resolve(state, result.Observation).Status == EffectiveDeathTotalStatus.SourceMismatch)
+        {
+            return null;
+        }
+        return result;
     }
 }
