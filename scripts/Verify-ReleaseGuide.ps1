@@ -18,7 +18,7 @@ $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "## Games" },
     @{ Path = $readmePath; Content = $readme; Text = "## Start streaming" },
     @{ Path = $readmePath; Content = $readme; Text = "## Privacy and read-only use" },
-    @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "Open SoulsTracker before OBS" },
+    @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "either startup order is supported" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "SoulsTracker v$version" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "SoulsTracker is read-only" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
