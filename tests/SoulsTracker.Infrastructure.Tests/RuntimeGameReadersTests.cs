@@ -32,17 +32,36 @@ public sealed class RuntimeGameReadersTests
         var reader = new StubReader(GameId.Ds1, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Ds1, 3, DateTimeOffset.UtcNow)));
         var coordinator = new RuntimeGameReaderCoordinator([reader]);
 
-        await coordinator.PollAsync(GameId.Ds1, default);
+        RuntimeGameReadResult? fresh = await coordinator.PollAsync(GameId.Ds1, default);
+        Assert.Same(reader.Result, fresh);
+        Assert.Same(fresh, coordinator.CurrentResult);
+        Assert.Equal(RuntimeGameReaderStatus.Synced, coordinator.CurrentStatus);
         Assert.NotNull(coordinator.CurrentObservation);
-        await coordinator.PollAsync(GameId.Ds2, default);
+        reader.Result = fresh! with { };
+        RuntimeGameReadResult? repeated = await coordinator.PollAsync(GameId.Ds1, default);
+        Assert.Same(reader.Result, repeated);
+        Assert.Equal(fresh, repeated);
+        Assert.NotSame(fresh, repeated);
+        Assert.Same(fresh, coordinator.CurrentResult);
+        Assert.Same(fresh.Observation, coordinator.CurrentObservation);
+
+        Assert.Null(await coordinator.PollAsync(GameId.Ds2, default));
+        Assert.Null(coordinator.CurrentResult);
         Assert.Null(coordinator.CurrentObservation);
         await coordinator.PollAsync(GameId.Ds1, default);
         reader.Result = null;
         RuntimeGameReadResult? unavailable = await coordinator.PollAsync(GameId.Ds1, default);
         Assert.Equal(RuntimeGameReaderStatus.Unavailable, unavailable!.Status);
         Assert.Equal(3, unavailable.Observation!.TotalDeaths.Value);
+        Assert.Same(unavailable, coordinator.CurrentResult);
+        Assert.Same(fresh.Observation, coordinator.CurrentObservation);
 
-        await coordinator.PollAsync(GameId.Ds2, default);
+        Assert.Null(await coordinator.PollAsync(null, default));
+        Assert.Null(coordinator.CurrentResult);
+        Assert.Equal(RuntimeGameReaderStatus.Unavailable, coordinator.CurrentStatus);
+        Assert.Null(coordinator.CurrentObservation);
+        Assert.Null(await coordinator.PollAsync(GameId.Ds2, default));
+        Assert.Null(coordinator.CurrentResult);
         Assert.Null(coordinator.CurrentObservation);
     }
 
@@ -60,6 +79,8 @@ public sealed class RuntimeGameReadersTests
         RuntimeGameReadResult? unavailable = await coordinator.PollAsync(GameId.Ds1, default);
 
         Assert.Null(unavailable);
+        Assert.Null(coordinator.CurrentResult);
+        Assert.Equal(RuntimeGameReaderStatus.Unavailable, coordinator.CurrentStatus);
         Assert.Null(coordinator.CurrentObservation);
     }
 
@@ -71,12 +92,18 @@ public sealed class RuntimeGameReadersTests
 
         RuntimeGameReadResult? waiting = await coordinator.PollAsync(GameId.Ds2, default);
         Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, waiting!.Status);
+        Assert.Same(waiting, coordinator.CurrentResult);
         Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, coordinator.CurrentStatus);
         Assert.Null(coordinator.CurrentObservation);
 
         reader.Result = null;
         RuntimeGameReadResult? unavailable = await coordinator.PollAsync(GameId.Ds2, default);
         Assert.Null(unavailable);
+        Assert.Null(coordinator.CurrentResult);
+        Assert.Equal(RuntimeGameReaderStatus.Unavailable, coordinator.CurrentStatus);
+        Assert.Null(coordinator.CurrentObservation);
+        Assert.Null(await coordinator.PollAsync(GameId.Ds2, default));
+        Assert.Null(coordinator.CurrentResult);
         Assert.Equal(RuntimeGameReaderStatus.Unavailable, coordinator.CurrentStatus);
         Assert.Null(coordinator.CurrentObservation);
     }

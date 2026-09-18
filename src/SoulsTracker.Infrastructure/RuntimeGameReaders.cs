@@ -152,8 +152,6 @@ public sealed class RuntimeGameReaderCoordinator
 
     public RuntimeGameObservation? CurrentObservation => CurrentResult?.Observation;
 
-    public event EventHandler<RuntimeGameReadResult?>? ObservationChanged;
-
     /// <summary>
     /// Polls only the selected approved reader. A confirmed value remains
     /// available for a short loading-screen grace period, but never crosses a
@@ -180,7 +178,6 @@ public sealed class RuntimeGameReaderCoordinator
         if (!Equals(CurrentResult, result))
         {
             CurrentResult = result;
-            ObservationChanged?.Invoke(this, result);
         }
 
         return result;
