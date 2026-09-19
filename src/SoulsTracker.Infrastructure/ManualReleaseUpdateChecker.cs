@@ -90,10 +90,10 @@ public sealed class GitHubLatestReleaseUpdateChecker(HttpClient client) : IManua
             if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden) return new(ManualReleaseUpdateStatus.RateLimited);
             if (!response.IsSuccessStatusCode) return new(ManualReleaseUpdateStatus.Unavailable);
             using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false));
-            if (!json.RootElement.TryGetProperty("tag_name", out JsonElement tag) || !ReleaseSemanticVersion.TryParse(tag.GetString(), out ReleaseSemanticVersion? released)) return new(ManualReleaseUpdateStatus.InvalidResponse);
+            if (json.RootElement.ValueKind != JsonValueKind.Object || !json.RootElement.TryGetProperty("tag_name", out JsonElement tag) || tag.ValueKind != JsonValueKind.String || !ReleaseSemanticVersion.TryParse(tag.GetString(), out ReleaseSemanticVersion? released)) return new(ManualReleaseUpdateStatus.InvalidResponse);
             if (released!.CompareTo(installed!) <= 0) return new(ManualReleaseUpdateStatus.UpToDate, released.ToString());
             Uri page = ReleasesPage;
-            if (json.RootElement.TryGetProperty("html_url", out JsonElement url) && Uri.TryCreate(url.GetString(), UriKind.Absolute, out Uri? candidate) && candidate.Scheme == Uri.UriSchemeHttps && candidate.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) page = candidate;
+            if (json.RootElement.TryGetProperty("html_url", out JsonElement url) && url.ValueKind == JsonValueKind.String && Uri.TryCreate(url.GetString(), UriKind.Absolute, out Uri? candidate) && candidate.Scheme == Uri.UriSchemeHttps && candidate.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) page = candidate;
             return new(ManualReleaseUpdateStatus.UpdateAvailable, released.ToString(), page);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return new(ManualReleaseUpdateStatus.Unavailable); }
