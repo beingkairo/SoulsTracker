@@ -11,6 +11,7 @@ using SoulsTracker.Infrastructure;
 
 namespace SoulsTracker.Desktop.Tests;
 
+[Collection("Shell presentation")]
 public sealed class ManualDeathControlTests
 {
     [Fact]
@@ -35,7 +36,9 @@ public sealed class ManualDeathControlTests
             Assert.False(increment.IsEnabled);
             Assert.False(decrement.IsEnabled);
             await tracker.InitializeAsync();
+            tracker.SetGlobalHotkeyStatus("Global hotkeys are active.");
             await FlushBindingsAsync();
+            Assert.False(((TextBlock)window.FindName("GlobalHotkeyStatusTextBlock")).IsVisible);
             Assert.Equal("+1", increment.Content);
             Assert.Equal("−1", decrement.Content);
             Assert.True(increment.IsVisible);
@@ -44,6 +47,7 @@ public sealed class ManualDeathControlTests
             Assert.False(decrement.IsEnabled);
             Assert.True(increment.Focusable);
             Assert.True(decrement.Focusable);
+            Assert.True(decrement.TranslatePoint(new Point(), window).X < increment.TranslatePoint(new Point(), window).X);
             Assert.Equal("0", total.Text);
             Assert.Throws<ElementNotEnabledException>(() => Invoke(decrement));
             Assert.Equal(0, repository.State.ManualDemonsSoulsDeathCounter.Value);
@@ -64,6 +68,7 @@ public sealed class ManualDeathControlTests
                 await WaitUntilAsync(() => tracker.SelectedGame?.GameId == choice.GameId && tracker.ControlsEnabled);
                 await FlushBindingsAsync();
                 Assert.False(increment.IsVisible);
+                Assert.False(((TextBlock)window.FindName("GlobalHotkeyStatusTextBlock")).IsVisible);
                 Assert.False(decrement.IsVisible);
                 Assert.Equal(1, repository.State.ManualDemonsSoulsDeathCounter.Value);
 
@@ -79,6 +84,7 @@ public sealed class ManualDeathControlTests
                     Assert.True(removeMissedDeath.IsVisible);
                     Assert.True(addMissedDeath.IsEnabled);
                     Assert.False(removeMissedDeath.IsEnabled);
+                    Assert.True(removeMissedDeath.TranslatePoint(new Point(), window).X < addMissedDeath.TranslatePoint(new Point(), window).X);
                     Invoke(addMissedDeath);
                     await WaitUntilAsync(() => total.Text == "13" && removeMissedDeath.IsEnabled);
                     Invoke(removeMissedDeath);

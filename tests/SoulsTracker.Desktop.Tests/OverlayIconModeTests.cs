@@ -12,6 +12,7 @@ using SoulsTracker.Infrastructure;
 
 namespace SoulsTracker.Desktop.Tests;
 
+[Collection("Shell presentation")]
 public sealed class OverlayIconModeTests
 {
     [Theory]

@@ -6,6 +6,7 @@ using static SoulsTracker.Desktop.Tests.HostedDesktopPublisherTests;
 
 namespace SoulsTracker.Desktop.Tests;
 
+[Collection("Shell presentation")]
 public sealed class HostedConnectionTests
 {
     [Fact]

@@ -14,6 +14,7 @@ using static SoulsTracker.Desktop.Tests.HostedDesktopPublisherTests;
 
 namespace SoulsTracker.Desktop.Tests;
 
+[Collection("Shell presentation")]
 public sealed class HostedConnectionPresentationTests
 {
     private static readonly bool[] CopyFailures = [false, true];
@@ -205,6 +206,7 @@ public sealed class HostedConnectionPresentationTests
 
     [Theory]
     [InlineData(560d, 400d)]
+    [InlineData(560d, 760d)]
     [InlineData(1060d, 760d)]
     public async Task ConsentFitsAvailableWidthAndRemainsCheckboxContent(double width, double height) => await OnDispatcher(async () =>
     {
@@ -231,8 +233,8 @@ public sealed class HostedConnectionPresentationTests
             var measured = new TextBlock { Text = label.Text, FontFamily = label.FontFamily, FontSize = label.FontSize, FontWeight = label.FontWeight, TextWrapping = TextWrapping.Wrap };
             measured.Measure(new Size(label.ActualWidth, double.PositiveInfinity));
             Assert.True(label.ActualHeight >= measured.DesiredSize.Height - 1);
-            if (width == 560) Assert.True(label.ActualHeight > label.FontSize * 2);
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
+            Assert.InRange(consent.ActualWidth, scroll.ViewportWidth - 35, scroll.ViewportWidth - 33);
             var viewportBounds = label.TransformToAncestor(scroll).TransformBounds(new Rect(label.RenderSize));
             Assert.True(viewportBounds.Top >= 0 && viewportBounds.Bottom <= scroll.ActualHeight + 1);
             Assert.Equal(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);

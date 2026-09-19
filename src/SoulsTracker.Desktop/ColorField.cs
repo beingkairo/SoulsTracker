@@ -146,7 +146,7 @@ public sealed class ColorField : Grid
     private static Style CreateKeyboardFocusVisualStyle()
     {
         FrameworkElementFactory border = new(typeof(Border));
-        border.SetValue(Border.BorderBrushProperty, new SolidColorBrush(System.Windows.Media.Color.FromRgb(167, 139, 250)));
+        border.SetValue(Border.BorderBrushProperty, new SolidColorBrush(System.Windows.Media.Color.FromRgb(232, 154, 154)));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(2));
         border.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
         border.SetValue(FrameworkElement.MarginProperty, new Thickness(-2));

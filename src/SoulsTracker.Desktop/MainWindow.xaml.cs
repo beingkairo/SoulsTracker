@@ -26,6 +26,20 @@ public partial class MainWindow : Window
         InitializeComponent();
     }
 
+    private void ContextHelp_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { ToolTip: System.Windows.Controls.ToolTip help } button)
+        {
+            help.PlacementTarget = button;
+            help.IsOpen = true;
+        }
+    }
+
+    private void ContextHelp_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { ToolTip: System.Windows.Controls.ToolTip help }) help.IsOpen = false;
+    }
+
     private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.NewValue is DesktopTrackerViewModel vm && vm.IsEldenRingNoticeVisible)
@@ -35,9 +49,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OverlayTypeTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-    }
 
     private async void GameSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -483,7 +494,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel viewModel)
         {
-            await viewModel.ResetOverlayAppearanceAsync(totalDeaths: OverlayTypeTabs.SelectedIndex != 1);
+            await viewModel.ResetOverlayAppearanceAsync(totalDeaths: true);
         }
     }
 
