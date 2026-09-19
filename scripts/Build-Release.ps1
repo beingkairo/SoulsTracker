@@ -94,6 +94,7 @@ function Promote-VerifiedDesktopArtifact {
 }
 
 & (Join-Path $PSScriptRoot "Verify-Version.ps1")
+& (Join-Path $PSScriptRoot "Verify-ReleaseGuide.ps1")
 Initialize-CleanStagingDirectory -Path $publishPath -AllowedRoot $stagingRoot
 Invoke-External dotnet @("restore", $solution, "--locked-mode")
 Invoke-External npm @("ci", "--prefix", $overlayPath)
@@ -102,6 +103,9 @@ Invoke-External npm @("exec", "--prefix", $overlayPath, "playwright", "install",
 Invoke-External npm @("run", "build", "--prefix", $overlayPath)
 Invoke-External npm @("run", "check", "--prefix", $overlayPath)
 Invoke-External npm @("test", "--prefix", $overlayPath, "--", "--workers=1")
+Invoke-External npm @("run", "check", "--prefix", (Join-Path $root "cloud_overlay"))
+Invoke-External npm @("run", "build", "--prefix", (Join-Path $root "cloud_overlay"))
+Invoke-External npm @("test", "--prefix", (Join-Path $root "cloud_overlay"))
 Invoke-External dotnet @("format", $solution, "--no-restore", "--verify-no-changes")
 Invoke-External dotnet @("build", $solution, "--configuration", "Release", "--no-restore")
 
@@ -112,15 +116,6 @@ if (-not $SkipTests) {
 Invoke-External dotnet @(
     "publish",
     (Join-Path $root "src\SoulsTracker.Desktop\SoulsTracker.Desktop.csproj"),
-    "--configuration",
-    "Release",
-    "--no-restore",
-    "--output",
-    $publishPath
-)
-
-Invoke-External dotnet @(
-    "publish",
     "--configuration",
     "Release",
     "--no-restore",
