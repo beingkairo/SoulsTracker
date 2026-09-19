@@ -1,71 +1,228 @@
 [CmdletBinding()]
 param(
-    [string]$OutputPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'docs\THIRD_PARTY_NOTICES.md')
+    [Parameter(Mandatory)] [string]$PayloadPath,
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$nugetRoot = Join-Path $env:USERPROFILE '.nuget\packages'
-$entries = [System.Collections.Generic.List[object]]::new()
+Add-Type -AssemblyName System.Reflection.Metadata
 
-Get-ChildItem -Path $root -Recurse -Filter project.assets.json |
-    ForEach-Object {
-        $assets = Get-Content -Raw $_.FullName | ConvertFrom-Json
-        foreach ($library in $assets.libraries.PSObject.Properties) {
-            if ($library.Value.type -ne 'package') { continue }
-            $name, $version = $library.Name -split '/', 2
-            $key = "nuget|$name|$version"
-            if ($entries.Key -contains $key) { continue }
+function Assert-Distribution([bool]$Condition, [string]$Message) {
+    if (-not $Condition) { throw $Message }
+}
 
-            $nuspec = Get-ChildItem (Join-Path $nugetRoot "$($name.ToLowerInvariant())\$version") -Filter '*.nuspec' -ErrorAction SilentlyContinue | Select-Object -First 1
-            $license = 'Package metadata unavailable; review NuGet package.'
-            $url = "https://www.nuget.org/packages/$name/$version"
-            if ($nuspec) {
-                [xml]$xml = Get-Content -Raw $nuspec.FullName
-                $metadata = $xml.package.metadata
-                if ($metadata.license) {
-                    $license = if ($metadata.license.type -eq 'expression') { [string]$metadata.license.'#text' } else { "See $($metadata.license.'#text') in package" }
-                } elseif ($metadata.licenseUrl) {
-                    $license = "See $($metadata.licenseUrl)"
-                }
-                if ($metadata.projectUrl) { $url = [string]$metadata.projectUrl }
+function Read-RequiredText([string]$Path) {
+    Assert-Distribution (Test-Path -LiteralPath $Path -PathType Leaf) 'Required distribution input is missing.'
+    $text = [IO.File]::ReadAllText($Path)
+    Assert-Distribution (-not [string]::IsNullOrWhiteSpace($text)) 'Required distribution input is empty.'
+    return $text
+}
+
+function Resolve-RestoredFile([string]$Relative) {
+    Assert-Distribution ($Relative -notmatch '(^|/)\.\.(/|$)|^[\\/]|:') 'Invalid restored asset path.'
+    foreach ($folder in $assets.packageFolders.Keys) {
+        $path = Join-Path $folder $Relative
+        if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+    }
+    throw 'Required restored upstream asset is missing.'
+}
+
+function Test-ApphostTemplatePaths([byte[]]$Bytes, [object[]]$PathMatches) {
+    # The SDK copies the native host template, then adds product resources and
+    # the managed entry-point name. Only unchanged template sections can explain
+    # upstream paths. A new path in resources, padding or appended bytes fails.
+    $dotnet = Get-Command dotnet -CommandType Application | Select-Object -First 1
+    $templatePath = Join-Path (Split-Path $dotnet.Source) 'packs/Microsoft.NETCore.App.Host.win-x64/10.0.9/runtimes/win-x64/native/apphost.exe'
+    if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { return $false }
+    $templateBytes = [IO.File]::ReadAllBytes($templatePath)
+    $stream = [IO.MemoryStream]::new($Bytes, $false)
+    $templateStream = [IO.MemoryStream]::new($templateBytes, $false)
+    $pe = [Reflection.PortableExecutable.PEReader]::new($stream)
+    $template = [Reflection.PortableExecutable.PEReader]::new($templateStream)
+    try {
+        foreach ($match in $PathMatches) {
+            $sections = @($pe.PEHeaders.SectionHeaders | Where-Object { $_.Name -ne '.rsrc' -and $match.Offset -ge $_.PointerToRawData -and ($match.Offset + $match.Length) -le ($_.PointerToRawData + $_.SizeOfRawData) })
+            if ($sections.Count -ne 1) { return $false }
+            $section = $sections[0]
+            $original = @($template.PEHeaders.SectionHeaders | Where-Object { $_.Name -ceq $section.Name -and $_.PointerToRawData -eq $section.PointerToRawData -and $_.SizeOfRawData -eq $section.SizeOfRawData })
+            if ($original.Count -ne 1 -or ($section.PointerToRawData + $section.SizeOfRawData) -gt $Bytes.Length -or ($section.PointerToRawData + $section.SizeOfRawData) -gt $templateBytes.Length) { return $false }
+            $hash = [Security.Cryptography.SHA256]::Create()
+            try {
+                $actualHash = [Convert]::ToHexString($hash.ComputeHash($Bytes, $section.PointerToRawData, $section.SizeOfRawData))
+                $originalHash = [Convert]::ToHexString($hash.ComputeHash($templateBytes, $section.PointerToRawData, $section.SizeOfRawData))
+                if ($actualHash -cne $originalHash) { return $false }
+            } finally { $hash.Dispose() }
+        }
+        return $true
+    } catch { return $false }
+    finally { $pe.Dispose(); $template.Dispose(); $stream.Dispose(); $templateStream.Dispose() }
+}
+
+# Only this Desktop restore and its published dependency graph are distribution inputs.
+$payload = (Get-Item -LiteralPath $PayloadPath).FullName
+Assert-Distribution (Test-Path -LiteralPath (Join-Path $payload 'SoulsTracker.Desktop.exe') -PathType Leaf) 'The staged desktop publish is incomplete: SoulsTracker.Desktop.exe is missing.'
+$null = Read-RequiredText (Join-Path $payload 'SoulsTracker.Desktop.runtimeconfig.json')
+$deps = (Read-RequiredText (Join-Path $payload 'SoulsTracker.Desktop.deps.json')) | ConvertFrom-Json -AsHashtable
+$assets = (Read-RequiredText (Join-Path $root 'src/SoulsTracker.Desktop/obj/project.assets.json')) | ConvertFrom-Json -AsHashtable
+$lock = (Read-RequiredText (Join-Path $root 'src/SoulsTracker.Desktop/packages.lock.json')) | ConvertFrom-Json -AsHashtable
+$reviewed = Read-RequiredText (Join-Path $root 'docs/THIRD_PARTY_NOTICES.md')
+$attribution = Read-RequiredText (Join-Path $root 'THIRD_PARTY_NOTICES.md')
+$null = Read-RequiredText (Join-Path $root 'LICENSE')
+$expected = @{
+    'Microsoft.NETCore.App.Runtime.win-x64' = '10.0.9'
+    'Microsoft.WindowsDesktop.App.Runtime.win-x64' = '10.0.9'
+    'Microsoft.Data.Sqlite.Core' = '10.0.10'
+    'SourceGear.sqlite3' = '3.50.4.5'
+    'SQLitePCLRaw.bundle_e_sqlite3' = '3.0.3'
+    'SQLitePCLRaw.config.e_sqlite3' = '3.0.3'
+    'SQLitePCLRaw.core' = '3.0.3'
+    'SQLitePCLRaw.provider.e_sqlite3' = '3.0.3'
+}
+$products = @('SoulsTracker.Desktop', 'SoulsTracker.Application', 'SoulsTracker.Domain', 'SoulsTracker.Infrastructure', 'SoulsTracker.Overlay')
+$version = & (Join-Path $root 'eng/Get-Version.ps1')
+$seen = @{}
+$projectCount = 0
+Assert-Distribution ($deps.runtimeTarget.name -ceq '.NETCoreApp,Version=v10.0/win-x64') 'Unsupported Desktop runtime target.'
+$target = $deps.targets[$deps.runtimeTarget.name]
+Assert-Distribution ($null -ne $target -and $target.Count -eq $deps.libraries.Count) 'Unsupported distribution inventory drift.'
+foreach ($key in $deps.libraries.Keys) {
+    Assert-Distribution ($target.Contains($key)) 'Unsupported distribution inventory drift.'
+    $name, $resolved = $key -split '/', 2
+    $type = $deps.libraries[$key].type
+    if ($type -eq 'project') {
+        Assert-Distribution ($name -cin $products -and $resolved -ceq $version) 'Unsupported product inventory drift.'
+        $projectCount++
+        continue
+    }
+    if ($type -eq 'runtimepack') { $name = $name -creplace '^runtimepack\.', '' }
+    Assert-Distribution ($type -in @('package', 'runtimepack') -and $expected.ContainsKey($name) -and $resolved -ceq $expected[$name] -and -not $seen.ContainsKey($name)) 'Unsupported distribution inventory drift.'
+    $seen[$name] = $resolved
+    Assert-Distribution ($reviewed.Contains("| $name | $resolved |")) 'Reviewed distribution inventory is missing or stale.'
+    if ($type -eq 'package') {
+        $restored = $assets.libraries[$key]
+        $locked = @($lock.dependencies.Values | ForEach-Object { if ($_.Contains($name)) { $_[$name] } })
+        Assert-Distribution ($null -ne $restored -and $locked.Count -gt 0) 'Distribution package is missing from restored or locked inputs.'
+        foreach ($entry in $locked) {
+            Assert-Distribution ($entry.resolved -ceq $resolved -and $entry.contentHash -ceq $restored.sha512 -and $deps.libraries[$key].sha512 -ceq "sha512-$($entry.contentHash)") 'Distribution restore/lock inventory drift.'
+        }
+    } else {
+        $downloads = @($assets.project.frameworks.Values | ForEach-Object { $_.downloadDependencies } | Where-Object { $_.name -ceq $name -and $_.version -ceq "[$resolved, $resolved]" })
+        Assert-Distribution ($downloads.Count -gt 0) 'Distribution runtime pack is missing from restored inputs.'
+    }
+}
+Assert-Distribution ($seen.Count -eq $expected.Count -and $projectCount -eq $products.Count) 'Unsupported distribution inventory drift.'
+$inventoryRows = [regex]::Matches($reviewed, '(?m)^\| ([^|]+) \| ([0-9][^|]*) \|')
+Assert-Distribution ($inventoryRows.Count -eq $expected.Count) 'Reviewed distribution inventory contains unsupported entries.'
+
+# Pin complete reviewed legal texts after the documented LF/trailing-space normalization.
+$textHashes = @{
+    'netcore-license' = 'cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310'
+    'netcore-notices' = '66f1d4e44973185519bb4aa8a9718eb22fc7af2cc532e3ae9cfc4c127ee7fc54'
+    'desktop-license' = 'ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b'
+    'wpf-notices' = '55fcac28c047e0d453d91d091501929349566262901566d222590b6986386f57'
+    'winforms-notices' = '252050abc9391903f425f3eb542ed761d72300390565b75d21864ec2b4203b99'
+    'sqlite-managed-license' = 'ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b'
+    'sqlite-native-license' = '99464c3a88df7b708ce59e462cdcb85f72dfc9b1335b4fcc68be56131b634b95'
+    'sqlitepcl-license' = 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'
+    'sqlitepcl-notice' = 'b038376ce12e87dc738874110969591b90620eaac5c73ffa4abef991da48188e'
+}
+$normalized = $reviewed.Replace("`r`n", "`n")
+foreach ($id in $textHashes.Keys) {
+    $sections = [regex]::Matches($normalized, "(?s)<!-- BEGIN $id -->`n(.*?)`n<!-- END $id -->")
+    Assert-Distribution ($sections.Count -eq 1) 'Required upstream license/notice text is missing or duplicated.'
+    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sections[0].Groups[1].Value)))
+    Assert-Distribution ($hash -eq $textHashes[$id]) 'Required upstream license/notice text has changed.'
+}
+
+# Map every published runtime/native/resource asset. Keep diagnostics and satellite assemblies.
+$allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$upstream = @{}
+foreach ($key in $target.Keys) {
+    $library = $target[$key]
+    foreach ($group in @('runtime', 'native', 'resources')) {
+        if (-not $library.Contains($group)) { continue }
+        foreach ($asset in $library[$group].Keys) {
+            $leaf = ($asset -split '/')[-1]
+            if ($leaf -eq '_._') { continue } # NuGet's non-runtime placeholder.
+            $relative = if ($group -eq 'resources') { "$($library[$group][$asset].locale)/$leaf" } else { $leaf }
+            $null = $allowed.Add($relative)
+            if ($deps.libraries[$key].type -eq 'package') {
+                $upstream[$relative] = "$($key.ToLowerInvariant())/$asset"
+            } elseif ($deps.libraries[$key].type -eq 'runtimepack') {
+                $pack = ($key -creplace '^runtimepack\.', '').ToLowerInvariant()
+                $directory = if ($group -eq 'native') { 'native' } else { 'lib/net10.0' }
+                $upstream[$relative] = "$pack/runtimes/win-x64/$directory/$asset"
             }
-            $entries.Add([pscustomobject]@{ Key=$key; Ecosystem='NuGet'; Name=$name; Version=$version; License=$license; Source=$url })
         }
     }
-
-$nodeModules = Join-Path $root 'web_overlay\node_modules'
-if (Test-Path $nodeModules) {
-    Get-ChildItem -Path $nodeModules -Recurse -Filter package.json |
-        Where-Object { $_.FullName -notmatch '[\\/]\.bin[\\/]' } |
-        ForEach-Object {
-            $package = Get-Content -Raw $_.FullName | ConvertFrom-Json
-            if ([string]::IsNullOrWhiteSpace($package.name) -or [string]::IsNullOrWhiteSpace($package.version)) { return }
-            $key = "npm|$($package.name)|$($package.version)"
-            if ($entries.Key -contains $key) { return }
-            $license = if ($package.license) { [string]$package.license } else { 'Package metadata unavailable; review npm package.' }
-            $source = if ($package.repository -is [string]) { [string]$package.repository } elseif ($package.repository.url) { [string]$package.repository.url } else { "https://www.npmjs.com/package/$($package.name)/v/$($package.version)" }
-            $entries.Add([pscustomobject]@{ Key=$key; Ecosystem='npm'; Name=[string]$package.name; Version=[string]$package.version; License=$license; Source=$source })
+}
+# Windows Desktop satellite files are described by the restored pack, not Desktop deps.json.
+$desktopPack = 'microsoft.windowsdesktop.app.runtime.win-x64/10.0.9/data/RuntimeList.xml'
+$lists = @($assets.packageFolders.Keys | ForEach-Object { Join-Path $_ $desktopPack } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+Assert-Distribution ($lists.Count -gt 0) 'Restored Windows Desktop runtime inventory is missing.'
+[xml]$runtimeList = Read-RequiredText $lists[0]
+foreach ($file in $runtimeList.FileList.File) {
+    if ($file.Type -eq 'Resources') {
+        $relative = "$($file.Culture)/$(($file.Path -split '/')[-1])"
+        $null = $allowed.Add($relative)
+        $upstream[$relative] = "microsoft.windowsdesktop.app.runtime.win-x64/10.0.9/$($file.Path)"
+    }
+}
+foreach ($relative in $allowed) {
+    Assert-Distribution ($relative -notmatch '(^|/)\.\.(/|$)|^[\\/]|:') 'Invalid distribution asset path.'
+    Assert-Distribution (Test-Path -LiteralPath (Join-Path $payload $relative) -PathType Leaf) 'A required runtime/native/resource asset is missing.'
+}
+foreach ($relative in @('SoulsTracker.Desktop.exe', 'SoulsTracker.Desktop.deps.json', 'SoulsTracker.Desktop.runtimeconfig.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
+    $null = $allowed.Add($relative)
+}
+foreach ($file in Get-ChildItem -LiteralPath $payload -Recurse -Force) {
+    Assert-Distribution (-not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'Distribution contains a prohibited link.'
+    $relative = [IO.Path]::GetRelativePath($payload, $file.FullName).Replace('\', '/')
+    Assert-Distribution ($relative -notmatch '(^|/)(agents|fixtures|node_modules|\.git)(/|$)|\.(pdb|dbg|mdb|db|sqlite|sqlite3|sl2|sav|dmp|key|pem|pfx)$|(^|/)(\.env|pairing)(\.|/|$)') 'Distribution contains a prohibited file or directory.'
+    if ($file.PSIsContainer) { continue }
+    Assert-Distribution ($allowed.Contains($relative)) 'Distribution contains an unrecognized file.'
+    if ($upstream.ContainsKey($relative) -and $file.Name -cnotin @($products | ForEach-Object { "$_.dll" })) {
+        $source = Resolve-RestoredFile $upstream[$relative]
+        Assert-Distribution ((Get-FileHash -LiteralPath $file.FullName).Hash -ceq (Get-FileHash -LiteralPath $source).Hash) 'Distribution asset differs from restored upstream bytes.'
+        # Full-file equality, not a filename or path exemption, establishes provenance.
+        continue
+    }
+    if ($file.Extension -in @('.dll', '.exe')) {
+        # Never print matching bytes: a match may contain a local user/build path.
+        $bytes = [IO.File]::ReadAllBytes($file.FullName)
+        $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+        $localPath = '(?i)[a-z]:[\\/](users|documents and settings)[\\/]|/(home|Users)/|[a-z]:[\\/](a|agent|build|work)[\\/]'
+        $pathMatches = @(
+            foreach ($match in [regex]::Matches($ascii, $localPath)) { @{ Offset = $match.Index; Length = $match.Length } }
+            # Scan both alignments; UTF-16 data can start at an odd binary offset.
+            foreach ($alignment in @(0, 1)) {
+                $unicode = [Text.Encoding]::Unicode.GetString($bytes, $alignment, $bytes.Length - $alignment)
+                foreach ($match in [regex]::Matches($unicode, $localPath)) { @{ Offset = $alignment + 2 * $match.Index; Length = 2 * $match.Length } }
+            }
+        )
+        if ($pathMatches.Count -gt 0) {
+            $verifiedTemplate = $file.Name -ceq 'SoulsTracker.Desktop.exe' -and (Test-ApphostTemplatePaths $bytes $pathMatches)
+            Assert-Distribution $verifiedTemplate 'Distribution contains a local source/build path.'
         }
+        if ($file.Name -cin @($products | ForEach-Object { "$_.dll" })) {
+            $stream = [IO.MemoryStream]::new($bytes, $false)
+            $pe = [Reflection.PortableExecutable.PEReader]::new($stream)
+            try {
+                foreach ($entry in $pe.ReadDebugDirectory()) {
+                    Assert-Distribution ($entry.Type.ToString() -notin @('CodeView', 'EmbeddedPortablePdb')) 'Product binary contains a debug-symbol record.'
+                }
+            } finally { $pe.Dispose(); $stream.Dispose() }
+        }
+    }
 }
 
-$lines = @(
-    '# Third-party notices',
-    '',
-    'This inventory is generated from the locked NuGet restore graph and installed npm package metadata for the release workspace. Review the referenced package licenses and notices before distributing a binary.',
-    '',
-    "Generated: $([DateTime]::UtcNow.ToString('yyyy-MM-dd')) UTC",
-    '',
-    '| Ecosystem | Package | Version | Declared license | Source |',
-    '| --- | --- | --- | --- | --- |'
-)
-
-foreach ($entry in $entries | Sort-Object Ecosystem, Name, Version) {
-    $license = $entry.License -replace '\|', '\\|'
-    $source = $entry.Source -replace '\|', '\\|'
-    $lines += "| $($entry.Ecosystem) | $($entry.Name) | $($entry.Version) | $license | $source |"
+$output = $reviewed + "`n`n" + $attribution
+if ($ValidateOnly) {
+    Assert-Distribution ((Read-RequiredText (Join-Path $payload 'THIRD_PARTY_NOTICES.md')) -ceq $output) 'Distributed notices do not match the reviewed texts and attribution.'
+    Assert-Distribution ((Get-FileHash -LiteralPath (Join-Path $payload 'LICENSE')).Hash -ceq (Get-FileHash -LiteralPath (Join-Path $root 'LICENSE')).Hash) 'Distributed product LICENSE has changed.'
+} else {
+    Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $payload 'LICENSE')
+    [IO.File]::WriteAllText((Join-Path $payload 'THIRD_PARTY_NOTICES.md'), $output, [Text.UTF8Encoding]::new($false))
 }
-
-New-Item -ItemType Directory -Force (Split-Path -Parent $OutputPath) | Out-Null
-Set-Content -LiteralPath $OutputPath -Value $lines -Encoding utf8
-Write-Output "Wrote $OutputPath with $($entries.Count) dependency entries."
+Write-Output 'Desktop distribution inventory, legal texts and content checks passed.'

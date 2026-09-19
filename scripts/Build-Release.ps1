@@ -120,8 +120,13 @@ Invoke-External dotnet @(
     "Release",
     "--no-restore",
     "--output",
-    $publishPath
+    $publishPath,
+    '-p:DebugType=None',
+    '-p:DebugSymbols=false',
+    '-p:CopyOutputSymbolsToPublishDirectory=false'
 )
+
+& (Join-Path $PSScriptRoot 'Export-ThirdPartyNotices.ps1') -PayloadPath $publishPath
 
 Promote-VerifiedDesktopArtifact -StagingPath $publishPath -ReleasePath $releasePath -ArtifactsRoot $artifactsRoot
 

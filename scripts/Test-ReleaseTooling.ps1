@@ -6,6 +6,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $version = & (Join-Path $root "eng/Get-Version.ps1")
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ("SoulsTracker-release-tooling-" + [guid]::NewGuid().ToString("N"))
 $null = New-Item -ItemType Directory -Path $fixtureRoot
+. (Join-Path $root 'scripts/Test-ReleaseContent.ps1') -DefineFixturesOnly
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -44,13 +45,24 @@ function Invoke-FakeCommand([string]$Tool, [object[]]$Arguments) {
         Assert-True (($Arguments[2..5] -join ' ') -eq '--configuration Release --no-restore --output') 'Publish configuration changed.'
         $output = $Arguments[6]
         Assert-True ($output -eq (Join-Path $packageCaseState.Fixture 'artifacts\staging\desktop')) 'Publish must use staging.'
+        foreach ($option in @('-p:DebugType=None', '-p:DebugSymbols=false', '-p:CopyOutputSymbolsToPublishDirectory=false')) {
+            Assert-True ($Arguments -ccontains $option) 'Publish must suppress end-user debug symbols without changing developer builds.'
+        }
+        New-DistributionFixture $packageCaseState.Fixture $output
         Set-Content (Join-Path $output 'partial.txt') 'synthetic staged payload'
         if ($packageCaseState.Failure -ne 'missing-executable') {
             Set-Content (Join-Path $output 'SoulsTracker.Desktop.exe') 'synthetic executable; never launched'
         }
+        switch ($packageCaseState.Failure) {
+            'content-notices' { Remove-Item (Join-Path $packageCaseState.Fixture 'docs/THIRD_PARTY_NOTICES.md') }
+            'content-drift' { (Get-Content -Raw (Join-Path $output 'SoulsTracker.Desktop.deps.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $output 'SoulsTracker.Desktop.deps.json') }
+            'content-symbol' { Set-Content (Join-Path $output 'synthetic.pdb') 'synthetic symbol' }
+            'content-upstream' { Add-Content (Join-Path $output 'fr/Example.resources.dll') 'C:\Users\Synthetic\private\example.pdb' }
+            'content-path' { Set-Content (Join-Path $output 'SoulsTracker.Desktop.exe') 'C:\Users\Synthetic\private\example.pdb' }
+        }
     }
     # Missing-executable changes only the payload; its fixture path also contains that name.
-    if ($packageCaseState.Failure -and $packageCaseState.Failure -ne 'missing-executable' -and $command.Contains($packageCaseState.Failure)) { $global:LASTEXITCODE = 17 }
+    if ($packageCaseState.Failure -and $packageCaseState.Failure -ne 'missing-executable' -and $packageCaseState.Failure -notlike 'content-*' -and $command.Contains($packageCaseState.Failure)) { $global:LASTEXITCODE = 17 }
 }
 function dotnet { Invoke-FakeCommand 'dotnet' $args }
 function npm { Invoke-FakeCommand 'npm' $args }
@@ -80,6 +92,11 @@ function Invoke-PackageCase([string]$Name, [string]$Failure = '', [string]$Inval
         $expected = if ($InvalidInput -eq 'version') { 'internal private package' }
         elseif ($InvalidInput -eq 'guide') { 'either startup order is supported' }
         elseif ($Failure -eq 'missing-executable') { 'SoulsTracker.Desktop.exe is missing' }
+        elseif ($Failure -eq 'content-notices') { 'Required distribution input is missing' }
+        elseif ($Failure -eq 'content-drift') { 'inventory drift' }
+        elseif ($Failure -eq 'content-symbol') { 'prohibited file' }
+        elseif ($Failure -eq 'content-upstream') { 'differs from restored upstream' }
+        elseif ($Failure -eq 'content-path') { 'local source/build path' }
         else { 'failed with exit code 17' }
         Assert-True ($null -ne $errorMessage -and $errorMessage.Contains($expected)) "$Name must fail for $expected; got $errorMessage"
         if ($Failure -eq 'missing-executable') {
@@ -95,6 +112,8 @@ function Invoke-PackageCase([string]$Name, [string]$Failure = '', [string]$Inval
         Assert-True ($null -eq $errorMessage) "$Name failed: $errorMessage"
         Assert-True ($packageCaseState.Publishes -eq 1) 'Exactly one publish is required.'
         Assert-True (Test-Path (Join-Path $release 'SoulsTracker.Desktop.exe')) 'Cold staging was not promoted.'
+        Assert-True ((Get-FileHash (Join-Path $release 'LICENSE')).Hash -ceq (Get-FileHash (Join-Path $root 'LICENSE')).Hash) 'Promoted product license changed.'
+        Assert-True ((Get-Content -Raw (Join-Path $release 'THIRD_PARTY_NOTICES.md')).Contains([IO.File]::ReadAllText((Join-Path $root 'THIRD_PARTY_NOTICES.md')))) 'Promoted notice is missing root attribution.'
         Assert-True (-not (Test-Path $staging)) 'Promotion must move staging.'
         if ($Previous) {
             $backups = @(Get-ChildItem (Split-Path $release) -Filter 'desktop.previous-*')
@@ -123,6 +142,9 @@ function Invoke-Git([string[]]$Arguments) {
 try {
     Invoke-PackageCase 'cold' -Previous $false
     Invoke-PackageCase 'replace'
+    foreach ($failure in @('content-notices', 'content-drift', 'content-symbol', 'content-upstream', 'content-path')) {
+        Invoke-PackageCase $failure -Failure $failure
+    }
     Invoke-PackageCase 'invalid-version' -InvalidInput 'version'
     Invoke-PackageCase 'invalid-guide' -InvalidInput 'guide'
     foreach ($failure in @('dotnet restore', 'npm ci', 'npm exec', 'npm run build', 'npm run check', 'npm test', 'dotnet format', 'dotnet build', 'dotnet test', 'dotnet publish', 'missing-executable')) {
@@ -219,6 +241,7 @@ try {
     Write-Output 'Release target fixture cases passed.'
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
+    Assert-True ($workflow.Contains('path: artifacts/desktop')) 'SBOM must scan the prepared Desktop payload.'
     foreach ($required in @('ref: ${{ github.sha }}', 'RELEASE_EVENT: ${{ github.event_name }}', 'RELEASE_REF: ${{ github.ref }}', 'RELEASE_COMMIT: ${{ github.sha }}', '-EventName $env:RELEASE_EVENT -EventRef $env:RELEASE_REF -ExpectedCommit $env:RELEASE_COMMIT', 'tag_name: ${{ steps.target.outputs.tag }}', 'RELEASE_TAG: ${{ steps.target.outputs.tag }}', 'releases/tags/$env:RELEASE_TAG', 'run: ./scripts/Build-Release.ps1')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }

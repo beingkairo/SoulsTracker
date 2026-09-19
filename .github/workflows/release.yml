@@ -70,7 +70,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: .
+          path: artifacts/desktop
           format: spdx-json
           output-file: artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
 
