@@ -197,15 +197,21 @@ public sealed class HostedConnectionTests
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
             dispatcher.BeginInvoke(async () =>
             {
-                try { await test(); completion.SetResult(); }
+                try
+                {
+                    try { await test(); }
+                    // The body has drained its owned work. Shut down on this
+                    // thread rather than queueing behind pending UI work.
+                    finally { dispatcher.InvokeShutdown(); }
+                    completion.SetResult();
+                }
                 catch (Exception error) { completion.SetException(error); }
-                finally { dispatcher.BeginInvokeShutdown(DispatcherPriority.Background); }
             });
             Dispatcher.Run();
         })
         { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
-        await completion.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        Assert.True(thread.Join(TimeSpan.FromSeconds(5)));
+        try { await completion.Task.WaitAsync(TimeSpan.FromSeconds(30)); }
+        finally { Assert.True(thread.Join(TimeSpan.FromSeconds(5))); }
     }
 }
