@@ -19,9 +19,12 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
         clock.Advance(TimeSpan.FromSeconds(9));
         RuntimeGameReadResult cached = (await reader.ReadAsync(default))!;
         Assert.Equal(RuntimeGameReaderStatus.Cached, cached.Status);
+        Assert.True(cached.IsCurrentSaveCache);
         Assert.Equal(first.Observation, cached.Observation);
         clock.Advance(TimeSpan.FromSeconds(1));
         Assert.Equal(RuntimeGameReaderStatus.Synced, (await reader.ReadAsync(default))!.Status);
+        File.Delete(path);
+        Assert.Null(await reader.ReadAsync(default));
     }
 
     [Fact]

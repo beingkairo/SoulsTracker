@@ -2,7 +2,7 @@ import type { HostedAppearance, HostedDeath } from "./hosted-contracts.js";
 
 // The retained compact renderer layout, with wire-validated appearance only.
 export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string): void {
-  if (!death || !appearance.enabled) { target.replaceChildren(); return; }
+  if (!appearance.enabled) { target.replaceChildren(); return; }
   const panel = document.createElement("section");
   panel.className = "souls-tracker-overlay-panel";
   panel.dataset.testid = "total-deaths-overlay";
@@ -21,7 +21,7 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
     effects.push(`${x}px ${y}px 0 ${appearance.outlineColor}`);
   if (appearance.shadowEnabled) effects.push(`${appearance.shadowOffsetX}px ${appearance.shadowOffsetY}px ${appearance.shadowBlur}px ${appearance.shadowColor}`);
   panel.style.textShadow = effects.join(", ");
-  const value = death.value ?? "Unavailable";
+  const value = death?.value ?? "0";
   const hasHeading = appearance.title.trim().length > 0 || appearance.titleIconMode === "skullOnly";
   if (hasHeading) {
     const title = document.createElement("h1"); title.className = "overlay-heading";

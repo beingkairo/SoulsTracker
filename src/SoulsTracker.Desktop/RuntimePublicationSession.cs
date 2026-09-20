@@ -56,7 +56,7 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         if (publication?.Status == RuntimeGameReaderStatus.Cached)
         {
             if (accepted is not null && hasFreshPresentation)
-                applyDesktop(pending is null ? RuntimeGameReadResult.Cached(accepted) : RuntimeGameReadResult.PendingLowerValue(accepted));
+                applyDesktop(pending is null ? RuntimeGameReadResult.Cached(accepted, publication.IsCurrentSaveCache) : RuntimeGameReadResult.PendingLowerValue(accepted));
             return;
         }
         if (publication is { Status: RuntimeGameReaderStatus.Synced, Observation: { } observation })

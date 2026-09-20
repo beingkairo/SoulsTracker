@@ -439,7 +439,7 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" /><Style.Triggers>
                                                 <DataTrigger Binding="{Binding RuntimeReaderStatusText}" Value="Synced"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}" /></DataTrigger>
-                                                <DataTrigger Binding="{Binding RuntimeReaderStatusText}" Value="Game detected — waiting for active character"><Setter Property="Foreground" Value="{StaticResource WaitingBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding RuntimeReaderStatusText}" Value="Waiting for character selection"><Setter Property="Foreground" Value="{StaticResource WaitingBrush}" /></DataTrigger>
                                             </Style.Triggers></Style>
                                         </TextBlock.Style>
                                     </TextBlock>

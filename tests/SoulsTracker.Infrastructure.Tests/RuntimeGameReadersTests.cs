@@ -470,6 +470,81 @@ public sealed class RuntimeGameReadersTests
         Assert.True(recheckAttachment.Disposed);
     }
 
+    [Theory]
+    [InlineData("ds1", false)]
+    [InlineData("ds1", true)]
+    [InlineData("ds2", false)]
+    [InlineData("ds2", true)]
+    [InlineData("ds3", false)]
+    [InlineData("ds3", true)]
+    [InlineData("sekiro", false)]
+    [InlineData("sekiro", true)]
+    public async Task ApprovedPointerEvidenceDistinguishesNullPointerFromReadableZero(string game, bool pointerPresent)
+    {
+        GameId id = GameId.Parse(game);
+        ProcessModuleFileIdentity identity = id == GameId.Ds1 ? ExactIdentity : new(game + ".exe", "synthetic", "synthetic", "synthetic");
+        var plans = new List<Plan> { new(PointerBytes(pointerPresent ? 0x2000UL : 0), ReadOnlyMemoryReadResult.Succeeded(8)) };
+        if (pointerPresent)
+        {
+            if (id == GameId.Ds2)
+            {
+                plans.Add(new(PointerBytes(0x3000), ReadOnlyMemoryReadResult.Succeeded(8)));
+                plans.Add(new(PointerBytes(0x4000), ReadOnlyMemoryReadResult.Succeeded(8)));
+            }
+            plans.Add(new(ValueBytes(0), ReadOnlyMemoryReadResult.Succeeded(4)));
+        }
+        var attachment = new Attachment(identity, ReadOnlyMainModuleBaseResult.Available(0x1000), plans.ToArray());
+        var factory = new AttachmentFactory(attachment);
+        IRuntimeGameDeathReader reader = game switch
+        {
+            "ds1" => new DarkSoulsRemasteredActiveCharacterDeathReader(new Enumerator(new Candidate()), factory),
+            "ds2" => new DarkSoulsIIScholarActiveCharacterDeathReader(new Ds2Enumerator(new Ds2Candidate()), factory, new ExactDarkSoulsIIScholarIdentityValidator(identity)),
+            "ds3" => new DarkSoulsIIIActiveCharacterDeathReader(new Ds3Enumerator(new Ds3Candidate()), factory, new ExactDarkSoulsIIIIdentityValidator(identity)),
+            _ => new SekiroActiveCharacterDeathReader(new SekiroEnumerator(new SekiroCandidate()), factory, new ExactSekiroIdentityValidator(identity)),
+        };
+        RuntimeGameReadResult result = (await reader.ReadAsync(default))!;
+        Assert.Equal(pointerPresent ? RuntimeGameReaderStatus.Synced : RuntimeGameReaderStatus.WaitingForActiveCharacter, result.Status);
+        if (pointerPresent)
+        {
+            Assert.Equal(0, result.Observation!.TotalDeaths.Value);
+            Assert.Equal(id.Value, result.Observation.SourceIdentity);
+        }
+        else Assert.Null(result.Observation);
+        Assert.Equal(plans.Count, attachment.BufferLengths.Count);
+        Assert.True(attachment.Disposed);
+    }
+
+    [Fact]
+    public async Task SekiroActualReaderTransitionsWaitingLoadedWaitingClosedWithoutStaleObservation()
+    {
+        var identity = new ProcessModuleFileIdentity("Sekiro.exe", "synthetic", "synthetic", "synthetic");
+        var waiting = new Attachment(identity, ReadOnlyMainModuleBaseResult.Available(0x1000), new Plan(PointerBytes(0), ReadOnlyMemoryReadResult.Succeeded(8)));
+        var loaded = new Attachment(identity, PointerBytes(0x2000), ValueBytes(0));
+        var leaving = new Attachment(identity, ReadOnlyMainModuleBaseResult.Available(0x1000), new Plan(PointerBytes(0), ReadOnlyMemoryReadResult.Succeeded(8)));
+        var reader = new SekiroActiveCharacterDeathReader(new TransitionSekiroEnumerator(), new SequenceAttachmentFactory(waiting, loaded, leaving), new ExactSekiroIdentityValidator(identity));
+        var coordinator = new RuntimeGameReaderCoordinator([reader]);
+        Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, (await coordinator.PollAsync(GameId.Sekiro, default))!.Status);
+        Assert.Equal(0, (await coordinator.PollAsync(GameId.Sekiro, default))!.Observation!.TotalDeaths.Value);
+        Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, (await coordinator.PollAsync(GameId.Sekiro, default))!.Status);
+        Assert.Null(coordinator.CurrentObservation);
+        Assert.Null(await coordinator.PollAsync(GameId.Sekiro, default));
+        Assert.Null(coordinator.CurrentObservation);
+        Assert.Equal(RuntimeGameReaderStatus.Unavailable, coordinator.CurrentStatus);
+    }
+
+    private sealed class TransitionSekiroEnumerator : ISekiroProcessEnumerator
+    {
+        private int polls;
+        public ValueTask<IReadOnlyList<ISekiroProcessCandidate>> EnumerateExactCandidatesAsync(CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IReadOnlyList<ISekiroProcessCandidate>>(++polls <= 3 ? [new SekiroCandidate()] : []);
+    }
+    private sealed class SequenceAttachmentFactory(params Attachment[] attachments) : IReadOnlyProcessAttachmentFactory
+    {
+        private readonly Queue<Attachment> remaining = new(attachments);
+        public ValueTask<ReadOnlyProcessAttachmentResult> AttachAsync(int processId, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Attached(remaining.Dequeue()));
+    }
+
     private static byte[] PointerBytes(ulong value) { byte[] bytes = new byte[8]; BinaryPrimitives.WriteUInt64LittleEndian(bytes, value); return bytes; }
     private static byte[] ValueBytes(int value) { byte[] bytes = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(bytes, value); return bytes; }
 

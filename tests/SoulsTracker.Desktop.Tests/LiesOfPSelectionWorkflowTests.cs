@@ -29,7 +29,7 @@ public sealed class LiesOfPSelectionWorkflowTests : IDisposable
         Assert.Equal(path, Assert.Single(outcome.Candidates!.Value).LocalPath);
         Assert.Equal(path, outcome.SelectedChoice!.LocalPath);
         Assert.Equal(LocalSaveSourceState.CustomSelection, outcome.SourceState);
-        Assert.Equal($"Tracking custom save: {Path.GetFileName(path)}", outcome.Status);
+        Assert.Equal(Path.GetFileName(path), outcome.Status);
         Assert.True(outcome.ExitChangeMode);
         Assert.Null(outcome.Error);
     }

@@ -31,11 +31,11 @@ for (const value of ["7", "42", "0"]) {
   });
 }
 
-test("real Worker hydrates transparently then pushes exact totals and reloads without Desktop", async ({ page, request }) => {
+test("real Worker hydrates missing death as zero then pushes exact totals and reloads without Desktop", async ({ page, request }) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
   await page.goto(address());
-  await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0");
   await publish(request, { death: { value: "9223372036854775807", availability: "available" } });
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 9223372036854775807");
   await page.reload();
@@ -53,9 +53,9 @@ test("reconnects to durable state while retaining the DOM through connection los
   await page.context().setOffline(false);
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0", { timeout: 10000 });
   await publish(request, { death: { value: null, availability: "unavailable" } });
-  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: Unavailable");
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0");
   await request.post(`${origin}/__test/disconnect`);
-  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: Unavailable");
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0");
   await publish(request, { appearance: { ...style, enabled: false } });
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
   await request.post(`${origin}/__test/disconnect`);
@@ -124,7 +124,7 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
         await expect(panel).toHaveCSS("background-color", "rgb(21, 23, 27)");
         const heading = variant.title.trim() !== "" || variant.titleIconMode === "skullOnly";
         const skull = heading && variant.titleIconMode !== "off";
-        const text = value ?? "Unavailable";
+        const text = value ?? "0";
         await expect(panel).toHaveText(variant.title.trim() && variant.titleIconMode !== "skullOnly" ? `Custom: ${text}` : text);
         await expect(panel.locator("h1")).toHaveCount(heading ? 1 : 0);
         await expect(panel.locator("p")).toHaveCount(heading ? 0 : 1);

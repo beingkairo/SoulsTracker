@@ -33,7 +33,8 @@ public sealed record RuntimeGameReadResult
         RuntimeGameObservation? observation,
         BlackMythWukongSaveMetadata? blackMythWukongSaveMetadata = null,
         string? blackMythWukongSavePath = null,
-        bool hasNoRecordedDeaths = false)
+        bool hasNoRecordedDeaths = false,
+        bool isCurrentSaveCache = false)
     {
         GameId = gameId ?? throw new ArgumentNullException(nameof(gameId));
         Status = status;
@@ -41,6 +42,7 @@ public sealed record RuntimeGameReadResult
         BlackMythWukongSaveMetadata = blackMythWukongSaveMetadata;
         BlackMythWukongSavePath = blackMythWukongSavePath;
         HasNoRecordedDeaths = hasNoRecordedDeaths;
+        IsCurrentSaveCache = isCurrentSaveCache;
     }
 
     public GameId GameId { get; }
@@ -61,6 +63,9 @@ public sealed record RuntimeGameReadResult
     /// unavailable, unsupported, or unreadable save data.
     /// </summary>
     public bool HasNoRecordedDeaths { get; }
+
+    /// <summary>Presentation-only provenance for an unchanged, successfully fingerprinted save. Does not make a cached observation fresh.</summary>
+    public bool IsCurrentSaveCache { get; }
 
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
@@ -83,9 +88,9 @@ public sealed record RuntimeGameReadResult
             blackMythWukongSaveMetadata,
             blackMythWukongSavePath);
 
-    public static RuntimeGameReadResult Cached(RuntimeGameReadResult result) =>
+    public static RuntimeGameReadResult Cached(RuntimeGameReadResult result, bool isCurrentSaveCache = false) =>
         new(result.GameId, RuntimeGameReaderStatus.Cached, result.Observation,
-            result.BlackMythWukongSaveMetadata, result.BlackMythWukongSavePath, result.HasNoRecordedDeaths);
+            result.BlackMythWukongSaveMetadata, result.BlackMythWukongSavePath, result.HasNoRecordedDeaths, isCurrentSaveCache);
 
     public static RuntimeGameReadResult PendingLowerValue(RuntimeGameReadResult accepted) =>
         new(accepted.GameId, RuntimeGameReaderStatus.PendingLowerValue, accepted.Observation,

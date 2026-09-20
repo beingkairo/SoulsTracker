@@ -56,7 +56,7 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
 
         if (lastFingerprint == fingerprint && lastResult is not null && timeProvider.GetUtcNow() - lastValidatedAtUtc < TimeSpan.FromSeconds(10))
         {
-            return RuntimeGameReadResult.Cached(lastResult);
+            return RuntimeGameReadResult.Cached(lastResult, isCurrentSaveCache: true);
         }
 
         for (int attempt = 0; attempt < RetryCount; attempt++)

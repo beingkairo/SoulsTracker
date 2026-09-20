@@ -171,7 +171,7 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
         {
             PersistentTrackerState state = await SaveLiesOfPAsync(new LiesOfPSaveConfiguration(choice.LocalPath), cancellationToken).ConfigureAwait(false);
             return IsCurrentLiesSelection(version)
-                ? new(state, null, choice, LocalSaveSourceState.PersistedDiscovered, $"Tracking {choice.Label}", null, true)
+                ? new(state, null, choice, LocalSaveSourceState.PersistedDiscovered, choice.Label, null, true)
                 : null;
         }
         catch { return new(null, null, null, LocalSaveSourceState.UnavailableSelection, string.Empty, "The Lies of P save selection could not be saved.", false); }
@@ -187,11 +187,11 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
             ImmutableArray<DiscoveredLocalSave> candidates = [.. result.Candidates];
             DiscoveredLocalSave? selected = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, configured ?? string.Empty));
             if (configured is not null && !result.ConfiguredPathExists) return new(null, candidates, null, LocalSaveSourceState.UnavailableSelection, "Selected save is unavailable.", null, false);
-            if (selected is not null) return new(null, candidates, selected, LocalSaveSourceState.PersistedDiscovered, $"Tracking {selected.Label}", null, false);
+            if (selected is not null) return new(null, candidates, selected, LocalSaveSourceState.PersistedDiscovered, selected.Label, null, false);
             if (configured is null && candidates.Length == 1)
             {
                 PersistentTrackerState state = await SaveLiesOfPAsync(new LiesOfPSaveConfiguration(candidates[0].LocalPath), cancellationToken).ConfigureAwait(false);
-                return IsCurrentLiesSelection(version) ? new(state, candidates, candidates[0], LocalSaveSourceState.AutomaticallySelected, $"Tracking {candidates[0].Label}", null, false) : null;
+                return IsCurrentLiesSelection(version) ? new(state, candidates, candidates[0], LocalSaveSourceState.AutomaticallySelected, candidates[0].Label, null, false) : null;
             }
             if (configured is null && candidates.Length > 1) return new(null, candidates, null, LocalSaveSourceState.MultipleCandidates, "Choose the character you’re streaming.", null, false);
             if (configured is not null && IsLiesOfPConfiguredSaveReadable(configured)) return new(null, candidates, null, LocalSaveSourceState.CustomSelection, CustomSaveStatus(configured), null, false);
@@ -202,5 +202,5 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     }
 
     private static string CustomSaveStatus(string localPath) =>
-        string.IsNullOrEmpty(Path.GetFileName(localPath)) ? "Tracking custom save." : $"Tracking custom save: {Path.GetFileName(localPath)}";
+        Path.GetFileName(localPath);
 }
