@@ -142,7 +142,8 @@ public sealed class LowerValueConsumerTests
             Deliver(lower);
             Deliver(RuntimeGameReadResult.Cached(lower));
             Assert.Equal("100", desktop.TotalDeathsText);
-            Assert.Equal("Confirming lower death count", desktop.RuntimeReaderStatusText);
+            Assert.Equal(game is "elden_ring" or "black_myth_wukong" or "lies_of_p"
+                ? "Confirming lower death count" : "Synced", desktop.RuntimeReaderStatusText);
             Assert.Same(original, Snapshot(overlay));
             Assert.Equal("Total Deaths: 100", await File.ReadAllTextAsync(path));
 

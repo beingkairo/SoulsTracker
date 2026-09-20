@@ -12,7 +12,7 @@ public sealed class ReaderStatusPresentationTests
     [InlineData("ds3")]
     [InlineData("bloodborne")]
     [InlineData("sekiro")]
-    public async Task EvidencedWaitingUsesCommonLabelAndLoadedZeroRemainsSynced(string game)
+    public async Task InternalCharacterStateDoesNotSurfaceWaitingAndReadableZeroRemainsNumeric(string game)
     {
         GameId id = GameId.Parse(game);
         var state = new PersistentTrackerState(PersistentTrackerState.CurrentSchemaVersion, id, OverlayConfiguration.Default);
@@ -20,12 +20,16 @@ public sealed class ReaderStatusPresentationTests
         var desktop = new DesktopTrackerViewModel(coordinator);
         await desktop.InitializeAsync();
         desktop.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForActiveCharacter(id));
-        Assert.Equal("Waiting for character selection", desktop.RuntimeReaderStatusText);
-        desktop.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(id, 0, DateTimeOffset.UtcNow, id.Value)));
+        // Bloodborne's internal waiting result means its total was unreadable/invalid.
+        Assert.Equal(id == GameId.Bloodborne ? "Game unavailable" : "Synced", desktop.RuntimeReaderStatusText);
+        Assert.DoesNotContain("waiting", desktop.TotalDeathsText, StringComparison.OrdinalIgnoreCase);
+        var zero = new RuntimeGameObservation(id, 0, DateTimeOffset.UtcNow, id.Value);
+        desktop.ApplyRuntimeReaderResult(id == GameId.Bloodborne
+            ? RuntimeGameReadResult.NoDeathsRecorded(zero) : RuntimeGameReadResult.Synced(zero));
         Assert.Equal("Synced", desktop.RuntimeReaderStatusText);
         Assert.Equal("0", desktop.TotalDeathsText);
         desktop.ApplyRuntimeReaderResult(null);
-        Assert.NotEqual("Waiting for character selection", desktop.RuntimeReaderStatusText);
+        Assert.Equal("Game unavailable", desktop.RuntimeReaderStatusText);
     }
 
     [Fact]

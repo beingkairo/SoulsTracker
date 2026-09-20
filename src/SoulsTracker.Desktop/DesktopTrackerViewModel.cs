@@ -337,7 +337,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
             if (runtimeReaderStatus == RuntimeGameReaderStatus.PendingLowerValue)
             {
-                return "Confirming lower death count";
+                return IsProcessReaderGame(selectedGameId) ? GameSyncedMessage : "Confirming lower death count";
             }
 
             if (runtimeReaderHasNoRecordedDeaths && selectedGameId != GameId.EldenRing)
@@ -366,7 +366,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
             return runtimeReaderStatus switch
             {
-                RuntimeGameReaderStatus.WaitingForActiveCharacter => GameWaitingForActiveCharacterMessage,
+                // The pointer readers can be operational without an active character.
+                // Bloodborne uses this internal status for an unreadable/invalid value.
+                RuntimeGameReaderStatus.WaitingForActiveCharacter => IsProcessReaderGame(selectedGameId)
+                    ? selectedGameId == GameId.Bloodborne ? GameUnavailableMessage : GameSyncedMessage
+                    : GameWaitingForActiveCharacterMessage,
                 RuntimeGameReaderStatus.WaitingForSaveFile => WaitingForSaveFileMessage(selectedGameId),
                 RuntimeGameReaderStatus.Synced => GameSyncedMessage,
                 RuntimeGameReaderStatus.Cached => runtimeReaderIsCurrentSaveCache ? GameSyncedMessage : "Using last confirmed save data",
@@ -511,7 +515,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         if (result is not null && result.GameId == state.SelectedGameId && !blackMythWukongSaveIsUnconfigured && !liesOfPSaveIsUnconfigured)
         {
             runtimeReaderStatus = result.Status;
-            runtimeReaderHasNoRecordedDeaths = result.HasNoRecordedDeaths;
+            runtimeReaderHasNoRecordedDeaths = result.HasNoRecordedDeaths && !IsProcessReaderGame(state.SelectedGameId);
             if (result.Status is not RuntimeGameReaderStatus.Cached)
             {
                 runtimeObservation = result.Observation;
@@ -1308,7 +1312,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             ? combined.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : IsManualGame(selectedId)
                 ? ManualDeaths.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForActiveCharacter
+                : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForActiveCharacter && !IsProcessReaderGame(selectedId)
                     ? GameTotalDeathsWaitingForActiveCharacterMessage
                     : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForSaveFile
                         ? WaitingForSaveFileMessage(selectedId) + " to begin tracking."
@@ -1379,6 +1383,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             : GameWaitingForSaveFileMessage;
 
     private static bool IsManualGame(GameId gameId) => gameId == GameId.DemonsSouls;
+
+    private static bool IsProcessReaderGame(GameId gameId) =>
+        gameId == GameId.Ds1 || gameId == GameId.Ds2 || gameId == GameId.Ds3 ||
+        gameId == GameId.Sekiro || gameId == GameId.Bloodborne;
 
 
     private async Task SaveExportsAsync(TextExportConfiguration configuration, CancellationToken cancellationToken)
