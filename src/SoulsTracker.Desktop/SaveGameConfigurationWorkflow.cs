@@ -98,7 +98,8 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     private static bool PathsEqual(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
-    public static Task<IReadOnlyList<EldenRingProfileSlotChoice>> ReadEldenRingProfileSlotsAsync(
+    // Null means unavailable; an empty list can be a valid save with no characters.
+    public static Task<IReadOnlyList<EldenRingProfileSlotChoice>?> ReadEldenRingProfileSlotsAsync(
         IEldenRingSaveProfileReader reader,
         string localPath,
         CancellationToken cancellationToken) =>
@@ -108,14 +109,15 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
             {
                 IReadOnlyList<EldenRingCharacterSlotMetadata> metadata = await reader.ReadAsync(
                     new EldenRingSaveConfiguration(localPath, EldenRingSaveConfiguration.NoSlotIndex), cancellationToken).ConfigureAwait(false);
-                return (IReadOnlyList<EldenRingProfileSlotChoice>)metadata
+                if (ReferenceEquals(metadata, EldenRingCharacterSlotMetadata.UnavailableSlots)) return null;
+                return (IReadOnlyList<EldenRingProfileSlotChoice>?)metadata
                     .Where(static item => !item.IsEmpty)
                     .Select(EldenRingProfileSlotChoice.FromMetadata)
                     .ToArray();
             }
             catch
             {
-                return Array.Empty<EldenRingProfileSlotChoice>();
+                return null;
             }
         }, cancellationToken);
 

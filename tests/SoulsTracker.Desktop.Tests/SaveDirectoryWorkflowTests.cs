@@ -404,10 +404,106 @@ public sealed class SaveDirectoryWorkflowTests : IDisposable
         Assert.Equal(first, SelectedChoice(vm, game)!.LocalPath);
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task LegacyEldenTransientProfilesPreserveCommittedSourceWithoutWrites(bool rescan, bool throws, bool discovered)
+    {
+        string path = CreateSave("er", Path.Combine(Root, "legacy"));
+        byte[] before = File.ReadAllBytes(path);
+        var repository = new MemoryRepository(GameId.EldenRing) { State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, 0)) };
+        var configuration = repository.State.EldenRingSave;
+        var source = EffectiveDeathTotalResult.SourceIdentityFor(repository.State);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var empty = new EmptyDiscovery();
+        ILocalSaveDiscovery discovery = discovered ? new FixedDiscovery(new(path, "Automatic source")) : empty;
+        var reader = new UnavailableProfileReader(throws) { ReadAvailableProfiles = rescan };
+        var vm = new DesktopTrackerViewModel(coordinator, reader, empty, discovery, liesOfPSaveDiscovery: empty);
+        await vm.InitializeAsync();
+        if (rescan)
+        {
+            Assert.Equal(0, vm.SelectedEldenRingProfileSlot!.Index);
+            reader.ReadAvailableProfiles = false;
+            await vm.RescanEldenRingSavesAsync();
+        }
+        Assert.Equal(configuration, repository.State.EldenRingSave);
+        Assert.Equal(source, EffectiveDeathTotalResult.SourceIdentityFor(repository.State));
+        Assert.Null(repository.State.EldenRingSave.SelectedDirectory);
+        Assert.Equal(Path.GetDirectoryName(path), vm.EldenRingDirectoryPath);
+        Assert.Empty(repository.Saves);
+        Assert.Empty(vm.EldenRingProfileSlots);
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
+    [Theory]
+    [InlineData(false, 0, false)]
+    [InlineData(false, 1, false)]
+    [InlineData(false, -1, false)]
+    [InlineData(false, 0, true)]
+    [InlineData(true, 0, false)]
+    [InlineData(true, 1, false)]
+    [InlineData(true, -1, false)]
+    [InlineData(true, 0, true)]
+    public async Task LegacyEldenValidProfilesRetainSelectionAndStaleCleanup(bool rescan, int slot, bool noCharacters)
+    {
+        string path = CreateSave("er", Path.Combine(Root, "legacy"));
+        if (noCharacters)
+        {
+            byte[] contents = File.ReadAllBytes(path);
+            contents[0x1000 + 0x1964] = 0;
+            File.WriteAllBytes(path, contents);
+        }
+        byte[] before = File.ReadAllBytes(path);
+        var repository = new MemoryRepository(GameId.EldenRing) { State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, slot)) };
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var empty = new EmptyDiscovery();
+        var reader = new UnavailableProfileReader(false) { ReadAvailableProfiles = !rescan };
+        var vm = new DesktopTrackerViewModel(coordinator, reader, empty, empty, liesOfPSaveDiscovery: empty);
+        await vm.InitializeAsync();
+        if (rescan)
+        {
+            Assert.Equal(slot, repository.State.EldenRingSave.SlotIndex);
+            Assert.Empty(repository.Saves);
+            reader.ReadAvailableProfiles = true;
+            await vm.RescanEldenRingSavesAsync();
+        }
+        bool stale = slot != EldenRingSaveConfiguration.NoSlotIndex && (slot != 0 || noCharacters);
+        Assert.Equal(stale ? EldenRingSaveConfiguration.NoSlotIndex : slot, repository.State.EldenRingSave.SlotIndex);
+        Assert.Equal(stale ? 1 : 0, repository.Saves.Count);
+        Assert.Equal(path, repository.State.EldenRingSave.LocalPath);
+        Assert.Null(repository.State.EldenRingSave.SelectedDirectory);
+        if (noCharacters) Assert.Empty(vm.EldenRingProfileSlots);
+        else
+        {
+            var choice = Assert.Single(vm.EldenRingProfileSlots);
+            Assert.Equal(0, choice.Index);
+            if (slot == 0) Assert.Equal(choice, vm.SelectedEldenRingProfileSlot);
+            else
+            {
+                Assert.Null(vm.SelectedEldenRingProfileSlot);
+                await vm.SetEldenRingProfileSlotAsync(choice);
+                Assert.Equal(0, repository.State.EldenRingSave.SlotIndex);
+                Assert.Equal(choice, vm.SelectedEldenRingProfileSlot);
+                Assert.Equal(stale ? 2 : 1, repository.Saves.Count);
+            }
+        }
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
     private sealed class UnavailableProfileReader(bool throws) : IEldenRingSaveProfileReader
     {
+        internal bool ReadAvailableProfiles { get; set; }
         public ValueTask<IReadOnlyList<EldenRingCharacterSlotMetadata>> ReadAsync(EldenRingSaveConfiguration configuration, CancellationToken cancellationToken) =>
-            throws ? throw new IOException("Synthetic profile failure") : ValueTask.FromResult(EldenRingCharacterSlotMetadata.UnavailableSlots);
+            ReadAvailableProfiles ? new EldenRingSaveProfileReader().ReadAsync(configuration, cancellationToken)
+                : throws ? throw new IOException("Synthetic profile failure") : ValueTask.FromResult(EldenRingCharacterSlotMetadata.UnavailableSlots);
     }
 
     private sealed class DelayedProfileReader(string delayedPath) : IEldenRingSaveProfileReader

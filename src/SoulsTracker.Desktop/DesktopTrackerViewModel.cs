@@ -1621,11 +1621,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     private async Task RefreshEldenRingProfileSlotsAsync(CancellationToken cancellationToken, bool clearStaleSelection = false)
     {
         string? localPath = state?.EldenRingSave.LocalPath;
-        IReadOnlyList<EldenRingProfileSlotChoice> choices = localPath is null
+        IReadOnlyList<EldenRingProfileSlotChoice>? choices = localPath is null
             ? []
             : await SaveGameConfigurationWorkflow.ReadEldenRingProfileSlotsAsync(eldenRingSaveProfileReader, localPath, cancellationToken);
-        ApplyEldenRingProfileChoices(choices);
+        ApplyEldenRingProfileChoices(choices ?? []);
         if (clearStaleSelection
+            && choices is not null
             && localPath is not null
             && state!.EldenRingSave.SlotIndex != EldenRingSaveConfiguration.NoSlotIndex
             && SelectedEldenRingProfileSlot is null)
