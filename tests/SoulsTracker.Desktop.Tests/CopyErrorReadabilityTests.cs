@@ -31,11 +31,12 @@ public sealed class CopyErrorReadabilityTests
     public Task PersistentCopyErrorLeavesWholeTotalReachable(string game, double width, double height) => HostedConnectionTests.OnDispatcher(async () =>
     {
         using var fixture = new SaveDirectoryWorkflowTests();
-        CreateSave(game, fixture.Root);
+        string directory = Path.Combine(fixture.Root, "synthetic-long-directory-name-for-streaming-account");
+        CreateSave(game, directory);
         var repository = new MemoryRepository(Game(game));
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var vm = CreateViewModel(coordinator);
-        await vm.InitializeAsync(); await Choose(vm, game, fixture.Root);
+        await vm.InitializeAsync(); await Choose(vm, game, directory);
         vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new(Game(game), 12345,
             DateTimeOffset.UtcNow, EffectiveDeathTotalResult.SourceIdentityFor(repository.State))));
         bool fail = true;
@@ -61,11 +62,14 @@ public sealed class CopyErrorReadabilityTests
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Same(focus, Keyboard.FocusedElement);
             Assert.False(overlay.IsHitTestVisible);
-            Assert.Same(window.Content, overlay.Parent);
-            Assert.Equal(VerticalAlignment.Bottom, overlay.VerticalAlignment);
+            Assert.Same(copy.CommandParameter, overlay.Parent);
+            Assert.InRange(Bounds(overlay, window).Top - Bounds(copy, window).Bottom, 0, 28);
+            Assert.InRange(Math.Abs(Bounds(overlay, window).Right - Bounds(copy, window).Right), 0, 16);
             await Task.Delay(TimeSpan.FromSeconds(5.2)); await Idle();
             Assert.Equal("The directory path could not be copied. Try again.", feedback.Text);
             Assert.Equal(Visibility.Visible, overlay.Visibility);
+            overlay.BringIntoView(); await Idle();
+            RenderAnchor(window, copy, overlay, $"{game}-{width}x{height}-error-anchor");
             scroll.ScrollToTop(); await Idle();
             Assert.Equal(0, scroll.VerticalOffset);
             scroll.ScrollToEnd(); await Idle();
@@ -79,7 +83,7 @@ public sealed class CopyErrorReadabilityTests
             }
             Assert.True(clearPositions > 0, $"No unobscured total position for {game} at {width}x{height}; total {Bounds(total, window)}; overlay {Bounds(overlay, window)}; extent {scroll.ExtentHeight}.");
             Assert.Equal("12345", total.Text);
-            Assert.Equal("Copy failed", ((TextBlock)window.FindName("CopyFeedbackKind")).Text);
+            Assert.False(((Border)window.FindName("HostedCopyFeedbackOverlay")).IsVisible);
             Assert.Same(focus, Keyboard.FocusedElement);
             copy.BringIntoView(); await Idle();
             Assert.True(copy.Focus()); await Idle();
@@ -90,13 +94,21 @@ public sealed class CopyErrorReadabilityTests
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Equal(ordinaryExtent, scroll.ExtentHeight);
             Assert.Equal("Directory path copied", feedback.Text);
+            overlay.BringIntoView(); await Idle();
+            RenderAnchor(window, copy, overlay, $"{game}-{width}x{height}-success-anchor");
             var point = total.TranslatePoint(new Point(), window);
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Equal(ordinaryExtent, scroll.ExtentHeight);
             Assert.Equal(point, total.TranslatePoint(new Point(), window));
+            double originalWidth = window.Width;
+            window.Width = originalWidth == 560 ? 1060 : 560; await Idle();
+            Assert.InRange(Bounds(overlay, window).Top - Bounds(copy, window).Bottom, 0, 28);
+            Assert.InRange(Math.Abs(Bounds(overlay, window).Right - Bounds(copy, window).Right), 0, 16);
+            Assert.False(Bounds(overlay, window).IntersectsWith(Bounds(total, window)));
+            window.Width = originalWidth; await Idle();
             fail = true;
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
-            Assert.True(scroll.ExtentHeight > ordinaryExtent);
+            Assert.Equal(ordinaryExtent, scroll.ExtentHeight);
             window.DataContext = null; window.DataContext = vm; await Idle();
             Assert.Equal(ordinaryExtent, scroll.ExtentHeight);
             Assert.Empty(feedback.Text);
@@ -112,6 +124,39 @@ public sealed class CopyErrorReadabilityTests
         element.TransformToAncestor(ancestor).TransformBounds(new Rect(element.RenderSize));
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
+
+    private static void RenderAnchor(MainWindow window, Button copy, Border feedback, string name)
+    {
+        string? directory = Environment.GetEnvironmentVariable("SOULSTRACKER_COPY_ERROR_EVIDENCE");
+        if (string.IsNullOrWhiteSpace(directory)) return;
+        Directory.CreateDirectory(directory);
+        var content = (FrameworkElement)window.Content;
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(content);
+        // Keep local fixture paths outside the crop. Geometry records relate
+        // the unmodified feedback render to the separate Copy control crop.
+        Rect anchor = Bounds(copy, content);
+        Rect message = Bounds(feedback, content);
+        File.WriteAllText(Path.Combine(directory, name + ".json"), System.Text.Json.JsonSerializer.Serialize(new
+        {
+            copy = anchor.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            feedback = message.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            width = window.Width, height = window.Height,
+        }));
+        SaveCrop(anchor, "-copy");
+        SaveCrop(message, "-feedback");
+        void SaveCrop(Rect bounds, string suffix)
+        {
+            bounds.Intersect(new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
+            Assert.False(bounds.IsEmpty);
+            int x = (int)Math.Ceiling(bounds.Left), y = (int)Math.Ceiling(bounds.Top);
+            int w = (int)Math.Floor(bounds.Right) - x, h = (int)Math.Floor(bounds.Bottom) - y;
+            Assert.True(w > 0 && h > 0);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(new CroppedBitmap(bitmap, new Int32Rect(x, y, w, h))));
+            using var output = File.Create(Path.Combine(directory, name + suffix + ".png")); encoder.Save(output);
+        }
+    }
 
     private static void RenderTotal(MainWindow window, TextBlock total, Border overlay, string name)
     {

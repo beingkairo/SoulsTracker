@@ -59,8 +59,12 @@ public sealed class HostedConnectionPresentationTests
                     Assert.Equal(instruction, delivery.Text);
                     Assert.True(delivery.IsVisible);
                     Assert.Equal(expected, sender!.Status);
-                    var feedback = (TextBlock)window.FindName("DirectoryCopyStatus");
+                    var feedback = (TextBlock)window.FindName("HostedCopyStatus");
                     Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => AutomationProperties.GetName(x) == "Hosted URL copy feedback");
+                    Assert.Empty(((TextBlock)window.FindName("DirectoryCopyStatus")).Text);
+                    var overlay = (Border)window.FindName("HostedCopyFeedbackOverlay");
+                    Assert.Same(window.Content, overlay.Parent);
+                    Assert.Equal(VerticalAlignment.Bottom, overlay.VerticalAlignment);
                     Assert.Equal(fail ? "Could not copy the URL. Try Copy OBS URL again." : "Read-only OBS URL copied. Keep the URL private.", feedback.Text);
                     Assert.True(feedback.IsVisible);
                     Assert.Equal(TextWrapping.Wrap, feedback.TextWrapping);
@@ -178,7 +182,7 @@ public sealed class HostedConnectionPresentationTests
                 {
                     await Idle();
                     var delivery = Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Hosted delivery status");
-                    var feedback = (TextBlock)window.FindName("DirectoryCopyStatus");
+                    var feedback = (TextBlock)window.FindName("HostedCopyStatus");
                     var senderStatus = sender!.Status;
                     int before = Volatile.Read(ref requests);
                     foreach (bool fail in CopyFailures)

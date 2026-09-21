@@ -59,7 +59,7 @@ public sealed class CopyToastLifecycleTests
             Assert.Equal(2, timers.Count);
             timers[1].Callback();
             Assert.Equal("The directory path could not be copied. Try again.", feedback.Text);
-            Assert.Equal("Copy failed", ((TextBlock)window.FindName("CopyFeedbackKind")).Text);
+            Assert.False(((Border)window.FindName("HostedCopyFeedbackOverlay")).IsVisible);
             Assert.Equal(Visibility.Visible, overlay.Visibility);
             fail = false; Copy();
             Assert.Equal(3, timers.Count);

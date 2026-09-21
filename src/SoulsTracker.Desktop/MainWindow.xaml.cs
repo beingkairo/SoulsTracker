@@ -61,7 +61,12 @@ public partial class MainWindow : Window
 
     private void CopyDirectoryPath_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not System.Windows.Controls.Button { Tag: string path } || string.IsNullOrWhiteSpace(path)) return;
+        if (sender is not System.Windows.Controls.Button { Tag: string path, CommandParameter: ContentControl anchor } || string.IsNullOrWhiteSpace(path)) return;
+        if (!ReferenceEquals(CopyFeedbackOverlay.Parent, anchor))
+        {
+            if (CopyFeedbackOverlay.Parent is ContentControl previous) previous.Content = null;
+            anchor.Content = CopyFeedbackOverlay;
+        }
         try
         {
             copyDirectoryPath(path);
@@ -75,12 +80,21 @@ public partial class MainWindow : Window
         if (copyFeedbackClosed) return;
         ClearCopyFeedback();
         hostedCopyFeedbackVisible = hosted;
-        DirectoryCopyStatus.Text = message;
-        CopyFeedbackKind.Text = success ? "Copied" : "Copy failed";
         var cue = (System.Windows.Media.Brush)FindResource(success ? "SuccessBrush" : "DangerBrush");
-        CopyFeedbackKind.Foreground = cue;
-        CopyFeedbackOverlay.BorderBrush = cue;
-        CopyFeedbackOverlay.Visibility = Visibility.Visible;
+        if (hosted)
+        {
+            HostedCopyStatus.Text = message;
+            CopyFeedbackKind.Text = success ? "Copied" : "Copy failed";
+            CopyFeedbackKind.Foreground = cue;
+            HostedCopyFeedbackOverlay.BorderBrush = cue;
+            HostedCopyFeedbackOverlay.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            DirectoryCopyStatus.Text = message;
+            DirectoryCopyStatus.Foreground = cue;
+            CopyFeedbackOverlay.Visibility = Visibility.Visible;
+        }
         if (success)
         {
             long version = copyFeedbackVersion;
@@ -98,8 +112,10 @@ public partial class MainWindow : Window
         cancelCopyExpiry = null;
         hostedCopyFeedbackVisible = false;
         DirectoryCopyStatus.Text = string.Empty;
+        HostedCopyStatus.Text = string.Empty;
         CopyFeedbackKind.Text = string.Empty;
         CopyFeedbackOverlay.Visibility = Visibility.Collapsed;
+        HostedCopyFeedbackOverlay.Visibility = Visibility.Collapsed;
     }
 
     private string? ChooseSaveDirectory(string title, string? currentDirectory)
@@ -303,7 +319,7 @@ public partial class MainWindow : Window
 
     private void ChangeEldenRingSave_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.BeginEldenRingChange();
+        BrowseEldenRingSave_Click(sender, e);
     }
 
     private void CancelEldenRingChange_Click(object sender, RoutedEventArgs e)
@@ -358,7 +374,7 @@ public partial class MainWindow : Window
 
     private void ChangeBlackMythWukongSave_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.BeginBlackMythWukongChange();
+        BrowseBlackMythWukongSave_Click(sender, e);
     }
 
     private void CancelBlackMythWukongChange_Click(object sender, RoutedEventArgs e)
@@ -413,7 +429,7 @@ public partial class MainWindow : Window
 
     private void ChangeLiesOfPSave_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.BeginLiesOfPChange();
+        BrowseLiesOfPSave_Click(sender, e);
     }
 
     private void CancelLiesOfPChange_Click(object sender, RoutedEventArgs e)

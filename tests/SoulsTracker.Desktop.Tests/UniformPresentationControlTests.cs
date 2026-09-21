@@ -155,7 +155,7 @@ public sealed class UniformPresentationControlTests
     });
 
     [Fact]
-    public Task CopyUsesOneBottomOverlayWithoutMovingContent() => HostedConnectionTests.OnDispatcher(async () =>
+    public Task CopyUsesOneAnchoredConfirmationWithoutMovingContent() => HostedConnectionTests.OnDispatcher(async () =>
     {
         using var fixture = new SaveDirectoryWorkflowTests();
         CreateSave("lp", fixture.Root);
@@ -168,12 +168,15 @@ public sealed class UniformPresentationControlTests
             window.Show(); await Idle();
             var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
             Point before = total.TranslatePoint(new Point(), window);
-            Tree(window).OfType<Button>().Single(x => x.IsVisible && AutomationProperties.GetName(x) == "Copy directory path")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var copy = Tree(window).OfType<Button>().Single(x => x.IsVisible && AutomationProperties.GetName(x) == "Copy directory path");
+            copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Idle();
             var toast = Assert.IsType<Border>(window.FindName("CopyFeedbackOverlay"));
-            Assert.Same(window.Content, toast.Parent);
-            Assert.Equal(VerticalAlignment.Bottom, toast.VerticalAlignment);
+            Assert.NotSame(window.Content, toast.Parent);
+            var copyBounds = copy.TransformToAncestor(window).TransformBounds(new Rect(copy.RenderSize));
+            var feedbackBounds = toast.TransformToAncestor(window).TransformBounds(new Rect(toast.RenderSize));
+            Assert.InRange(feedbackBounds.Top - copyBounds.Bottom, 0, 28);
+            Assert.InRange(Math.Abs(feedbackBounds.Right - copyBounds.Right), 0, 16);
             Assert.False(toast.IsHitTestVisible);
             Assert.Equal(before, total.TranslatePoint(new Point(), window));
             Assert.Equal("Directory path copied", ((TextBlock)window.FindName("DirectoryCopyStatus")).Text);
@@ -254,7 +257,8 @@ public sealed class UniformPresentationControlTests
             Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && (Equals(x.Content, "Refresh") || AutomationProperties.GetName(x) == "Copy directory path"));
             Assert.Equal(id == "demons", Tree(window).OfType<Button>().Any(x => x.IsVisible && AutomationProperties.GetName(x) == "Increase manual deaths"));
             ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
-            Assert.Equal(id == "demons", ((TextBox)window.FindName("IncrementHotkeyTextBox")).IsVisible);
+            Assert.True(((TextBox)window.FindName("IncrementHotkeyTextBox")).IsVisible);
+            Assert.Equal(id == "demons", ((TextBox)window.FindName("IncrementHotkeyTextBox")).IsEnabled);
             Assert.Empty(repository.Saves);
         }
         finally { window.Close(); }

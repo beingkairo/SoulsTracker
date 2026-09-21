@@ -112,8 +112,6 @@ public sealed class DirectoryCopyFeedbackControlTests
             Assert.Equal(Message(fail), feedback.Text);
             Assert.Equal(directory, Assert.Single(copies));
             Click(window, "Change Directory"); await Idle();
-            Assert.Equal(Message(fail), feedback.Text);
-            Click(window, "Choose Directory");
             await HostedDesktopPublisherTests.WaitUntil(() => DirectoryPath(vm, game) == pending && !vm.IsBusy);
             await Idle();
             Assert.Empty(feedback.Text);
@@ -176,7 +174,6 @@ public sealed class DirectoryCopyFeedbackControlTests
             Assert.Equal(Message(fail), feedback.Text);
             Assert.NotEqual("Synced", ((TextBlock)window.FindName("RuntimeReaderStatusTextBlock")).Text);
             Click(window, "Change Directory"); await Idle();
-            Click(window, "Choose Directory");
             await HostedDesktopPublisherTests.WaitUntil(() => Status(vm, game)?.Contains("attempted directory", StringComparison.Ordinal) == true);
             await Idle();
             string? rejection = Status(vm, game);

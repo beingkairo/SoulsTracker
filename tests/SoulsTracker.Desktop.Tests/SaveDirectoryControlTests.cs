@@ -17,6 +17,73 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class SaveDirectoryControlTests
 {
     [Theory]
+    [InlineData("er")]
+    [InlineData("wk")]
+    [InlineData("lp")]
+    public Task ChangeInvokesPickerBeforeMutationAndCancelOrSameDirectoryIsNoOp(string game) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string directory = Path.Combine(fixture.Root, "original");
+        CreateSave(game, directory);
+        var repository = new MemoryRepository(Game(game));
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync(); await Choose(vm, game, directory);
+        vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new(Game(game), 12345, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(repository.State))));
+        var committed = repository.State;
+        var selected = SelectedChoice(vm, game);
+        var choices = Choices(vm, game).ToArray();
+        string? status = vm.RuntimeReaderStatusText;
+        repository.Saves.Clear();
+        var notifications = new List<string?>();
+        vm.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+        int picks = 0;
+        string? result = null;
+        var observed = new List<(int Changes, bool SameState, bool SameChoice)>();
+        var window = new MainWindow((_, current) =>
+        {
+            picks++;
+            observed.Add((notifications.Count, ReferenceEquals(committed, repository.State), ReferenceEquals(selected, SelectedChoice(vm, game))));
+            return result;
+        }, _ => { }) { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await Idle(); notifications.Clear();
+            foreach (string? candidate in new[] { null, directory, Path.Combine(directory, ".") + Path.DirectorySeparatorChar })
+            {
+                result = candidate;
+                await Invoke(window, "Change Directory");
+                Assert.Equal(observed.Count, picks);
+                Assert.NotEmpty(observed);
+                Assert.All(observed, x => { Assert.Equal(0, x.Changes); Assert.True(x.SameState); Assert.True(x.SameChoice); });
+                Assert.Empty(notifications);
+                Assert.Same(committed, repository.State);
+                Assert.Same(selected, SelectedChoice(vm, game));
+                Assert.Equal(choices, Choices(vm, game));
+                Assert.Equal(directory, DirectoryPath(vm, game));
+                Assert.Equal(status, vm.RuntimeReaderStatusText);
+                Assert.Equal("12345", ((TextBlock)window.FindName("TotalDeathsTextBlock")).Text);
+                Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && Equals(x.Content, "Cancel"));
+                Assert.Empty(repository.Saves);
+            }
+            Assert.Equal(3, picks);
+            string replacement = Path.Combine(fixture.Root, "replacement");
+            string replacementPath = CreateSave(game, replacement);
+            result = replacement;
+            await Invoke(window, "Change Directory");
+            await HostedDesktopPublisherTests.WaitUntil(() => ConfiguredPath(repository.State, game) == replacementPath && !vm.IsBusy);
+            await Idle();
+            Assert.Equal(4, picks);
+            Assert.Equal((0, true, true), observed.Last());
+            Assert.Equal(replacement, DirectoryPath(vm, game));
+            Assert.Equal(replacementPath, SelectedChoice(vm, game)?.LocalPath);
+            Assert.Single(repository.Saves);
+            Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && Equals(x.Content, "Cancel"));
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
     [InlineData(true, 1)]
     [InlineData(true, 2)]
     [InlineData(false, 2)]
@@ -104,8 +171,6 @@ public sealed class SaveDirectoryControlTests
             Assert.True(bounds.Left >= -1 && bounds.Right <= scroll.ActualWidth + 1);
             Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, "Change Directory")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Idle();
-            choose.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Idle();
             Assert.Equal(2, picks);
             Assert.Equal(path, ConfiguredPath(repository.State, game));
             Assert.Equal(directory, DirectoryPath(vm, game));
@@ -150,7 +215,6 @@ public sealed class SaveDirectoryControlTests
             await Idle();
             Assert.Single(repository.Saves);
             Button("Change Directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); await Idle();
-            Button("Choose Directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             await HostedDesktopPublisherTests.WaitUntil(() => DirectoryPath(vm, game) == replacement);
             await Idle();
             Assert.Equal(selected, ConfiguredPath(repository.State, game));
@@ -218,7 +282,6 @@ public sealed class SaveDirectoryControlTests
         {
             window.Show(); await Idle();
             await Invoke(window, "Change…");
-            await Invoke(window, "Choose directory");
             await HostedDesktopPublisherTests.WaitUntil(() => Status(vm, game) != committedStatus);
             await Idle();
             Assert.Equal(original, DirectoryPath(vm, game));
@@ -287,7 +350,6 @@ public sealed class SaveDirectoryControlTests
         try
         {
             window.Show(); await Idle();
-            await Invoke(window, "Change…");
             await Pick(empty);
             await HostedDesktopPublisherTests.WaitUntil(() => Status(vm, game) != committedStatus);
             string? rejectedStatus = Status(vm, game);
@@ -307,7 +369,6 @@ public sealed class SaveDirectoryControlTests
             Assert.Empty(repository.Saves);
 
             // Rescan after a rejected attempt restores the committed directory.
-            await Invoke(window, "Change…");
             await Pick(empty);
             await WaitForStatus(rejectedStatus);
             await Invoke(window, "Rescan");
@@ -318,7 +379,6 @@ public sealed class SaveDirectoryControlTests
             // A real failure of the committed source must survive Cancel, both
             // on its own and after a separate rejected replacement.
             File.WriteAllBytes(path, [1, 2]);
-            await Invoke(window, "Change…");
             await Pick(empty);
             await WaitForStatus(rejectedStatus);
             await Invoke(window, "Rescan");
@@ -330,7 +390,6 @@ public sealed class SaveDirectoryControlTests
             await Invoke(window, "Cancel");
             Assert.Equal(unavailableStatus, Status(vm, game));
             Assert.Equal(unavailableStatus, ((TextBlock)window.FindName("RuntimeReaderStatusTextBlock")).Text);
-            await Invoke(window, "Change…");
             await Pick(empty);
             await WaitForStatus(rejectedStatus);
             await Invoke(window, "Cancel");
@@ -342,14 +401,12 @@ public sealed class SaveDirectoryControlTests
             File.WriteAllBytes(path, originalBytes);
             await Invoke(window, "Rescan");
             await WaitForStatus(committedStatus);
-            await Invoke(window, "Change…");
             await Pick(null);
-            await Invoke(window, "Cancel");
+            Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && Equals(x.Content, "Cancel"));
             Assert.Equal(committedStatus, Status(vm, game));
             Assert.Empty(repository.Saves);
 
             // Recovery still requires explicit selection from multiple sources.
-            await Invoke(window, "Change…");
             await Pick(multiple);
             await HostedDesktopPublisherTests.WaitUntil(() => DirectoryPath(vm, game) == multiple);
             await Idle();

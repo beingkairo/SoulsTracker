@@ -74,11 +74,27 @@ public sealed partial class DesktopTrackerViewModel
         : DirectoryFor(game) is null ? "Save Directory" : "Chosen Directory";
 
     public Task SetEldenRingSaveDirectoryAsync(string directory, CancellationToken cancellationToken = default) =>
-        SetSaveDirectoryAsync(GameId.EldenRing, directory, cancellationToken);
+        ChooseSaveDirectoryAsync(GameId.EldenRing, directory, cancellationToken);
     public Task SetBlackMythWukongSaveDirectoryAsync(string directory, CancellationToken cancellationToken = default) =>
-        SetSaveDirectoryAsync(GameId.BlackMythWukong, directory, cancellationToken);
+        ChooseSaveDirectoryAsync(GameId.BlackMythWukong, directory, cancellationToken);
     public Task SetLiesOfPSaveDirectoryAsync(string directory, CancellationToken cancellationToken = default) =>
-        SetSaveDirectoryAsync(GameId.LiesOfP, directory, cancellationToken);
+        ChooseSaveDirectoryAsync(GameId.LiesOfP, directory, cancellationToken);
+
+    private Task ChooseSaveDirectoryAsync(GameId game, string directory, CancellationToken cancellationToken)
+    {
+        // Picking the current folder is not Refresh. Do not invalidate reader
+        // operations, alter pending selection, or write legacy configuration.
+        try
+        {
+            if (DirectoryFor(game) is { } current && PathsEqual(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(current)))) return Task.CompletedTask;
+        }
+        catch (ArgumentException) { }
+        catch (NotSupportedException) { }
+        catch (PathTooLongException) { }
+        return SetSaveDirectoryAsync(game, directory, cancellationToken);
+    }
 
     private string? ConfiguredPathFor(GameId game) => game == GameId.EldenRing ? state?.EldenRingSave.LocalPath
         : game == GameId.BlackMythWukong ? state?.BlackMythWukongSave.LocalPath : state?.LiesOfPSave.LocalPath;
@@ -110,7 +126,11 @@ public sealed partial class DesktopTrackerViewModel
         // Rejected attempts need cancellation state even when no pending source
         // exists. A rescan of the committed directory must retain its own errors.
         if (isReplacement && directorySelectionSnapshot?.Game != game)
+        {
             directorySelectionSnapshot = CaptureDirectorySelection(game);
+            var snapshot = directorySelectionSnapshot;
+            SetDirectoryChoice(game, snapshot.Selected, snapshot.SourceState, changeMode: true);
+        }
         else if (!isReplacement && pendingDirectoryGame != game)
             directorySelectionSnapshot = null;
         try

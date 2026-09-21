@@ -436,7 +436,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         ? "Use these global hotkeys to adjust the active manual death total."
         : IsEldenRingMissedDeathAdjustmentAvailable
             ? "Use these global hotkeys to add or remove missed deaths for the selected character."
-            : "Choose a local save and character before global hotkeys can adjust missed deaths.";
+            : IsEldenRingSelected
+                ? "Choose a local save and character before global hotkeys can adjust missed deaths."
+                : "Global hotkey adjustments are not available for this game. Select Demon's Souls or Elden Ring to configure them.";
 
     public bool CanDecrementManualDeaths => IsManualGameSelected && ManualDeaths > 0 && ControlsEnabled;
     public bool IsEldenRingMissedDeathAdjustmentAvailable => IsEldenRingSelected
