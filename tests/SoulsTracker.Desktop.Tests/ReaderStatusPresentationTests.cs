@@ -6,6 +6,38 @@ namespace SoulsTracker.Desktop.Tests;
 
 public sealed class ReaderStatusPresentationTests
 {
+    [Fact]
+    public void WaitingExplanationUsesOrdinarySentencePunctuation() =>
+        Assert.Equal("Unavailable, waiting for active character.", DesktopTrackerViewModel.GameTotalDeathsWaitingForActiveCharacterMessage);
+
+    [Theory]
+    [InlineData("er")]
+    [InlineData("wk")]
+    [InlineData("lp")]
+    public async Task ReadableSaveZeroSeparatesExplanationFromReaderStatus(string game)
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string path = SaveDirectoryWorkflowTests.CreateSave(game, fixture.Root);
+        var repository = new SaveDirectoryWorkflowTests.MemoryRepository(SaveDirectoryWorkflowTests.Game(game));
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var desktop = SaveDirectoryWorkflowTests.CreateViewModel(coordinator);
+        await desktop.InitializeAsync();
+        await SaveDirectoryWorkflowTests.Choose(desktop, game, fixture.Root);
+        var zero = new RuntimeGameObservation(repository.State.SelectedGameId, 0, DateTimeOffset.UtcNow,
+            EffectiveDeathTotalResult.SourceIdentityFor(repository.State));
+        desktop.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(zero));
+        Assert.Equal("Synced", desktop.RuntimeReaderStatusText);
+        Assert.Equal("0", desktop.TotalDeathsText);
+        desktop.ApplyRuntimeReaderResult(RuntimeGameReadResult.NoDeathsRecorded(zero));
+        Assert.Equal("Synced", desktop.RuntimeReaderStatusText);
+        Assert.Equal("No deaths recorded yet, the tracker will update after your first death", desktop.TotalDeathsText);
+        desktop.ApplyRuntimeReaderResult(RuntimeGameReadResult.Cached(RuntimeGameReadResult.NoDeathsRecorded(zero)));
+        Assert.Equal("Using last confirmed save data", desktop.RuntimeReaderStatusText);
+        desktop.ApplyRuntimeReaderResult(RuntimeGameReadResult.Unavailable(repository.State.SelectedGameId));
+        Assert.NotEqual("Synced", desktop.RuntimeReaderStatusText);
+        Assert.NotEqual(DesktopTrackerViewModel.NoDeathsRecordedMessage, desktop.TotalDeathsText);
+    }
+
     [Theory]
     [InlineData("ds1")]
     [InlineData("ds2")]

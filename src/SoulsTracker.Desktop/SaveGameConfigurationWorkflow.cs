@@ -81,11 +81,12 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
         ILocalSaveDiscovery discovery,
         Func<string, IReadOnlyList<DiscoveredLocalSave>> discoverInSelectedFolder,
         string? configuredPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, string, bool>? matchesConfiguredSource = null)
     {
         IReadOnlyList<DiscoveredLocalSave> candidates = await DiscoverAsync(discovery, cancellationToken).ConfigureAwait(false);
         bool configuredPathExists = configuredPath is not null && File.Exists(configuredPath);
-        if (configuredPathExists && !candidates.Any(candidate => PathsEqual(candidate.LocalPath, configuredPath!)))
+        if (configuredPathExists && !candidates.Any(candidate => (matchesConfiguredSource ?? PathsEqual)(candidate.LocalPath, configuredPath!)))
         {
             candidates = await DiscoverInSelectedFolderAsync(discoverInSelectedFolder, configuredPath!, cancellationToken).ConfigureAwait(false);
         }
@@ -149,9 +150,12 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
         long version = BeginLiesSelection();
         try
         {
-            SaveDiscoveryResult result = await DiscoverWithConfiguredFallbackAsync(discovery, LiesOfPSaveDiscovery.DiscoverInSelectedFolder, configured, cancellationToken).ConfigureAwait(false);
+            SaveDiscoveryResult result = await DiscoverWithConfiguredFallbackAsync(discovery, LiesOfPSaveDiscovery.DiscoverInSelectedFolder, configured, cancellationToken, LiesOfPSaveDiscovery.IsSameCharacter).ConfigureAwait(false);
             if (!IsCurrentLiesSelection(version)) return null;
-            ImmutableArray<DiscoveredLocalSave> candidates = [.. result.Candidates];
+            // Keep the committed member identity when discovery reports its newer pair.
+            ImmutableArray<DiscoveredLocalSave> candidates = [.. result.Candidates.Select(candidate =>
+                configured is not null && LiesOfPSaveDiscovery.IsSameCharacter(candidate.LocalPath, configured)
+                    ? candidate with { LocalPath = configured } : candidate)];
             DiscoveredLocalSave? selected = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, configured ?? string.Empty));
             if (configured is not null && !result.ConfiguredPathExists) return new(null, candidates, null, LocalSaveSourceState.UnavailableSelection, "Selected save is unavailable.", null, false);
             if (selected is not null) return new(null, candidates, selected, LocalSaveSourceState.PersistedDiscovered, selected.Label, null, false);
@@ -162,7 +166,8 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
             }
             if (configured is null && candidates.Length > 1) return new(null, candidates, null, LocalSaveSourceState.MultipleCandidates, "Choose the character you’re streaming.", null, false);
             if (configured is not null && IsLiesOfPConfiguredSaveReadable(configured)) return new(null, candidates, null, LocalSaveSourceState.CustomSelection, CustomSaveStatus(configured), null, false);
-            return new(null, candidates, null, LocalSaveSourceState.NoCandidate, "No save found automatically.", null, false);
+            return new(null, candidates, null, LocalSaveSourceState.NoCandidate,
+                configured is null ? DesktopTrackerViewModel.MissingSaveDirectoryMessage : "Selected save is unavailable.", null, false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return null; }
         catch { return new(null, null, null, LocalSaveSourceState.NoCandidate, "Could not search for local saves. Try Rescan or Choose directory.", null, false); }

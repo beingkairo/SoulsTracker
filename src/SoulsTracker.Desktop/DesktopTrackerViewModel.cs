@@ -30,10 +30,10 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string LiesOfPWaitingForSaveFileMessage = "Choose a Lies of P save directory";
     internal const string EldenRingChooseCharacterMessage = "Choose a character to continue.";
     internal const string GameSyncedMessage = "Synced";
-    internal const string NoDeathsRecordedMessage = "No deaths recorded yet — the tracker will update after your first saved death.";
+    internal const string NoDeathsRecordedMessage = "No deaths recorded yet, the tracker will update after your first death";
     internal const string SelectedSaveUnreadableMessage = "Selected save cannot currently be read. Save in-game, then Rescan or change the selected save.";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
-    internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable — waiting for active character.";
+    internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable, waiting for active character.";
 
 
     private readonly SerializedTrackerCoordinator coordinator;
@@ -340,11 +340,6 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
                 return IsProcessReaderGame(selectedGameId) ? GameSyncedMessage : "Confirming lower death count";
             }
 
-            if (runtimeReaderHasNoRecordedDeaths && selectedGameId != GameId.EldenRing)
-            {
-                return NoDeathsRecordedMessage;
-            }
-
             if (runtimeReaderStatus == RuntimeGameReaderStatus.SelectedSaveUnreadable)
             {
                 return SelectedSaveUnreadableMessage;
@@ -352,11 +347,11 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
 
             if (selectedGameId == GameId.BlackMythWukong && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
-                return BlackMythWukongSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
+                return BlackMythWukongDirectoryStatus ?? (state?.BlackMythWukongSave.LocalPath is null ? WaitingForSaveFileMessage(selectedGameId) : GameUnavailableMessage);
             }
             if (selectedGameId == GameId.LiesOfP && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
-                return LiesOfPSaveDiscoveryStatus ?? WaitingForSaveFileMessage(selectedGameId);
+                return LiesOfPDirectoryStatus ?? (state?.LiesOfPSave.LocalPath is null ? WaitingForSaveFileMessage(selectedGameId) : GameUnavailableMessage);
             }
             if (selectedGameId == GameId.EldenRing && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
@@ -652,7 +647,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         else if (SelectedEldenRingSaveChoice is not null)
         {
-            SetEldenRingSaveDiscoveryStatus("Save found automatically");
+            SetEldenRingSaveDiscoveryStatus(SelectedEldenRingSaveChoice.Label);
             EldenRingSaveSourceState = LocalSaveSourceState.PersistedDiscovered;
             await RefreshEldenRingProfileSlotsAsync(cancellationToken, clearStaleSelection: true);
         }
@@ -674,7 +669,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         else
         {
-            SetEldenRingSaveDiscoveryStatus(configured is null ? "No save found automatically." : "Selected save is unavailable.");
+            SetEldenRingSaveDiscoveryStatus(configured is null ? MissingSaveDirectoryMessage : "Selected save is unavailable.");
             EldenRingSaveSourceState = configured is null ? LocalSaveSourceState.NoCandidate : LocalSaveSourceState.UnavailableSelection;
             ApplyEldenRingProfileChoices([]);
         }
@@ -696,6 +691,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(choice.LocalPath), cancellationToken);
         if (!IsCurrentWukongSelectionOperation(selectionVersion, choice.LocalPath)) return;
         SelectedBlackMythWukongSaveChoice = choice;
+        automaticDirectorySources.Remove(GameId.BlackMythWukong);
         IsBlackMythWukongChangeMode = false;
         WukongSaveSourceState = LocalSaveSourceState.PersistedDiscovered;
         SetBlackMythWukongSaveDiscoveryStatus(choice.Label);
@@ -783,6 +779,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             if (IsCurrentWukongSelectionOperation(selectionVersion, candidates[0].LocalPath))
             {
                 SelectedBlackMythWukongSaveChoice = candidates[0];
+                automaticDirectorySources[GameId.BlackMythWukong] = candidates[0].LocalPath;
                 SetBlackMythWukongSaveDiscoveryStatus(candidates[0].Label);
                 WukongSaveSourceState = LocalSaveSourceState.AutomaticallySelected;
                 metadataPath = candidates[0].LocalPath;
@@ -815,7 +812,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         else
         {
-            SetBlackMythWukongSaveDiscoveryStatus("No save found automatically.");
+            SetBlackMythWukongSaveDiscoveryStatus(MissingSaveDirectoryMessage);
             WukongSaveSourceState = LocalSaveSourceState.NoCandidate;
         }
         if (metadataPath is not null)
@@ -1317,6 +1314,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     private void NotifyTrackerProperties()
     {
         OnPropertyChanged(nameof(ControlsEnabled));
+        OnPropertyChanged(nameof(IsEldenRingSaveSelectorEnabled));
+        OnPropertyChanged(nameof(IsWukongSaveSelectorEnabled));
+        OnPropertyChanged(nameof(IsLiesOfPSaveSelectorEnabled));
         OnPropertyChanged(nameof(ManualDeaths));
 
         OnPropertyChanged(nameof(IsEldenRingSelected));
@@ -1393,14 +1393,11 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         if (committed is null || !string.Equals(committed.LocalPath, localPath, StringComparison.OrdinalIgnoreCase) || committed.SlotIndex != selectedSlot) return;
 
         SelectedEldenRingSaveChoice = discoveredChoice;
+        if (sourceState == LocalSaveSourceState.AutomaticallySelected) automaticDirectorySources[GameId.EldenRing] = localPath;
+        else automaticDirectorySources.Remove(GameId.EldenRing);
         IsEldenRingChangeMode = false;
         EldenRingSaveSourceState = sourceState;
-        SetEldenRingSaveDiscoveryStatus(
-            sourceState == LocalSaveSourceState.AutomaticallySelected
-                ? "Save found automatically"
-                : discoveredChoice is null
-                    ? CustomSaveTrackingStatus(localPath)
-                    : discoveredChoice.Label);
+        SetEldenRingSaveDiscoveryStatus(discoveredChoice?.Label ?? CustomSaveTrackingStatus(localPath));
         ApplyEldenRingProfileChoices(choices);
         OnPropertyChanged(nameof(SelectedEldenRingSaveChoice));
         NotifyEldenRingSaveSourceProperties();
@@ -1466,6 +1463,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
         }
         SelectedLiesOfPSaveChoice = outcome.SelectedChoice;
+        if (outcome.SourceState == LocalSaveSourceState.AutomaticallySelected && outcome.SelectedChoice is { } automatic)
+            automaticDirectorySources[GameId.LiesOfP] = automatic.LocalPath;
+        else if (outcome.ExitChangeMode) automaticDirectorySources.Remove(GameId.LiesOfP);
         LiesOfPSaveSourceState = outcome.SourceState;
         SetLiesOfPSaveDiscoveryStatus(outcome.Status);
         if (outcome.ExitChangeMode) IsLiesOfPChangeMode = false;
@@ -1548,7 +1548,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             SetBlackMythWukongSaveDiscoveryStatus(
                 BlackMythWukongSaveChoices.Count > 1
                     ? "Choose the save slot youâ€™re streaming."
-                    : "No save found automatically.");
+                    : MissingSaveDirectoryMessage);
         }
         else if (File.Exists(localPath))
         {
@@ -1643,6 +1643,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private void NotifyEldenRingSaveSourceProperties()
     {
+        NotifyDirectoryPaths();
         OnPropertyChanged(nameof(IsEldenRingSaveSelectorVisible));
         OnPropertyChanged(nameof(IsEldenRingSaveSelectorEnabled));
         OnPropertyChanged(nameof(IsEldenRingBrowseVisible));
@@ -1656,12 +1657,14 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (string.Equals(eldenRingSaveDiscoveryStatus, value, StringComparison.Ordinal)) return;
         eldenRingSaveDiscoveryStatus = value;
+        NotifyDirectoryPaths();
         OnPropertyChanged(nameof(EldenRingSaveDiscoveryStatus));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 
     private void NotifyWukongSaveSourceProperties()
     {
+        NotifyDirectoryPaths();
         OnPropertyChanged(nameof(IsWukongSaveSelectorVisible));
         OnPropertyChanged(nameof(IsWukongBrowseVisible));
         OnPropertyChanged(nameof(IsWukongChangeVisible));
@@ -1674,12 +1677,14 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (string.Equals(blackMythWukongSaveDiscoveryStatus, value, StringComparison.Ordinal)) return;
         blackMythWukongSaveDiscoveryStatus = value;
+        NotifyDirectoryPaths();
         OnPropertyChanged(nameof(BlackMythWukongSaveDiscoveryStatus));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 
     private void NotifyLiesOfPSaveSourceProperties()
     {
+        NotifyDirectoryPaths();
         OnPropertyChanged(nameof(IsLiesOfPSaveSelectorVisible));
         OnPropertyChanged(nameof(IsLiesOfPBrowseVisible));
         OnPropertyChanged(nameof(IsLiesOfPChangeVisible));
@@ -1692,6 +1697,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         if (string.Equals(liesOfPSaveDiscoveryStatus, value, StringComparison.Ordinal)) return;
         liesOfPSaveDiscoveryStatus = value;
+        NotifyDirectoryPaths();
         OnPropertyChanged(nameof(LiesOfPSaveDiscoveryStatus));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }

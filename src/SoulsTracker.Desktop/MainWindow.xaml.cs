@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private bool isRestoringBlackMythWukongSaveSelection;
     private bool isRestoringLiesOfPSaveSelection;
     private readonly Func<string, string?, string?> chooseSaveDirectory;
+    private readonly Action<string> copyDirectoryPath = text => System.Windows.Clipboard.SetText(text);
 
     public MainWindow()
     {
@@ -30,6 +31,20 @@ public partial class MainWindow : Window
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory) : this() =>
         this.chooseSaveDirectory = chooseSaveDirectory;
+
+    internal MainWindow(Func<string, string?, string?> chooseSaveDirectory, Action<string> copyDirectoryPath) : this(chooseSaveDirectory) =>
+        this.copyDirectoryPath = copyDirectoryPath;
+
+    private void CopyDirectoryPath_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string path } || string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            copyDirectoryPath(path);
+            DirectoryCopyStatus.Text = "Directory path copied.";
+        }
+        catch { DirectoryCopyStatus.Text = "The directory path could not be copied. Try again."; }
+    }
 
     private string? ChooseSaveDirectory(string title, string? currentDirectory)
     {

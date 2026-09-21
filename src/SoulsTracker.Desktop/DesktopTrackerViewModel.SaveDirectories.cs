@@ -7,6 +7,22 @@ namespace SoulsTracker.Desktop;
 
 public sealed partial class DesktopTrackerViewModel
 {
+    internal const string MissingSaveDirectoryMessage = "Save directory was not found automatically, please click Choose Directory and select the save folder";
+    // Session-only provenance, keyed by the source actually selected by discovery.
+    private readonly Dictionary<GameId, string> automaticDirectorySources = [];
+    public bool EldenRingDirectoryWasAutomatic => DirectoryWasAutomatic(GameId.EldenRing);
+    public bool BlackMythWukongDirectoryWasAutomatic => DirectoryWasAutomatic(GameId.BlackMythWukong);
+    public bool LiesOfPDirectoryWasAutomatic => DirectoryWasAutomatic(GameId.LiesOfP);
+    public string? EldenRingDirectoryStatus => DirectoryStatus(GameId.EldenRing, EldenRingSaveDiscoveryStatus, SelectedEldenRingSaveChoice);
+    public string? BlackMythWukongDirectoryStatus => DirectoryStatus(GameId.BlackMythWukong, BlackMythWukongSaveDiscoveryStatus, SelectedBlackMythWukongSaveChoice);
+    public string? LiesOfPDirectoryStatus => DirectoryStatus(GameId.LiesOfP, LiesOfPSaveDiscoveryStatus, SelectedLiesOfPSaveChoice);
+
+    private bool DirectoryWasAutomatic(GameId game) => pendingDirectoryGame != game
+        && automaticDirectorySources.TryGetValue(game, out string? path) && PathsEqual(path, ConfiguredPathFor(game));
+
+    private string? DirectoryStatus(GameId game, string? status, DiscoveredLocalSave? selected) =>
+        status == selected?.Label || (ConfiguredPathFor(game) is { } path && status == Path.GetFileName(path)) ? null : status;
+
     // Directory choice is provisional until a resolved source is committed.
     private string? pendingSaveDirectory;
     private GameId? pendingDirectoryGame;
@@ -19,8 +35,8 @@ public sealed partial class DesktopTrackerViewModel
     public string EldenRingDirectoryHeading => DirectoryHeading(GameId.EldenRing);
     public string BlackMythWukongDirectoryHeading => DirectoryHeading(GameId.BlackMythWukong);
     public string LiesOfPDirectoryHeading => DirectoryHeading(GameId.LiesOfP);
-    private string DirectoryHeading(GameId game) => pendingDirectoryGame == game ? "Pending directory"
-        : DirectoryFor(game) is null ? "Save directory" : "Chosen Directory";
+    private string DirectoryHeading(GameId game) => pendingDirectoryGame == game ? "Pending Directory"
+        : DirectoryFor(game) is null ? "Save Directory" : "Chosen Directory";
 
     public Task SetEldenRingSaveDirectoryAsync(string directory, CancellationToken cancellationToken = default) =>
         SetSaveDirectoryAsync(GameId.EldenRing, directory, cancellationToken);
@@ -161,6 +177,7 @@ public sealed partial class DesktopTrackerViewModel
             pendingSaveDirectory = null;
             pendingDirectoryGame = null;
             directorySelectionSnapshot = null;
+            if (!preserveProfileSelection) automaticDirectorySources.Remove(game);
             SetDirectoryStatus(game, choice.Label);
             NotifyDirectoryPaths();
         }
@@ -243,6 +260,12 @@ public sealed partial class DesktopTrackerViewModel
 
     private void NotifyDirectoryPaths()
     {
+        OnPropertyChanged(nameof(EldenRingDirectoryWasAutomatic));
+        OnPropertyChanged(nameof(BlackMythWukongDirectoryWasAutomatic));
+        OnPropertyChanged(nameof(LiesOfPDirectoryWasAutomatic));
+        OnPropertyChanged(nameof(EldenRingDirectoryStatus));
+        OnPropertyChanged(nameof(BlackMythWukongDirectoryStatus));
+        OnPropertyChanged(nameof(LiesOfPDirectoryStatus));
         OnPropertyChanged(nameof(EldenRingDirectoryPath));
         OnPropertyChanged(nameof(BlackMythWukongDirectoryPath));
         OnPropertyChanged(nameof(LiesOfPDirectoryPath));

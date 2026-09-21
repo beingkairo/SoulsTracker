@@ -68,7 +68,7 @@ public sealed class LowerValueConsumerTests
             Deliver(Read(lowerValue, 3, 30));
             Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Equal(lowerValue == 0 ? DesktopTrackerViewModel.NoDeathsRecordedMessage : "90", desktop.TotalDeathsText);
-            Assert.Equal(lowerValue == 0 ? DesktopTrackerViewModel.NoDeathsRecordedMessage : "Synced", desktop.RuntimeReaderStatusText);
+            Assert.Equal("Synced", desktop.RuntimeReaderStatusText);
             Assert.NotEqual(metadata, desktop.BlackMythWukongSaveMetadataText);
             Assert.Equal(lowerValue.ToString(System.Globalization.CultureInfo.InvariantCulture), Snapshot(overlay).Death!.Value);
             Assert.NotSame(confirmed, Snapshot(overlay));

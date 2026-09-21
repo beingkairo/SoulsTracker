@@ -17,6 +17,52 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class SaveDirectoryControlTests
 {
     [Theory]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+    [InlineData(false, 2)]
+    public Task LiesStartupRetainsSourceAndEnablesKnownCharacters(bool selectedDirectory, int characters) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string directory = Path.Combine(fixture.Root, "account");
+        string selected = CreateSave("lp", directory);
+        string paired = Path.Combine(directory, "SaveData-1_Character_2.sav");
+        File.Copy(selected, paired);
+        File.SetLastWriteTimeUtc(paired, DateTime.UtcNow.AddMinutes(1));
+        if (characters > 1) CreateSave("lp", directory, 2);
+        var before = Directory.GetFiles(directory).ToDictionary(x => x, File.ReadAllBytes);
+        var repository = new MemoryRepository(Game("lp")) { State = new(1, Game("lp"), OverlayConfiguration.Default,
+            liesOfPSave: new(selected, selectedDirectory ? directory : null)) };
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        for (int restart = 0; restart < 2; restart++)
+        {
+            var vm = CreateViewModel(coordinator);
+            var window = new MainWindow((_, _) => null) { DataContext = vm, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Show(); await vm.InitializeAsync(); await Idle();
+                var selector = (ComboBox)window.FindName("LiesOfPSaveSelector");
+                Assert.Equal(characters, selector.Items.Count);
+                Assert.Equal(selected, vm.SelectedLiesOfPSaveChoice?.LocalPath);
+                Assert.Empty(repository.Saves);
+                if (characters > 1)
+                {
+                    Assert.True(selector.IsVisible);
+                    Assert.True(selector.IsEnabled);
+                    if (restart == 1)
+                    {
+                        selector.SelectedItem = vm.LiesOfPSaveChoices.Single(x => x.LocalPath != selected);
+                        await HostedDesktopPublisherTests.WaitUntil(() => repository.Saves.Count == 1);
+                        Assert.Equal(((DiscoveredLocalSave)selector.SelectedItem).LocalPath, repository.State.LiesOfPSave.LocalPath);
+                    }
+                }
+                else Assert.False(selector.IsVisible);
+                foreach (var file in before) Assert.Equal(file.Value, File.ReadAllBytes(file.Key));
+            }
+            finally { window.Close(); }
+        }
+    });
+
+    [Theory]
     [InlineData("er", 560d)]
     [InlineData("wk", 560d)]
     [InlineData("lp", 560d)]
@@ -43,7 +89,7 @@ public sealed class SaveDirectoryControlTests
         {
             window.Show();
             await Idle();
-            Button choose = Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, "Choose directory"));
+            Button choose = Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, "Choose Directory"));
             choose.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await HostedDesktopPublisherTests.WaitUntil(() => ConfiguredPath(repository.State, game) == path && !vm.IsBusy);
             await Idle();
@@ -56,7 +102,7 @@ public sealed class SaveDirectoryControlTests
             shown.BringIntoView(); await Idle();
             Rect bounds = shown.TransformToAncestor(scroll).TransformBounds(new Rect(shown.RenderSize));
             Assert.True(bounds.Left >= -1 && bounds.Right <= scroll.ActualWidth + 1);
-            Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, "Change…")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, "Change Directory")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Idle();
             choose.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Idle();
@@ -88,7 +134,7 @@ public sealed class SaveDirectoryControlTests
         try
         {
             window.Show(); await Idle();
-            Button("Choose directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            Button("Choose Directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             await HostedDesktopPublisherTests.WaitUntil(() => Choices(vm, game).Count == 2);
             await Idle();
             Assert.Null(ConfiguredPath(repository.State, game));
@@ -98,12 +144,12 @@ public sealed class SaveDirectoryControlTests
             await HostedDesktopPublisherTests.WaitUntil(() => ConfiguredPath(repository.State, game) == selected && !vm.IsBusy);
             await Idle();
             Assert.Single(repository.Saves);
-            Button("Change…").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); await Idle();
-            Button("Choose directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            Button("Change Directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); await Idle();
+            Button("Choose Directory").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             await HostedDesktopPublisherTests.WaitUntil(() => DirectoryPath(vm, game) == replacement);
             await Idle();
             Assert.Equal(selected, ConfiguredPath(repository.State, game));
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == "Pending directory");
+            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == "Pending Directory");
             Button("Cancel").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); await Idle();
             Assert.Equal(directory, DirectoryPath(vm, game));
             Assert.Equal(directory, ConfiguredDirectory(repository.State, game));
@@ -179,7 +225,8 @@ public sealed class SaveDirectoryControlTests
             Assert.Equal(committedStatus, Status(vm, game));
             Assert.Contains("previous selection is unchanged", rejectionStatus, StringComparison.Ordinal);
             Assert.Contains("attempted directory", rejectionStatus, StringComparison.Ordinal);
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == committedStatus);
+            Assert.Null(DirectoryPresentationTests.Feedback(vm, game));
+            Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == rejectionStatus);
             Assert.Equal(original, DirectoryPath(vm, game));
             Assert.Equal(path, ConfiguredPath(repository.State, game));
             Assert.Equal(source, EffectiveDeathTotalResult.SourceIdentityFor(repository.State));
@@ -318,6 +365,8 @@ public sealed class SaveDirectoryControlTests
 
     private static async Task Invoke(MainWindow window, string content)
     {
+        // Retain the prior interaction sequences while migrating visible labels.
+        content = content switch { "Change…" => "Change Directory", "Choose directory" => "Choose Directory", _ => content };
         Button button = Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, content));
         Assert.True(button.IsEnabled);
         ((IInvokeProvider)new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke)).Invoke();
