@@ -20,10 +20,22 @@ public partial class MainWindow : Window
     private bool isRestoringEldenRingSaveSelection;
     private bool isRestoringBlackMythWukongSaveSelection;
     private bool isRestoringLiesOfPSaveSelection;
+    private readonly Func<string, string?, string?> chooseSaveDirectory;
 
     public MainWindow()
     {
+        chooseSaveDirectory = ChooseSaveDirectory;
         InitializeComponent();
+    }
+
+    internal MainWindow(Func<string, string?, string?> chooseSaveDirectory) : this() =>
+        this.chooseSaveDirectory = chooseSaveDirectory;
+
+    private string? ChooseSaveDirectory(string title, string? currentDirectory)
+    {
+        var dialog = new OpenFolderDialog { Title = title, Multiselect = false };
+        if (System.IO.Directory.Exists(currentDirectory)) dialog.InitialDirectory = currentDirectory;
+        return dialog.ShowDialog(this) == true ? dialog.FolderName : null;
     }
 
     private void ContextHelp_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
@@ -131,10 +143,10 @@ public partial class MainWindow : Window
 
     private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Elden Ring save (ER0000.sl2)|ER0000.sl2", CheckFileExists = true, Multiselect = false, Title = "Choose ER0000.sl2" };
-        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
+        if (DataContext is DesktopTrackerViewModel viewModel &&
+            chooseSaveDirectory("Choose Elden Ring save directory", viewModel.EldenRingDirectoryPath) is { } directory)
         {
-            await viewModel.SetEldenRingSaveFileAsync(dialog.FileName);
+            await viewModel.SetEldenRingSaveDirectoryAsync(directory);
         }
     }
 
@@ -160,6 +172,7 @@ public partial class MainWindow : Window
             && e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice
             && DataContext is DesktopTrackerViewModel viewModel)
         {
+            if (ReferenceEquals(choice, viewModel.SelectedEldenRingSaveChoice)) return;
             await viewModel.SelectEldenRingSaveChoiceAsync(choice);
             DiscoveredLocalSave? committedChoice = viewModel.SelectedEldenRingSaveChoice;
             if (selector.Dispatcher.HasShutdownStarted) return;
@@ -185,10 +198,10 @@ public partial class MainWindow : Window
 
     private async void BrowseBlackMythWukongSave_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Black Myth: Wukong save (ArchiveSaveFile.*.sav)|ArchiveSaveFile.*.sav", CheckFileExists = true, Multiselect = false, Title = "Choose Black Myth: Wukong save" };
-        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
+        if (DataContext is DesktopTrackerViewModel viewModel &&
+            chooseSaveDirectory("Choose Black Myth: Wukong save directory", viewModel.BlackMythWukongDirectoryPath) is { } directory)
         {
-            await viewModel.SetBlackMythWukongSaveFileAsync(dialog.FileName);
+            await viewModel.SetBlackMythWukongSaveDirectoryAsync(directory);
         }
     }
 
@@ -214,6 +227,7 @@ public partial class MainWindow : Window
             && e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice
             && DataContext is DesktopTrackerViewModel viewModel)
         {
+            if (ReferenceEquals(choice, viewModel.SelectedBlackMythWukongSaveChoice)) return;
             await viewModel.SelectBlackMythWukongSaveChoiceAsync(choice);
             DiscoveredLocalSave? committedChoice = viewModel.SelectedBlackMythWukongSaveChoice;
             if (selector.Dispatcher.HasShutdownStarted) return;
@@ -239,10 +253,10 @@ public partial class MainWindow : Window
 
     private async void BrowseLiesOfPSave_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Lies of P character save (SaveData-*_Character_*.sav)|SaveData-*_Character_*.sav", CheckFileExists = true, Multiselect = false, Title = "Choose Lies of P character save" };
-        if (dialog.ShowDialog(this) == true && DataContext is DesktopTrackerViewModel viewModel)
+        if (DataContext is DesktopTrackerViewModel viewModel &&
+            chooseSaveDirectory("Choose Lies of P save directory", viewModel.LiesOfPDirectoryPath) is { } directory)
         {
-            await viewModel.SetLiesOfPSaveFileAsync(dialog.FileName);
+            await viewModel.SetLiesOfPSaveDirectoryAsync(directory);
         }
     }
 
@@ -268,6 +282,7 @@ public partial class MainWindow : Window
             e.AddedItems.OfType<DiscoveredLocalSave>().FirstOrDefault() is { } choice &&
             DataContext is DesktopTrackerViewModel viewModel)
         {
+            if (ReferenceEquals(choice, viewModel.SelectedLiesOfPSaveChoice)) return;
             await viewModel.SelectLiesOfPSaveChoiceAsync(choice);
             DiscoveredLocalSave? committedChoice = viewModel.SelectedLiesOfPSaveChoice;
             if (selector.Dispatcher.HasShutdownStarted) return;

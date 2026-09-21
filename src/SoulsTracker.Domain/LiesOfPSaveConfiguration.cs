@@ -5,7 +5,7 @@ public sealed record LiesOfPSaveConfiguration
 {
     public static LiesOfPSaveConfiguration Default { get; } = new((string?)null);
 
-    public LiesOfPSaveConfiguration(string? localPath)
+    public LiesOfPSaveConfiguration(string? localPath, string? selectedDirectory = null)
     {
         if (!string.IsNullOrWhiteSpace(localPath) && !IsCharacterSaveFileName(Path.GetFileName(localPath)))
         {
@@ -13,10 +13,14 @@ public sealed record LiesOfPSaveConfiguration
         }
 
         LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath;
+        SelectedDirectory = string.IsNullOrWhiteSpace(selectedDirectory) ? null : selectedDirectory;
     }
 
     /// <summary>Private, user-selected path. It is never logged or sent anywhere.</summary>
     public string? LocalPath { get; }
+
+    /// <summary>Optional local discovery root, independent of the resolved reader source.</summary>
+    public string? SelectedDirectory { get; }
 
     public string? FileName => LocalPath is null ? null : Path.GetFileName(LocalPath);
 

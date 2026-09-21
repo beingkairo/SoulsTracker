@@ -208,7 +208,7 @@ public sealed class LiesOfPSaveReaderTests : IDisposable
         public IEnumerable<string> GetInstallRoots(CancellationToken cancellationToken) => roots;
     }
 
-    private static class Fixture
+    internal static class Fixture
     {
         public static byte[] Create(int? deaths, bool duplicateDeaths = false)
         {

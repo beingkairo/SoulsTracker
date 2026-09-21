@@ -26,7 +26,7 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
     public void Configure(BlackMythWukongSaveConfiguration value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (configuration != value)
+        if (configuration.LocalPath != value.LocalPath)
         {
             configuration = value;
             lastFingerprint = null;

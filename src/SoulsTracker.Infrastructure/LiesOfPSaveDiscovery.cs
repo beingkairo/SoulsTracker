@@ -46,16 +46,27 @@ public sealed class LiesOfPSaveDiscovery(ILiesOfPSteamInstallRootSource? install
 
     /// <summary>Finds valid character saves beside a user-selected character save.</summary>
     public static IReadOnlyList<DiscoveredLocalSave> DiscoverInSelectedFolder(string selectedSavePath)
+        => DiscoverDirectory(Path.GetDirectoryName(selectedSavePath), includeAccounts: false);
+
+    /// <summary>Finds logical characters in a selected save directory and its bounded account level.</summary>
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverInDirectory(string selectedDirectory)
+        => DiscoverDirectory(selectedDirectory, includeAccounts: true);
+
+    private static DiscoveredLocalSave[] DiscoverDirectory(string? selectedDirectory, bool includeAccounts)
     {
-        string? selectedDirectory = Path.GetDirectoryName(selectedSavePath);
         if (!TryDirectory(selectedDirectory, out string directory)) return [];
 
         var members = new List<(string path, int character, DateTime lastWriteUtc)>();
-        foreach (string path in SafeFiles(directory, "SaveData-*_Character_*.sav", MaximumFilesPerAccount))
+        IEnumerable<string> directories = includeAccounts ? SafeDirectories(directory, MaximumAccounts).Prepend(directory) : [directory];
+        foreach (string account in directories)
         {
-            if (BlackMythWukongSaveDiscovery.HasReparsePointBetween(directory, path) || !IsRegularBoundedSave(path)) continue;
-            int character = LiesOfPSaveMembers.CharacterNumber(path);
-            if (character != int.MaxValue) members.Add((Path.GetFullPath(path), character, new FileInfo(path).LastWriteTimeUtc));
+            if (account != directory && BlackMythWukongSaveDiscovery.HasReparsePointBetween(directory, account)) continue;
+            foreach (string path in SafeFiles(account, "SaveData-*_Character_*.sav", MaximumFilesPerAccount))
+            {
+                if (BlackMythWukongSaveDiscovery.HasReparsePointBetween(directory, path) || !IsRegularBoundedSave(path)) continue;
+                int character = LiesOfPSaveMembers.CharacterNumber(path);
+                if (character != int.MaxValue) members.Add((Path.GetFullPath(path), character, new FileInfo(path).LastWriteTimeUtc));
+            }
         }
 
         return LabelCharacters(members);
@@ -91,6 +102,12 @@ public sealed class LiesOfPSaveDiscovery(ILiesOfPSteamInstallRootSource? install
     }
 
     private static string CharacterKey(string path, int character) => $"{Path.GetDirectoryName(path)}|{character}";
+
+    /// <summary>Compares paired members without replacing the configured reader identity.</summary>
+    public static bool IsSameCharacter(string candidate, string configured) =>
+        SoulsTracker.Domain.LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(configured)) &&
+        string.Equals(CharacterKey(candidate, LiesOfPSaveMembers.CharacterNumber(candidate)),
+            CharacterKey(configured, LiesOfPSaveMembers.CharacterNumber(configured)), StringComparison.OrdinalIgnoreCase);
 
     private static bool TryDirectory(string? path, out string canonical)
     {

@@ -11,7 +11,8 @@ public sealed record EldenRingSaveConfiguration
 
     public EldenRingSaveConfiguration(
         string? localPath,
-        int slotIndex)
+        int slotIndex,
+        string? selectedDirectory = null)
     {
         if (slotIndex is < NoSlotIndex or > MaximumSlotIndex)
         {
@@ -26,10 +27,14 @@ public sealed record EldenRingSaveConfiguration
 
         LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath;
         SlotIndex = slotIndex;
+        SelectedDirectory = string.IsNullOrWhiteSpace(selectedDirectory) ? null : selectedDirectory;
     }
 
-    /// <summary>Private, user-selected path. It must never be logged or shown outside the local picker.</summary>
+    /// <summary>Private resolved save path. It must never be logged or published.</summary>
     public string? LocalPath { get; }
+
+    /// <summary>Optional local discovery root, independent of the resolved reader source.</summary>
+    public string? SelectedDirectory { get; }
 
     /// <summary>Zero-based Elden Ring profile slot.</summary>
     public int SlotIndex { get; }

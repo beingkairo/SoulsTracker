@@ -9,8 +9,6 @@ namespace SoulsTracker.Desktop;
 /// <summary>Owns persistence of game-specific save configuration changes.</summary>
 internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator coordinator)
 {
-    internal readonly record struct SelectionValidationResult(bool IsValid, string Status);
-    internal readonly record struct SelectionDiscoveryResult(IReadOnlyList<DiscoveredLocalSave> Candidates, SelectionValidationResult Validation);
     internal sealed record LiesSelectionOutcome(
         PersistentTrackerState? CommittedState,
         ImmutableArray<DiscoveredLocalSave>? Candidates,
@@ -35,6 +33,18 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
 
     public void InvalidateOperations() => Interlocked.Increment(ref operationVersion);
 
+    public static Task<IReadOnlyList<DiscoveredLocalSave>> DiscoverDirectoryAsync(GameId game, string directory, CancellationToken cancellationToken) =>
+        Task.Run(() => game == GameId.EldenRing ? EldenRingSaveDiscovery.DiscoverInDirectory(directory)
+            : game == GameId.BlackMythWukong ? BlackMythWukongSaveDiscovery.DiscoverInDirectory(directory)
+            : LiesOfPSaveDiscovery.DiscoverInDirectory(directory), cancellationToken);
+
+    public static Task<bool> ValidateDirectoryChoiceAsync(GameId game, string path, CancellationToken cancellationToken) =>
+        Task.Run(() => game == GameId.EldenRing
+            ? EldenRingSaveDiscovery.DiscoverInDirectory(Path.GetDirectoryName(path)!).Any(x => PathsEqual(x.LocalPath, path))
+            : game == GameId.BlackMythWukong
+                ? BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(path).Any(x => PathsEqual(x.LocalPath, path))
+                : LiesOfPSaveDiscovery.DiscoverInSelectedFolder(path).Any(x => LiesOfPSaveDiscovery.IsSameCharacter(x.LocalPath, path)), cancellationToken);
+
     public long BeginWukongDiscovery() => Interlocked.Increment(ref wukongDiscoveryVersion);
     public bool IsCurrentWukongDiscovery(long version) => version == Interlocked.Read(ref wukongDiscoveryVersion);
     public long BeginLiesSelection() => Interlocked.Increment(ref liesSelectionVersion);
@@ -46,34 +56,6 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     public bool IsCurrentWukongSelection(long version) => version == Interlocked.Read(ref wukongSelectionVersion);
     public void InvalidateWukongSelections() => Interlocked.Increment(ref wukongSelectionVersion);
 
-    public bool IsValidLiesOfPSave(string localPath)
-    {
-        _ = coordinator;
-        return LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) && LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath);
-    }
-
-    public bool ValidateLiesOfPSelection(string localPath) =>
-        IsValidLiesOfPSave(localPath);
-
-    public static SelectionValidationResult ValidateLiesOfPSelectionResult(string localPath) =>
-        LiesOfPSaveConfiguration.IsCharacterSaveFileName(Path.GetFileName(localPath)) && LiesOfPSaveDiscovery.IsRegularBoundedSave(localPath)
-            ? new(true, string.Empty)
-            : new(false, "Selected save is unavailable or unsupported.");
-
-    public IReadOnlyList<DiscoveredLocalSave> DiscoverWukongSelection(string localPath)
-    {
-        _ = coordinator;
-        return BlackMythWukongSaveDiscovery.DiscoverInSelectedFolder(localPath);
-    }
-
-    public IReadOnlyList<DiscoveredLocalSave> DiscoverLiesOfPSelection(string localPath)
-    {
-        _ = coordinator;
-        return LiesOfPSaveDiscovery.DiscoverInSelectedFolder(localPath);
-    }
-
-    public SelectionDiscoveryResult DiscoverLiesOfPSelectionResult(string localPath) =>
-        new(DiscoverLiesOfPSelection(localPath), ValidateLiesOfPSelectionResult(localPath));
 
     public bool IsLiesOfPConfiguredSaveReadable(string localPath)
     {
@@ -146,23 +128,6 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
     public Task<PersistentTrackerState> SaveLiesOfPAsync(LiesOfPSaveConfiguration configuration, CancellationToken cancellationToken) =>
         coordinator.SetLiesOfPSaveConfigurationAsync(configuration, cancellationToken);
 
-    public async Task<LiesSelectionOutcome?> BrowseLiesOfPSaveAsync(string localPath, CancellationToken cancellationToken)
-    {
-        long version = BeginLiesSelection();
-        SelectionValidationResult validation = ValidateLiesOfPSelectionResult(localPath);
-        if (!validation.IsValid)
-            return new(null, null, null, LocalSaveSourceState.UnavailableSelection, validation.Status, null, false);
-        IReadOnlyList<DiscoveredLocalSave> candidates = await DiscoverInSelectedFolderAsync(LiesOfPSaveDiscovery.DiscoverInSelectedFolder, localPath, cancellationToken).ConfigureAwait(false);
-        if (!IsCurrentLiesSelection(version)) return null;
-        try
-        {
-            PersistentTrackerState state = await SaveLiesOfPAsync(new LiesOfPSaveConfiguration(localPath), cancellationToken).ConfigureAwait(false);
-            if (!IsCurrentLiesSelection(version)) return null;
-            DiscoveredLocalSave? selected = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, localPath));
-            return new(state, [.. candidates], selected, LocalSaveSourceState.CustomSelection, CustomSaveStatus(localPath), null, true);
-        }
-        catch { return new(null, [.. candidates], null, LocalSaveSourceState.UnavailableSelection, string.Empty, "The Lies of P save selection could not be saved.", false); }
-    }
 
     public async Task<LiesSelectionOutcome?> SelectLiesOfPSaveAsync(DiscoveredLocalSave choice, CancellationToken cancellationToken)
     {
@@ -198,7 +163,7 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
             return new(null, candidates, null, LocalSaveSourceState.NoCandidate, "No save found automatically.", null, false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return null; }
-        catch { return new(null, null, null, LocalSaveSourceState.NoCandidate, "Could not search for local saves. Try Rescan or Browse…", null, false); }
+        catch { return new(null, null, null, LocalSaveSourceState.NoCandidate, "Could not search for local saves. Try Rescan or Choose directory.", null, false); }
     }
 
     private static string CustomSaveStatus(string localPath) =>

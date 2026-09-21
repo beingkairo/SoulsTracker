@@ -17,21 +17,20 @@ public sealed class LiesOfPSelectionWorkflowTests : IDisposable
         var repository = new MemoryRepository();
         var publisher = new RecordingPublisher();
         await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
-        await coordinator.InitializeAsync();
-        var workflow = new SaveGameConfigurationWorkflow(coordinator);
+        var empty = new SaveDirectoryWorkflowTests.EmptyDiscovery();
+        var viewModel = new DesktopTrackerViewModel(coordinator, blackMythWukongSaveDiscovery: empty, eldenRingSaveDiscovery: empty, liesOfPSaveDiscovery: empty);
+        await viewModel.InitializeAsync();
+        await viewModel.SetLiesOfPSaveDirectoryAsync(Path.GetDirectoryName(path)!);
 
-        var outcome = await workflow.BrowseLiesOfPSaveAsync(path, default);
-
-        Assert.NotNull(outcome);
-        Assert.Equal(path, outcome.CommittedState!.LiesOfPSave.LocalPath);
         Assert.Equal(path, Assert.Single(repository.Saves).LiesOfPSave.LocalPath);
         Assert.Equal(TrackerCommandType.UpdateLiesOfPSaveConfiguration, Assert.Single(publisher.Notifications).CommandType);
-        Assert.Equal(path, Assert.Single(outcome.Candidates!.Value).LocalPath);
-        Assert.Equal(path, outcome.SelectedChoice!.LocalPath);
-        Assert.Equal(LocalSaveSourceState.CustomSelection, outcome.SourceState);
-        Assert.Equal(Path.GetFileName(path), outcome.Status);
-        Assert.True(outcome.ExitChangeMode);
-        Assert.Null(outcome.Error);
+        Assert.Equal(path, Assert.Single(viewModel.LiesOfPSaveChoices).LocalPath);
+        Assert.Equal(path, viewModel.SelectedLiesOfPSaveChoice!.LocalPath);
+        Assert.Equal(LocalSaveSourceState.CustomSelection, viewModel.LiesOfPSaveSourceState);
+        Assert.Equal("Character 1", viewModel.LiesOfPSaveDiscoveryStatus);
+        Assert.Equal(Path.GetDirectoryName(path), viewModel.LiesOfPDirectoryPath);
+        Assert.False(viewModel.IsLiesOfPChangeMode);
+        Assert.Null(viewModel.ErrorMessage);
     }
 
     private string CreateSave(int character)
@@ -77,7 +76,7 @@ public sealed class LiesOfPSelectionWorkflowTests : IDisposable
     {
         public List<PersistentTrackerState> Saves { get; } = [];
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(TrackerStateLoadResult.Loaded(PersistentTrackerState.Default));
+            Task.FromResult(TrackerStateLoadResult.Loaded(new PersistentTrackerState(1, GameId.LiesOfP, OverlayConfiguration.Default)));
         public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
         {
             Saves.Add(state);

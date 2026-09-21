@@ -156,7 +156,7 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
     }
 
     /// <summary>Creates synthetic test fixtures only; it never includes a user save.</summary>
-    private static class EldenRingSaveFixture
+    internal static class EldenRingSaveFixture
     {
         internal const int FirstSlotDataOffset = 0x1000;
         private const int HeaderSize = 0x40;

@@ -18,16 +18,16 @@ internal readonly record struct WukongSaveMetadataReadResult(
     BlackMythWukongSaveMetadata? Metadata);
 
 /// <summary>Projects persisted tracker state into the small P3-01 desktop surface.</summary>
-public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
+public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
 {
     internal const string LocalTrackerStateReadyMessage = "Local tracker state is ready.";
     internal const string LocalTrackerStateUnavailableMessage = "Local tracker state is unavailable. Tracker controls remain disabled.";
 
     internal const string GameUnavailableMessage = "Game unavailable";
     internal const string GameWaitingForActiveCharacterMessage = "Waiting for character selection";
-    internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save file";
-    internal const string BlackMythWukongWaitingForSaveFileMessage = "Choose a Black Myth: Wukong save file";
-    internal const string LiesOfPWaitingForSaveFileMessage = "Choose a Lies of P save file";
+    internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save directory";
+    internal const string BlackMythWukongWaitingForSaveFileMessage = "Choose a Black Myth: Wukong save directory";
+    internal const string LiesOfPWaitingForSaveFileMessage = "Choose a Lies of P save directory";
     internal const string EldenRingChooseCharacterMessage = "Choose a character to continue.";
     internal const string GameSyncedMessage = "Synced";
     internal const string NoDeathsRecordedMessage = "No deaths recorded yet — the tracker will update after your first saved death.";
@@ -591,29 +591,21 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public Task SetDeathsExportPathAsync(string path, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(path, IsDeathsExportEnabled), cancellationToken);
     public Task SetDeathsExportEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(state?.TextExports.DeathsPath, enabled), cancellationToken);
     public Task ClearDeathsExportAsync(CancellationToken cancellationToken = default) => SaveExportsAsync(new TextExportConfiguration(null, IsDeathsExportEnabled), cancellationToken);
-    public async Task SetEldenRingSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
-    {
-        if (!ControlsEnabled) return;
-        if (!await Task.Run(() => EldenRingSaveDiscovery.IsParserValidSave(localPath), cancellationToken))
-        {
-            SetEldenRingSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
-            return;
-        }
-        await CommitEldenRingSaveAsync(localPath, discoveredChoice: null, LocalSaveSourceState.CustomSelection, cancellationToken);
-    }
 
     public async Task SelectEldenRingSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || choice is null || !EldenRingSaveChoices.Contains(choice)) return;
+        if (HasDirectorySelection(GameId.EldenRing)) { await SelectDirectoryChoiceAsync(GameId.EldenRing, choice, cancellationToken); return; }
         await CommitEldenRingSaveAsync(choice.LocalPath, choice, LocalSaveSourceState.PersistedDiscovered, cancellationToken);
     }
 
     public void BeginEldenRingChange() { if (IsEldenRingSelected) IsEldenRingChangeMode = true; }
-    public void CancelEldenRingChange() => IsEldenRingChangeMode = false;
+    public void CancelEldenRingChange() { if (IsBusy) return; CancelDirectorySelection(GameId.EldenRing); IsEldenRingChangeMode = false; }
 
     public async Task RescanEldenRingSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsEldenRingSelected) return;
+        if (HasDirectorySelection(GameId.EldenRing)) { await RescanDirectoryAsync(GameId.EldenRing, cancellationToken); return; }
         long version = Interlocked.Increment(ref eldenRingDiscoveryVersion);
         LocalSaveSourceState stableState = EldenRingSaveSourceState;
         bool stableChangeMode = IsEldenRingChangeMode;
@@ -641,7 +633,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 EldenRingSaveSourceState = stableState;
                 IsEldenRingChangeMode = stableChangeMode;
-                SetEldenRingSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…");
+                SetEldenRingSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Choose directory.");
             }
             return;
         }
@@ -693,39 +685,13 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     {
         ArgumentNullException.ThrowIfNull(slot);
         if (!CanSelectEldenRingProfile || !EldenRingProfileSlots.Any(choice => choice.Index == slot.Index)) return;
-        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index), cancellationToken);
-    }
-    public async Task SetBlackMythWukongSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
-    {
-        if (!ControlsEnabled) return;
-        long selectionVersion = BeginWukongSelectionOperation();
-        WukongSaveMetadataReadResult read = await readWukongSaveMetadataAsync(localPath, cancellationToken);
-        if (!IsCurrentWukongSelectionOperation(selectionVersion)) return;
-        if (!read.IsValid)
-        {
-            SetBlackMythWukongSaveDiscoveryStatus("Selected save is unavailable or unsupported.");
-            return;
-        }
-        IReadOnlyList<DiscoveredLocalSave> candidates = await Task.Run(
-            () => saveGameConfigurationWorkflow.DiscoverWukongSelection(localPath),
-            cancellationToken);
-        if (!IsCurrentWukongSelectionOperation(selectionVersion)) return;
-        await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(localPath), cancellationToken);
-        if (!IsCurrentWukongSelectionOperation(selectionVersion, localPath)) return;
-        BlackMythWukongSaveChoices.Clear();
-        foreach (DiscoveredLocalSave candidate in candidates) BlackMythWukongSaveChoices.Add(candidate);
-        SelectedBlackMythWukongSaveChoice = candidates.SingleOrDefault(candidate => PathsEqual(candidate.LocalPath, localPath));
-        SetBlackMythWukongSaveDiscoveryStatus(CustomSaveTrackingStatus(localPath));
-        IsBlackMythWukongChangeMode = false;
-        WukongSaveSourceState = LocalSaveSourceState.CustomSelection;
-        OnPropertyChanged(nameof(SelectedBlackMythWukongSaveChoice));
-        long metadataVersion = BeginWukongMetadataRead();
-        TryApplyBlackMythWukongSaveMetadata(metadataVersion, localPath, read.Metadata);
+        await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(state?.EldenRingSave.LocalPath, slot.Index, state?.EldenRingSave.SelectedDirectory), cancellationToken);
     }
 
     public async Task SelectBlackMythWukongSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || choice is null || !BlackMythWukongSaveChoices.Contains(choice)) return;
+        if (HasDirectorySelection(GameId.BlackMythWukong)) { await SelectDirectoryChoiceAsync(GameId.BlackMythWukong, choice, cancellationToken); return; }
         long selectionVersion = BeginWukongSelectionOperation();
         await SaveBlackMythWukongSaveAsync(new BlackMythWukongSaveConfiguration(choice.LocalPath), cancellationToken);
         if (!IsCurrentWukongSelectionOperation(selectionVersion, choice.LocalPath)) return;
@@ -745,6 +711,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task RescanBlackMythWukongSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsBlackMythWukongSelected) return;
+        if (HasDirectorySelection(GameId.BlackMythWukong)) { await RescanDirectoryAsync(GameId.BlackMythWukong, cancellationToken); return; }
         long selectionVersion = BeginWukongSelectionOperation();
         long version = saveGameConfigurationWorkflow.BeginWukongDiscovery();
         LocalSaveSourceState stableState = WukongSaveSourceState;
@@ -782,7 +749,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 WukongSaveSourceState = stableState;
                 IsBlackMythWukongChangeMode = stableChangeMode;
-                SetBlackMythWukongSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Browse…");
+                SetBlackMythWukongSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Choose directory.");
                 NotifyWukongSaveSourceProperties();
             }
             return;
@@ -873,30 +840,27 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
     }
 
     public void BeginBlackMythWukongChange() { if (IsBlackMythWukongSelected) IsBlackMythWukongChangeMode = true; }
-    public void CancelBlackMythWukongChange() => IsBlackMythWukongChangeMode = false;
+    public void CancelBlackMythWukongChange() { if (IsBusy) return; CancelDirectorySelection(GameId.BlackMythWukong); IsBlackMythWukongChangeMode = false; }
 
-    public async Task SetLiesOfPSaveFileAsync(string localPath, CancellationToken cancellationToken = default)
-    {
-        if (!ControlsEnabled) return;
-        ApplyLiesSelectionOutcome(await saveGameConfigurationWorkflow.BrowseLiesOfPSaveAsync(localPath, cancellationToken));
-    }
 
     public async Task SelectLiesOfPSaveChoiceAsync(DiscoveredLocalSave? choice, CancellationToken cancellationToken = default)
     {
         if (!ControlsEnabled || choice is null || !LiesOfPSaveChoices.Contains(choice)) return;
+        if (HasDirectorySelection(GameId.LiesOfP)) { await SelectDirectoryChoiceAsync(GameId.LiesOfP, choice, cancellationToken); return; }
         ApplyLiesSelectionOutcome(await saveGameConfigurationWorkflow.SelectLiesOfPSaveAsync(choice, cancellationToken));
     }
 
     public async Task RescanLiesOfPSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsLiesOfPSelected) return;
+        if (HasDirectorySelection(GameId.LiesOfP)) { await RescanDirectoryAsync(GameId.LiesOfP, cancellationToken); return; }
         LiesOfPSaveSourceState = LocalSaveSourceState.Scanning;
         SetLiesOfPSaveDiscoveryStatus("Looking for local saves…");
         ApplyLiesSelectionOutcome(await saveGameConfigurationWorkflow.RescanLiesOfPSavesAsync(state?.LiesOfPSave.LocalPath, liesOfPSaveDiscovery, cancellationToken));
     }
 
     public void BeginLiesOfPChange() { if (IsLiesOfPSelected) IsLiesOfPChangeMode = true; }
-    public void CancelLiesOfPChange() => IsLiesOfPChangeMode = false;
+    public void CancelLiesOfPChange() { if (IsBusy) return; CancelDirectorySelection(GameId.LiesOfP); IsLiesOfPChangeMode = false; }
 
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -1231,6 +1195,12 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         PersistentTrackerState committedState,
         bool preserveWukongMetadataOperation = false)
     {
+        if (state is not null && state.SelectedGameId != committedState.SelectedGameId)
+        {
+            CancelDirectorySelection(state.SelectedGameId);
+            Interlocked.Increment(ref eldenRingDiscoveryVersion);
+            saveGameConfigurationWorkflow.BeginLiesSelection();
+        }
         if (!preserveWukongMetadataOperation)
         {
             InvalidateWukongOperations();
@@ -1283,6 +1253,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         NotifyEldenRingSaveSourceProperties();
         NotifyWukongSaveSourceProperties();
         NotifyLiesOfPSaveSourceProperties();
+        NotifyDirectoryPaths();
 
 
     }
@@ -1406,7 +1377,10 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private async Task CommitEldenRingSaveAsync(string localPath, DiscoveredLocalSave? discoveredChoice, LocalSaveSourceState sourceState, CancellationToken cancellationToken)
     {
+        long version = saveGameConfigurationWorkflow.BeginOperation();
+        Interlocked.Increment(ref eldenRingDiscoveryVersion);
         IReadOnlyList<EldenRingProfileSlotChoice> choices = await ReadEldenRingProfileChoicesAsync(localPath, cancellationToken);
+        if (!IsCurrentDirectoryOperation(GameId.EldenRing, version)) return;
         bool sameFile = string.Equals(state?.EldenRingSave.LocalPath, localPath, StringComparison.OrdinalIgnoreCase);
         int currentSlot = state?.EldenRingSave.SlotIndex ?? EldenRingSaveConfiguration.NoSlotIndex;
         int selectedSlot = sameFile && choices.Any(choice => choice.Index == currentSlot)
@@ -1453,6 +1427,11 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
         OnPropertyChanged(nameof(EldenRingCharacterStatus));
+        OnPropertyChanged(nameof(IsEldenRingMissedDeathAdjustmentAvailable));
+        OnPropertyChanged(nameof(CanAdjustEldenRingMissedDeaths));
+        OnPropertyChanged(nameof(CanDecrementEldenRingMissedDeaths));
+        OnPropertyChanged(nameof(EldenRingMissedDeaths));
+        OnPropertyChanged(nameof(GlobalHotkeyUsageDescription));
     }
 
     private async Task SaveBlackMythWukongSaveAsync(BlackMythWukongSaveConfiguration configuration, CancellationToken cancellationToken)
@@ -1651,7 +1630,7 @@ public sealed class DesktopTrackerViewModel : INotifyPropertyChanged
             && state!.EldenRingSave.SlotIndex != EldenRingSaveConfiguration.NoSlotIndex
             && SelectedEldenRingProfileSlot is null)
         {
-            await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, EldenRingSaveConfiguration.NoSlotIndex), cancellationToken);
+            await SaveEldenRingSaveAsync(new EldenRingSaveConfiguration(localPath, EldenRingSaveConfiguration.NoSlotIndex, state?.EldenRingSave.SelectedDirectory), cancellationToken);
             ApplyEldenRingProfileChoices(choices);
         }
     }

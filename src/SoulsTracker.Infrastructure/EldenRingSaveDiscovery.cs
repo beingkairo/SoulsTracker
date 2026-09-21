@@ -37,6 +37,19 @@ public sealed class EldenRingSaveDiscovery(IEldenRingSaveRootSource? rootSource 
         return ValueTask.FromResult<IReadOnlyList<DiscoveredLocalSave>>(discovered);
     }
 
+    /// <summary>Finds valid saves in the selected directory and at most one account level below it.</summary>
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverInDirectory(string selectedDirectory)
+    {
+        if (!TryDirectory(selectedDirectory, out string root)) return [];
+        return EnumerateDirectories(root, MaximumAccounts).Prepend(root)
+            .Where(directory => directory == root || !BlackMythWukongSaveDiscovery.HasReparsePointBetween(root, directory))
+            .Select(directory => Path.Combine(directory, "ER0000.sl2"))
+            .Where(path => !BlackMythWukongSaveDiscovery.HasReparsePointBetween(root, path) && IsParserValidSave(path))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Select((path, index) => new DiscoveredLocalSave(path, $"Save {index + 1}"))
+            .ToArray();
+    }
+
     public static bool IsParserValidSave(string path)
     {
         try

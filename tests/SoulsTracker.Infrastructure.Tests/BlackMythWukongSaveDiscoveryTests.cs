@@ -281,7 +281,7 @@ public sealed class BlackMythWukongSaveDiscoveryTests : IAsyncLifetime
         File.WriteAllBytes(Path.Combine(saveRoot, $"ArchiveSaveFile.{slot}.sav"), CreateArchive(deaths));
     }
 
-    private static byte[] CreateArchive(int deaths, int buildRevision = 23831)
+    internal static byte[] CreateArchive(int deaths, int buildRevision = 23831)
     {
         byte[] death = FieldVarint(1, (ulong)deaths);
         byte[] decoded = FieldBytes(6, FieldBytes(1, FieldBytes(5, death)));

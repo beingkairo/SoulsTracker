@@ -25,7 +25,7 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
     public void Configure(EldenRingSaveConfiguration value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (configuration != value)
+        if (configuration.LocalPath != value.LocalPath || configuration.SlotIndex != value.SlotIndex)
         {
             configuration = value;
             lastFingerprint = null;

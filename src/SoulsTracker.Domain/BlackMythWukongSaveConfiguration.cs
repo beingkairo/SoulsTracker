@@ -5,7 +5,7 @@ public sealed record BlackMythWukongSaveConfiguration
 {
     public static BlackMythWukongSaveConfiguration Default { get; } = new((string?)null);
 
-    public BlackMythWukongSaveConfiguration(string? localPath)
+    public BlackMythWukongSaveConfiguration(string? localPath, string? selectedDirectory = null)
     {
         if (!string.IsNullOrWhiteSpace(localPath) && !IsArchiveSaveFileName(Path.GetFileName(localPath)))
         {
@@ -13,10 +13,14 @@ public sealed record BlackMythWukongSaveConfiguration
         }
 
         LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath;
+        SelectedDirectory = string.IsNullOrWhiteSpace(selectedDirectory) ? null : selectedDirectory;
     }
 
-    /// <summary>Private, user-selected path. It must never be logged or shown outside the local picker.</summary>
+    /// <summary>Private resolved save path. It must never be logged or published.</summary>
     public string? LocalPath { get; }
+
+    /// <summary>Optional local discovery root, independent of the resolved reader source.</summary>
+    public string? SelectedDirectory { get; }
 
     public string? FileName => LocalPath is null ? null : Path.GetFileName(LocalPath);
 

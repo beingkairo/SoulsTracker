@@ -58,17 +58,28 @@ public sealed class BlackMythWukongSaveDiscovery(IBlackMythWukongInstallRootSour
 
     /// <summary>Finds valid save slots beside a user-selected slot, keeping character switching within that folder.</summary>
     public static IReadOnlyList<DiscoveredLocalSave> DiscoverInSelectedFolder(string selectedSavePath)
+        => DiscoverDirectory(Path.GetDirectoryName(selectedSavePath), includeAccounts: false);
+
+    /// <summary>Finds valid slots in a selected save directory and its bounded account level.</summary>
+    public static IReadOnlyList<DiscoveredLocalSave> DiscoverInDirectory(string selectedDirectory)
+        => DiscoverDirectory(selectedDirectory, includeAccounts: true);
+
+    private static DiscoveredLocalSave[] DiscoverDirectory(string? selectedDirectory, bool includeAccounts)
     {
-        string? selectedDirectory = Path.GetDirectoryName(selectedSavePath);
         if (!TryDirectory(selectedDirectory, out string directory)) return [];
 
         var discovered = new Dictionary<string, DiscoveredLocalSave>(StringComparer.OrdinalIgnoreCase);
-        foreach (string save in EnumerateFiles(directory, "ArchiveSaveFile.*.sav", MaximumSlotsPerAccount))
+        IEnumerable<string> directories = includeAccounts ? EnumerateDirectories(directory, MaximumAccounts).Prepend(directory) : [directory];
+        foreach (string account in directories)
         {
-            if (HasReparsePointBetween(directory, save) || !IsRegularBoundedSave(save) || !BlackMythWukongSaveConfiguration.IsArchiveSaveFileName(Path.GetFileName(save))) continue;
-            string canonical = Path.GetFullPath(save);
-            int slot = SlotNumber(canonical);
-            if (slot != int.MaxValue) discovered.TryAdd(canonical, new DiscoveredLocalSave(canonical, $"Save slot {slot}"));
+            if (account != directory && HasReparsePointBetween(directory, account)) continue;
+            foreach (string save in EnumerateFiles(account, "ArchiveSaveFile.*.sav", MaximumSlotsPerAccount))
+            {
+                if (HasReparsePointBetween(directory, save) || !IsRegularBoundedSave(save) || !BlackMythWukongSaveConfiguration.IsArchiveSaveFileName(Path.GetFileName(save))) continue;
+                string canonical = Path.GetFullPath(save);
+                int slot = SlotNumber(canonical);
+                if (slot != int.MaxValue) discovered.TryAdd(canonical, new DiscoveredLocalSave(canonical, $"Save slot {slot}"));
+            }
         }
 
         return LabelSlots(discovered.Values);
