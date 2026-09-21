@@ -11,7 +11,7 @@ public sealed partial class DesktopTrackerViewModel
     private string? pendingSaveDirectory;
     private GameId? pendingDirectoryGame;
     private DirectorySelectionSnapshot? directorySelectionSnapshot;
-    private sealed record DirectorySelectionSnapshot(DiscoveredLocalSave[] Choices, DiscoveredLocalSave? Selected, LocalSaveSourceState SourceState, string? Status);
+    private sealed record DirectorySelectionSnapshot(GameId Game, DiscoveredLocalSave[] Choices, DiscoveredLocalSave? Selected, LocalSaveSourceState SourceState, string? Status);
 
     public string? EldenRingDirectoryPath => DirectoryFor(GameId.EldenRing);
     public string? BlackMythWukongDirectoryPath => DirectoryFor(GameId.BlackMythWukong);
@@ -54,6 +54,13 @@ public sealed partial class DesktopTrackerViewModel
         Interlocked.Increment(ref eldenRingDiscoveryVersion);
         InvalidateWukongOperations();
         saveGameConfigurationWorkflow.BeginLiesSelection();
+        bool isReplacement = allowReplacement && !PathsEqual(directory, DirectoryFor(game));
+        // Rejected attempts need cancellation state even when no pending source
+        // exists. A rescan of the committed directory must retain its own errors.
+        if (isReplacement && directorySelectionSnapshot?.Game != game)
+            directorySelectionSnapshot = CaptureDirectorySelection(game);
+        else if (!isReplacement && pendingDirectoryGame != game)
+            directorySelectionSnapshot = null;
         try
         {
             IReadOnlyList<DiscoveredLocalSave> candidates = await SaveGameConfigurationWorkflow.DiscoverDirectoryAsync(game, directory, cancellationToken);
@@ -65,10 +72,11 @@ public sealed partial class DesktopTrackerViewModel
                     ? x with { LocalPath = configured } : x).ToArray();
             if (candidates.Count == 0)
             {
-                SetDirectoryStatus(game, "No usable saves found in this directory. Choose another directory or Rescan.");
+                SetDirectoryStatus(game, isReplacement && ConfiguredPathFor(game) is not null
+                    ? "No usable saves found in the attempted directory. Your previous selection is unchanged. Choose another directory or Cancel."
+                    : "No usable saves found in this directory. Choose another directory or Rescan.");
                 return;
             }
-            directorySelectionSnapshot ??= CaptureDirectorySelection(game);
             pendingSaveDirectory = Path.GetFullPath(directory);
             pendingDirectoryGame = game;
             ObservableCollection<DiscoveredLocalSave> choices = ChoicesFor(game);
@@ -85,7 +93,9 @@ public sealed partial class DesktopTrackerViewModel
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch
         {
-            if (IsCurrentDirectoryOperation(game, version)) SetDirectoryStatus(game, "The directory could not be used. Choose another directory or Rescan.");
+            if (IsCurrentDirectoryOperation(game, version)) SetDirectoryStatus(game, isReplacement && directorySelectionSnapshot?.Game == game && ConfiguredPathFor(game) is not null
+                ? "The attempted directory could not be used. Your previous selection is unchanged. Choose another directory or Cancel."
+                : "The directory could not be used. Choose another directory or Rescan.");
         }
     }
 
@@ -165,10 +175,10 @@ public sealed partial class DesktopTrackerViewModel
     }
 
     private DirectorySelectionSnapshot CaptureDirectorySelection(GameId game) => game == GameId.EldenRing
-        ? new([.. EldenRingSaveChoices], SelectedEldenRingSaveChoice, EldenRingSaveSourceState, EldenRingSaveDiscoveryStatus)
+        ? new(game, [.. EldenRingSaveChoices], SelectedEldenRingSaveChoice, EldenRingSaveSourceState, EldenRingSaveDiscoveryStatus)
         : game == GameId.BlackMythWukong
-            ? new([.. BlackMythWukongSaveChoices], SelectedBlackMythWukongSaveChoice, WukongSaveSourceState, BlackMythWukongSaveDiscoveryStatus)
-            : new([.. LiesOfPSaveChoices], SelectedLiesOfPSaveChoice, LiesOfPSaveSourceState, LiesOfPSaveDiscoveryStatus);
+            ? new(game, [.. BlackMythWukongSaveChoices], SelectedBlackMythWukongSaveChoice, WukongSaveSourceState, BlackMythWukongSaveDiscoveryStatus)
+            : new(game, [.. LiesOfPSaveChoices], SelectedLiesOfPSaveChoice, LiesOfPSaveSourceState, LiesOfPSaveDiscoveryStatus);
 
     private void SetDirectoryChoice(GameId game, DiscoveredLocalSave? choice, LocalSaveSourceState sourceState, bool changeMode)
     {
@@ -201,8 +211,8 @@ public sealed partial class DesktopTrackerViewModel
     private void CancelDirectorySelection(GameId game)
     {
         saveGameConfigurationWorkflow.InvalidateOperations();
-        if (pendingDirectoryGame != game) return;
-        if (directorySelectionSnapshot is { } snapshot)
+        if (pendingDirectoryGame != game && directorySelectionSnapshot?.Game != game) return;
+        if (directorySelectionSnapshot is { } snapshot && snapshot.Game == game)
         {
             ObservableCollection<DiscoveredLocalSave> choices = ChoicesFor(game);
             choices.Clear();
