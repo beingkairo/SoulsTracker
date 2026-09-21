@@ -73,6 +73,13 @@ public partial class MainWindow : Window
             ShowCopyFeedback("Directory path copied", success: true);
         }
         catch { ShowCopyFeedback("The directory path could not be copied. Try again.", success: false); }
+        if (!copyFeedbackClosed && CopyFeedbackOverlay.Visibility == Visibility.Visible)
+        {
+            // Measure the current message before requesting the smallest scroll
+            // needed to expose it beneath Copy. Keep keyboard focus on the action.
+            CopyFeedbackOverlay.UpdateLayout();
+            CopyFeedbackOverlay.BringIntoView();
+        }
     }
 
     private void ShowCopyFeedback(string message, bool success, bool hosted = false)

@@ -167,7 +167,8 @@ public sealed class UniformPresentationControlTests
         {
             window.Show(); await Idle();
             var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
-            Point before = total.TranslatePoint(new Point(), window);
+            var content = (FrameworkElement)((ScrollViewer)window.FindName("MainContentScrollViewer")).Content;
+            Point before = total.TranslatePoint(new Point(), content);
             var copy = Tree(window).OfType<Button>().Single(x => x.IsVisible && AutomationProperties.GetName(x) == "Copy directory path");
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Idle();
@@ -178,7 +179,9 @@ public sealed class UniformPresentationControlTests
             Assert.InRange(feedbackBounds.Top - copyBounds.Bottom, 0, 28);
             Assert.InRange(Math.Abs(feedbackBounds.Right - copyBounds.Right), 0, 16);
             Assert.False(toast.IsHitTestVisible);
-            Assert.Equal(before, total.TranslatePoint(new Point(), window));
+            Point after = total.TranslatePoint(new Point(), content);
+            Assert.Equal(before.X, after.X, precision: 8);
+            Assert.Equal(before.Y, after.Y, precision: 8);
             Assert.Equal("Directory path copied", ((TextBlock)window.FindName("DirectoryCopyStatus")).Text);
         }
         finally { window.Close(); }
