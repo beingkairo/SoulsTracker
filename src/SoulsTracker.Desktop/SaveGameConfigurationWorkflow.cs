@@ -164,13 +164,13 @@ internal sealed class SaveGameConfigurationWorkflow(SerializedTrackerCoordinator
                 PersistentTrackerState state = await SaveLiesOfPAsync(new LiesOfPSaveConfiguration(candidates[0].LocalPath), cancellationToken).ConfigureAwait(false);
                 return IsCurrentLiesSelection(version) ? new(state, candidates, candidates[0], LocalSaveSourceState.AutomaticallySelected, candidates[0].Label, null, false) : null;
             }
-            if (configured is null && candidates.Length > 1) return new(null, candidates, null, LocalSaveSourceState.MultipleCandidates, "Choose the character you’re streaming.", null, false);
+            if (configured is null && candidates.Length > 1) return new(null, candidates, null, LocalSaveSourceState.MultipleCandidates, DesktopTrackerViewModel.ChooseCharacterMessage, null, false);
             if (configured is not null && IsLiesOfPConfiguredSaveReadable(configured)) return new(null, candidates, null, LocalSaveSourceState.CustomSelection, CustomSaveStatus(configured), null, false);
             return new(null, candidates, null, LocalSaveSourceState.NoCandidate,
                 configured is null ? DesktopTrackerViewModel.MissingSaveDirectoryMessage : "Selected save is unavailable.", null, false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return null; }
-        catch { return new(null, null, null, LocalSaveSourceState.NoCandidate, "Could not search for local saves. Try Rescan or Choose directory.", null, false); }
+        catch { return new(null, null, null, LocalSaveSourceState.NoCandidate, "Could not search for local saves. Try Refresh or choose another directory.", null, false); }
     }
 
     private static string CustomSaveStatus(string localPath) =>

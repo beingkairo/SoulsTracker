@@ -130,7 +130,12 @@ public sealed class SaveDirectoryControlTests
         var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
         int picks = 0;
         var window = new MainWindow((_, _) => ++picks == 1 ? directory : replacement) { DataContext = vm, Width = 560, Height = 760, ShowActivated = false, ShowInTaskbar = false };
-        Button Button(string content) => Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, content));
+        Button Button(string content)
+        {
+            var buttons = Tree(window).OfType<Button>().Where(x => x.IsVisible).ToArray();
+            if (content == "Choose Directory" && !buttons.Any(x => Equals(x.Content, content))) content = "Change Directory";
+            return buttons.Single(x => Equals(x.Content, content));
+        }
         try
         {
             window.Show(); await Idle();
@@ -324,6 +329,7 @@ public sealed class SaveDirectoryControlTests
             Assert.DoesNotContain("attempted directory", unavailableStatus, StringComparison.Ordinal);
             await Invoke(window, "Cancel");
             Assert.Equal(unavailableStatus, Status(vm, game));
+            Assert.Equal(unavailableStatus, ((TextBlock)window.FindName("RuntimeReaderStatusTextBlock")).Text);
             await Invoke(window, "Change…");
             await Pick(empty);
             await WaitForStatus(rejectedStatus);
@@ -366,7 +372,8 @@ public sealed class SaveDirectoryControlTests
     private static async Task Invoke(MainWindow window, string content)
     {
         // Retain the prior interaction sequences while migrating visible labels.
-        content = content switch { "Change…" => "Change Directory", "Choose directory" => "Choose Directory", _ => content };
+        content = content switch { "Change…" => "Change Directory", "Choose directory" => "Choose Directory", "Rescan" => "Refresh", _ => content };
+        if (content == "Choose Directory" && !Tree(window).OfType<Button>().Any(x => x.IsVisible && Equals(x.Content, content))) content = "Change Directory";
         Button button = Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, content));
         Assert.True(button.IsEnabled);
         ((IInvokeProvider)new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke)).Invoke();

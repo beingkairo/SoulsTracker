@@ -8,6 +8,33 @@ namespace SoulsTracker.Desktop.Tests;
 
 public sealed class DirectoryPresentationTests
 {
+    [Theory]
+    [InlineData("er")]
+    [InlineData("wk")]
+    [InlineData("lp")]
+    public async Task CommonAutomaticDirectoryPrecedesSelectionWithoutWriting(string game)
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string first = Path.Combine(fixture.Root, "first.sav");
+        string second = Path.Combine(fixture.Root, "second.sav");
+        var discovery = new Discovery(new(first, "Character 1"), new(second, "Character 2"));
+        var repository = new MemoryRepository(Game(game));
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = new DesktopTrackerViewModel(coordinator, eldenRingSaveDiscovery: discovery,
+            blackMythWukongSaveDiscovery: discovery, liesOfPSaveDiscovery: discovery);
+        await vm.InitializeAsync();
+        Assert.Equal(fixture.Root, DirectoryPath(vm, game));
+        Assert.True(Automatic(vm, game));
+        Assert.Null(SelectedChoice(vm, game));
+        Assert.Null(ConfiguredPath(repository.State, game));
+        Assert.Empty(repository.Saves);
+        Assert.Equal("Choose a character to continue.", vm.RuntimeReaderStatusText);
+        await Rescan(vm, game);
+        Assert.Equal(fixture.Root, DirectoryPath(vm, game));
+        Assert.True(Automatic(vm, game));
+        Assert.Empty(repository.Saves);
+    }
+
     [Fact]
     public async Task LegacyLiesPairedDiscoveryRetainsAllAlreadyDiscoveredCandidates()
     {
@@ -26,6 +53,44 @@ public sealed class DirectoryPresentationTests
         Assert.Equal(selected, repository.State.LiesOfPSave.LocalPath);
         Assert.Empty(repository.Saves);
         Assert.False(vm.LiesOfPDirectoryWasAutomatic);
+    }
+
+    [Fact]
+    public async Task LiesBoundedAutomaticResultsExposeDirectoryBeforeCharacterAndCancelRestoresIt()
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string directory = Path.Combine(fixture.Root, "automatic");
+        string first = CreateSave("lp", directory);
+        string pair = Path.Combine(directory, "SaveData-1_Character_2.sav");
+        File.Copy(first, pair);
+        File.SetLastWriteTimeUtc(pair, DateTime.UtcNow.AddMinutes(1));
+        CreateSave("lp", directory, 2);
+        var before = Directory.GetFiles(directory).ToDictionary(x => x, File.ReadAllBytes);
+        var discovery = new Discovery([.. LiesOfPSaveDiscovery.DiscoverInDirectory(directory)]);
+        var repository = new MemoryRepository(GameId.LiesOfP);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = new DesktopTrackerViewModel(coordinator, liesOfPSaveDiscovery: discovery);
+        await vm.InitializeAsync();
+        Assert.Equal(2, vm.LiesOfPSaveChoices.Count);
+        Assert.Equal(directory, vm.LiesOfPDirectoryPath);
+        Assert.True(vm.LiesOfPDirectoryWasAutomatic);
+        Assert.Null(vm.SelectedLiesOfPSaveChoice);
+        Assert.Empty(repository.Saves);
+        string pending = Path.Combine(fixture.Root, "manual");
+        CreateSave("lp", pending); CreateSave("lp", pending, 2);
+        await vm.SetLiesOfPSaveDirectoryAsync(pending);
+        Assert.False(vm.LiesOfPDirectoryWasAutomatic);
+        Assert.Equal(pending, vm.LiesOfPDirectoryPath);
+        vm.CancelLiesOfPChange();
+        Assert.Equal(directory, vm.LiesOfPDirectoryPath);
+        Assert.True(vm.LiesOfPDirectoryWasAutomatic);
+        Assert.Null(vm.SelectedLiesOfPSaveChoice);
+        Assert.Empty(repository.Saves);
+        var choice = vm.LiesOfPSaveChoices.Single(x => LiesOfPSaveDiscovery.IsSameCharacter(x.LocalPath, first));
+        await vm.SelectLiesOfPSaveChoiceAsync(choice);
+        Assert.Equal(choice.LocalPath, repository.State.LiesOfPSave.LocalPath);
+        Assert.Single(repository.Saves);
+        foreach (var file in before) Assert.Equal(file.Value, File.ReadAllBytes(file.Key));
     }
 
     [Theory]

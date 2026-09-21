@@ -60,7 +60,7 @@ public sealed class DirectoryCopyFeedbackControlTests
                 Assert.Equal(attempts, copies.Count);
                 Assert.Single(repository.Saves); // Explicit game selection only.
                 if (target == GameId.DemonsSouls)
-                    Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && Equals(x.Content, "Copy") && x.Tag is string);
+                    Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && System.Windows.Automation.AutomationProperties.GetName(x) == "Copy directory path");
                 else
                     Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == otherDirectory);
                 await Switch(window, vm, Game(game));
@@ -201,10 +201,16 @@ public sealed class DirectoryCopyFeedbackControlTests
         finally { window.Close(); }
     });
 
-    private static string Message(bool fail) => fail ? "The directory path could not be copied. Try again." : "Directory path copied.";
-    private static void Copy(MainWindow window) => Click(window, "Copy");
-    private static void Click(MainWindow window, string content) => Tree(window).OfType<Button>()
-        .Single(x => x.IsVisible && Equals(x.Content, content)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static string Message(bool fail) => fail ? "The directory path could not be copied. Try again." : "Directory path copied";
+    private static void Copy(MainWindow window) => Tree(window).OfType<Button>()
+        .Single(x => x.IsVisible && System.Windows.Automation.AutomationProperties.GetName(x) == "Copy directory path")
+        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static void Click(MainWindow window, string content)
+    {
+        var buttons = Tree(window).OfType<Button>().Where(x => x.IsVisible).ToArray();
+        if (content == "Choose Directory" && !buttons.Any(x => Equals(x.Content, content))) content = "Change Directory";
+        buttons.Single(x => Equals(x.Content, content)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    }
     private static async Task Switch(MainWindow window, DesktopTrackerViewModel vm, GameId game)
     {
         ((ComboBox)window.FindName("GameSelector")).SelectedItem = vm.GameChoices.Single(x => x.GameId == game);

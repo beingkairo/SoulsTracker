@@ -36,6 +36,8 @@ public sealed class DirectoryPresentationControlTests
         {
             window.Show(); await vm.InitializeAsync(); await Idle();
             Button help = Tree(window).OfType<Button>().Single(x => x.IsVisible && AutomationProperties.GetName(x).EndsWith("directory discovery help", StringComparison.Ordinal));
+            Assert.Equal("?", help.Content);
+            Assert.True(ToolTipService.GetIsEnabled(help));
             Assert.Equal("Chosen Directory", ((Panel)help.Parent).Children.OfType<TextBlock>().Single().Text);
             help.BringIntoView(); await Idle();
             Assert.True(help.Focus());
@@ -87,10 +89,10 @@ public sealed class DirectoryPresentationControlTests
         try
         {
             window.Show(); await Idle();
-            Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && Equals(x.Content, "Copy") && x.Tag is string);
+            Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && AutomationProperties.GetName(x) == "Copy directory path");
             var choose = Tree(window).OfType<Button>().Single(x => x.IsVisible && Equals(x.Content, "Choose Directory"));
             var heading = Tree(window).OfType<TextBlock>().Single(x => x.IsVisible && x.Text == "Save Directory");
-            Assert.Same(heading.Parent, choose.Parent);
+            Assert.NotSame(heading.Parent, choose.Parent);
             Assert.True(choose.Focusable && choose.IsTabStop);
             choose.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await HostedDesktopPublisherTests.WaitUntil(() => DirectoryPath(vm, game) == directory && !vm.IsBusy);
@@ -99,7 +101,8 @@ public sealed class DirectoryPresentationControlTests
             var grid = Assert.IsType<Grid>(path.Parent);
             var container = Assert.IsType<Border>(grid.Parent);
             Button copyButton = grid.Children.OfType<Button>().Single();
-            Assert.Equal("Copy", copyButton.Content);
+            Assert.Equal("Copy directory path", AutomationProperties.GetName(copyButton));
+            Assert.NotEqual("Copy", copyButton.Content);
             Assert.Equal(directory, AutomationProperties.GetHelpText(path));
             Assert.Equal(TextWrapping.Wrap, path.TextWrapping);
             Assert.Equal("Consolas", path.FontFamily.Source);
@@ -130,8 +133,7 @@ public sealed class DirectoryPresentationControlTests
                 var selector = (ComboBox)window.FindName("EldenRingProfileSlotSelector");
                 Assert.True(selector.IsVisible && selector.IsEnabled);
                 Assert.True(vm.IsEldenRingMissedDeathAdjustmentAvailable);
-                TextBlock feedback = Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Elden Ring character selection status");
-                Assert.Equal(Visibility.Collapsed, feedback.Visibility);
+                Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => AutomationProperties.GetName(x) == "Elden Ring character selection status");
             }
             string replacement = Path.Combine(fixture.Root, "pending");
             CreateSave(game, Path.Combine(replacement, "a")); CreateSave(game, Path.Combine(replacement, "b"), 2);

@@ -25,10 +25,18 @@ public partial class MainWindow : Window
     private readonly Action<string> copyDirectoryPath = text => System.Windows.Clipboard.SetText(text);
     private DesktopTrackerViewModel? directoryCopyViewModel;
     private (GameId? Game, string? Path) directoryCopyContext;
+    private readonly Func<TimeSpan, Action, Action> scheduleCopyExpiry;
+    private Action? cancelCopyExpiry;
+    private long copyFeedbackVersion;
+    private bool copyFeedbackClosed;
+    private HostedOverlayConnection? copyFeedbackConnection;
+    private string lastHostedCopyFeedback = string.Empty;
+    private bool hostedCopyFeedbackVisible;
 
     public MainWindow()
     {
         chooseSaveDirectory = ChooseSaveDirectory;
+        scheduleCopyExpiry = ScheduleCopyExpiry;
         InitializeComponent();
     }
 
@@ -38,15 +46,60 @@ public partial class MainWindow : Window
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory, Action<string> copyDirectoryPath) : this(chooseSaveDirectory) =>
         this.copyDirectoryPath = copyDirectoryPath;
 
+    internal MainWindow(Func<string, string?, string?> chooseSaveDirectory, Action<string> copyDirectoryPath,
+        Func<TimeSpan, Action, Action> scheduleCopyExpiry) : this(chooseSaveDirectory, copyDirectoryPath) =>
+        this.scheduleCopyExpiry = scheduleCopyExpiry;
+
+    private Action ScheduleCopyExpiry(TimeSpan delay, Action expire)
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = delay };
+        EventHandler tick = (_, _) => expire();
+        timer.Tick += tick;
+        timer.Start();
+        return () => { timer.Stop(); timer.Tick -= tick; };
+    }
+
     private void CopyDirectoryPath_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button { Tag: string path } || string.IsNullOrWhiteSpace(path)) return;
         try
         {
             copyDirectoryPath(path);
-            DirectoryCopyStatus.Text = "Directory path copied.";
+            ShowCopyFeedback("Directory path copied", success: true);
         }
-        catch { DirectoryCopyStatus.Text = "The directory path could not be copied. Try again."; }
+        catch { ShowCopyFeedback("The directory path could not be copied. Try again.", success: false); }
+    }
+
+    private void ShowCopyFeedback(string message, bool success, bool hosted = false)
+    {
+        if (copyFeedbackClosed) return;
+        ClearCopyFeedback();
+        hostedCopyFeedbackVisible = hosted;
+        DirectoryCopyStatus.Text = message;
+        CopyFeedbackKind.Text = success ? "Copied" : "Copy failed";
+        var cue = (System.Windows.Media.Brush)FindResource(success ? "SuccessBrush" : "DangerBrush");
+        CopyFeedbackKind.Foreground = cue;
+        CopyFeedbackOverlay.BorderBrush = cue;
+        CopyFeedbackOverlay.Visibility = Visibility.Visible;
+        if (success)
+        {
+            long version = copyFeedbackVersion;
+            cancelCopyExpiry = scheduleCopyExpiry(TimeSpan.FromSeconds(5), () =>
+            {
+                if (!copyFeedbackClosed && version == copyFeedbackVersion) ClearCopyFeedback();
+            });
+        }
+    }
+
+    private void ClearCopyFeedback()
+    {
+        copyFeedbackVersion++;
+        cancelCopyExpiry?.Invoke();
+        cancelCopyExpiry = null;
+        hostedCopyFeedbackVisible = false;
+        DirectoryCopyStatus.Text = string.Empty;
+        CopyFeedbackKind.Text = string.Empty;
+        CopyFeedbackOverlay.Visibility = Visibility.Collapsed;
     }
 
     private string? ChooseSaveDirectory(string title, string? currentDirectory)
@@ -75,7 +128,8 @@ public partial class MainWindow : Window
         if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged -= DirectoryCopyContext_PropertyChanged;
         directoryCopyViewModel = e.NewValue as DesktopTrackerViewModel;
         directoryCopyContext = GetDirectoryCopyContext(directoryCopyViewModel);
-        DirectoryCopyStatus.Text = string.Empty;
+        ClearCopyFeedback();
+        ObserveHostedCopyFeedback();
         if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged += DirectoryCopyContext_PropertyChanged;
         if (e.NewValue is DesktopTrackerViewModel vm && vm.IsEldenRingNoticeVisible)
         {
@@ -96,6 +150,11 @@ public partial class MainWindow : Window
 
     private void DirectoryCopyContext_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is null or "" or nameof(DesktopTrackerViewModel.HostedOverlay))
+        {
+            if (Dispatcher.CheckAccess()) ObserveHostedCopyFeedback();
+            else _ = Dispatcher.BeginInvoke(ObserveHostedCopyFeedback);
+        }
         if (e.PropertyName is not (null or "" or nameof(DesktopTrackerViewModel.SelectedGame)
             or nameof(DesktopTrackerViewModel.EldenRingDirectoryPath)
             or nameof(DesktopTrackerViewModel.BlackMythWukongDirectoryPath)
@@ -108,7 +167,7 @@ public partial class MainWindow : Window
         {
             if (!ReferenceEquals(directoryCopyViewModel, vm) || directoryCopyContext == context) return;
             directoryCopyContext = context;
-            DirectoryCopyStatus.Text = string.Empty;
+            ClearCopyFeedback();
         }
         if (Dispatcher.CheckAccess()) ApplyContext();
         else _ = Dispatcher.BeginInvoke(ApplyContext);
@@ -116,9 +175,37 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        copyFeedbackClosed = true;
+        ClearCopyFeedback();
         if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged -= DirectoryCopyContext_PropertyChanged;
         directoryCopyViewModel = null;
+        ObserveHostedCopyFeedback();
         base.OnClosed(e);
+    }
+
+    private void ObserveHostedCopyFeedback()
+    {
+        var connection = directoryCopyViewModel?.HostedOverlay;
+        if (ReferenceEquals(copyFeedbackConnection, connection)) return;
+        if (copyFeedbackConnection is not null) copyFeedbackConnection.PropertyChanged -= HostedCopyFeedback_PropertyChanged;
+        if (hostedCopyFeedbackVisible) ClearCopyFeedback();
+        copyFeedbackConnection = connection;
+        // Rebinding never revives an old copy notification.
+        lastHostedCopyFeedback = connection?.CopyFeedbackText ?? string.Empty;
+        if (connection is not null) connection.PropertyChanged += HostedCopyFeedback_PropertyChanged;
+    }
+
+    private void HostedCopyFeedback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (copyFeedbackClosed || sender is not HostedOverlayConnection connection || !ReferenceEquals(connection, copyFeedbackConnection)) return;
+        string message = connection.CopyFeedbackText;
+        if (message == lastHostedCopyFeedback) return;
+        lastHostedCopyFeedback = message;
+        if (message.Length == 0)
+        {
+            if (hostedCopyFeedbackVisible) ClearCopyFeedback();
+        }
+        else ShowCopyFeedback(message, message == "Read-only OBS URL copied. Keep the URL private.", hosted: true);
     }
 
     private async void GameSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -573,8 +660,14 @@ public partial class MainWindow : Window
     }
 
 
-    private void CopyTotalDeathsOverlayUrl_Click(object sender, RoutedEventArgs e) =>
-        (DataContext as DesktopTrackerViewModel)?.HostedOverlay?.CopyReadUrl(System.Windows.Clipboard.SetText);
+    private void CopyTotalDeathsOverlayUrl_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel { HostedOverlay: { CanCopy: true } connection }) return;
+        string previous = lastHostedCopyFeedback;
+        bool success = connection.CopyReadUrl(copyDirectoryPath);
+        // Repeated identical copies still reset the same notification's lifetime.
+        if (previous == lastHostedCopyFeedback) ShowCopyFeedback(connection.CopyFeedbackText, success, hosted: true);
+    }
 
     private async void ImportHostedPairing_Click(object sender, RoutedEventArgs e)
     {

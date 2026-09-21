@@ -31,7 +31,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string EldenRingChooseCharacterMessage = "Choose a character to continue.";
     internal const string GameSyncedMessage = "Synced";
     internal const string NoDeathsRecordedMessage = "No deaths recorded yet, the tracker will update after your first death";
-    internal const string SelectedSaveUnreadableMessage = "Selected save cannot currently be read. Save in-game, then Rescan or change the selected save.";
+    internal const string SelectedSaveUnreadableMessage = "Selected save cannot currently be read. Save in-game, then Refresh or change the selected save.";
     internal const string GameTotalDeathsUnavailableMessage = "Unable to read total deaths.";
     internal const string GameTotalDeathsWaitingForActiveCharacterMessage = "Unavailable, waiting for active character.";
 
@@ -345,17 +345,22 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
                 return SelectedSaveUnreadableMessage;
             }
 
+            if ((selectedGameId == GameId.EldenRing || selectedGameId == GameId.BlackMythWukong || selectedGameId == GameId.LiesOfP)
+                && SaveReaderStatus(selectedGameId) is { } saveStatus
+                && (runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached)
+                    || RequiresDirectoryAttention(saveStatus))) return saveStatus;
+
             if (selectedGameId == GameId.BlackMythWukong && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
-                return BlackMythWukongDirectoryStatus ?? (state?.BlackMythWukongSave.LocalPath is null ? WaitingForSaveFileMessage(selectedGameId) : GameUnavailableMessage);
+                return state?.BlackMythWukongSave.LocalPath is null ? WaitingForSaveFileMessage(selectedGameId) : GameUnavailableMessage;
             }
             if (selectedGameId == GameId.LiesOfP && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
-                return LiesOfPDirectoryStatus ?? (state?.LiesOfPSave.LocalPath is null ? WaitingForSaveFileMessage(selectedGameId) : GameUnavailableMessage);
+                return state?.LiesOfPSave.LocalPath is null ? WaitingForSaveFileMessage(selectedGameId) : GameUnavailableMessage;
             }
             if (selectedGameId == GameId.EldenRing && runtimeReaderStatus is not (RuntimeGameReaderStatus.Synced or RuntimeGameReaderStatus.Cached))
             {
-                if (state?.EldenRingSave.LocalPath is null) return EldenRingSaveDiscoveryStatus ?? GameWaitingForSaveFileMessage;
+                if (state?.EldenRingSave.LocalPath is null) return GameWaitingForSaveFileMessage;
                 if (state.EldenRingSave.SlotIndex == EldenRingSaveConfiguration.NoSlotIndex) return EldenRingChooseCharacterMessage;
             }
 
@@ -628,7 +633,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 EldenRingSaveSourceState = stableState;
                 IsEldenRingChangeMode = stableChangeMode;
-                SetEldenRingSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Choose directory.");
+                SetEldenRingSaveDiscoveryStatus("Could not search for local saves. Try Refresh or choose another directory.");
             }
             return;
         }
@@ -637,6 +642,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         EldenRingSaveChoices.Clear();
         foreach (DiscoveredLocalSave candidate in candidates) EldenRingSaveChoices.Add(candidate);
         string? configured = state?.EldenRingSave.LocalPath;
+        ProjectDiscoveredDirectory(GameId.EldenRing, candidates);
         SelectedEldenRingSaveChoice = candidates.SingleOrDefault(candidate => string.Equals(candidate.LocalPath, configured, StringComparison.OrdinalIgnoreCase));
 
         if (configured is not null && !File.Exists(configured))
@@ -657,7 +663,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         }
         else if (configured is null && candidates.Count > 1)
         {
-            SetEldenRingSaveDiscoveryStatus("Choose a save to track");
+            SetEldenRingSaveDiscoveryStatus(ChooseCharacterMessage);
             EldenRingSaveSourceState = LocalSaveSourceState.MultipleCandidates;
             ApplyEldenRingProfileChoices([]);
         }
@@ -745,7 +751,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             {
                 WukongSaveSourceState = stableState;
                 IsBlackMythWukongChangeMode = stableChangeMode;
-                SetBlackMythWukongSaveDiscoveryStatus("Could not search for local saves. Try Rescan or Choose directory.");
+                SetBlackMythWukongSaveDiscoveryStatus("Could not search for local saves. Try Refresh or choose another directory.");
                 NotifyWukongSaveSourceProperties();
             }
             return;
@@ -756,6 +762,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         foreach (DiscoveredLocalSave candidate in candidates) BlackMythWukongSaveChoices.Add(candidate);
 
         string? configured = state?.BlackMythWukongSave.LocalPath;
+        ProjectDiscoveredDirectory(GameId.BlackMythWukong, candidates);
         string? metadataPath = null;
         string? metadataReadPath = null;
         BlackMythWukongSaveMetadata? refreshedMetadata = null;
@@ -788,7 +795,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         else if (configured is null && candidates.Count > 1)
         {
             WukongSaveSourceState = LocalSaveSourceState.MultipleCandidates;
-            SetBlackMythWukongSaveDiscoveryStatus("Choose the save slot you’re streaming.");
+            SetBlackMythWukongSaveDiscoveryStatus(ChooseCharacterMessage);
         }
         else if (configured is not null)
         {
@@ -1271,7 +1278,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
 
         if (runtimeReaderStatus == RuntimeGameReaderStatus.SelectedSaveUnreadable)
         {
-            TotalDeathsText = SelectedSaveUnreadableMessage;
+            TotalDeathsText = GameTotalDeathsUnavailableMessage;
             return;
         }
 
@@ -1280,11 +1287,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             ? combined.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : IsManualGame(selectedId)
                 ? ManualDeaths.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForActiveCharacter && !IsProcessReaderGame(selectedId)
-                    ? GameTotalDeathsWaitingForActiveCharacterMessage
-                    : runtimeReaderStatus == RuntimeGameReaderStatus.WaitingForSaveFile
-                        ? WaitingForSaveFileMessage(selectedId) + " to begin tracking."
-                        : GameTotalDeathsUnavailableMessage;
+                : GameTotalDeathsUnavailableMessage;
     }
 
 
@@ -1459,6 +1462,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         if (outcome.CommittedState is not null) ApplyCommittedState(outcome.CommittedState);
         if (outcome.Candidates is { } candidates)
         {
+            ProjectDiscoveredDirectory(GameId.LiesOfP, candidates);
             LiesOfPSaveChoices.Clear();
             foreach (DiscoveredLocalSave candidate in candidates) LiesOfPSaveChoices.Add(candidate);
         }
@@ -1547,7 +1551,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
                 : LocalSaveSourceState.NoCandidate;
             SetBlackMythWukongSaveDiscoveryStatus(
                 BlackMythWukongSaveChoices.Count > 1
-                    ? "Choose the save slot youâ€™re streaming."
+                    ? ChooseCharacterMessage
                     : MissingSaveDirectoryMessage);
         }
         else if (File.Exists(localPath))

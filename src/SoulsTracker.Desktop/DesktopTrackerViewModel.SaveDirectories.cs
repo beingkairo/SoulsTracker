@@ -10,15 +10,50 @@ public sealed partial class DesktopTrackerViewModel
     internal const string MissingSaveDirectoryMessage = "Save directory was not found automatically, please click Choose Directory and select the save folder";
     // Session-only provenance, keyed by the source actually selected by discovery.
     private readonly Dictionary<GameId, string> automaticDirectorySources = [];
+    private readonly Dictionary<GameId, string> discoveredDirectories = [];
+    internal const string ChooseCharacterMessage = "Choose a character to continue.";
     public bool EldenRingDirectoryWasAutomatic => DirectoryWasAutomatic(GameId.EldenRing);
     public bool BlackMythWukongDirectoryWasAutomatic => DirectoryWasAutomatic(GameId.BlackMythWukong);
     public bool LiesOfPDirectoryWasAutomatic => DirectoryWasAutomatic(GameId.LiesOfP);
     public string? EldenRingDirectoryStatus => DirectoryStatus(GameId.EldenRing, EldenRingSaveDiscoveryStatus, SelectedEldenRingSaveChoice);
     public string? BlackMythWukongDirectoryStatus => DirectoryStatus(GameId.BlackMythWukong, BlackMythWukongSaveDiscoveryStatus, SelectedBlackMythWukongSaveChoice);
     public string? LiesOfPDirectoryStatus => DirectoryStatus(GameId.LiesOfP, LiesOfPSaveDiscoveryStatus, SelectedLiesOfPSaveChoice);
+    public string? EldenRingDirectoryActionFeedback => ActionFeedback(EldenRingDirectoryStatus);
+    public string? BlackMythWukongDirectoryActionFeedback => ActionFeedback(BlackMythWukongDirectoryStatus);
+    public string? LiesOfPDirectoryActionFeedback => ActionFeedback(LiesOfPDirectoryStatus);
+
+    private static string? ActionFeedback(string? status) => status?.Contains("previous selection is unchanged", StringComparison.OrdinalIgnoreCase) == true
+        || status?.Contains("could not be saved", StringComparison.OrdinalIgnoreCase) == true ? status : null;
+
+    private string? SaveReaderStatus(GameId game)
+    {
+        string? status = game == GameId.EldenRing ? EldenRingDirectoryStatus
+            : game == GameId.BlackMythWukong ? BlackMythWukongDirectoryStatus : LiesOfPDirectoryStatus;
+        return ActionFeedback(status) is null ? status : null;
+    }
+
+    private static bool RequiresDirectoryAttention(string status) => status == ChooseCharacterMessage
+        || status.StartsWith("No usable saves", StringComparison.Ordinal)
+        || status.StartsWith("The directory could not be used", StringComparison.Ordinal)
+        || status.StartsWith("Selected source is unavailable", StringComparison.Ordinal)
+        || status.StartsWith("Character information is unavailable", StringComparison.Ordinal);
 
     private bool DirectoryWasAutomatic(GameId game) => pendingDirectoryGame != game
-        && automaticDirectorySources.TryGetValue(game, out string? path) && PathsEqual(path, ConfiguredPathFor(game));
+        && ((ConfiguredPathFor(game) is null && discoveredDirectories.ContainsKey(game))
+            || (automaticDirectorySources.TryGetValue(game, out string? path) && PathsEqual(path, ConfiguredPathFor(game))));
+
+    private void ProjectDiscoveredDirectory(GameId game, IEnumerable<DiscoveredLocalSave> candidates)
+    {
+        // Presentation only: never choose a source or persist an ambiguous result.
+        if (ConfiguredPathFor(game) is not null) return;
+        string?[] directories = candidates.Select(x => Path.GetDirectoryName(x.LocalPath))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (directories is [string directory] && !string.IsNullOrWhiteSpace(directory))
+            discoveredDirectories[game] = directory;
+        else
+            discoveredDirectories.Remove(game);
+        NotifyDirectoryPaths();
+    }
 
     private string? DirectoryStatus(GameId game, string? status, DiscoveredLocalSave? selected) =>
         status == selected?.Label || (ConfiguredPathFor(game) is { } path && status == Path.GetFileName(path)) ? null : status;
@@ -53,6 +88,7 @@ public sealed partial class DesktopTrackerViewModel
     {
         if (pendingDirectoryGame == game) return pendingSaveDirectory;
         if (ConfiguredDirectoryFor(game) is { } directory) return directory;
+        if (ConfiguredPathFor(game) is null && discoveredDirectories.TryGetValue(game, out string? discovered)) return discovered;
         try { return Path.GetDirectoryName(ConfiguredPathFor(game)); }
         catch (ArgumentException) { return null; }
     }
@@ -90,7 +126,7 @@ public sealed partial class DesktopTrackerViewModel
             {
                 SetDirectoryStatus(game, isReplacement && ConfiguredPathFor(game) is not null
                     ? "No usable saves found in the attempted directory. Your previous selection is unchanged. Choose another directory or Cancel."
-                    : "No usable saves found in this directory. Choose another directory or Rescan.");
+                    : "No usable saves found in this directory. Choose another directory or Refresh.");
                 return;
             }
             pendingSaveDirectory = Path.GetFullPath(directory);
@@ -104,14 +140,14 @@ public sealed partial class DesktopTrackerViewModel
             if (selected is not null || (candidates.Count == 1 && (allowReplacement || ConfiguredPathFor(game) is null)))
                 await CommitDirectoryChoiceAsync(game, selected ?? candidates[0], version, cancellationToken, preserveProfileSelection: !allowReplacement);
             else
-                SetDirectoryStatus(game, game == GameId.EldenRing ? "Choose a save source, then a character." : "Choose the character or save slot you are streaming.");
+                SetDirectoryStatus(game, ChooseCharacterMessage);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch
         {
             if (IsCurrentDirectoryOperation(game, version)) SetDirectoryStatus(game, isReplacement && directorySelectionSnapshot?.Game == game && ConfiguredPathFor(game) is not null
                 ? "The attempted directory could not be used. Your previous selection is unchanged. Choose another directory or Cancel."
-                : "The directory could not be used. Choose another directory or Rescan.");
+                : "The directory could not be used. Choose another directory or Refresh.");
         }
     }
 
@@ -122,7 +158,7 @@ public sealed partial class DesktopTrackerViewModel
         if (!IsCurrentDirectoryOperation(game, version)) return;
         if (!valid)
         {
-            SetDirectoryStatus(game, "Selected source is unavailable or unsupported. Rescan or choose another directory.");
+            SetDirectoryStatus(game, "Selected source is unavailable or unsupported. Refresh or choose another directory.");
             return;
         }
         IReadOnlyList<EldenRingProfileSlotChoice> profiles = [];
@@ -131,7 +167,7 @@ public sealed partial class DesktopTrackerViewModel
         if (!IsCurrentDirectoryOperation(game, version)) return;
         if (game == GameId.EldenRing && profiles.Count == 0)
         {
-            SetDirectoryStatus(game, "Character information is unavailable. Rescan or choose another directory.");
+            SetDirectoryStatus(game, "Character information is unavailable. Refresh or choose another directory.");
             return;
         }
         // Persistence is the commit boundary. The same disabled-controls guard
@@ -260,6 +296,9 @@ public sealed partial class DesktopTrackerViewModel
 
     private void NotifyDirectoryPaths()
     {
+        OnPropertyChanged(nameof(EldenRingDirectoryActionFeedback));
+        OnPropertyChanged(nameof(BlackMythWukongDirectoryActionFeedback));
+        OnPropertyChanged(nameof(LiesOfPDirectoryActionFeedback));
         OnPropertyChanged(nameof(EldenRingDirectoryWasAutomatic));
         OnPropertyChanged(nameof(BlackMythWukongDirectoryWasAutomatic));
         OnPropertyChanged(nameof(LiesOfPDirectoryWasAutomatic));

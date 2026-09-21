@@ -25,13 +25,13 @@ Existing local OBS URLs need one deliberate replacement. Styles embedded in old 
 
 Keep the pairing file and read-only OBS URL private. The original pairing file contains write authority and is not deleted by import. **Reconnect** explicitly starts a new publisher session; close another publisher first if a conflict is reported. **Import / Replace pairing** is the recovery entry for a new operator-issued bundle. **Remove pairing** stops publication and deletes only this PC's protected pairing, not cloud state or remote capabilities. Contact the operator for revocation or deletion.
 
-Browse and Rescan help with save locations. Save-based counters update after the game saves.
+Choose Directory and Refresh help with save locations. Save-based counters update after the game saves.
 
 ## Make it yours
 
 The **Overlay** tab controls fonts, colors, size, background, alignment, outlines, and shadows.
 
-The **Settings** tab includes TXT output for OBS text sources, update checks, and global hotkeys for manual counters.
+The **Settings** tab includes TXT output for OBS text sources, update checks, and global hotkeys for the manual counter and Elden Ring missed deaths.
 
 ## Privacy and read-only use
 

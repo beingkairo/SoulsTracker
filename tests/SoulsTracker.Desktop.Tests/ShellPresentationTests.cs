@@ -194,6 +194,7 @@ public sealed class ShellPresentationTests
             window.Show();
             foreach (string status in HotkeyStatuses)
             {
+                ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
                 window.DataContext = new { IsHotkeyRecording = false, IsEldenRingNoticeVisible = false, IsGlobalHotkeyConfigurationAvailable = true, GlobalHotkeyStatus = status,
                     GlobalHotkeyUsageDescription = "Synthetic hotkey usage.", IsEldenRingMissedDeathAdjustmentAvailable = true };
                 await Idle();
@@ -201,9 +202,11 @@ public sealed class ShellPresentationTests
                 Assert.Equal(status != "Global hotkeys are active.", feedback.IsVisible);
                 Assert.Equal(status, feedback.Text);
             }
-            const string missed = "Some PvP and invasion-style deaths, including the Great Jar challenge, are excluded from Elden Ring's save files";
+            const string missed = "Some PvP and invasion-style deaths, including the Great Jar challenge, are excluded from Elden Ring's save files. Customizable hotkeys for increment and decrement of deaths can be found in the Settings tab.";
             foreach (var (name, expected) in new[] { ("MissedDeathsHelpButton", missed), ("GlobalHotkeysHelpButton", "Synthetic hotkey usage. Choose a field to record. Enter saves and returns to the main menu; Esc cancels.") })
             {
+                ((TabItem)window.FindName(name == "MissedDeathsHelpButton" ? "MainWorkspaceTab" : "SettingsWorkspaceTab")).IsSelected = true;
+                await Idle();
                 var help = Assert.IsType<Button>(window.FindName(name));
                 Assert.True(help.Focusable && help.IsTabStop && help.IsEnabled);
                 Assert.Equal(expected, AutomationProperties.GetHelpText(help));
@@ -220,6 +223,8 @@ public sealed class ShellPresentationTests
                 await Idle();
                 Assert.False(tooltip.IsOpen);
             }
+            ((TabItem)window.FindName("MainWorkspaceTab")).IsSelected = true;
+            await Idle();
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Add any missed deaths manually");
             Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text == missed || x.Text == "Synthetic hotkey usage.");
         }

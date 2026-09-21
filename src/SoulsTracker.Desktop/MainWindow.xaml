@@ -103,6 +103,24 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="DirectoryChooseButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Content" Value="Change Directory" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Content, RelativeSource={RelativeSource Self}}" />
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="{x:Null}"><Setter Property="Content" Value="Choose Directory" /></Trigger>
+                <Trigger Property="Tag" Value=""><Setter Property="Content" Value="Choose Directory" /></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="DirectoryCopyButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="ToolTip" Value="Copy directory path" />
+            <Setter Property="AutomationProperties.Name" Value="Copy directory path" />
+            <Setter Property="ContentTemplate">
+                <Setter.Value><DataTemplate><Path Width="14" Height="16" Stretch="Uniform" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.5" Data="M 4,4 L 14,4 14,16 4,16 Z M 10,1 L 1,1 1,12" /></DataTemplate></Setter.Value>
+            </Setter>
+            <Setter Property="Content" Value="" />
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}" />
             <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
@@ -128,9 +146,27 @@
             </Setter>
         </Style>
         <Style x:Key="ContextHelpButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Content" Value="Help" />
+            <Setter Property="Content" Value="?" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Margin" Value="8,0,0,0" />
-            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <Border x:Name="HelpCircle" Width="19" Height="19" BorderBrush="{StaticResource MutedTextBrush}" BorderThickness="1" CornerRadius="10">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource AccentBrush}" /><Setter TargetName="HelpCircle" Property="BorderThickness" Value="2" /></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource PrimaryTextBrush}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Setter Property="ToolTipService.ShowDuration" Value="60000" />
             <EventSetter Event="GotKeyboardFocus" Handler="ContextHelp_GotKeyboardFocus" />
             <EventSetter Event="LostKeyboardFocus" Handler="ContextHelp_LostKeyboardFocus" />
@@ -395,28 +431,32 @@
                                     <Button Style="{StaticResource ContextHelpButton}" Visibility="{Binding EldenRingDirectoryWasAutomatic, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring directory discovery help" AutomationProperties.HelpText="Save directory was found automatically">
                                         <Button.ToolTip><ToolTip Content="Save directory was found automatically" /></Button.ToolTip>
                                     </Button>
-                                    <Button Margin="8,0,0,0" Content="Choose Directory" Click="BrowseEldenRingSave_Click" Visibility="{Binding IsEldenRingBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Elden Ring save directory" ToolTip="Choose the save directory or its account folder, then select a source and character if needed." />
-                                    <Button Margin="8,0,0,0" Content="Change Directory" Click="ChangeEldenRingSave_Click" Visibility="{Binding IsEldenRingChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Elden Ring save directory" />
+
                                 </WrapPanel>
                                 <Border Style="{StaticResource DirectoryPathContainer}" Tag="{Binding EldenRingDirectoryPath}">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding EldenRingDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding EldenRingDirectoryPath}" AutomationProperties.Name="Elden Ring chosen directory" AutomationProperties.HelpText="{Binding EldenRingDirectoryPath}" />
-                                        <Button Grid.Column="1" VerticalAlignment="Center" Content="Copy" Tag="{Binding EldenRingDirectoryPath}" Click="CopyDirectoryPath_Click" AutomationProperties.Name="Copy Elden Ring directory path" />
+                                        <Button Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding EldenRingDirectoryPath}" Click="CopyDirectoryPath_Click" />
                                     </Grid>
                                 </Border>
-                                <WrapPanel>
-                                    <ComboBox x:Name="EldenRingSaveSelector" Width="190" ItemsSource="{Binding EldenRingSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingSaveChoice, Mode=OneWay}" SelectionChanged="EldenRingSave_SelectionChanged" IsEnabled="{Binding IsEldenRingSaveSelectorEnabled}" Visibility="{Binding IsEldenRingSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save" />
-                                    <Button Margin="8,0,0,0" Content="Rescan" Click="RescanEldenRingSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Rescan Elden Ring saves" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Style="{StaticResource DirectoryChooseButton}" Tag="{Binding EldenRingDirectoryPath}" Click="BrowseEldenRingSave_Click" Visibility="{Binding IsEldenRingBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
+                                    <Button Content="Change Directory" Click="ChangeEldenRingSave_Click" Visibility="{Binding IsEldenRingChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Elden Ring save directory" />
+                                    <Button Margin="8,0,0,0" Content="Refresh" Click="RescanEldenRingSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Refresh Elden Ring saves" />
                                     <Button Margin="8,0,0,0" Content="Cancel" Click="CancelEldenRingChange_Click" Visibility="{Binding IsEldenRingCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Elden Ring save change" />
-                                </WrapPanel>
-                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding EldenRingDirectoryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring save discovery status" AutomationProperties.HelpText="{Binding EldenRingDirectoryStatus}" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock FontWeight="SemiBold" Text="Save source" />
+                                    <ComboBox x:Name="EldenRingSaveSelector" Margin="0,5,0,0" HorizontalAlignment="Left" Width="190" ItemsSource="{Binding EldenRingSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingSaveChoice, Mode=OneWay}" SelectionChanged="EldenRingSave_SelectionChanged" IsEnabled="{Binding IsEldenRingSaveSelectorEnabled}" Visibility="{Binding IsEldenRingSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding EldenRingDirectoryActionFeedback}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring directory action feedback" />
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock FontWeight="SemiBold" Text="Choose character" />
                                     <StackPanel Margin="0,5,0,0" Orientation="Horizontal">
                                         <ComboBox x:Name="EldenRingProfileSlotSelector" Width="190" ItemsSource="{Binding EldenRingProfileSlots}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedEldenRingProfileSlot, Mode=OneWay}" SelectionChanged="EldenRingProfileSlot_SelectionChanged" IsEnabled="{Binding CanSelectEldenRingProfile}" AutomationProperties.Name="Elden Ring character slot" />
                                     </StackPanel>
-                                    <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding EldenRingCharacterStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Elden Ring character selection status" />
+
                                 </StackPanel>
                             </StackPanel>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsBlackMythWukongSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong save reader setup">
@@ -426,22 +466,26 @@
                                     <Button Style="{StaticResource ContextHelpButton}" Visibility="{Binding BlackMythWukongDirectoryWasAutomatic, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong directory discovery help" AutomationProperties.HelpText="Save directory was found automatically">
                                         <Button.ToolTip><ToolTip Content="Save directory was found automatically" /></Button.ToolTip>
                                     </Button>
-                                    <Button Margin="8,0,0,0" Content="Choose Directory" Click="BrowseBlackMythWukongSave_Click" Visibility="{Binding IsWukongBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Black Myth Wukong save directory" ToolTip="Choose SaveGames or its account folder, then select a save slot if needed." />
-                                    <Button Margin="8,0,0,0" Content="Change Directory" Click="ChangeBlackMythWukongSave_Click" Visibility="{Binding IsWukongChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Black Myth Wukong save directory" />
+
                                 </WrapPanel>
                                 <Border Style="{StaticResource DirectoryPathContainer}" Tag="{Binding BlackMythWukongDirectoryPath}">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding BlackMythWukongDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding BlackMythWukongDirectoryPath}" AutomationProperties.Name="Black Myth Wukong chosen directory" AutomationProperties.HelpText="{Binding BlackMythWukongDirectoryPath}" />
-                                        <Button Grid.Column="1" VerticalAlignment="Center" Content="Copy" Tag="{Binding BlackMythWukongDirectoryPath}" Click="CopyDirectoryPath_Click" AutomationProperties.Name="Copy Black Myth Wukong directory path" />
+                                        <Button Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding BlackMythWukongDirectoryPath}" Click="CopyDirectoryPath_Click" />
                                     </Grid>
                                 </Border>
-                                <WrapPanel>
-                                    <ComboBox x:Name="BlackMythWukongSaveSelector" Width="190" ItemsSource="{Binding BlackMythWukongSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedBlackMythWukongSaveChoice, Mode=OneWay}" SelectionChanged="BlackMythWukongSave_SelectionChanged" IsEnabled="{Binding IsWukongSaveSelectorEnabled}" Visibility="{Binding IsWukongSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong save slot" />
-                                    <Button Margin="8,0,0,0" Content="Rescan" Click="RescanBlackMythWukongSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Rescan Black Myth Wukong saves" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Style="{StaticResource DirectoryChooseButton}" Tag="{Binding BlackMythWukongDirectoryPath}" Click="BrowseBlackMythWukongSave_Click" Visibility="{Binding IsWukongBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
+                                    <Button Content="Change Directory" Click="ChangeBlackMythWukongSave_Click" Visibility="{Binding IsWukongChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Black Myth Wukong save directory" />
+                                    <Button Margin="8,0,0,0" Content="Refresh" Click="RescanBlackMythWukongSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Refresh Black Myth Wukong saves" />
                                     <Button Margin="8,0,0,0" Content="Cancel" Click="CancelBlackMythWukongChange_Click" Visibility="{Binding IsWukongCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Black Myth Wukong save change" />
-                                </WrapPanel>
-                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding BlackMythWukongDirectoryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Black Myth Wukong save discovery status" AutomationProperties.HelpText="{Binding BlackMythWukongDirectoryStatus}" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding IsWukongSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock FontWeight="SemiBold" Text="Choose character" />
+                                    <ComboBox x:Name="BlackMythWukongSaveSelector" Margin="0,5,0,0" HorizontalAlignment="Left" Width="190" ItemsSource="{Binding BlackMythWukongSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedBlackMythWukongSaveChoice, Mode=OneWay}" SelectionChanged="BlackMythWukongSave_SelectionChanged" IsEnabled="{Binding IsWukongSaveSelectorEnabled}" Visibility="{Binding IsWukongSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Black Myth Wukong character slot" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding BlackMythWukongDirectoryActionFeedback}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Black Myth Wukong directory action feedback" />
                                 <TextBlock x:Name="BlackMythWukongSaveMetadataTextBlock"
                                            Margin="0,3,0,0"
                                            Text="{Binding BlackMythWukongSaveMetadataText, Mode=OneWay}"
@@ -469,24 +513,28 @@
                                     <Button Style="{StaticResource ContextHelpButton}" Visibility="{Binding LiesOfPDirectoryWasAutomatic, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P directory discovery help" AutomationProperties.HelpText="Save directory was found automatically">
                                         <Button.ToolTip><ToolTip Content="Save directory was found automatically" /></Button.ToolTip>
                                     </Button>
-                                    <Button Margin="8,0,0,0" Content="Choose Directory" Click="BrowseLiesOfPSave_Click" Visibility="{Binding IsLiesOfPBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Choose Lies of P save directory" ToolTip="Choose SaveGames or its account folder, then select a character if needed." />
-                                    <Button Margin="8,0,0,0" Content="Change Directory" Click="ChangeLiesOfPSave_Click" Visibility="{Binding IsLiesOfPChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Lies of P save directory" />
+
                                 </WrapPanel>
                                 <Border Style="{StaticResource DirectoryPathContainer}" Tag="{Binding LiesOfPDirectoryPath}">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding LiesOfPDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding LiesOfPDirectoryPath}" AutomationProperties.Name="Lies of P chosen directory" AutomationProperties.HelpText="{Binding LiesOfPDirectoryPath}" />
-                                        <Button Grid.Column="1" VerticalAlignment="Center" Content="Copy" Tag="{Binding LiesOfPDirectoryPath}" Click="CopyDirectoryPath_Click" AutomationProperties.Name="Copy Lies of P directory path" />
+                                        <Button Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding LiesOfPDirectoryPath}" Click="CopyDirectoryPath_Click" />
                                     </Grid>
                                 </Border>
-                                <WrapPanel>
-                                    <ComboBox x:Name="LiesOfPSaveSelector" Width="190" ItemsSource="{Binding LiesOfPSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedLiesOfPSaveChoice, Mode=OneWay}" SelectionChanged="LiesOfPSave_SelectionChanged" IsEnabled="{Binding IsLiesOfPSaveSelectorEnabled}" Visibility="{Binding IsLiesOfPSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P character save" />
-                                    <Button Margin="8,0,0,0" Content="Rescan" Click="RescanLiesOfPSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Rescan Lies of P saves" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Style="{StaticResource DirectoryChooseButton}" Tag="{Binding LiesOfPDirectoryPath}" Click="BrowseLiesOfPSave_Click" Visibility="{Binding IsLiesOfPBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
+                                    <Button Content="Change Directory" Click="ChangeLiesOfPSave_Click" Visibility="{Binding IsLiesOfPChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Lies of P save directory" />
+                                    <Button Margin="8,0,0,0" Content="Refresh" Click="RescanLiesOfPSaves_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Refresh Lies of P saves" />
                                     <Button Margin="8,0,0,0" Content="Cancel" Click="CancelLiesOfPChange_Click" Visibility="{Binding IsLiesOfPCancelVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Cancel Lies of P save change" />
-                                </WrapPanel>
-                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding LiesOfPDirectoryStatus}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Lies of P save discovery status" AutomationProperties.HelpText="{Binding LiesOfPDirectoryStatus}" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding IsLiesOfPSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock FontWeight="SemiBold" Text="Choose character" />
+                                    <ComboBox x:Name="LiesOfPSaveSelector" Margin="0,5,0,0" HorizontalAlignment="Left" Width="190" ItemsSource="{Binding LiesOfPSaveChoices}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedLiesOfPSaveChoice, Mode=OneWay}" SelectionChanged="LiesOfPSave_SelectionChanged" IsEnabled="{Binding IsLiesOfPSaveSelectorEnabled}" Visibility="{Binding IsLiesOfPSaveSelectorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Lies of P character slot" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding LiesOfPDirectoryActionFeedback}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Lies of P directory action feedback" />
                             </StackPanel>
-                            <TextBlock x:Name="DirectoryCopyStatus" Style="{StaticResource OptionalSaveFeedback}" AutomationProperties.Name="Directory copy status" AutomationProperties.LiveSetting="Polite" />
+
                             <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4">
                                 <StackPanel>
                                     <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedTextBrush}" Text="READER STATUS" />
@@ -494,7 +542,7 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" /><Style.Triggers>
                                                 <DataTrigger Binding="{Binding RuntimeReaderStatusText}" Value="Synced"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}" /></DataTrigger>
-                                                <DataTrigger Binding="{Binding RuntimeReaderStatusText}" Value="Waiting for character selection"><Setter Property="Foreground" Value="{StaticResource WaitingBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding RuntimeReaderStatusText}" Value="Choose a character to continue."><Setter Property="Foreground" Value="{StaticResource WaitingBrush}" /></DataTrigger>
                                             </Style.Triggers></Style>
                                         </TextBlock.Style>
                                     </TextBlock>
@@ -529,7 +577,7 @@
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingMissedDeathAdjustmentAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring missed deaths adjustment">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Text="MISSED DEATHS" />
-                                    <Button x:Name="MissedDeathsHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Missed deaths help" AutomationProperties.HelpText="Some PvP and invasion-style deaths, including the Great Jar challenge, are excluded from Elden Ring's save files">
+                                    <Button x:Name="MissedDeathsHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Missed deaths help" AutomationProperties.HelpText="Some PvP and invasion-style deaths, including the Great Jar challenge, are excluded from Elden Ring's save files. Customizable hotkeys for increment and decrement of deaths can be found in the Settings tab.">
                                         <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                     </Button>
                                 </StackPanel>
@@ -541,27 +589,7 @@
                                     <Button Width="78" Margin="8,0,0,0" Click="IncrementEldenRingMissedDeaths_Click" IsEnabled="{Binding CanAdjustEldenRingMissedDeaths}" Content="+1" AutomationProperties.Name="Add Elden Ring missed death" />
                                 </StackPanel>
                             </StackPanel>
-                            <TextBlock x:Name="GlobalHotkeyStatusTextBlock" Margin="0,12,0,0" Text="{Binding GlobalHotkeyStatus, Mode=OneWay}" AutomationProperties.Name="{Binding GlobalHotkeyStatus, Mode=OneWay}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
-                                        <Setter Property="Visibility" Value="{Binding IsGlobalHotkeyConfigurationAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding GlobalHotkeyStatus}" Value="Global hotkeys are active."><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <StackPanel Margin="0,12,0,0" Visibility="{Binding IsGlobalHotkeyConfigurationAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Text="GLOBAL HOTKEYS" />
-                                    <Button x:Name="GlobalHotkeysHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Global hotkeys help" AutomationProperties.HelpText="{Binding GlobalHotkeyUsageDescription, StringFormat={}{0} Choose a field to record. Enter saves and returns to the main menu; Esc cancels.}">
-                                        <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
-                                    </Button>
-                                </StackPanel>
-                                <DockPanel Margin="0,0,0,5"><TextBlock Width="90" VerticalAlignment="Center" Text="Increment" /><TextBox x:Name="IncrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingIncrementHotkey, Mode=OneWay}" GotKeyboardFocus="IncrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Increment global hotkey" /></DockPanel>
-                                <DockPanel><TextBlock Width="90" VerticalAlignment="Center" Text="Decrement" /><TextBox x:Name="DecrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingDecrementHotkey, Mode=OneWay}" GotKeyboardFocus="DecrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Decrement global hotkey" /></DockPanel>
-                                <Button x:Name="ApplyHotkeysButton" Margin="0,8,0,0" HorizontalAlignment="Left" Click="ApplyHotkeysButton_Click" Content="Apply hotkeys" AutomationProperties.Name="Apply global hotkeys" />
-                            </StackPanel>
+
                             <TextBlock x:Name="ErrorMessageTextBlock" Margin="0,8,0,0" Foreground="{StaticResource DangerBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" AutomationProperties.Name="Tracker error status" />
                         </StackPanel>
                     </Border>
@@ -615,7 +643,7 @@
                                     <Button Content="Reconnect" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanReconnect, FallbackValue=False}" Click="ReconnectHosted_Click" AutomationProperties.Name="Reconnect hosted publisher" />
                                     <Button Content="Remove pairing" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanRemove, FallbackValue=False}" Click="RemoveHostedPairing_Click" AutomationProperties.Name="Remove local hosted pairing" />
                                 </WrapPanel>
-                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding HostedOverlay.CopyFeedbackText}" AutomationProperties.Name="Hosted URL copy feedback" />
+
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Put this as a browser source in your OBS or as a Link Source in TikTok Live Studio to display it on stream" />
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Keep the read-only URL private. Total Deaths below controls visibility only; it does not withdraw publication consent." />
                                 <CheckBox x:Name="TotalDeathsOverlayEnabledCheckBox" Content="Total Deaths" IsChecked="{Binding IsTotalDeathsOverlayEnabled, Mode=OneWay}" IsEnabled="{Binding PresentationControlsEnabled}" Checked="TotalDeathsOverlayEnabled_Checked" Unchecked="TotalDeathsOverlayEnabled_Unchecked" AutomationProperties.Name="Show Total Deaths overlay" />
@@ -669,6 +697,29 @@
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,24,24,16" AutomationProperties.Name="Settings workspace content">
                 <StackPanel x:Name="SettingsContentStack">
+                    <Border Style="{StaticResource Panel}" Margin="0,0,0,14" Visibility="{Binding IsGlobalHotkeyConfigurationAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Global hotkeys settings">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Text="GLOBAL HOTKEYS" />
+                                <Button x:Name="GlobalHotkeysHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Global hotkeys help" AutomationProperties.HelpText="{Binding GlobalHotkeyUsageDescription, StringFormat={}{0} Choose a field to record. Enter saves and returns to the main menu; Esc cancels.}">
+                                    <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
+                                </Button>
+                            </StackPanel>
+                            <DockPanel Margin="0,0,0,5"><TextBlock Width="90" VerticalAlignment="Center" Text="Increment" /><TextBox x:Name="IncrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingIncrementHotkey, Mode=OneWay}" GotKeyboardFocus="IncrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Increment global hotkey" /></DockPanel>
+                            <DockPanel><TextBlock Width="90" VerticalAlignment="Center" Text="Decrement" /><TextBox x:Name="DecrementHotkeyTextBox" IsReadOnly="True" Text="{Binding PendingDecrementHotkey, Mode=OneWay}" GotKeyboardFocus="DecrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Decrement global hotkey" /></DockPanel>
+                            <Button x:Name="ApplyHotkeysButton" Margin="0,8,0,0" HorizontalAlignment="Left" Click="ApplyHotkeysButton_Click" Content="Apply hotkeys" AutomationProperties.Name="Apply global hotkeys" />
+                            <TextBlock x:Name="GlobalHotkeyStatusTextBlock" Margin="0,12,0,0" Text="{Binding GlobalHotkeyStatus, Mode=OneWay}" AutomationProperties.Name="{Binding GlobalHotkeyStatus, Mode=OneWay}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                        <Setter Property="Visibility" Value="{Binding IsGlobalHotkeyConfigurationAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding GlobalHotkeyStatus}" Value="Global hotkeys are active."><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Manual update check settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="UPDATES" />
@@ -707,6 +758,13 @@
 
         <Border Grid.Row="2" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,10">
             <TextBlock HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
+        </Border>
+
+        <Border x:Name="CopyFeedbackOverlay" Grid.Row="1" Panel.ZIndex="10" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="24,16" Padding="12,10" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="6" IsHitTestVisible="False" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="CopyFeedbackKind" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                <TextBlock x:Name="DirectoryCopyStatus" Style="{StaticResource OptionalSaveFeedback}" AutomationProperties.Name="Directory copy status" AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
         </Border>
 
         <Grid x:Name="HotkeyRecordingOverlay"
