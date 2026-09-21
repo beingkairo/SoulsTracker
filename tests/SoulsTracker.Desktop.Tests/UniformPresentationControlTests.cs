@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
@@ -14,6 +15,53 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class UniformPresentationControlTests
 {
+    [Fact]
+    public Task ConfiguredEmptyEldenRingSlotHasOneCanonicalSelectionStatus() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string path = CreateSave("er", fixture.Root);
+        byte[] bytes = File.ReadAllBytes(path);
+        // Keep occupied profile metadata, but give the selected slot a bounded,
+        // zero-version record so the real death reader reports EmptySlot.
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0x48), 48);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0x50), 0x500);
+        File.WriteAllBytes(path, bytes);
+        var configuration = new EldenRingSaveConfiguration(path, 0);
+        var repository = new MemoryRepository(GameId.EldenRing)
+        {
+            State = new PersistentTrackerState(PersistentTrackerState.CurrentSchemaVersion, GameId.EldenRing,
+                OverlayConfiguration.Default, eldenRingNoticeAcknowledged: true, eldenRingSave: configuration),
+        };
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator);
+        await vm.InitializeAsync();
+        Assert.Equal(0, vm.SelectedEldenRingProfileSlot?.Index);
+        Assert.Null(vm.EldenRingDirectoryStatus);
+        var reader = new EldenRingSaveDeathReader();
+        reader.Configure(configuration);
+        RuntimeGameReadResult result = Assert.IsType<RuntimeGameReadResult>(await reader.ReadAsync(CancellationToken.None));
+        Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, result.Status);
+        Assert.Null(result.Observation);
+        vm.ApplyRuntimeReaderResult(result);
+        var window = new MainWindow((_, _) => null, _ => { }) { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await Idle();
+            Assert.Equal(configuration, repository.State.EldenRingSave);
+            Assert.Empty(repository.Saves);
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+            var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
+            Assert.Equal("Unable to read total deaths.", total.Text);
+            Assert.False(vm.IsTotalDeathsValueNumeric);
+            var status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
+            Assert.Equal("Choose a character to continue.", status.Text);
+            Assert.Equal(status.Text, vm.RuntimeReaderStatusText);
+            Assert.Same(status, Assert.Single(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == status.Text));
+            Assert.Null(vm.EldenRingDirectoryActionFeedback);
+        }
+        finally { window.Close(); }
+    });
+
     [Theory]
     [InlineData("er")]
     [InlineData("wk")]

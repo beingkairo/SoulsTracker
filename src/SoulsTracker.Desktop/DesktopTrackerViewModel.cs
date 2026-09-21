@@ -24,7 +24,6 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     internal const string LocalTrackerStateUnavailableMessage = "Local tracker state is unavailable. Tracker controls remain disabled.";
 
     internal const string GameUnavailableMessage = "Game unavailable";
-    internal const string GameWaitingForActiveCharacterMessage = "Waiting for character selection";
     internal const string GameWaitingForSaveFileMessage = "Choose an Elden Ring save directory";
     internal const string BlackMythWukongWaitingForSaveFileMessage = "Choose a Black Myth: Wukong save directory";
     internal const string LiesOfPWaitingForSaveFileMessage = "Choose a Lies of P save directory";
@@ -370,7 +369,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
                 // Bloodborne uses this internal status for an unreadable/invalid value.
                 RuntimeGameReaderStatus.WaitingForActiveCharacter => IsProcessReaderGame(selectedGameId)
                     ? selectedGameId == GameId.Bloodborne ? GameUnavailableMessage : GameSyncedMessage
-                    : GameWaitingForActiveCharacterMessage,
+                    : ChooseCharacterMessage,
                 RuntimeGameReaderStatus.WaitingForSaveFile => WaitingForSaveFileMessage(selectedGameId),
                 RuntimeGameReaderStatus.Synced => GameSyncedMessage,
                 RuntimeGameReaderStatus.Cached => runtimeReaderIsCurrentSaveCache ? GameSyncedMessage : "Using last confirmed save data",
