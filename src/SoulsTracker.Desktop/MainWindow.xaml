@@ -609,6 +609,23 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                    <!-- Persistent copy errors need scroll clearance; transient success stays outside layout. -->
+                    <Border Height="{Binding ActualHeight, ElementName=CopyFeedbackOverlay}" IsHitTestVisible="False">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Visibility, ElementName=CopyFeedbackOverlay}" Value="Visible" />
+                                            <Condition Binding="{Binding Text, ElementName=CopyFeedbackKind}" Value="Copy failed" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                    </Border>
                 </StackPanel>
                 </ScrollViewer>
             </Grid>
