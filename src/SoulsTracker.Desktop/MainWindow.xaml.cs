@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,6 +23,8 @@ public partial class MainWindow : Window
     private bool isRestoringLiesOfPSaveSelection;
     private readonly Func<string, string?, string?> chooseSaveDirectory;
     private readonly Action<string> copyDirectoryPath = text => System.Windows.Clipboard.SetText(text);
+    private DesktopTrackerViewModel? directoryCopyViewModel;
+    private (GameId? Game, string? Path) directoryCopyContext;
 
     public MainWindow()
     {
@@ -69,6 +72,11 @@ public partial class MainWindow : Window
 
     private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged -= DirectoryCopyContext_PropertyChanged;
+        directoryCopyViewModel = e.NewValue as DesktopTrackerViewModel;
+        directoryCopyContext = GetDirectoryCopyContext(directoryCopyViewModel);
+        DirectoryCopyStatus.Text = string.Empty;
+        if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged += DirectoryCopyContext_PropertyChanged;
         if (e.NewValue is DesktopTrackerViewModel vm && vm.IsEldenRingNoticeVisible)
         {
             Dispatcher.BeginInvoke(() =>
@@ -76,6 +84,42 @@ public partial class MainWindow : Window
         }
     }
 
+
+    private static (GameId? Game, string? Path) GetDirectoryCopyContext(DesktopTrackerViewModel? vm) =>
+        (vm?.SelectedGame?.GameId, vm?.SelectedGame?.GameId switch
+        {
+            var game when game == GameId.EldenRing => vm?.EldenRingDirectoryPath,
+            var game when game == GameId.BlackMythWukong => vm?.BlackMythWukongDirectoryPath,
+            var game when game == GameId.LiesOfP => vm?.LiesOfPDirectoryPath,
+            _ => null
+        });
+
+    private void DirectoryCopyContext_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (null or "" or nameof(DesktopTrackerViewModel.SelectedGame)
+            or nameof(DesktopTrackerViewModel.EldenRingDirectoryPath)
+            or nameof(DesktopTrackerViewModel.BlackMythWukongDirectoryPath)
+            or nameof(DesktopTrackerViewModel.LiesOfPDirectoryPath)) || sender is not DesktopTrackerViewModel vm) return;
+
+        // Capture each transition before dispatch so returning to an earlier
+        // context cannot revive feedback when notifications arrive off-thread.
+        var context = GetDirectoryCopyContext(vm);
+        void ApplyContext()
+        {
+            if (!ReferenceEquals(directoryCopyViewModel, vm) || directoryCopyContext == context) return;
+            directoryCopyContext = context;
+            DirectoryCopyStatus.Text = string.Empty;
+        }
+        if (Dispatcher.CheckAccess()) ApplyContext();
+        else _ = Dispatcher.BeginInvoke(ApplyContext);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged -= DirectoryCopyContext_PropertyChanged;
+        directoryCopyViewModel = null;
+        base.OnClosed(e);
+    }
 
     private async void GameSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
