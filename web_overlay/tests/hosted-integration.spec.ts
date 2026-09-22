@@ -5,8 +5,16 @@ const origin = "https://localhost:8799";
 test.use({ ignoreHTTPSErrors: true });
 let credentials: { id: string; read: string; write: string };
 let sequence: number;
+let lastPublisherAdmission = 0;
+async function pacePublisherAdmission(): Promise<void> {
+  // Sessions and publishes share one retained 60/minute budget across tests.
+  const remaining = 1200 - (Date.now() - lastPublisherAdmission);
+  if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+  lastPublisherAdmission = Date.now();
+}
 test.beforeEach(async ({ request }) => {
   credentials = await (await request.post(`${origin}/__test/provision`)).json(); sequence = 0;
+  await pacePublisherAdmission();
   const acquired = await request.post(`${origin}/api/v1/overlays/${credentials.id}/session`, {
     headers: { Authorization: `Bearer ${credentials.write}` }, data: { v: 1, expectedEpoch: "0", sessionRequestId: "3".repeat(32) }
   });
@@ -50,6 +58,7 @@ const style = { enabled: true, title: "Total Deaths", fontFamily: "Arial", fontS
   backgroundColor: "#15171B", backgroundOpacity: 0, padding: 0, cornerRadius: 0, outlineEnabled: true, outlineColor: "#000000", outlineWidth: 0,
   shadowEnabled: false, shadowColor: "#000000", shadowOffsetX: 2, shadowOffsetY: 2, shadowBlur: 4, titleIconMode: "off", iconColor: "#FFFFFF" };
 async function publish(request: any, channels: object) {
+  await pacePublisherAdmission();
   const response = await request.put(`${origin}/api/v1/overlays/${credentials.id}/state`, {
     headers: { Authorization: `Bearer ${credentials.write}` }, data: { v: 1, epoch: "1", sessionRequestId: "3".repeat(32), sequence: String(++sequence), ...channels }
   });

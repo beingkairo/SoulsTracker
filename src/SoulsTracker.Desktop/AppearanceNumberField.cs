@@ -9,6 +9,8 @@ using System.Windows.Media;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
 using Binding = System.Windows.Data.Binding;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
 
 namespace SoulsTracker.Desktop;
 
@@ -33,17 +35,24 @@ public sealed class AppearanceNumberField : Grid, IDataErrorInfo
         Width = 150;
         Height = 32;
         HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(25) });
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
-        input = new TextBox { MinWidth = 0, Padding = new Thickness(5, 3, 4, 3), VerticalContentAlignment = VerticalAlignment.Center };
+        var frame = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), BorderBrush = Brushes.Gray, Background = new SolidColorBrush(Color.FromRgb(25, 29, 35)) };
+        var layout = new Grid();
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(25) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+        frame.Child = layout;
+        Children.Add(frame);
+        input = new TextBox { MinWidth = 0, BorderThickness = new Thickness(0), Padding = new Thickness(5, 3, 4, 3), VerticalContentAlignment = VerticalAlignment.Center };
         input.SetBinding(TextBox.TextProperty, new Binding(nameof(Value)) { Source = this, Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged, ValidatesOnDataErrors = true });
-        Children.Add(input);
+        layout.Children.Add(input);
         var suffix = new TextBlock { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = System.Windows.HorizontalAlignment.Center };
         suffix.SetBinding(TextBlock.TextProperty, new Binding(nameof(Unit)) { Source = this });
-        SetColumn(suffix, 1); Children.Add(suffix);
-        AddStep("-", -1, 2); AddStep("+", 1, 3);
+        SetColumn(suffix, 1); layout.Children.Add(suffix);
+        var steps = new Grid();
+        steps.RowDefinitions.Add(new RowDefinition());
+        steps.RowDefinitions.Add(new RowDefinition());
+        SetColumn(steps, 2); layout.Children.Add(steps);
+        AddStep(steps, 1, 0); AddStep(steps, -1, 1);
         input.PreviewKeyDown += (_, e) =>
         {
             if (e.Key is Key.Up or Key.Down) { Step(e.Key == Key.Up ? 1 : -1); e.Handled = true; }
@@ -56,12 +65,13 @@ public sealed class AppearanceNumberField : Grid, IDataErrorInfo
         };
     }
 
-    private void AddStep(string label, int direction, int column)
+    private void AddStep(Grid steps, int direction, int row)
     {
-        var button = new Button { Content = label, MinWidth = 0, MinHeight = 0, Padding = new Thickness(0), Margin = new Thickness(2, 0, 0, 0) };
+        var arrow = new System.Windows.Shapes.Path { Data = Geometry.Parse(direction > 0 ? "M 0,4 L 4,0 L 8,4 Z" : "M 0,0 L 8,0 L 4,4 Z"), Fill = Brushes.LightGray, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var button = new Button { Content = arrow, MinWidth = 0, MinHeight = 0, Padding = new Thickness(0), Margin = new Thickness(0), BorderThickness = new Thickness(0) };
         button.Click += (_, _) => Step(direction);
         button.Loaded += (_, _) => AutomationProperties.SetName(button, $"{(direction > 0 ? "Increase" : "Decrease")} {AutomationProperties.GetName(this)}");
-        SetColumn(button, column); Children.Add(button);
+        SetRow(button, row); steps.Children.Add(button);
     }
 
     private void Step(int direction)

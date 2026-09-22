@@ -556,7 +556,12 @@
 
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death counter panel">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource PanelTitle}" Text="TOTAL DEATHS" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource PanelTitle}" Text="TOTAL DEATHS" VerticalAlignment="Center" />
+                                <Button x:Name="ManualCounterHelpButton" Style="{StaticResource ContextHelpButton}" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Manual counter hotkeys help" AutomationProperties.HelpText="Customizable hotkeys for increasing and decreasing the count can be found in the Settings tab.">
+                                    <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
+                                </Button>
+                            </StackPanel>
                             <TextBlock x:Name="TotalDeathsTextBlock" Margin="0,6,0,0" Text="{Binding TotalDeathsText}" TextWrapping="Wrap" AutomationProperties.Name="Current total deaths">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -671,6 +676,9 @@
 
                             </StackPanel>
                         </Border>
+                        <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Local appearance preview panel">
+                            <local:AppearancePreview x:Name="LocalAppearancePreview" AutomationProperties.Name="Local Total Deaths appearance preview" />
+                        </Border>
                         <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Overlay appearance panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="APPEARANCE" />
@@ -681,9 +689,9 @@
                                                 <Style TargetType="ComboBox" BasedOn="{StaticResource OverlayAppearanceComboBox}" />
                                                 <Style TargetType="{x:Type local:ColorField}" BasedOn="{StaticResource OverlayAppearanceColorField}" />
                                             </StackPanel.Resources>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}" Visibility="{Binding IsAppearanceTitleVisible, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Title"/><TextBox Grid.Column="1" Text="{Binding TotalDeathsAppearanceDraft.Title, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" AutomationProperties.Name="Overlay title" AutomationProperties.HelpText="Use at most 40 characters." ToolTip="Use at most 40 characters."/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Title icon"/><ComboBox Grid.Column="1" ItemsSource="{Binding TitleIconModes}" DisplayMemberPath="Label" SelectedItem="{Binding DraftTitleIconModeChoice}" AutomationProperties.Name="Total Deaths title icon"/></Grid>
-                                            <Grid Style="{StaticResource OverlayAppearanceRow}" Visibility="{Binding IsTitleIconSelected, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Skull color"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.IconColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths skull color"/></Grid>
+                                            <Grid Style="{StaticResource OverlayAppearanceRow}" Visibility="{Binding IsTitleIconSelected, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Icon color"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.IconColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths icon color"/></Grid>
+                                            <Grid Style="{StaticResource OverlayAppearanceRow}" Visibility="{Binding IsAppearanceTitleVisible, Converter={StaticResource BooleanToVisibilityConverter}}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Title"/><TextBox Grid.Column="1" Text="{Binding TotalDeathsAppearanceDraft.Title, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" AutomationProperties.Name="Overlay title" AutomationProperties.HelpText="Use at most 40 characters." ToolTip="Use at most 40 characters."/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}" Margin="0,6,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Font"/><local:AppearanceFontField Grid.Column="1" Fonts="{Binding LocalFontFamilies}" SelectedFont="{Binding TotalDeathsAppearanceDraft.FontFamily}"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Font size"/><local:AppearanceNumberField Grid.Column="1" Minimum="12" Maximum="96" Unit="px" Value="{Binding TotalDeathsAppearanceDraft.FontSize, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Font size"/></Grid>
                                             <Grid Style="{StaticResource OverlayAppearanceRow}"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Text color"/><local:ColorField Grid.Column="1" Value="{Binding TotalDeathsAppearanceDraft.TextColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Total Deaths text color"/></Grid>
@@ -713,15 +721,17 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                <Grid x:Name="AppearanceActions" Grid.Row="1" Height="32" Margin="0,10,0,0" Focusable="True" AutomationProperties.Name="Appearance actions">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal">
                         <Button x:Name="ApplyAppearanceButton" Background="{StaticResource SelectionBrush}" BorderBrush="{StaticResource AccentBrush}" FontWeight="SemiBold" IsEnabled="{Binding PresentationControlsEnabled}" Click="ApplyTotalDeathsAppearance_Click" Content="Apply to live overlay" />
                         <Button x:Name="ResetSelectedOverlayAppearanceButton" Margin="10,0,0,0" Background="{StaticResource SurfaceBrush}" IsEnabled="{Binding PresentationControlsEnabled}" Click="ResetSelectedOverlayAppearance_Click" Content="Reset" AutomationProperties.Name="Reset selected overlay appearance" />
                     </StackPanel>
-                    <TextBlock Height="34" Margin="0,6,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" Text="{Binding TotalDeathsAppearanceStatus}" ToolTip="{Binding TotalDeathsAppearanceStatus}" AutomationProperties.Name="Total Deaths appearance apply status" AutomationProperties.LiveSetting="Polite">
+                    <TextBlock x:Name="AppearanceApplyStatus" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Focusable="True" AutomationProperties.Name="Total Deaths appearance apply status" AutomationProperties.LiveSetting="Polite">
+                        <TextBlock.ToolTip><ToolTip><TextBlock MaxWidth="400" TextWrapping="Wrap" Text="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></TextBlock.ToolTip>
                         <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#E06C75"/><Style.Triggers><DataTrigger Binding="{Binding IsAppearanceApplySuccessful}" Value="True"><Setter Property="Foreground" Value="#8CCB9B"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                     </TextBlock>
-                </StackPanel>
+                </Grid>
                 </Grid>
             </TabItem>
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
@@ -841,7 +851,7 @@
               Visibility="{Binding IsEldenRingNoticeVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
               FocusManager.IsFocusScope="True"
               AutomationProperties.Name="Set up Elden Ring">
-            <Border x:Name="EldenRingNoticeDialog" Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
+            <Border x:Name="EldenRingNoticeDialog" Focusable="True" AutomationProperties.Name="Set up Elden Ring" Width="480" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#20242B" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
                 <StackPanel>
                     <TextBlock FontSize="18" FontWeight="SemiBold" Text="Set up Elden Ring" />
                     <TextBlock Margin="0,18,0,0" Style="{StaticResource MutedText}" Text="All Elden Ring characters are stored in ER0000.sl2." />
@@ -849,7 +859,7 @@
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource MutedText}" Text="Typical directory: %APPDATA%\EldenRing\&lt;your Steam ID&gt;" />
                     <StackPanel Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button x:Name="EldenRingNoticeCancelButton" Margin="0,0,8,0" Content="Not now" Click="CancelEldenRingNotice_Click" AutomationProperties.Name="Not now" />
-                        <Button x:Name="EldenRingNoticeConfirmButton" Content="Got it" IsDefault="True" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Got it" />
+                        <Button x:Name="EldenRingNoticeConfirmButton" Content="Got it" Click="ConfirmEldenRingNotice_Click" AutomationProperties.Name="Got it" />
                     </StackPanel>
                 </StackPanel>
             </Border>

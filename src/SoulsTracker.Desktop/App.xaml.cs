@@ -106,6 +106,7 @@ public partial class App : System.Windows.Application, IDisposable
             viewModel.ConfigureLegacyImport(new LegacyImportViewModel(new LegacyImportWorkflow(locator, new ApprovedLegacyImportPreflight(locator), coordinator), viewModel.ApplyImportedCommittedState));
         }
         var window = new MainWindow { DataContext = viewModel };
+        window.ConfigureAppearancePreview(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoulsTracker"));
         window.Closing += MainWindow_Closing;
         MainWindow = window;
         window.Show();

@@ -25,12 +25,16 @@ public sealed class AppearanceFontTests
         try
         {
             window.Show(); await Idle();
-            Tree(control).OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             var popup = Tree(control).OfType<Popup>().Single();
-            Assert.True(popup.IsOpen);
-            var search = Tree(popup.Child).OfType<TextBox>().Single();
-            var list = Tree(popup.Child).OfType<ListBox>().Single();
+            Assert.False(popup.IsOpen);
+            var search = Assert.Single(Tree(control).OfType<TextBox>());
+            Assert.Equal(TextAlignment.Left, search.TextAlignment);
+            Assert.Equal(HorizontalAlignment.Left, search.HorizontalContentAlignment);
+            search.Focus();
             search.Text = "fOnT 2"; await Idle();
+            Assert.True(popup.IsOpen);
+            Assert.Empty(Tree(popup.Child).OfType<TextBox>());
+            var list = Tree(popup.Child).OfType<ListBox>().Single();
             Assert.Equal(10, list.Items.Count);
             AppearanceGeometryTests.Capture((FrameworkElement)popup.Child, "font-filtered");
             Assert.Equal("Font 40", type.GetProperty("SelectedFont")!.GetValue(control));
@@ -64,12 +68,14 @@ public sealed class AppearanceFontTests
             Assert.False(popup.IsOpen);
             Assert.Equal("Font 25", type.GetProperty("SelectedFont")!.GetValue(control));
             Tree(control).OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
-            Assert.Empty(search.Text);
+            Assert.Equal("Font 25", search.Text);
+            Assert.Equal(fonts.Length, list.Items.Count);
             search.Text = "no matches"; await Idle();
             search.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, Key.Escape) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
             await Idle();
             Assert.False(popup.IsOpen);
             Assert.Equal("Font 25", type.GetProperty("SelectedFont")!.GetValue(control));
+            Assert.Equal("Font 25", search.Text);
         }
         finally { window.Close(); }
     });

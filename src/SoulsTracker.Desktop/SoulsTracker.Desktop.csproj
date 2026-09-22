@@ -16,6 +16,11 @@
     </Resource>
   </ItemGroup>
 
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -28,4 +33,12 @@
     <ApplicationIcon>../../assets/branding/souls-tracker-skull-compact.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <Target Name="BuildAppearancePreview" BeforeTargets="PrepareResources"
+          Inputs="../../web_overlay/scripts/build-preview.mjs;../../web_overlay/src/preview-entry.ts;../../web_overlay/src/hosted-renderer.ts;../../web_overlay/src/overlay.css;../../assets/branding/souls-tracker-skull.png"
+          Outputs="$(IntermediateOutputPath)AppearancePreview.html">
+    <Exec Command="node &quot;$(MSBuildProjectDirectory)/../../web_overlay/scripts/build-preview.mjs&quot; &quot;$(MSBuildProjectDirectory)/$(IntermediateOutputPath)AppearancePreview.html&quot;" />
+  </Target>
+  <ItemGroup>
+    <EmbeddedResource Include="$(IntermediateOutputPath)AppearancePreview.html" LogicalName="SoulsTracker.Desktop.AppearancePreview.html" />
+  </ItemGroup>
 </Project>

@@ -37,6 +37,8 @@ public sealed class AppearanceGeometryTests
         try
         {
             window.Show(); neutral.Focus(); await Idle();
+            foreach (var query in Tree(control).OfType<TextBox>().Where(x => x.GetBindingExpression(TextBox.TextProperty) is null))
+                query.SetBinding(TextBox.TextProperty, new System.Windows.Data.Binding("Value") { Source = new { Value = query.Text }, Mode = System.Windows.Data.BindingMode.OneWay });
             var baseline = Geometry(control);
             foreach (var child in Tree(control).OfType<Control>().Where(x => x is Button or TextBox).ToArray())
             {
@@ -91,11 +93,11 @@ public sealed class AppearanceGeometryTests
                 var text = color.Children.OfType<TextBox>().Single();
                 text.Text = "bad";
             }
-            foreach (var number in Tree(form).OfType<AppearanceNumberField>()) number.Children.OfType<TextBox>().Single().Text = "bad";
+            foreach (var number in Tree(form).OfType<AppearanceNumberField>()) Tree(number).OfType<TextBox>().Single().Text = "bad";
             await Idle();
             Assert.Equal(before, LayoutGeometry(form));
             Assert.All(Tree(form).OfType<ColorField>(), color => Assert.True(Validation.GetHasError(color.Children.OfType<TextBox>().Single())));
-            Assert.All(Tree(form).OfType<AppearanceNumberField>(), number => Assert.True(Validation.GetHasError(number.Children.OfType<TextBox>().Single())));
+            Assert.All(Tree(form).OfType<AppearanceNumberField>(), number => Assert.True(Validation.GetHasError(Tree(number).OfType<TextBox>().Single())));
             ((Button)window.FindName("ApplyAppearanceButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Empty(repository.Saves);
             Assert.Contains("Text color", vm.TotalDeathsAppearanceStatus);

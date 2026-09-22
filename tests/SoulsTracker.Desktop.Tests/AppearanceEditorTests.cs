@@ -31,6 +31,14 @@ public sealed class AppearanceEditorTests
             var title = Tree(window).OfType<TextBox>().Single(x => BindingOperations.GetBinding(x, TextBox.TextProperty)?.Path.Path == "TotalDeathsAppearanceDraft.Title");
             title.Text = "My draft title";
             var selector = Tree(window).OfType<ComboBox>().Single(x => BindingOperations.GetBinding(x, ComboBox.SelectedItemProperty)?.Path.Path == "DraftTitleIconModeChoice");
+            selector.SelectedItem = vm.TitleIconModes.Single(x => x.Value == OverlayTitleIconMode.PrefixSkull);
+            await Idle();
+            var iconColor = Tree(window).OfType<ColorField>().Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Total Deaths icon color");
+            Assert.True(selector.TranslatePoint(new Point(), window).Y < iconColor.TranslatePoint(new Point(), window).Y);
+            Assert.True(iconColor.TranslatePoint(new Point(), window).Y < title.TranslatePoint(new Point(), window).Y);
+            vm.TotalDeathsAppearanceDraft.IconColor = "bad";
+            Assert.Equal("Icon color: use #RRGGBB.", vm.TotalDeathsAppearanceDraft[nameof(OverlayAppearanceDraft.IconColor)]);
+            vm.TotalDeathsAppearanceDraft.IconColor = "#FFFFFF";
             selector.SelectedItem = vm.TitleIconModes.Single(x => x.Value == OverlayTitleIconMode.SkullOnly);
             await Idle();
             Assert.False(title.IsVisible);
@@ -74,8 +82,16 @@ public sealed class AppearanceEditorTests
             Assert.Contains(Tree(input).OfType<TextBlock>(), x => x.Text == unit);
             Assert.Contains(minimum.ToString(CultureInfo.InvariantCulture), System.Windows.Automation.AutomationProperties.GetHelpText(text));
             Assert.Contains(maximum.ToString(CultureInfo.InvariantCulture), System.Windows.Automation.AutomationProperties.GetHelpText(text));
-            var increment = buttons.Single(x => Equals(x.Content, "+"));
-            var decrement = buttons.Single(x => Equals(x.Content, "-"));
+            var increment = buttons.Single(x => System.Windows.Automation.AutomationProperties.GetName(x).StartsWith("Increase", StringComparison.Ordinal));
+            var decrement = buttons.Single(x => System.Windows.Automation.AutomationProperties.GetName(x).StartsWith("Decrease", StringComparison.Ordinal));
+            Assert.DoesNotContain(buttons, x => Equals(x.Content, "+") || Equals(x.Content, "-"));
+            var up = increment.TransformToAncestor(input).TransformBounds(new Rect(increment.RenderSize));
+            var down = decrement.TransformToAncestor(input).TransformBounds(new Rect(decrement.RenderSize));
+            Assert.Equal(up.Left, down.Left);
+            Assert.True(up.Bottom <= down.Top);
+            Assert.True(up.Width >= 24 && up.Height >= 14);
+            Assert.True(down.Right <= input.ActualWidth && down.Bottom <= input.ActualHeight);
+            Assert.Equal(new Thickness(0), text.BorderThickness);
             foreach (var boundary in new[] { minimum, maximum })
             {
                 text.Text = boundary.ToString(CultureInfo.InvariantCulture); await Idle();

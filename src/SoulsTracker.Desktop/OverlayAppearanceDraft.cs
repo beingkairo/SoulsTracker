@@ -88,7 +88,7 @@ public sealed class OverlayAppearanceDraft : INotifyPropertyChanged, IDataErrorI
         nameof(BackgroundColor) => ColorError(BackgroundColor, "Background color"),
         nameof(OutlineColor) => ColorError(OutlineColor, "Outline color"),
         nameof(ShadowColor) => ColorError(ShadowColor, "Shadow color"),
-        nameof(IconColor) => ColorError(IconColor, "Skull color"),
+        nameof(IconColor) => ColorError(IconColor, "Icon color"),
         _ => ""
     };
     private static string NumberError(string value, int minimum, int maximum, string label, string unit) =>

@@ -29,6 +29,7 @@ public sealed class AppearanceActionTests
             var reset = (Button)window.FindName("ResetSelectedOverlayAppearanceButton");
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
             var position = apply.TranslatePoint(new Point(), window);
+            Assert.Equal(apply.ActualHeight, ((FrameworkElement)window.FindName("AppearanceActions")).ActualHeight);
             Assert.True(position.Y + apply.ActualHeight < window.ActualHeight);
             Assert.DoesNotContain(apply, Tree(scroll));
             Assert.DoesNotContain(reset, Tree(scroll));
@@ -88,7 +89,14 @@ public sealed class AppearanceActionTests
                     Assert.Equal("Reset overlay appearance to defaults?", dialog.Title);
                     Assert.Contains(Tree(dialog).OfType<TextBlock>(), x => x.Text == "This will replace your current appearance settings.");
                     var cancel = Tree(dialog).OfType<Button>().Single(x => Equals(x.Content, "Cancel"));
-                    Assert.True(cancel.IsDefault && cancel.IsCancel);
+                    Assert.False(cancel.IsDefault);
+                    Assert.True(cancel.IsCancel);
+                    Assert.False(cancel.IsKeyboardFocused);
+                    Assert.True(((UIElement)dialog.Content).IsKeyboardFocused);
+                    Assert.DoesNotContain(Tree(dialog).OfType<Button>(), x => x.IsKeyboardFocused || x.IsDefault);
+                    ((UIElement)dialog.Content).RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, PresentationSource.FromVisual(dialog), Environment.TickCount, System.Windows.Input.Key.Enter) { RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent });
+                    Assert.True(dialog.IsVisible);
+                    ((UIElement)dialog.Content).MoveFocus(new System.Windows.Input.TraversalRequest(System.Windows.Input.FocusNavigationDirection.Next));
                     Assert.True(cancel.IsKeyboardFocused);
                     foreach (var button in Tree(dialog).OfType<Button>())
                     {
@@ -108,9 +116,11 @@ public sealed class AppearanceActionTests
                 }
                 finally { if (dialog.IsVisible) dialog.Close(); }
             }, DispatcherPriority.ApplicationIdle);
+            ((Button)window.FindName("ResetSelectedOverlayAppearanceButton")).Focus();
             ((Button)window.FindName("ResetSelectedOverlayAppearanceButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await inspect; Assert.True(inspected);
             await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsBusy); await Idle();
+            Assert.False(((Button)window.FindName("ResetSelectedOverlayAppearanceButton")).IsKeyboardFocused);
             Assert.Equal(action == "reset" ? OverlayAppearance.Default.Title : "Keep my draft", vm.TotalDeathsAppearanceDraft.Title);
             if (action != "reset") Assert.Empty(repository.Saves);
         }

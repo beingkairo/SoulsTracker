@@ -47,6 +47,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         directoryFeedback = new FloatingFeedback(FloatingFeedbackLayer, CopyFeedbackOverlay);
         hotkeyFeedback = new FloatingFeedback(FloatingFeedbackLayer, HotkeySuccessOverlay);
+        AppearanceApplyStatus.GotKeyboardFocus += (_, _) => ((System.Windows.Controls.ToolTip)AppearanceApplyStatus.ToolTip).IsOpen = AppearanceApplyStatus.Text.Length > 0;
+        AppearanceApplyStatus.LostKeyboardFocus += (_, _) => ((System.Windows.Controls.ToolTip)AppearanceApplyStatus.ToolTip).IsOpen = false;
         LayoutUpdated += (_, _) => { directoryFeedback.Update(); hotkeyFeedback.Update(); };
         WorkspaceTabs.SelectionChanged += (_, e) =>
         {
@@ -58,6 +60,14 @@ public partial class MainWindow : Window
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory) : this() =>
         this.chooseSaveDirectory = chooseSaveDirectory;
+
+    internal void ConfigureAppearancePreview(string dataRoot)
+    {
+        LocalAppearancePreview.IsVisibleChanged += async (_, _) =>
+        {
+            if (LocalAppearancePreview.IsVisible) await LocalAppearancePreview.StartBrowserAsync(dataRoot);
+        };
+    }
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory, Action<string> copyDirectoryPath) : this(chooseSaveDirectory) =>
         this.copyDirectoryPath = copyDirectoryPath;
@@ -184,6 +194,10 @@ public partial class MainWindow : Window
 
     private void DirectoryCopyContext_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(DesktopTrackerViewModel.TotalDeathsAppearanceStatus))
+            Dispatcher.BeginInvoke(UpdateAppearanceFeedback);
+        if (e.PropertyName == nameof(DesktopTrackerViewModel.IsEldenRingNoticeVisible))
+            Dispatcher.BeginInvoke(FocusEldenRingNoticePrimaryAction);
         if (e.PropertyName is null or "" or nameof(DesktopTrackerViewModel.HostedOverlay))
         {
             if (Dispatcher.CheckAccess()) ObserveHostedCopyFeedback();
@@ -210,6 +224,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        LocalAppearancePreview.Dispose();
         copyFeedbackClosed = true;
         ClearCopyFeedback();
         ClearHotkeyFeedback();
@@ -631,8 +646,8 @@ public partial class MainWindow : Window
     private void FocusEldenRingNoticePrimaryAction()
     {
         if (DataContext is not DesktopTrackerViewModel { IsEldenRingNoticeVisible: true }) return;
-        FocusManager.SetFocusedElement(EldenRingNoticeOverlay, EldenRingNoticeConfirmButton);
-        Keyboard.Focus(EldenRingNoticeConfirmButton);
+        FocusManager.SetFocusedElement(EldenRingNoticeOverlay, EldenRingNoticeDialog);
+        Keyboard.Focus(EldenRingNoticeDialog);
     }
 
     private void RestoreGameSelectorFocus()
@@ -753,7 +768,22 @@ public partial class MainWindow : Window
 
     private async void ApplyTotalDeathsAppearance_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ApplyOverlayAppearanceAsync(totalDeaths: true);
+        if (DataContext is DesktopTrackerViewModel viewModel)
+        {
+            AppearanceApplyStatus.Text = "";
+            await viewModel.ApplyOverlayAppearanceAsync(totalDeaths: true);
+            if (!copyFeedbackClosed) UpdateAppearanceFeedback();
+        }
+    }
+
+    private void UpdateAppearanceFeedback()
+    {
+        if (copyFeedbackClosed || DataContext is not DesktopTrackerViewModel vm) return;
+        string? message = vm.TotalDeathsAppearanceStatus;
+        if (string.IsNullOrEmpty(message) && !vm.IsAppearanceApplySuccessful) return;
+        AppearanceApplyStatus.Tag = message;
+        System.Windows.Automation.AutomationProperties.SetHelpText(AppearanceApplyStatus, message ?? "");
+        AppearanceApplyStatus.Text = message is { Length: > 80 } ? "Correct the highlighted appearance fields, then Apply." : message ?? "";
     }
 
     private bool appearanceResetConfirmationOpen;
@@ -766,7 +796,11 @@ public partial class MainWindow : Window
             var dialog = new AppearanceResetDialog { Owner = this, Resources = Resources };
             if (dialog.ShowDialog() == true) await viewModel.ResetOverlayAppearanceAsync(totalDeaths: true);
         }
-        finally { appearanceResetConfirmationOpen = false; }
+        finally
+        {
+            appearanceResetConfirmationOpen = false;
+            if (!copyFeedbackClosed) AppearanceActions.Focus();
+        }
     }
 
 
