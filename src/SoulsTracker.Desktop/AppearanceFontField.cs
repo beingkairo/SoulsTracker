@@ -59,6 +59,8 @@ public sealed class AppearanceFontField : Grid
         search.TextChanged += (_, _) => { if (!restoring) { Filter(); Open(); } };
         search.PreviewKeyDown += HandleKey;
         panel.PreviewKeyDown += HandleKey;
+        LostKeyboardFocus += HandleFocusDeparture;
+        surface.LostKeyboardFocus += HandleFocusDeparture;
         popup.Closed += (_, _) => RestoreSelection();
         list.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Commit(); e.Handled = true; } };
         list.PreviewMouseLeftButtonUp += (_, e) =>
@@ -67,6 +69,16 @@ public sealed class AppearanceFontField : Grid
             { list.SelectedItem = item.Content; Commit(); e.Handled = true; }
         };
         Unloaded += (_, _) => popup.IsOpen = false;
+    }
+
+    private void HandleFocusDeparture(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        // Popup focus crosses a separate presentation source; check after the transfer settles.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, new Action(() =>
+        {
+            if (!popup.IsOpen || IsKeyboardFocusWithin || popup.Child.IsKeyboardFocusWithin) return;
+            popup.IsOpen = false;
+        }));
     }
 
     private void Filter() => list.ItemsSource = (Fonts ?? []).Where(font => font.Contains(search.Text, StringComparison.OrdinalIgnoreCase)).ToArray();
