@@ -13,6 +13,8 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class SettingsHotkeyControlTests
 {
+    private static readonly string[] HotkeyFieldNames = ["IncrementHotkeyTextBox", "DecrementHotkeyTextBox"];
+
     [Theory]
     [InlineData(560d, 400d, false)]
     [InlineData(560d, 760d, false)]
@@ -66,6 +68,7 @@ public sealed class SettingsHotkeyControlTests
             Assert.True(new Rect(viewport.RenderSize).Contains(bounds));
             Assert.False(((Border)window.FindName("HotkeySuccessOverlay")).IsHitTestVisible);
             RecordSettings(window, $"confirmation-{width}x{height}-{recorded}");
+            AssertHotkeyTextReadable(window);
             Assert.Equal(before, stack.RenderSize);
             await Apply();
             Assert.Equal(2, callbacks.Count);
@@ -77,6 +80,132 @@ public sealed class SettingsHotkeyControlTests
         }
         finally { window.Close(); }
     });
+
+    public static IEnumerable<object[]> ReadabilityCases()
+    {
+        foreach (var (width, height) in new[] { (560d, 400d), (560d, 760d), (1060d, 760d) })
+            foreach (string action in new[] { "apply", "increment", "decrement" })
+                foreach (bool longBinding in new[] { false, true })
+                    yield return [width, height, action, longBinding];
+    }
+
+    [Theory]
+    [MemberData(nameof(ReadabilityCases))]
+    public Task ConfirmationKeepsBindingsReadableDuringViewportChanges(double width, double height, string action, bool longBinding) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        var native = new Native();
+        using var service = new DesktopGlobalHotkeyService(new Sink(), native, vm);
+        Assert.True(service.Start().IsRegistered);
+        vm.ConfigureGlobalHotkeys(service.ActiveSettings, async candidate =>
+        {
+            var result = service.Replace(candidate);
+            if (result.IsRegistered)
+                await coordinator.SetGlobalHotkeysAsync(new(candidate.Increment.Modifiers, candidate.Increment.VirtualKey,
+                    candidate.Decrement.Modifiers, candidate.Decrement.VirtualKey));
+            return result;
+        });
+        vm.SetGlobalHotkeyStatus(GlobalHotkeyRegistrationResult.Registered.StatusMessage);
+        if (longBinding)
+        {
+            // Down Arrow is the longest supported key label. Exercise it in
+            // the other field as well, with every permitted modifier.
+            vm.CapturePendingHotkey(true, Key.Down, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift);
+            vm.CapturePendingHotkey(false, Key.Up, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift);
+        }
+        // Isolate floating geometry from removal of the persistent edit prompt.
+        vm.SetGlobalHotkeyStatus(GlobalHotkeyRegistrationResult.Registered.StatusMessage);
+        var callbacks = new List<Action>();
+        var window = new MainWindow((_, _) => null, _ => { }, (_, callback) => { callbacks.Add(callback); return () => { }; })
+        { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await Idle();
+            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
+            var apply = (Button)window.FindName("ApplyHotkeysButton");
+            var increment = (TextBox)window.FindName("IncrementHotkeyTextBox");
+            var decrement = (TextBox)window.FindName("DecrementHotkeyTextBox");
+            var scroll = (ScrollViewer)window.FindName("SettingsContentScrollViewer");
+            var viewport = DirectoryPresentationControlTests.Tree(scroll).OfType<ScrollContentPresenter>().First();
+            var stack = (StackPanel)window.FindName("SettingsContentStack");
+            var layer = (Canvas)window.FindName("FloatingFeedbackLayer");
+            var overlay = (Border)window.FindName("HotkeySuccessOverlay");
+            FrameworkElement anchor = action == "apply" ? apply : action == "increment" ? increment : decrement;
+            anchor.BringIntoView(); await Idle();
+            if (action == "apply") { Assert.True(apply.Focus()); await Idle(); }
+            Rect Bounds(FrameworkElement element) => element.TransformToVisual(window).TransformBounds(new Rect(element.RenderSize));
+            var before = (stack.RenderSize, scroll.VerticalOffset, scroll.ExtentHeight, Bounds(increment), Bounds(decrement), Bounds(apply));
+            var expectedIncrement = vm.PendingIncrementHotkey;
+            var expectedDecrement = vm.PendingDecrementHotkey;
+            if (action == "apply") apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            else
+            {
+                Assert.True(anchor.Focus()); await Idle(); Assert.True(vm.IsHotkeyRecording);
+                window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, Key.Enter)
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+            }
+            await Idle();
+            await HostedDesktopPublisherTests.WaitUntil(() => callbacks.Count == 1);
+            await Idle();
+            string name = $"readability-{width}x{height}-{action}-{longBinding}";
+            RecordSettings(window, name);
+            Assert.Equal(before, (stack.RenderSize, scroll.VerticalOffset, scroll.ExtentHeight, Bounds(increment), Bounds(decrement), Bounds(apply)));
+            Assert.Equal(new System.Windows.Size(), layer.DesiredSize);
+            Assert.Equal("Hotkeys applied successfully", ((TextBlock)window.FindName("HotkeySuccessStatus")).Text);
+            Assert.True(overlay.IsVisible);
+            Assert.True(Bounds(viewport).Contains(Bounds(overlay)));
+            AssertHotkeyTextReadable(window);
+            Assert.Equal(expectedIncrement, vm.ActiveIncrementHotkey);
+            Assert.Equal(expectedDecrement, vm.ActiveDecrementHotkey);
+            Assert.Equal(service.ActiveSettings.Increment.VirtualKey, repository.State.GlobalHotkeys.IncrementVirtualKey);
+            Assert.Equal(service.ActiveSettings.Decrement.VirtualKey, repository.State.GlobalHotkeys.DecrementVirtualKey);
+            Assert.Single(repository.Saves);
+            Assert.Equal(2, native.Registered.Count);
+            Assert.Same(action == "apply" ? (IInputElement)apply : scroll, Keyboard.FocusedElement);
+            Assert.False(overlay.IsHitTestVisible);
+            var point = Bounds(overlay).TopLeft + new Vector(4, 4);
+            Assert.DoesNotContain(overlay, Ancestors(window.InputHitTest(point) as DependencyObject));
+            // Sweep the real viewport while feedback remains alive, including
+            // transitions between the action row and heading row.
+            double originalOffset = scroll.VerticalOffset;
+            for (double offset = 0; offset <= scroll.ScrollableHeight; offset += 4)
+            {
+                scroll.ScrollToVerticalOffset(offset); await Idle();
+                if (!overlay.IsVisible) continue;
+                Assert.True(Bounds(viewport).Contains(Bounds(overlay)));
+                AssertHotkeyTextReadable(window);
+            }
+            scroll.ScrollToVerticalOffset(originalOffset); await Idle();
+            window.Width = width == 560 ? 1060 : 560; await Idle();
+            if (overlay.IsVisible) { Assert.True(Bounds(viewport).Contains(Bounds(overlay))); AssertHotkeyTextReadable(window); }
+            window.Width = width; await Idle();
+            window.Height = height == 400 ? 760 : 400; await Idle();
+            if (overlay.IsVisible) { Assert.True(Bounds(viewport).Contains(Bounds(overlay))); AssertHotkeyTextReadable(window); }
+            window.Height = height; await Idle();
+            callbacks.Single()(); await Idle();
+            Assert.Equal(Visibility.Collapsed, overlay.Visibility);
+            Assert.Equal(before.Item1, stack.RenderSize);
+            // The neighboring binding still accepts capture, and cancel returns
+            // to a safe focus target without reviving the old confirmation.
+            decrement.BringIntoView(); await Idle(); Assert.True(decrement.Focus()); await Idle();
+            Assert.True(vm.IsHotkeyRecording);
+            window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, Key.Escape)
+            { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+            await Idle();
+            Assert.Same(scroll, Keyboard.FocusedElement);
+            Assert.False(vm.IsHotkeyRecording);
+            Assert.Equal(expectedDecrement, vm.PendingDecrementHotkey);
+            Assert.Empty(((TextBlock)window.FindName("HotkeySuccessStatus")).Text);
+        }
+        finally { window.Close(); }
+    });
+
+    private static IEnumerable<DependencyObject> Ancestors(DependencyObject? element)
+    {
+        for (; element is not null; element = VisualTreeHelper.GetParent(element)) yield return element;
+    }
 
     [Fact]
     public Task OlderCommittedApplyKeepsBindingsSyncedAfterNewerRegistrationFailure() => HostedConnectionTests.OnDispatcher(async () =>
@@ -244,6 +373,28 @@ public sealed class SettingsHotkeyControlTests
         finally { window.Close(); }
     });
 
+    private static void AssertHotkeyTextReadable(MainWindow window)
+    {
+        var overlay = (Border)window.FindName("HotkeySuccessOverlay");
+        Rect surface = overlay.TransformToVisual(window).TransformBounds(new Rect(overlay.RenderSize));
+        foreach (string name in HotkeyFieldNames)
+        {
+            var field = (TextBox)window.FindName(name);
+            var label = ((DockPanel)field.Parent).Children.OfType<TextBlock>().Single();
+            Rect labelBounds = label.TransformToVisual(window).TransformBounds(new Rect(label.RenderSize));
+            Assert.False(surface.IntersectsWith(labelBounds), $"Feedback covers {label.Text}: {surface}; label {labelBounds}");
+            // Character rectangles cover displayed text, not the unused field area.
+            for (int i = 0; i < field.Text.Length; i++)
+            {
+                Rect start = field.GetRectFromCharacterIndex(i);
+                Rect end = field.GetRectFromCharacterIndex(i, trailingEdge: true);
+                start.Union(end);
+                Rect glyph = field.TransformToVisual(window).TransformBounds(start);
+                Assert.False(surface.IntersectsWith(glyph), $"Feedback covers {label.Text} character {i}: {surface}; glyph {glyph}");
+            }
+        }
+    }
+
     private static void RecordSettings(MainWindow window, string game)
     {
         string? directory = Environment.GetEnvironmentVariable("SOULSTRACKER_SETTINGS_EVIDENCE");
@@ -254,6 +405,25 @@ public sealed class SettingsHotkeyControlTests
         bitmap.Render(content);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = System.IO.File.Create(System.IO.Path.Combine(directory, game + ".png")); encoder.Save(stream);
+        string Bounds(FrameworkElement element) => element.TransformToVisual(window).TransformBounds(new Rect(element.RenderSize))
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var overlay = (Border)window.FindName("HotkeySuccessOverlay");
+        var fields = HotkeyFieldNames.Select(name =>
+        {
+            var field = (TextBox)window.FindName(name);
+            var label = ((DockPanel)field.Parent).Children.OfType<TextBlock>().Single();
+            return new { name, field.Text, field = Bounds(field), label = Bounds(label) };
+        }).ToArray();
+        System.IO.File.WriteAllText(System.IO.Path.Combine(directory, game + ".json"), System.Text.Json.JsonSerializer.Serialize(new
+        {
+            overlay = Bounds(overlay),
+            overlay.IsVisible,
+            overlay.IsHitTestVisible,
+            fields,
+            feedback = ((TextBlock)window.FindName("HotkeySuccessStatus")).Text,
+            scrollOffset = ((ScrollViewer)window.FindName("SettingsContentScrollViewer")).VerticalOffset,
+            focus = (Keyboard.FocusedElement as FrameworkElement)?.Name
+        }));
     }
 
     private sealed class Native : IWindowsGlobalHotkeyNative

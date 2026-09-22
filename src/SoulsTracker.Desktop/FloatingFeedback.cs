@@ -11,11 +11,15 @@ internal sealed class FloatingFeedback(Canvas layer, Border surface)
 {
     private FrameworkElement? anchor;
     private FrameworkElement? viewport;
+    private FrameworkElement? besideRow;
+    private FrameworkElement? alternateRow;
 
-    internal void Show(FrameworkElement target, ScrollViewer scroll)
+    internal void Show(FrameworkElement target, ScrollViewer scroll, FrameworkElement? beside = null, FrameworkElement? alternate = null)
     {
         anchor = target;
         viewport = FindViewport(scroll);
+        besideRow = beside;
+        alternateRow = alternate;
         Update();
     }
 
@@ -23,6 +27,8 @@ internal sealed class FloatingFeedback(Canvas layer, Border surface)
     {
         anchor = null;
         viewport = null;
+        besideRow = null;
+        alternateRow = null;
         surface.Visibility = Visibility.Collapsed;
     }
 
@@ -48,12 +54,26 @@ internal sealed class FloatingFeedback(Canvas layer, Border surface)
         surface.Visibility = Visibility.Visible;
         surface.Measure(new Size(available.Width, double.PositiveInfinity));
         Size size = surface.DesiredSize;
+        // Hotkey feedback uses the free space beside its action or heading,
+        // rather than flipping onto a neighboring shortcut's text.
+        if (TryBeside(besideRow, available, size) || TryBeside(alternateRow, available, size)) return;
         double left = Math.Clamp(target.Right - size.Width, available.Left, Math.Max(available.Left, available.Right - size.Width));
         double top = target.Bottom + 4;
         if (top + size.Height > available.Bottom) top = target.Top - size.Height - 4;
         top = Math.Clamp(top, available.Top, Math.Max(available.Top, available.Bottom - size.Height));
         Canvas.SetLeft(surface, left);
         Canvas.SetTop(surface, top);
+    }
+
+    private bool TryBeside(FrameworkElement? row, Rect available, Size size)
+    {
+        if (row is null || !row.IsVisible) return false;
+        Rect bounds = row.TransformToVisual(layer).TransformBounds(new Rect(row.RenderSize));
+        var position = new System.Windows.Point(bounds.Right + 8, bounds.Top + (bounds.Height - size.Height) / 2);
+        if (!available.Contains(new Rect(position, size))) return false;
+        Canvas.SetLeft(surface, position.X);
+        Canvas.SetTop(surface, position.Y);
+        return true;
     }
 
     private static FrameworkElement? FindViewport(DependencyObject root)

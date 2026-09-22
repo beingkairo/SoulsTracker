@@ -713,7 +713,7 @@ public partial class MainWindow : Window
         if (!SettingsWorkspaceTab.IsSelected) return;
         ClearHotkeyFeedback();
         HotkeySuccessStatus.Text = "Hotkeys applied successfully";
-        hotkeyFeedback?.Show(anchor, SettingsContentScrollViewer);
+        hotkeyFeedback?.Show(anchor, SettingsContentScrollViewer, ApplyHotkeysButton, GlobalHotkeysHelpButton);
         long version = hotkeyOperationVersion;
         cancelHotkeyExpiry = scheduleCopyExpiry(TimeSpan.FromSeconds(5), () =>
         {
