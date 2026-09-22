@@ -73,7 +73,10 @@ public sealed class HostedOverlayContractTests
     public void DefaultAndNormalizedAppearanceMatchesDomainAndGoldenFields()
     {
         var golden = HostedOverlayJson.Parse(Corpus["valid"]![4]!.ToJsonString());
-        Assert.Equal(golden.Appearance, HostedAppearance.From(new OverlayPresentationConfiguration(true, false), "0"));
+        // The wire fixture retains explicit zero. New local settings choose a
+        // two-pixel outline without changing that wire value or its schema.
+        Assert.Equal(0, golden.Appearance!.OutlineWidth);
+        Assert.Equal(golden.Appearance with { OutlineWidth = 2 }, HostedAppearance.From(new OverlayPresentationConfiguration(true, false), "0"));
         var blank = HostedOverlayJson.Parse(Corpus["valid"]![5]!.ToJsonString()).Appearance!;
         Assert.Equal(string.Empty, blank.Title);
         Assert.Equal("#ABCDEF", blank.TextColor);

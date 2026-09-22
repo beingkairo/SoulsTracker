@@ -128,7 +128,7 @@ public sealed class OverlayIconModeTests
                         ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
                         await Idle();
                         var selector = Tree(window).OfType<ComboBox>().Single(control => AutomationProperties.GetName(control) == "Total Deaths title icon");
-                        var apply = Tree(window).OfType<Button>().Single(control => Equals(control.Content, "Apply Total Deaths appearance"));
+                        var apply = Tree(window).OfType<Button>().Single(control => Equals(control.Content, "Apply to live overlay"));
                         Assert.True(selector.IsEnabled && selector.Focusable && selector.IsTabStop);
                         Assert.True(apply.IsEnabled && apply.Focusable && apply.IsTabStop);
                         selector.SelectedItem = vm.TitleIconModes.Single(choice => choice.Value == mode);
@@ -154,6 +154,50 @@ public sealed class OverlayIconModeTests
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(5)]
+    public async Task AppearanceValuesSurviveApplyReconstructionAndResetWithoutChangingDeaths(int width)
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"souls-appearance-{Guid.NewGuid():N}");
+        try
+        {
+            string chosenFont;
+            await using (var coordinator = new SerializedTrackerCoordinator(new SqliteTrackerStateRepository(root, "tracker.db"), new NullPublisher()))
+            {
+                var vm = new DesktopTrackerViewModel(coordinator); await vm.InitializeAsync();
+                chosenFont = vm.LocalFontFamilies[0];
+                string before = vm.TotalDeathsText;
+                var projection = new HostedOverlayProjection();
+                var death = projection.Initialize(vm.CurrentState!).Death;
+                vm.TotalDeathsAppearanceDraft.OutlineWidth = width.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                vm.TotalDeathsAppearanceDraft.FontFamily = chosenFont;
+                vm.TotalDeathsAppearanceDraft.OutlineEnabled = false;
+                vm.TotalDeathsAppearanceDraft.OutlineEnabled = true;
+                Assert.Equal(width.ToString(System.Globalization.CultureInfo.InvariantCulture), vm.TotalDeathsAppearanceDraft.OutlineWidth);
+                await vm.ApplyOverlayAppearanceAsync(true);
+                Assert.True(vm.IsAppearanceApplySuccessful);
+                Assert.Equal(width, vm.CurrentState!.OverlayConfiguration.TotalDeaths.Appearance.OutlineWidth);
+                Assert.Equal(before, vm.TotalDeathsText);
+                Assert.Equal(death, projection.FromAcceptedPublication(vm.CurrentState!, null).Death);
+            }
+            await using var reloaded = new SerializedTrackerCoordinator(new SqliteTrackerStateRepository(root, "tracker.db"), new NullPublisher());
+            var restored = new DesktopTrackerViewModel(reloaded); await restored.InitializeAsync();
+            Assert.Equal(chosenFont, restored.TotalDeathsAppearanceDraft.FontFamily);
+            Assert.Equal(width.ToString(System.Globalization.CultureInfo.InvariantCulture), restored.TotalDeathsAppearanceDraft.OutlineWidth);
+            string total = restored.TotalDeathsText;
+            var original = JsonSerializer.SerializeToNode(restored.CurrentState!)!;
+            await restored.ResetOverlayAppearanceAsync(true);
+            var reset = JsonSerializer.SerializeToNode(restored.CurrentState!)!;
+            original.AsObject().Remove("OverlayConfiguration"); reset.AsObject().Remove("OverlayConfiguration");
+            Assert.Equal(original.ToJsonString(), reset.ToJsonString());
+            Assert.Equal(total, restored.TotalDeathsText);
+            Assert.Equal(2, restored.CurrentState!.OverlayConfiguration.TotalDeaths.Appearance.OutlineWidth);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
 
     // Compare every serialized state property except the deliberately changed mode,
     // including appearance, source selections, counter, adjustments, hotkeys and exports.

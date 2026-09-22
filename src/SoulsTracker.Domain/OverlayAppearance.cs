@@ -11,11 +11,11 @@ public sealed class OverlayAppearance
     public static IReadOnlyList<string> AllowedFonts { get; } = ["Segoe UI", "Arial", "Verdana"];
     // Sanitized product defaults captured from the approved local visual setup.
     // This deliberately excludes stream state, endpoints, paths, and tokens.
-    public static OverlayAppearance Default { get; } = new("Total Deaths", "Arial", 24, "#F7F6FF", "#A78BFA", "#15171B", 0, 0, 0, OverlayTextAlignment.Left, outlineEnabled: true, outlineColor: "#000000", outlineWidth: 0);
+    public static OverlayAppearance Default { get; } = new("Total Deaths", "Arial", 24, "#F7F6FF", "#A78BFA", "#15171B", 0, 0, 0, OverlayTextAlignment.Left, outlineEnabled: true, outlineColor: "#000000", outlineWidth: 2);
 
 
     public OverlayAppearance(string title, string fontFamily, int fontSize, string textColor, string accentColor, string backgroundColor, int backgroundOpacity, int padding, int cornerRadius, OverlayTextAlignment alignment,
-        bool outlineEnabled = false, string outlineColor = "#000000", int outlineWidth = 0,
+        bool outlineEnabled = false, string outlineColor = "#000000", int outlineWidth = 2,
         bool shadowEnabled = false, string shadowColor = "#000000", int shadowOffsetX = 2, int shadowOffsetY = 2, int shadowBlur = 4,
         int textOpacity = 100, string iconColor = "#FFFFFF")
     {

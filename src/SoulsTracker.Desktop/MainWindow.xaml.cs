@@ -756,12 +756,17 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ApplyOverlayAppearanceAsync(totalDeaths: true);
     }
 
+    private bool appearanceResetConfirmationOpen;
     private async void ResetSelectedOverlayAppearance_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel)
+        if (appearanceResetConfirmationOpen || DataContext is not DesktopTrackerViewModel { PresentationControlsEnabled: true } viewModel) return;
+        appearanceResetConfirmationOpen = true;
+        try
         {
-            await viewModel.ResetOverlayAppearanceAsync(totalDeaths: true);
+            var dialog = new AppearanceResetDialog { Owner = this, Resources = Resources };
+            if (dialog.ShowDialog() == true) await viewModel.ResetOverlayAppearanceAsync(totalDeaths: true);
         }
+        finally { appearanceResetConfirmationOpen = false; }
     }
 
 

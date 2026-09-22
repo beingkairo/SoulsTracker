@@ -5,7 +5,7 @@ using SoulsTracker.Domain;
 namespace SoulsTracker.Desktop;
 
 /// <summary>Editable, notifying presentation draft. Conversion remains bounded by the domain contract.</summary>
-public sealed class OverlayAppearanceDraft : INotifyPropertyChanged
+public sealed class OverlayAppearanceDraft : INotifyPropertyChanged, IDataErrorInfo
 {
     private string title = "TOTAL DEATHS", fontFamily = "Segoe UI", fontSize = "42", textColor = "#FFFFFF", accentColor = "#A78BFA", backgroundColor = "#15171B", backgroundOpacity = "88", padding = "16", cornerRadius = "8", outlineColor = "#000000", outlineWidth = "0", shadowColor = "#000000", shadowOffsetX = "2", shadowOffsetY = "2", shadowBlur = "4", textOpacity = "100", iconColor = "#FFFFFF";
     private bool backgroundEnabled, outlineEnabled, shadowEnabled;
@@ -68,10 +68,44 @@ public sealed class OverlayAppearanceDraft : INotifyPropertyChanged
         }
     }
     public bool IsOutlineWidthInvalid => string.Equals(InvalidField, "outlineWidth", StringComparison.Ordinal);
+    private static readonly string[] ValidatedFields = [nameof(Title), nameof(FontFamily), nameof(FontSize), nameof(TextColor), nameof(AccentColor), nameof(BackgroundColor), nameof(BackgroundOpacity), nameof(Padding), nameof(CornerRadius), nameof(OutlineColor), nameof(OutlineWidth), nameof(ShadowColor), nameof(ShadowOffsetX), nameof(ShadowOffsetY), nameof(ShadowBlur), nameof(TextOpacity), nameof(IconColor)];
+    public string Error => string.Join(" ", ValidatedFields.Select(property => this[property]).Where(message => message.Length > 0));
+    public string this[string field] => field switch
+    {
+        nameof(Title) => Title.Trim().Length <= 40 ? "" : "Title must be at most 40 characters.",
+        nameof(FontFamily) => FontFamily is { Length: > 0 and <= 128 } && !FontFamily.Any(c => char.IsControl(c) || c is ';' or '{' or '}' or '<' or '>' or '\'' or '"' or '\\') ? "" : "Choose a valid font name.",
+        nameof(FontSize) => NumberError(FontSize, 12, 96, "Font size", "px"),
+        nameof(TextOpacity) => NumberError(TextOpacity, 0, 100, "Text opacity", "%"),
+        nameof(BackgroundOpacity) => NumberError(BackgroundOpacity, 0, 100, "Background opacity", "%"),
+        nameof(OutlineWidth) => NumberError(OutlineWidth, 0, 8, "Outline width", "px"),
+        nameof(ShadowOffsetX) => NumberError(ShadowOffsetX, -20, 20, "Shadow X", "px"),
+        nameof(ShadowOffsetY) => NumberError(ShadowOffsetY, -20, 20, "Shadow Y", "px"),
+        nameof(ShadowBlur) => NumberError(ShadowBlur, 0, 20, "Shadow blur", "px"),
+        nameof(Padding) => NumberError(Padding, 0, 64, "Padding", "px"),
+        nameof(CornerRadius) => NumberError(CornerRadius, 0, 32, "Corner radius", "px"),
+        nameof(TextColor) => ColorError(TextColor, "Text color"),
+        nameof(AccentColor) => ColorError(AccentColor, "Accent color"),
+        nameof(BackgroundColor) => ColorError(BackgroundColor, "Background color"),
+        nameof(OutlineColor) => ColorError(OutlineColor, "Outline color"),
+        nameof(ShadowColor) => ColorError(ShadowColor, "Shadow color"),
+        nameof(IconColor) => ColorError(IconColor, "Skull color"),
+        _ => ""
+    };
+    private static string NumberError(string value, int minimum, int maximum, string label, string unit) =>
+        int.TryParse(value, out int number) && number >= minimum && number <= maximum ? "" : $"{label}: enter a whole number from {minimum} to {maximum} {unit}.";
+    private static string ColorError(string value, string label) =>
+        value is { Length: 7 } && value[0] == '#' && value.Skip(1).All(Uri.IsHexDigit) ? "" : $"{label}: use #RRGGBB.";
     public void Load(OverlayAppearance appearance) { Title = appearance.Title; FontFamily = appearance.FontFamily; FontSize = appearance.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture); TextColor = appearance.TextColor; AccentColor = appearance.AccentColor; BackgroundColor = appearance.BackgroundColor; BackgroundOpacity = appearance.BackgroundOpacity.ToString(System.Globalization.CultureInfo.InvariantCulture); BackgroundEnabled = appearance.BackgroundOpacity > 0; Padding = appearance.Padding.ToString(System.Globalization.CultureInfo.InvariantCulture); CornerRadius = appearance.CornerRadius.ToString(System.Globalization.CultureInfo.InvariantCulture); Alignment = appearance.Alignment; OutlineEnabled = appearance.OutlineEnabled; OutlineColor = appearance.OutlineColor; OutlineWidth = appearance.OutlineWidth.ToString(System.Globalization.CultureInfo.InvariantCulture); ShadowEnabled = appearance.ShadowEnabled; ShadowColor = appearance.ShadowColor; ShadowOffsetX = appearance.ShadowOffsetX.ToString(System.Globalization.CultureInfo.InvariantCulture); ShadowOffsetY = appearance.ShadowOffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture); ShadowBlur = appearance.ShadowBlur.ToString(System.Globalization.CultureInfo.InvariantCulture); TextOpacity = appearance.TextOpacity.ToString(System.Globalization.CultureInfo.InvariantCulture); IconColor = appearance.IconColor; }
     public OverlayAppearance ToDomain(OverlayTextAlignment forcedAlignment)
     {
         ClearValidation();
+        if (Error.Length > 0)
+        {
+            ValidationMessage = Error;
+            InvalidField = ValidatedFields.First(field => this[field].Length > 0);
+            if (InvalidField == nameof(OutlineWidth)) InvalidField = "outlineWidth";
+            throw new ArgumentException(ValidationMessage);
+        }
         try
         {
             int opacity = BackgroundEnabled ? Parse(BackgroundOpacity, "backgroundOpacity") : 0;

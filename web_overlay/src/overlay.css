@@ -38,15 +38,12 @@ body {
   display: inline-flex;
   flex-direction: column;
   gap: 0.25rem;
-  min-width: 16rem;
+  min-width: 0;
   padding: 1rem;
   background: rgb(12 12 16 / 88%);
 }
 
 
-.souls-tracker-overlay-panel:has(> .overlay-total-deaths) {
-  min-width: 0;
-}
 
 .overlay-heading,
 .overlay-game-name,

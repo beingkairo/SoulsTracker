@@ -13,6 +13,39 @@ test.beforeEach(async ({ request }) => {
   expect(acquired.status()).toBe(200);
 });
 const address = () => `${origin}/overlay/#id=${credentials.id}&read=${credentials.read}`;
+test("background follows current content and skull gaps match", async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 4096, height: 720 });
+  await publish(request, { death: { value: "7", availability: "available" } });
+  await page.goto(address());
+  const panel = page.getByTestId("total-deaths-overlay");
+  const measurements = [];
+  for (const title of ["A long synthetic counter title", "X", ""]) {
+    for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await publish(request, { appearance: { ...style, title, titleIconMode, padding: 12, backgroundOpacity: 100 } });
+      await expect(panel).toHaveText(title && titleIconMode !== "skullOnly" ? `${title}: 7` : "7");
+      await expect(panel).toHaveCSS("padding", "12px");
+      if (await panel.locator("img").count()) await expect.poll(() => panel.locator("img").evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+      const metrics = await panel.evaluate(node => {
+        const content = node.querySelector("h1, p")!;
+        const text = document.createRange(); text.selectNodeContents(content.lastChild!);
+        text.setStart(content.lastChild!, (content.lastChild!.textContent ?? "").length - (content.lastChild!.textContent ?? "").trimStart().length);
+        const glyph = text.getBoundingClientRect();
+        const image = content.querySelector("img")?.getBoundingClientRect();
+        const bounds = node.getBoundingClientRect();
+        return { width: bounds.width, rightPadding: bounds.right - glyph.right,
+          leftPadding: (image?.left ?? glyph.left) - bounds.left, gap: image ? glyph.left - image.right : null };
+      });
+      measurements.push({ title, titleIconMode, ...metrics });
+      expect.soft(metrics.rightPadding).toBeCloseTo(12, 1);
+      expect.soft(metrics.leftPadding).toBeCloseTo(12, 1);
+      await testInfo.attach(`content-${measurements.length}`, { body: await panel.screenshot(), contentType: "image/png" });
+    }
+  }
+  const gaps = measurements.filter(item => item.gap !== null).map(item => item.gap!);
+  for (const gap of gaps) expect.soft(gap).toBeCloseTo(gaps[0], 2);
+  await testInfo.attach("content-bounds", { body: JSON.stringify(measurements, null, 2), contentType: "application/json" });
+});
 const style = { enabled: true, title: "Total Deaths", fontFamily: "Arial", fontSize: 24, textColor: "#F7F6FF", textOpacity: 100,
   backgroundColor: "#15171B", backgroundOpacity: 0, padding: 0, cornerRadius: 0, outlineEnabled: true, outlineColor: "#000000", outlineWidth: 0,
   shadowEnabled: false, shadowColor: "#000000", shadowOffsetX: 2, shadowOffsetY: 2, shadowBlur: 4, titleIconMode: "off", iconColor: "#FFFFFF" };
@@ -144,7 +177,7 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
         measurements.push({ value, ...variant, fontSize, ...metrics });
         expect.soft(metrics.font).toBeCloseTo(fontSize * (heading ? 1.15 : 2.5), 2);
         expect(metrics.x).toBe(0); expect(metrics.y).toBe(0);
-        expect.soft(metrics.minimum).toBe(heading ? "256px" : "0px");
+        expect.soft(metrics.minimum).toBe("0px");
         expect(metrics.textX).toBeGreaterThanOrEqual(variant.padding - 0.1);
         expect.soft(metrics.textRight).toBeLessThanOrEqual(metrics.width - variant.padding + 0.1);
         if (!heading) {
@@ -152,8 +185,7 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
           expect(metrics.height).toBeCloseTo(metrics.contentHeight + 2 * variant.padding, 1);
           if (value === "42" && fontSize === 12) expect.soft(metrics.width).toBeLessThan(256);
         } else {
-          expect(metrics.width).toBeGreaterThanOrEqual(256);
-          if (!skull) expect(metrics.width).toBeCloseTo(Math.max(256, metrics.textWidth + 2 * variant.padding), 1);
+          if (!skull) expect(metrics.width).toBeCloseTo(metrics.textWidth + 2 * variant.padding, 1);
           if (skull) {
             expect(metrics.skullWidth).toBeCloseTo(fontSize * 1.15 * 2, 1);
             expect(metrics.skullHeight).toBeCloseTo(fontSize * 1.15 * 2, 1);

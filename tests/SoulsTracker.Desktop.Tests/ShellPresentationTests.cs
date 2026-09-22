@@ -155,17 +155,23 @@ public sealed class ShellPresentationTests
             var title = Tree(window).OfType<TextBox>().Single(x => BoundPath(x) == "TotalDeathsAppearanceDraft.Title");
             title.Text = "Synthetic total";
             title.GetBindingExpression(TextBox.TextProperty).UpdateSource();
-            var apply = Tree(window).OfType<Button>().Single(x => Equals(x.Content, "Apply Total Deaths appearance"));
+            var apply = Tree(window).OfType<Button>().Single(x => Equals(x.Content, "Apply to live overlay"));
             apply.BringIntoView();
             await Idle();
-            AssertFits(apply, scroll);
+            AssertFixedActionFits(apply, scroll);
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsBusy && repository.State.OverlayConfiguration.TotalDeaths.Appearance.Title == "Synthetic total");
             var reset = (Button)window.FindName("ResetSelectedOverlayAppearanceButton");
             reset.BringIntoView();
             await Idle();
-            AssertFits(reset, scroll);
+            AssertFixedActionFits(reset, scroll);
+            var confirmReset = Dispatcher.CurrentDispatcher.InvokeAsync(() =>
+            {
+                var dialog = window.OwnedWindows.Cast<Window>().Single();
+                Tree(dialog).OfType<Button>().Single(x => Equals(x.Content, "Reset")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }, DispatcherPriority.ApplicationIdle);
             reset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await confirmReset;
             await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsBusy && repository.State.OverlayConfiguration.TotalDeaths.Appearance.Title == OverlayAppearance.Default.Title);
             Assert.Equal(System.Text.Json.JsonSerializer.Serialize(OverlayAppearance.Default), System.Text.Json.JsonSerializer.Serialize(repository.State.OverlayConfiguration.TotalDeaths.Appearance));
             Assert.Equal(OverlayConfiguration.Default.TotalDeaths.Appearance.Title, vm.TotalDeathsAppearanceDraft.Title);
@@ -179,8 +185,18 @@ public sealed class ShellPresentationTests
         ComboBox combo => BindingOperations.GetBinding(combo, ComboBox.SelectedItemProperty)?.Path.Path,
         CheckBox check => BindingOperations.GetBinding(check, CheckBox.IsCheckedProperty)?.Path.Path,
         ColorField color => BindingOperations.GetBinding(color, ColorField.ValueProperty)?.Path.Path,
+        AppearanceNumberField number => BindingOperations.GetBinding(number, AppearanceNumberField.ValueProperty)?.Path.Path,
+        AppearanceFontField font => BindingOperations.GetBinding(font, AppearanceFontField.SelectedFontProperty)?.Path.Path,
         _ => null
     };
+
+    private static void AssertFixedActionFits(FrameworkElement control, ScrollViewer scroll)
+    {
+        var layout = (FrameworkElement)scroll.Parent;
+        var bounds = control.TransformToAncestor(layout).TransformBounds(new Rect(control.RenderSize));
+        Assert.True(bounds.Left >= 0 && bounds.Right <= layout.ActualWidth + 1);
+        Assert.True(bounds.Top >= scroll.ActualHeight && bounds.Bottom <= layout.ActualHeight + 1);
+    }
 
     private static void AssertFits(FrameworkElement control, ScrollViewer scroll)
     {
@@ -304,9 +320,7 @@ public sealed class ShellPresentationTests
                 if (tabName == "OverlayWorkspaceTab")
                 {
                     var reset = (Button)window.FindName("ResetSelectedOverlayAppearanceButton");
-                    var bounds = reset.TransformToAncestor(scroll).TransformBounds(new Rect(reset.RenderSize));
-                    Assert.True(bounds.Top >= -1 && bounds.Bottom <= scroll.ActualHeight + 1, $"Reset bounds {bounds}");
-                    Assert.True(bounds.Left >= 0 && bounds.Right <= scroll.ActualWidth + 1, $"Reset bounds {bounds}");
+                    AssertFixedActionFits(reset, scroll);
                 }
             }
         }

@@ -30,7 +30,7 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
       const skull = document.createElement("img"); skull.alt = "SoulsTracker skull"; skull.className = "overlay-title-skull";
       skull.src = skullAsset;
       skull.style.filter = "url(#hosted-skull-filter)";
-      title.append(skull, document.createTextNode(appearance.titleIconMode === "prefixSkull" ? ` ${text}` : text));
+      title.append(skull, document.createTextNode(text));
     } else title.textContent = text;
     panel.append(title);
   } else {

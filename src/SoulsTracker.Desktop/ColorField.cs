@@ -10,8 +10,10 @@ using Forms = System.Windows.Forms;
 namespace SoulsTracker.Desktop;
 
 /// <summary>Dark hex input paired with the Windows color palette dialog.</summary>
-public sealed class ColorField : Grid
+public sealed class ColorField : Grid, System.ComponentModel.IDataErrorInfo
 {
+    public string Error => this[nameof(Value)];
+    public string this[string columnName] => columnName == nameof(Value) && Parse(Value) is null ? "Use #RRGGBB, for example #FFFFFF." : "";
     private static readonly Style KeyboardFocusVisualStyle = CreateKeyboardFocusVisualStyle();
     private readonly Border swatch;
 
@@ -38,8 +40,12 @@ public sealed class ColorField : Grid
             {
                 Source = this,
                 Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                ValidatesOnDataErrors = true
             });
+        hexBox.ToolTip = "Use #RRGGBB, for example #FFFFFF.";
+        AutomationProperties.SetHelpText(hexBox, "Use #RRGGBB, for example #FFFFFF.");
+        hexBox.Loaded += (_, _) => AutomationProperties.SetName(hexBox, AutomationProperties.GetName(this));
         Children.Add(hexBox);
 
         System.Windows.Controls.Button button = new()

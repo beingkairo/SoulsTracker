@@ -252,7 +252,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     public bool DraftShowGameName { get => legacyDraftShowGameName; set => SetField(ref legacyDraftShowGameName, value); }
     public bool DraftCompactTitle { get => legacyDraftCompactTitle; set => SetField(ref legacyDraftCompactTitle, value); }
     public IReadOnlyList<OverlayTitleIconModeChoice> TitleIconModes { get; } = OverlayTitleIconModeChoice.All;
-    public OverlayTitleIconModeChoice DraftTitleIconModeChoice { get => draftTitleIconModeChoice; set { if (SetField(ref draftTitleIconModeChoice, value)) OnPropertyChanged(nameof(IsTitleIconSelected)); } }
+    public OverlayTitleIconModeChoice DraftTitleIconModeChoice { get => draftTitleIconModeChoice; set { if (SetField(ref draftTitleIconModeChoice, value)) { OnPropertyChanged(nameof(IsTitleIconSelected)); OnPropertyChanged(nameof(IsAppearanceTitleVisible)); } } }
+
+    public bool IsAppearanceTitleVisible => DraftTitleIconModeChoice.Value != OverlayTitleIconMode.SkullOnly;
 
     public bool IsTitleIconSelected => DraftTitleIconModeChoice.Value != OverlayTitleIconMode.Off;
     public string DraftCheckmarkAccent { get; set; } = "#A78BFA";
@@ -473,6 +475,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     public LegacyImportViewModel? LegacyImport { get => legacyImport; private set => SetField(ref legacyImport, value); }
     public bool HasActiveLegacyImport => LegacyImport is { OfferVisible: true } or { ReviewVisible: true };
     public string? TotalDeathsAppearanceStatus { get => totalDeathsAppearanceStatus; private set => SetField(ref totalDeathsAppearanceStatus, value); }
+    private bool isAppearanceApplySuccessful;
+    public bool IsAppearanceApplySuccessful { get => isAppearanceApplySuccessful; private set => SetField(ref isAppearanceApplySuccessful, value); }
 
     public string? TextExportStatus { get => textExportStatus; private set => SetField(ref textExportStatus, value); }
     public string? DeathsExportFileName => state?.TextExports.DeathsPath is { } path ? Path.GetFileName(path) : null;
@@ -1146,6 +1150,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     public async Task ApplyOverlayAppearanceAsync(bool totalDeaths, CancellationToken cancellationToken = default)
     {
         if (!PresentationControlsEnabled || state is null) return;
+        IsAppearanceApplySuccessful = false;
         try
         {
             OverlayAppearance appearance = totalDeaths
@@ -1156,6 +1161,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
             // Appearance drafts are isolated from Main-tab operational errors.
             // A failed Apply must leave the last applied style/URL/preview intact.
             await SubmitAsync(new UpdateOverlayAppearanceCommand(totalDeaths, appearance, false, false, DraftTitleIconModeChoice.Value), cancellationToken);
+            IsAppearanceApplySuccessful = ErrorMessage is null;
             SetAppearanceFeedback(totalDeaths, ErrorMessage is null
                 ? "Total Deaths appearance applied."
                 : "Total Deaths appearance could not be applied.");
