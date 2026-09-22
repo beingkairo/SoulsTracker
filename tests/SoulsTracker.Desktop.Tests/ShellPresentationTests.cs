@@ -54,15 +54,37 @@ public sealed class ShellPresentationTests
     [InlineData(1060d, 760d)]
     public Task LongSetupAndSettingsRowsRemainInsideViewport(double width, double height) => HostedConnectionTests.OnDispatcher(async () =>
     {
-        var window = new MainWindow { Width = width, Height = height, ShowActivated = false, ShowInTaskbar = false,
-            DataContext = new {
-                IsEldenRingSelected = true, IsBlackMythWukongSelected = true, IsLiesOfPSelected = true,
-                IsEldenRingSaveSelectorVisible = true, IsEldenRingBrowseVisible = true, IsEldenRingChangeVisible = true, IsEldenRingCancelVisible = true,
-                IsWukongSaveSelectorVisible = true, IsWukongBrowseVisible = true, IsWukongChangeVisible = true, IsWukongCancelVisible = true,
-                IsLiesOfPSaveSelectorVisible = true, IsLiesOfPBrowseVisible = true, IsLiesOfPChangeVisible = true, IsLiesOfPCancelVisible = true,
-                HasCheckedForUpdates = true, CanRetryUpdateCheck = true, CanOpenAvailableUpdateReleasePage = true,
-                UpdateCurrentVersion = "1.3.2", UpdateLatestVersion = "1.3.3", UpdateCheckStatus = "An update is available. Open the release page to download it."
-            } };
+        var window = new MainWindow
+        {
+            Width = width,
+            Height = height,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+            DataContext = new
+            {
+                IsEldenRingSelected = true,
+                IsBlackMythWukongSelected = true,
+                IsLiesOfPSelected = true,
+                IsEldenRingSaveSelectorVisible = true,
+                IsEldenRingBrowseVisible = true,
+                IsEldenRingChangeVisible = true,
+                IsEldenRingCancelVisible = true,
+                IsWukongSaveSelectorVisible = true,
+                IsWukongBrowseVisible = true,
+                IsWukongChangeVisible = true,
+                IsWukongCancelVisible = true,
+                IsLiesOfPSaveSelectorVisible = true,
+                IsLiesOfPBrowseVisible = true,
+                IsLiesOfPChangeVisible = true,
+                IsLiesOfPCancelVisible = true,
+                HasCheckedForUpdates = true,
+                CanRetryUpdateCheck = true,
+                CanOpenAvailableUpdateReleasePage = true,
+                UpdateCurrentVersion = "1.3.2",
+                UpdateLatestVersion = "1.3.3",
+                UpdateCheckStatus = "An update is available. Open the release page to download it."
+            }
+        };
         try
         {
             window.Show();
@@ -195,15 +217,22 @@ public sealed class ShellPresentationTests
             foreach (string status in HotkeyStatuses)
             {
                 ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
-                window.DataContext = new { IsHotkeyRecording = false, IsEldenRingNoticeVisible = false, IsGlobalHotkeyConfigurationAvailable = true, GlobalHotkeyStatus = status,
-                    GlobalHotkeyUsageDescription = "Synthetic hotkey usage.", IsEldenRingMissedDeathAdjustmentAvailable = true };
+                window.DataContext = new
+                {
+                    IsHotkeyRecording = false,
+                    IsEldenRingNoticeVisible = false,
+                    IsGlobalHotkeyConfigurationAvailable = true,
+                    GlobalHotkeyStatus = status,
+                    GlobalHotkeyUsageDescription = "Synthetic hotkey usage.",
+                    IsEldenRingMissedDeathAdjustmentAvailable = true
+                };
                 await Idle();
                 var feedback = (TextBlock)window.FindName("GlobalHotkeyStatusTextBlock");
                 Assert.Equal(status != "Global hotkeys are active.", feedback.IsVisible);
                 Assert.Equal(status, feedback.Text);
             }
             const string missed = "Some PvP and invasion-style deaths, including the Great Jar challenge, are excluded from Elden Ring's save files. Customizable hotkeys for increment and decrement of deaths can be found in the Settings tab.";
-            foreach (var (name, expected) in new[] { ("MissedDeathsHelpButton", missed), ("GlobalHotkeysHelpButton", "Synthetic hotkey usage. Choose a field to record. Enter saves and returns to the main menu; Esc cancels.") })
+            foreach (var (name, expected) in new[] { ("MissedDeathsHelpButton", missed), ("GlobalHotkeysHelpButton", "Synthetic hotkey usage. Choose a field to record. Enter saves; Esc cancels. Both return to the view where recording started.") })
             {
                 ((TabItem)window.FindName(name == "MissedDeathsHelpButton" ? "MainWorkspaceTab" : "SettingsWorkspaceTab")).IsSelected = true;
                 await Idle();

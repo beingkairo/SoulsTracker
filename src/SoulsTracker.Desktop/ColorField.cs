@@ -153,8 +153,8 @@ public sealed class ColorField : Grid
         border.SetValue(UIElement.IsHitTestVisibleProperty, false);
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
 
-        ControlTemplate template = new(typeof(System.Windows.Controls.Button)) { VisualTree = border };
-        var style = new Style(typeof(System.Windows.Controls.Button));
+        ControlTemplate template = new(typeof(System.Windows.Controls.Control)) { VisualTree = border };
+        var style = new Style(typeof(System.Windows.Controls.Control));
         style.Setters.Add(new Setter(System.Windows.Controls.Control.TemplateProperty, template));
         return style;
     }

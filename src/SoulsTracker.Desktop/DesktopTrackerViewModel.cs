@@ -82,6 +82,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     private bool recordingIncrementHotkey;
     private GlobalHotkeyBinding? hotkeyBindingBeforeRecording;
     private Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>>? applyHotkeysAsync;
+    private long hotkeyApplyVersion;
+    private long hotkeyCommittedVersion;
     private string? textExportStatus;
     private OverlayTitleIconModeChoice draftTitleIconModeChoice = OverlayTitleIconModeChoice.All[0];
 
@@ -922,6 +924,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
 
     internal void ConfigureGlobalHotkeys(GlobalHotkeySettings settings, Func<GlobalHotkeySettings, Task<GlobalHotkeyRegistrationResult>> apply)
     {
+        hotkeyCommittedVersion = ++hotkeyApplyVersion;
         applyHotkeysAsync = apply ?? throw new ArgumentNullException(nameof(apply));
         SetGlobalHotkeySettings(settings);
     }
@@ -979,13 +982,13 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     }
 
     /// <summary>Applies a recording session's captured binding and always releases the capture surface.</summary>
-    public async Task SaveRecordedHotkeyAsync()
+    public async Task<bool> SaveRecordedHotkeyAsync()
     {
-        if (!IsHotkeyRecording) return;
+        if (!IsHotkeyRecording) return false;
 
         try
         {
-            await ApplyGlobalHotkeysAsync();
+            return await ApplyGlobalHotkeysAsync();
         }
         finally
         {
@@ -994,14 +997,22 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         }
     }
 
-    public async Task ApplyGlobalHotkeysAsync()
+    public async Task<bool> ApplyGlobalHotkeysAsync()
     {
-        if (applyHotkeysAsync is null) { SetGlobalHotkeyStatus("Global hotkeys are unavailable. The desktop controls remain available."); return; }
-        if (!TryParsePending(out GlobalHotkeySettings? candidate, out string message)) { SetGlobalHotkeyStatus(message); return; }
+        long version = ++hotkeyApplyVersion;
+        if (applyHotkeysAsync is null) { SetGlobalHotkeyStatus("Global hotkeys are unavailable. The desktop controls remain available."); return false; }
+        if (!TryParsePending(out GlobalHotkeySettings? candidate, out string message)) { SetGlobalHotkeyStatus(message); return false; }
         GlobalHotkeyRegistrationResult result = await applyHotkeysAsync(candidate!);
+        // Superseded notifications must not discard an already committed binding.
+        if (result.IsRegistered && version > hotkeyCommittedVersion)
+        {
+            hotkeyCommittedVersion = version;
+            SetGlobalHotkeySettings(candidate!);
+        }
+        if (version != hotkeyApplyVersion) return false;
         SetGlobalHotkeyStatus(result.StatusMessage);
-        if (result.IsRegistered) SetGlobalHotkeySettings(candidate!);
-        else SetGlobalHotkeySettings(hotkeySettings);
+        if (!result.IsRegistered) SetGlobalHotkeySettings(hotkeySettings);
+        return result.IsRegistered;
     }
 
     private bool TryParsePending(out GlobalHotkeySettings? settings, out string message)

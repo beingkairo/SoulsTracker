@@ -97,7 +97,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#454F61" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45" /></Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" /><Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2" /></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -161,7 +161,7 @@
                             </Border>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource AccentBrush}" /><Setter TargetName="HelpCircle" Property="BorderThickness" Value="2" /></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Trigger>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource PrimaryTextBrush}" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -214,10 +214,10 @@
                                     </Thumb>
                                 </Track.Thumb>
                             </Track>
-                            <Border x:Name="FocusRing" BorderBrush="{StaticResource AccentBrush}" BorderThickness="0" CornerRadius="4" IsHitTestVisible="False" />
+                            <Border x:Name="FocusRing" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" Opacity="0" CornerRadius="4" IsHitTestVisible="False" />
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusRing" Property="BorderThickness" Value="2" /></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusRing" Property="Opacity" Value="1" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -437,14 +437,10 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding EldenRingDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding EldenRingDirectoryPath}" AutomationProperties.Name="Elden Ring chosen directory" AutomationProperties.HelpText="{Binding EldenRingDirectoryPath}" />
-                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding EldenRingDirectoryPath}" CommandParameter="{Binding ElementName=EldenRingCopyFeedbackHost}" Click="CopyDirectoryPath_Click" />
+                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding EldenRingDirectoryPath}" Click="CopyDirectoryPath_Click" />
                                     </Grid>
                                 </Border>
-                                <ContentControl x:Name="EldenRingCopyFeedbackHost" MinHeight="36" HorizontalContentAlignment="Stretch" Focusable="False">
-                                    <Border x:Name="CopyFeedbackOverlay" Padding="4,0,4,4" IsHitTestVisible="False" Visibility="Collapsed">
-                                        <TextBlock x:Name="DirectoryCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" TextAlignment="Right" AutomationProperties.Name="Directory copy status" AutomationProperties.LiveSetting="Polite" />
-                                    </Border>
-                                </ContentControl>
+
                                 <StackPanel Orientation="Horizontal">
                                     <Button Style="{StaticResource DirectoryChooseButton}" Tag="{Binding EldenRingDirectoryPath}" Click="BrowseEldenRingSave_Click" Visibility="{Binding IsEldenRingBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
                                     <Button Content="Change Directory" Click="ChangeEldenRingSave_Click" Visibility="{Binding IsEldenRingChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Elden Ring save directory" />
@@ -477,10 +473,10 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding BlackMythWukongDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding BlackMythWukongDirectoryPath}" AutomationProperties.Name="Black Myth Wukong chosen directory" AutomationProperties.HelpText="{Binding BlackMythWukongDirectoryPath}" />
-                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding BlackMythWukongDirectoryPath}" CommandParameter="{Binding ElementName=BlackMythWukongCopyFeedbackHost}" Click="CopyDirectoryPath_Click" />
+                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding BlackMythWukongDirectoryPath}" Click="CopyDirectoryPath_Click" />
                                     </Grid>
                                 </Border>
-                                <ContentControl x:Name="BlackMythWukongCopyFeedbackHost" MinHeight="36" HorizontalContentAlignment="Stretch" Focusable="False" />
+
                                 <StackPanel Orientation="Horizontal">
                                     <Button Style="{StaticResource DirectoryChooseButton}" Tag="{Binding BlackMythWukongDirectoryPath}" Click="BrowseBlackMythWukongSave_Click" Visibility="{Binding IsWukongBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
                                     <Button Content="Change Directory" Click="ChangeBlackMythWukongSave_Click" Visibility="{Binding IsWukongChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Black Myth Wukong save directory" />
@@ -525,10 +521,10 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding LiesOfPDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding LiesOfPDirectoryPath}" AutomationProperties.Name="Lies of P chosen directory" AutomationProperties.HelpText="{Binding LiesOfPDirectoryPath}" />
-                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding LiesOfPDirectoryPath}" CommandParameter="{Binding ElementName=LiesOfPCopyFeedbackHost}" Click="CopyDirectoryPath_Click" />
+                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding LiesOfPDirectoryPath}" Click="CopyDirectoryPath_Click" />
                                     </Grid>
                                 </Border>
-                                <ContentControl x:Name="LiesOfPCopyFeedbackHost" MinHeight="36" HorizontalContentAlignment="Stretch" Focusable="False" />
+
                                 <StackPanel Orientation="Horizontal">
                                     <Button Style="{StaticResource DirectoryChooseButton}" Tag="{Binding LiesOfPDirectoryPath}" Click="BrowseLiesOfPSave_Click" Visibility="{Binding IsLiesOfPBrowseVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
                                     <Button Content="Change Directory" Click="ChangeLiesOfPSave_Click" Visibility="{Binding IsLiesOfPChangeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Lies of P save directory" />
@@ -742,7 +738,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Text="GLOBAL HOTKEYS" />
-                                <Button x:Name="GlobalHotkeysHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Global hotkeys help" AutomationProperties.HelpText="{Binding GlobalHotkeyUsageDescription, StringFormat={}{0} Choose a field to record. Enter saves and returns to the main menu; Esc cancels.}">
+                                <Button x:Name="GlobalHotkeysHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Global hotkeys help" AutomationProperties.HelpText="{Binding GlobalHotkeyUsageDescription, StringFormat={}{0} Choose a field to record. Enter saves; Esc cancels. Both return to the view where recording started.}">
                                     <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                 </Button>
                             </StackPanel>
@@ -800,6 +796,15 @@
                 <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" AutomationProperties.Name="OBS URL copy status" AutomationProperties.LiveSetting="Polite" />
             </StackPanel>
         </Border>
+
+        <Canvas x:Name="FloatingFeedbackLayer" Grid.Row="1" Panel.ZIndex="11" IsHitTestVisible="False" ClipToBounds="True">
+            <Border x:Name="CopyFeedbackOverlay" Padding="8,5" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock x:Name="DirectoryCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="Directory copy status" AutomationProperties.LiveSetting="Polite" />
+            </Border>
+            <Border x:Name="HotkeySuccessOverlay" Padding="8,5" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock x:Name="HotkeySuccessStatus" Style="{StaticResource OptionalSaveFeedback}" Foreground="{StaticResource SuccessBrush}" Margin="0" AutomationProperties.Name="Hotkey apply confirmation" AutomationProperties.LiveSetting="Polite" />
+            </Border>
+        </Canvas>
 
         <Grid x:Name="HotkeyRecordingOverlay"
               Grid.RowSpan="3"

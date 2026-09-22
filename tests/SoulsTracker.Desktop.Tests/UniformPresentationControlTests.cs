@@ -170,14 +170,13 @@ public sealed class UniformPresentationControlTests
             var content = (FrameworkElement)((ScrollViewer)window.FindName("MainContentScrollViewer")).Content;
             Point before = total.TranslatePoint(new Point(), content);
             var copy = Tree(window).OfType<Button>().Single(x => x.IsVisible && AutomationProperties.GetName(x) == "Copy directory path");
+            copy.BringIntoView(); await Idle();
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Idle();
             var toast = Assert.IsType<Border>(window.FindName("CopyFeedbackOverlay"));
             Assert.NotSame(window.Content, toast.Parent);
-            var copyBounds = copy.TransformToAncestor(window).TransformBounds(new Rect(copy.RenderSize));
-            var feedbackBounds = toast.TransformToAncestor(window).TransformBounds(new Rect(toast.RenderSize));
-            Assert.InRange(feedbackBounds.Top - copyBounds.Bottom, 0, 28);
-            Assert.InRange(Math.Abs(feedbackBounds.Right - copyBounds.Right), 0, 16);
+            var viewport = Tree((ScrollViewer)window.FindName("MainContentScrollViewer")).OfType<ScrollContentPresenter>().First();
+            CopyErrorReadabilityTests.AssertAnchored(copy, toast, viewport);
             Assert.False(toast.IsHitTestVisible);
             Point after = total.TranslatePoint(new Point(), content);
             Assert.Equal(before.X, after.X, precision: 8);

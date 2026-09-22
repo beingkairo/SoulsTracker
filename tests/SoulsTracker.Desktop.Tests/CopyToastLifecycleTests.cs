@@ -36,7 +36,8 @@ public sealed class CopyToastLifecycleTests
         {
             var expiry = new Expiry(delay, callback); timers.Add(expiry);
             return () => expiry.Cancelled = true;
-        }) { DataContext = vm, Width = 560, Height = 400, ShowInTaskbar = false };
+        })
+        { DataContext = vm, Width = 560, Height = 400, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle();
@@ -45,6 +46,7 @@ public sealed class CopyToastLifecycleTests
             var overlay = (Border)window.FindName("CopyFeedbackOverlay");
             void Copy() => copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             ((TabControl)window.FindName("WorkspaceTabs")).Focus();
+            copy.BringIntoView(); await Idle();
             var focus = Keyboard.FocusedElement;
             Copy(); Copy();
             Assert.Same(focus, Keyboard.FocusedElement);

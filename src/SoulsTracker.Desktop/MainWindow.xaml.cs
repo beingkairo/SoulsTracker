@@ -32,12 +32,28 @@ public partial class MainWindow : Window
     private HostedOverlayConnection? copyFeedbackConnection;
     private string lastHostedCopyFeedback = string.Empty;
     private bool hostedCopyFeedbackVisible;
+    private TabItem? hotkeyRecordingOrigin;
+    private FrameworkElement? hotkeyRecordingAnchor;
+    private FloatingFeedback? directoryFeedback;
+    private FloatingFeedback? hotkeyFeedback;
+    private Action? cancelHotkeyExpiry;
+    private long hotkeyOperationVersion;
+    private bool savingRecordedHotkey;
 
     public MainWindow()
     {
         chooseSaveDirectory = ChooseSaveDirectory;
         scheduleCopyExpiry = ScheduleCopyExpiry;
         InitializeComponent();
+        directoryFeedback = new FloatingFeedback(FloatingFeedbackLayer, CopyFeedbackOverlay);
+        hotkeyFeedback = new FloatingFeedback(FloatingFeedbackLayer, HotkeySuccessOverlay);
+        LayoutUpdated += (_, _) => { directoryFeedback.Update(); hotkeyFeedback.Update(); };
+        WorkspaceTabs.SelectionChanged += (_, e) =>
+        {
+            if (!ReferenceEquals(e.Source, WorkspaceTabs)) return;
+            if (!hostedCopyFeedbackVisible) ClearCopyFeedback();
+            if (hotkeyRecordingOrigin is null) ClearHotkeyFeedback();
+        };
     }
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory) : this() =>
@@ -61,25 +77,14 @@ public partial class MainWindow : Window
 
     private void CopyDirectoryPath_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not System.Windows.Controls.Button { Tag: string path, CommandParameter: ContentControl anchor } || string.IsNullOrWhiteSpace(path)) return;
-        if (!ReferenceEquals(CopyFeedbackOverlay.Parent, anchor))
-        {
-            if (CopyFeedbackOverlay.Parent is ContentControl previous) previous.Content = null;
-            anchor.Content = CopyFeedbackOverlay;
-        }
+        if (sender is not System.Windows.Controls.Button { Tag: string path } anchor || string.IsNullOrWhiteSpace(path)) return;
         try
         {
             copyDirectoryPath(path);
             ShowCopyFeedback("Directory path copied", success: true);
         }
         catch { ShowCopyFeedback("The directory path could not be copied. Try again.", success: false); }
-        if (!copyFeedbackClosed && CopyFeedbackOverlay.Visibility == Visibility.Visible)
-        {
-            // Measure the current message before requesting the smallest scroll
-            // needed to expose it beneath Copy. Keep keyboard focus on the action.
-            CopyFeedbackOverlay.UpdateLayout();
-            CopyFeedbackOverlay.BringIntoView();
-        }
+        if (!copyFeedbackClosed) directoryFeedback?.Show(anchor, MainContentScrollViewer);
     }
 
     private void ShowCopyFeedback(string message, bool success, bool hosted = false)
@@ -100,6 +105,7 @@ public partial class MainWindow : Window
         {
             DirectoryCopyStatus.Text = message;
             DirectoryCopyStatus.Foreground = cue;
+            CopyFeedbackOverlay.BorderBrush = cue;
             CopyFeedbackOverlay.Visibility = Visibility.Visible;
         }
         if (success)
@@ -121,6 +127,7 @@ public partial class MainWindow : Window
         DirectoryCopyStatus.Text = string.Empty;
         HostedCopyStatus.Text = string.Empty;
         CopyFeedbackKind.Text = string.Empty;
+        directoryFeedback?.Hide();
         CopyFeedbackOverlay.Visibility = Visibility.Collapsed;
         HostedCopyFeedbackOverlay.Visibility = Visibility.Collapsed;
     }
@@ -148,6 +155,10 @@ public partial class MainWindow : Window
 
     private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        ClearHotkeyFeedback();
+        (e.OldValue as DesktopTrackerViewModel)?.CancelHotkeyRecording();
+        hotkeyRecordingOrigin = null;
+        hotkeyRecordingAnchor = null;
         if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged -= DirectoryCopyContext_PropertyChanged;
         directoryCopyViewModel = e.NewValue as DesktopTrackerViewModel;
         directoryCopyContext = GetDirectoryCopyContext(directoryCopyViewModel);
@@ -189,6 +200,7 @@ public partial class MainWindow : Window
         void ApplyContext()
         {
             if (!ReferenceEquals(directoryCopyViewModel, vm) || directoryCopyContext == context) return;
+            if (directoryCopyContext.Game != context.Game) ClearHotkeyFeedback();
             directoryCopyContext = context;
             ClearCopyFeedback();
         }
@@ -200,6 +212,10 @@ public partial class MainWindow : Window
     {
         copyFeedbackClosed = true;
         ClearCopyFeedback();
+        ClearHotkeyFeedback();
+        (DataContext as DesktopTrackerViewModel)?.CancelHotkeyRecording();
+        hotkeyRecordingOrigin = null;
+        hotkeyRecordingAnchor = null;
         if (directoryCopyViewModel is not null) directoryCopyViewModel.PropertyChanged -= DirectoryCopyContext_PropertyChanged;
         directoryCopyViewModel = null;
         ObserveHostedCopyFeedback();
@@ -507,12 +523,19 @@ public partial class MainWindow : Window
 
     private void BeginHotkeyRecording(bool increment)
     {
-        if (DataContext is not DesktopTrackerViewModel viewModel) return;
+        if (DataContext is not DesktopTrackerViewModel viewModel || viewModel.IsHotkeyRecording || savingRecordedHotkey) return;
 
         viewModel.BeginHotkeyRecording(increment);
         if (viewModel.IsHotkeyRecording)
         {
-            Dispatcher.BeginInvoke(() => Keyboard.Focus(HotkeyRecordingOverlay));
+            ClearHotkeyFeedback();
+            hotkeyRecordingOrigin = WorkspaceTabs.SelectedItem as TabItem;
+            hotkeyRecordingAnchor = increment ? IncrementHotkeyTextBox : DecrementHotkeyTextBox;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!copyFeedbackClosed && ReferenceEquals(DataContext, viewModel) && viewModel.IsHotkeyRecording)
+                    Keyboard.Focus(HotkeyRecordingOverlay);
+            });
         }
     }
 
@@ -529,17 +552,30 @@ public partial class MainWindow : Window
 
         if (key == Key.Escape)
         {
+            ClearHotkeyFeedback();
             viewModel.CancelHotkeyRecording();
             e.Handled = true;
-            ReturnToMainAfterHotkeyRecording();
+            ReturnToHotkeyRecordingOrigin();
             return;
         }
 
         if (key == Key.Enter)
         {
             e.Handled = true;
-            await viewModel.SaveRecordedHotkeyAsync();
-            ReturnToMainAfterHotkeyRecording();
+            if (savingRecordedHotkey) return;
+            ClearHotkeyFeedback();
+            long version = hotkeyOperationVersion;
+            var origin = hotkeyRecordingOrigin;
+            savingRecordedHotkey = true;
+            bool applied;
+            try { applied = await viewModel.SaveRecordedHotkeyAsync(); }
+            finally { savingRecordedHotkey = false; }
+            if (!copyFeedbackClosed && ReferenceEquals(DataContext, viewModel) && origin is not null && ReferenceEquals(origin, hotkeyRecordingOrigin))
+            {
+                bool current = version == hotkeyOperationVersion;
+                ReturnToHotkeyRecordingOrigin();
+                if (applied && current) ShowHotkeyFeedback(hotkeyRecordingAnchor ?? ApplyHotkeysButton);
+            }
             return;
         }
 
@@ -628,15 +664,61 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private void ReturnToMainAfterHotkeyRecording()
+    private void ReturnToHotkeyRecordingOrigin()
     {
-        WorkspaceTabs.SelectedItem = MainWorkspaceTab;
-        Keyboard.Focus(WorkspaceTabs);
+        var origin = hotkeyRecordingOrigin;
+        hotkeyRecordingOrigin = null;
+        if (copyFeedbackClosed || origin is null) return;
+        WorkspaceTabs.SelectedItem = origin;
+        WorkspaceTabs.UpdateLayout();
+        var content = FindScrollViewer(origin.Content as DependencyObject);
+        if (content is not null)
+        {
+            content.Focusable = true;
+            Keyboard.Focus(content);
+        }
+        else Keyboard.Focus(WorkspaceTabs);
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject? element)
+    {
+        if (element is ScrollViewer scroll) return scroll;
+        if (element is null) return null;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+            if (FindScrollViewer(VisualTreeHelper.GetChild(element, i)) is { } result) return result;
+        return null;
     }
 
     private async void ApplyHotkeysButton_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.ApplyGlobalHotkeysAsync();
+        if (DataContext is not DesktopTrackerViewModel viewModel) return;
+        ClearHotkeyFeedback();
+        long version = hotkeyOperationVersion;
+        if (await viewModel.ApplyGlobalHotkeysAsync() && !copyFeedbackClosed &&
+            ReferenceEquals(DataContext, viewModel) && version == hotkeyOperationVersion)
+            ShowHotkeyFeedback(ApplyHotkeysButton);
+    }
+
+    private void ClearHotkeyFeedback()
+    {
+        hotkeyOperationVersion++;
+        cancelHotkeyExpiry?.Invoke();
+        cancelHotkeyExpiry = null;
+        if (HotkeySuccessStatus is not null) HotkeySuccessStatus.Text = string.Empty;
+        hotkeyFeedback?.Hide();
+    }
+
+    private void ShowHotkeyFeedback(FrameworkElement anchor)
+    {
+        if (!SettingsWorkspaceTab.IsSelected) return;
+        ClearHotkeyFeedback();
+        HotkeySuccessStatus.Text = "Hotkeys applied successfully";
+        hotkeyFeedback?.Show(anchor, SettingsContentScrollViewer);
+        long version = hotkeyOperationVersion;
+        cancelHotkeyExpiry = scheduleCopyExpiry(TimeSpan.FromSeconds(5), () =>
+        {
+            if (!copyFeedbackClosed && version == hotkeyOperationVersion) ClearHotkeyFeedback();
+        });
     }
 
     private async void TotalDeathsOverlayEnabled_Checked(object sender, RoutedEventArgs e) =>

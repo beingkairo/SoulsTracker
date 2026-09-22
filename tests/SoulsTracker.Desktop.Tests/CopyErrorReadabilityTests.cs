@@ -66,7 +66,13 @@ public sealed class CopyErrorReadabilityTests
             if (height == 400) Assert.InRange(Math.Abs(Bounds(copy, viewport).Bottom - viewport.ActualHeight), 0, 1);
             var focus = Keyboard.FocusedElement;
             Rect copyPosition = Bounds(copy, content), totalPosition = Bounds(total, content);
+            var pathContainer = (Border)((Grid)copy.Parent).Parent;
+            var directoryPanel = (StackPanel)pathContainer.Parent;
+            var actions = directoryPanel.Children.OfType<StackPanel>().First(x => x.Children.OfType<Button>().Any(b => Equals(b.Content, "Change Directory")));
+            Rect actionsBefore = Bounds(actions, content);
+            Assert.Equal(pathContainer.Margin.Bottom, Bounds(actions, directoryPanel).Top - Bounds(pathContainer, directoryPanel).Bottom, precision: 8);
             double extent = scroll.ExtentHeight;
+            double offsetBefore = scroll.VerticalOffset;
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
 
             // Observe the real clipped viewport before any test-driven scroll.
@@ -76,14 +82,18 @@ public sealed class CopyErrorReadabilityTests
             Assert.True(Bounds(overlay, viewport).IntersectsWith(new Rect(viewport.RenderSize)));
             Assert.Equal(fail ? "The directory path could not be copied. Try again." : "Directory path copied", feedback.Text);
             Assert.Same(focus, Keyboard.FocusedElement);
-            Assert.Same(copy.CommandParameter, overlay.Parent);
+            Assert.Same(window.FindName("FloatingFeedbackLayer"), overlay.Parent);
             Assert.False(overlay.IsHitTestVisible);
             Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(feedback));
             Assert.Equal(copyPosition, Bounds(copy, content));
             Assert.Equal(totalPosition, Bounds(total, content));
             Assert.Equal(extent, scroll.ExtentHeight);
+            Assert.Equal(offsetBefore, scroll.VerticalOffset);
+            Assert.Equal(actionsBefore, Bounds(actions, content));
+            Assert.Equal(new Size(), ((Canvas)window.FindName("FloatingFeedbackLayer")).DesiredSize);
+            Assert.Single(((Canvas)window.FindName("FloatingFeedbackLayer")).Children.OfType<Border>(), x => x.IsVisible);
             Assert.Equal("12345", total.Text);
-            Assert.InRange(Bounds(overlay, window).Top - Bounds(copy, window).Bottom, 0, 28);
+            AssertAnchored(copy, overlay, viewport);
             Assert.False(((Border)window.FindName("HostedCopyFeedbackOverlay")).IsVisible);
             RenderAnchor(window, copy, overlay, $"{game}-{width}x{height}-{(fail ? "failure" : "success")}-immediate");
             double visibleOffset = scroll.VerticalOffset;
@@ -164,16 +174,15 @@ public sealed class CopyErrorReadabilityTests
             Assert.Equal(42, total.FontSize);
             double ordinaryExtent = scroll.ExtentHeight;
 
+            copy.BringIntoView(); await Idle();
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Same(focus, Keyboard.FocusedElement);
             Assert.False(overlay.IsHitTestVisible);
-            Assert.Same(copy.CommandParameter, overlay.Parent);
-            Assert.InRange(Bounds(overlay, window).Top - Bounds(copy, window).Bottom, 0, 28);
-            Assert.InRange(Math.Abs(Bounds(overlay, window).Right - Bounds(copy, window).Right), 0, 16);
+            Assert.Same(window.FindName("FloatingFeedbackLayer"), overlay.Parent);
+            AssertAnchored(copy, overlay, viewport);
             await Task.Delay(TimeSpan.FromSeconds(5.2)); await Idle();
             Assert.Equal("The directory path could not be copied. Try again.", feedback.Text);
             Assert.Equal(Visibility.Visible, overlay.Visibility);
-            overlay.BringIntoView(); await Idle();
             RenderAnchor(window, copy, overlay, $"{game}-{width}x{height}-error-anchor");
             scroll.ScrollToTop(); await Idle();
             Assert.Equal(0, scroll.VerticalOffset);
@@ -184,7 +193,7 @@ public sealed class CopyErrorReadabilityTests
             {
                 scroll.ScrollToVerticalOffset(offset); await Idle();
                 Rect bounds = Bounds(total, window);
-                if (Bounds(viewport, window).Contains(bounds) && !Bounds(overlay, window).IntersectsWith(bounds))
+                if (Bounds(viewport, window).Contains(bounds) && (!overlay.IsVisible || !Bounds(overlay, window).IntersectsWith(bounds)))
                 {
                     if (clearPositions == 0) RenderTotal(window, total, $"{game}-{width}x{height}-reachable-total");
                     clearPositions++;
@@ -200,10 +209,11 @@ public sealed class CopyErrorReadabilityTests
             Assert.NotSame(copy, Keyboard.FocusedElement);
             Assert.Equal("The directory path could not be copied. Try again.", feedback.Text);
             fail = false;
+            copy.BringIntoView(); await Idle();
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Equal(ordinaryExtent, scroll.ExtentHeight);
             Assert.Equal("Directory path copied", feedback.Text);
-            overlay.BringIntoView(); await Idle();
+            AssertAnchored(copy, overlay, viewport);
             RenderAnchor(window, copy, overlay, $"{game}-{width}x{height}-success-anchor");
             var point = total.TranslatePoint(new Point(), window);
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
@@ -211,8 +221,8 @@ public sealed class CopyErrorReadabilityTests
             Assert.Equal(point, total.TranslatePoint(new Point(), window));
             double originalWidth = window.Width;
             window.Width = originalWidth == 560 ? 1060 : 560; await Idle();
-            Assert.InRange(Bounds(overlay, window).Top - Bounds(copy, window).Bottom, 0, 28);
-            Assert.InRange(Math.Abs(Bounds(overlay, window).Right - Bounds(copy, window).Right), 0, 16);
+            copy.BringIntoView(); await Idle();
+            AssertAnchored(copy, overlay, viewport);
             Assert.False(Bounds(overlay, window).IntersectsWith(Bounds(total, window)));
             window.Width = originalWidth; await Idle();
             fail = true;
@@ -230,7 +240,17 @@ public sealed class CopyErrorReadabilityTests
     });
 
     private static Rect Bounds(FrameworkElement element, Visual ancestor) =>
-        element.TransformToAncestor(ancestor).TransformBounds(new Rect(element.RenderSize));
+        element.TransformToVisual(ancestor).TransformBounds(new Rect(element.RenderSize));
+
+    internal static void AssertAnchored(Button copy, Border overlay, FrameworkElement viewport)
+    {
+        Assert.True(overlay.IsVisible);
+        AssertContained(overlay, viewport);
+        Rect anchor = Bounds(copy, viewport), feedback = Bounds(overlay, viewport);
+        double gap = feedback.Top >= anchor.Bottom ? feedback.Top - anchor.Bottom : anchor.Top - feedback.Bottom;
+        Assert.Equal(4, gap, precision: 8);
+        Assert.Equal(anchor.Right, feedback.Right, precision: 8);
+    }
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
 

@@ -13,6 +13,105 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class SettingsHotkeyControlTests
 {
+    [Theory]
+    [InlineData(560d, 400d, false)]
+    [InlineData(560d, 760d, false)]
+    [InlineData(1060d, 760d, false)]
+    [InlineData(560d, 400d, true)]
+    [InlineData(560d, 760d, true)]
+    [InlineData(1060d, 760d, true)]
+    public Task ApplySuccessFloatsAndLatestActionOwnsExpiry(double width, double height, bool recorded) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        vm.ConfigureGlobalHotkeys(GlobalHotkeySettings.Default, _ => Task.FromResult(GlobalHotkeyRegistrationResult.Registered));
+        vm.SetGlobalHotkeyStatus(GlobalHotkeyRegistrationResult.Registered.StatusMessage);
+        var callbacks = new List<Action>();
+        var window = new MainWindow((_, _) => null, _ => { }, (delay, callback) =>
+        {
+            Assert.Equal(TimeSpan.FromSeconds(5), delay);
+            callbacks.Add(callback);
+            return () => { };
+        })
+        { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await Idle();
+            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
+            var apply = (Button)window.FindName("ApplyHotkeysButton");
+            var field = (TextBox)window.FindName("IncrementHotkeyTextBox");
+            FrameworkElement anchor = recorded ? field : apply;
+            anchor.BringIntoView(); await Idle();
+            var stack = (StackPanel)window.FindName("SettingsContentStack");
+            var before = stack.RenderSize;
+            async Task Apply()
+            {
+                if (recorded)
+                {
+                    Assert.True(field.Focus()); await Idle();
+                    window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, Key.Enter)
+                    { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+                }
+                else apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Idle();
+            }
+            await Apply();
+            var feedback = Assert.IsType<TextBlock>(window.FindName("HotkeySuccessStatus"));
+            Assert.Equal("Hotkeys applied successfully", feedback.Text);
+            Assert.True(feedback.IsVisible);
+            var scroll = (ScrollViewer)window.FindName("SettingsContentScrollViewer");
+            var viewport = DirectoryPresentationControlTests.Tree(scroll).OfType<ScrollContentPresenter>().First();
+            var bounds = feedback.TransformToVisual(viewport).TransformBounds(new Rect(feedback.RenderSize));
+            Assert.True(new Rect(viewport.RenderSize).Contains(bounds));
+            Assert.False(((Border)window.FindName("HotkeySuccessOverlay")).IsHitTestVisible);
+            RecordSettings(window, $"confirmation-{width}x{height}-{recorded}");
+            Assert.Equal(before, stack.RenderSize);
+            await Apply();
+            Assert.Equal(2, callbacks.Count);
+            callbacks[0](); await Idle();
+            Assert.Equal("Hotkeys applied successfully", feedback.Text);
+            callbacks[1](); await Idle();
+            Assert.Empty(feedback.Text);
+            Assert.Equal(before, stack.RenderSize);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task OlderCommittedApplyKeepsBindingsSyncedAfterNewerRegistrationFailure() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        var native = new Native();
+        using var service = new DesktopGlobalHotkeyService(new Sink(), native, vm);
+        Assert.True(service.Start().IsRegistered);
+        var release = new TaskCompletionSource();
+        vm.ConfigureGlobalHotkeys(service.ActiveSettings, async candidate =>
+        {
+            var result = service.Replace(candidate);
+            if (!result.IsRegistered) return result;
+            await release.Task;
+            await coordinator.SetGlobalHotkeysAsync(new(candidate.Increment.Modifiers, candidate.Increment.VirtualKey,
+                candidate.Decrement.Modifiers, candidate.Decrement.VirtualKey));
+            return result;
+        });
+        vm.CapturePendingHotkey(true, Key.F7, ModifierKeys.Control);
+        Task<bool> first = vm.ApplyGlobalHotkeysAsync();
+        native.RejectedKey = 119;
+        vm.CapturePendingHotkey(true, Key.F8, ModifierKeys.Control);
+        Assert.False(await vm.ApplyGlobalHotkeysAsync());
+        string? failure = vm.GlobalHotkeyStatus;
+        release.SetResult();
+        Assert.False(await first); // Its notification was superseded, not its commit.
+        Assert.Equal(118u, service.ActiveSettings.Increment.VirtualKey);
+        Assert.Equal(118u, repository.State.GlobalHotkeys.IncrementVirtualKey);
+        Assert.Equal("Ctrl+F7", vm.ActiveIncrementHotkey);
+        Assert.Equal("Ctrl+F7", vm.PendingIncrementHotkey);
+        Assert.Equal(failure, vm.GlobalHotkeyStatus);
+    });
+
     [Fact]
     public Task SettingsEntryAndReturnKeepHelpClosedForEveryGame() => HostedConnectionTests.OnDispatcher(async () =>
     {
@@ -81,7 +180,7 @@ public sealed class SettingsHotkeyControlTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public Task SettingsCaptureKeepsSaveCancelAndMainReturnContract(bool save) => HostedConnectionTests.OnDispatcher(async () =>
+    public Task SettingsCaptureKeepsSaveCancelAndOriginReturnContract(bool save) => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.DemonsSouls);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
@@ -121,8 +220,11 @@ public sealed class SettingsHotkeyControlTests
             await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsHotkeyRecording);
             await Idle();
             Assert.True(key.Handled);
-            Assert.True(((TabItem)window.FindName("MainWorkspaceTab")).IsSelected);
-            Assert.Same(window.FindName("WorkspaceTabs"), Keyboard.FocusedElement);
+            Assert.True(settings.IsSelected);
+            Assert.Same(window.FindName("SettingsContentScrollViewer"), Keyboard.FocusedElement);
+            var confirmation = (TextBlock)window.FindName("HotkeySuccessStatus");
+            Assert.Equal(save ? "Hotkeys applied successfully" : string.Empty, confirmation.Text);
+            Assert.Equal(save, confirmation.IsVisible);
             Assert.Equal(save ? "Ctrl+F7" : original, vm.PendingIncrementHotkey);
             Assert.Equal(save ? 1 : 0, repository.Saves.Count);
             Assert.Equal(save ? 118u : GlobalHotkeySettings.Default.Increment.VirtualKey, service.ActiveSettings.Increment.VirtualKey);
@@ -156,8 +258,9 @@ public sealed class SettingsHotkeyControlTests
 
     private sealed class Native : IWindowsGlobalHotkeyNative
     {
+        internal uint? RejectedKey { get; set; }
         internal Dictionary<int, (uint Modifiers, uint Key)> Registered { get; } = [];
-        public bool RegisterHotKey(nint handle, int id, uint modifiers, uint key) => Registered.TryAdd(id, (modifiers, key));
+        public bool RegisterHotKey(nint handle, int id, uint modifiers, uint key) => key != RejectedKey && Registered.TryAdd(id, (modifiers, key));
         public bool UnregisterHotKey(nint handle, int id) => Registered.Remove(id);
     }
     private sealed class Sink : IGlobalHotkeyMessageSink
