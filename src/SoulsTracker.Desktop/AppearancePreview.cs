@@ -1,10 +1,14 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Windows.Threading;
 using SoulsTracker.Domain;
 
@@ -26,8 +30,7 @@ public sealed class AppearancePreview : Grid, IDisposable
 
     public AppearancePreview()
     {
-        Height = 220;
-        RowDefinitions.Add(new RowDefinition());
+        RowDefinitions.Add(new RowDefinition { Height = new GridLength(180) });
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         SetRow(caption, 1); Children.Add(caption);
         Children.Add(unavailable);
@@ -45,7 +48,7 @@ public sealed class AppearancePreview : Grid, IDisposable
             var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(userDataRoot, "AppearancePreview"),
                 new CoreWebView2EnvironmentOptions("--disable-background-networking --disable-component-update --disk-cache-size=16777216"));
             if (IsDisposed) return;
-            browser = new WebView2 { Focusable = false, IsHitTestVisible = false, DefaultBackgroundColor = System.Drawing.Color.Transparent };
+            browser = new ClippedPreviewBrowser { Focusable = false, IsHitTestVisible = false, DefaultBackgroundColor = System.Drawing.Color.Transparent };
             Children.Insert(0, browser);
             var options = environment.CreateCoreWebView2ControllerOptions();
             options.IsInPrivateModeEnabled = true;
@@ -75,13 +78,7 @@ public sealed class AppearancePreview : Grid, IDisposable
             core.NewWindowRequested += (_, e) => e.Handled = true;
             core.DownloadStarting += (_, e) => e.Cancel = true;
             core.PermissionRequested += (_, e) => { e.State = CoreWebView2PermissionState.Deny; e.Handled = true; };
-            core.WebMessageReceived += (_, e) =>
-            {
-                if (IsDisposed || e.Source != "about:blank") return;
-                string message = e.TryGetWebMessageAsString();
-                if (message == "ready") SendDraft();
-                if (message == "rendered") { IsReady = true; unavailable.Visibility = Visibility.Collapsed; }
-            };
+            core.WebMessageReceived += BrowserMessageReceived;
             using var resource = typeof(AppearancePreview).Assembly.GetManifestResourceStream("SoulsTracker.Desktop.AppearancePreview.html")!;
             using var reader = new StreamReader(resource);
             string html = await reader.ReadToEndAsync();
@@ -104,6 +101,25 @@ public sealed class AppearancePreview : Grid, IDisposable
     {
         if (Model is null || browser?.CoreWebView2 is null || IsDisposed) return;
         browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { appearance = Model.Appearance, value = Model.Value }, JsonSerializerOptions.Web));
+    }
+
+    private void BrowserMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        if (IsDisposed || e.Source != "about:blank" || e.WebMessageAsJson.Length > 80) return;
+        string? message;
+        try { message = JsonSerializer.Deserialize<string>(e.WebMessageAsJson); }
+        catch (JsonException) { return; }
+        if (message == "ready") SendDraft();
+        if (message == "rendered") { IsReady = true; unavailable.Visibility = Visibility.Collapsed; }
+        if (!IsVisible || message is null || !message.StartsWith("wheel:", StringComparison.Ordinal) ||
+            !double.TryParse(message.AsSpan(6), NumberStyles.Float, CultureInfo.InvariantCulture, out double delta) ||
+            !double.IsFinite(delta) || Math.Abs(delta) > 600) return;
+        for (DependencyObject? parent = VisualTreeHelper.GetParent(this); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+        {
+            if (parent is not ScrollViewer scroll) continue;
+            scroll.ScrollToVerticalOffset(scroll.VerticalOffset + delta);
+            break;
+        }
     }
 
     private void BindSource()
@@ -138,6 +154,59 @@ public sealed class AppearancePreview : Grid, IDisposable
         caption.Text = Model.IsRepresentative ? "Local preview uses a sample count of 123. Draft edits are not published." : "Local preview. Draft edits are not published.";
         SendDraft();
     }
+    // HwndHost is not clipped by WPF's ScrollViewer. Limit this preview's own
+    // native window region without moving/resizing its document or using hooks.
+    private sealed class ClippedPreviewBrowser : WebView2
+    {
+        private (int Left, int Top, int Right, int Bottom)? lastClip;
+
+        public ClippedPreviewBrowser() => LayoutUpdated += UpdateClip;
+
+        protected override void OnWindowPositionChanged(Rect rcBoundingBox)
+        {
+            base.OnWindowPositionChanged(rcBoundingBox);
+            UpdateClip(this, EventArgs.Empty);
+        }
+
+        private void UpdateClip(object? sender, EventArgs e)
+        {
+            if (!IsLoaded || Handle == nint.Zero) return;
+            ScrollContentPresenter? viewport = null;
+            for (DependencyObject? parent = VisualTreeHelper.GetParent(this); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+            {
+                if (parent is ScrollContentPresenter presenter) { viewport = presenter; break; }
+            }
+            if (viewport is null || PresentationSource.FromVisual(viewport) is null || !GetWindowRect(Handle, out var bounds)) return;
+            var top = viewport.PointToScreen(new System.Windows.Point());
+            var bottom = viewport.PointToScreen(new System.Windows.Point(viewport.ActualWidth, viewport.ActualHeight));
+            int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
+            var clip = (
+                Left: Math.Clamp((int)Math.Ceiling(top.X) - bounds.Left, 0, width),
+                Top: Math.Clamp((int)Math.Ceiling(top.Y) - bounds.Top, 0, height),
+                Right: Math.Clamp((int)Math.Floor(bottom.X) - bounds.Left, 0, width),
+                Bottom: Math.Clamp((int)Math.Floor(bottom.Y) - bounds.Top, 0, height));
+            if (lastClip == clip) return;
+            nint region = CreateRectRgn(clip.Left, clip.Top, clip.Right, clip.Bottom);
+            if (region == nint.Zero) return;
+            if (SetWindowRgn(Handle, region, true) == 0) { _ = DeleteObject(region); return; }
+            // Windows owns the region after a successful SetWindowRgn.
+            lastClip = clip;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) LayoutUpdated -= UpdateClip;
+            base.Dispose(disposing);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect { public int Left; public int Top; public int Right; public int Bottom; }
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(nint window, out NativeRect rect);
+        [DllImport("user32.dll")] private static extern int SetWindowRgn(nint window, nint region, bool redraw);
+        [DllImport("gdi32.dll")] private static extern nint CreateRectRgn(int left, int top, int right, int bottom);
+        [DllImport("gdi32.dll")] private static extern bool DeleteObject(nint handle);
+    }
+
     public void Dispose()
     {
         if (IsDisposed) return;
@@ -149,6 +218,7 @@ public sealed class AppearancePreview : Grid, IDisposable
         }
         source = null;
         IsReady = false;
+        if (browser?.CoreWebView2 is { } core) core.WebMessageReceived -= BrowserMessageReceived;
         browser?.Dispose();
     }
 }

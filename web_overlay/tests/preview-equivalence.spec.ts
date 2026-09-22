@@ -8,7 +8,7 @@ import process from "node:process";
 
 const temporary = mkdtempSync(join(tmpdir(), "souls-preview-equivalence-"));
 const previewDocument = join(temporary, "preview.html");
-execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/build-preview.mjs", import.meta.url)), previewDocument]);
+execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/build-preview.mjs", import.meta.url)), previewDocument, "--no-compile"]);
 const html = readFileSync(previewDocument, "utf8");
 test.afterAll(() => rmSync(temporary, { recursive: true, force: true }));
 const renderer = readFileSync(new URL("../dist/src/hosted-renderer.js", import.meta.url), "utf8").replace("export function renderHosted", "function renderHosted");
@@ -33,7 +33,13 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
         const actual = preview.getByTestId("total-deaths-overlay");
         const expected = hosted.getByTestId("total-deaths-overlay");
         await expect(actual).toHaveText(titleIconMode === "skullOnly" ? value : `Preview test: ${value}`);
+        await expect(preview.locator("main")).toHaveAttribute("data-fit", "painted");
         for (const page of [preview, hosted]) await page.evaluate(async () => { await document.fonts.ready; await Promise.all(Array.from(document.images).map(image => image.decode())); });
+        // Isolate renderer equivalence from the separately tested local fit.
+        // Normalize both origins to whole pixels to avoid subpixel rasterization.
+        const transform = await preview.locator("main").evaluate(node => (node as HTMLElement).style.transform);
+        await testInfo.attach(`placement-${outlineWidth}-${value}`, { body: transform, contentType: "text/plain" });
+        for (const page of [preview, hosted]) await page.locator("main").evaluate(node => { (node as HTMLElement).style.transformOrigin = "top left"; (node as HTMLElement).style.transform = "translate(48px, 48px)"; });
         const pixels = await actual.screenshot();
         expect(pixels.equals(await expected.screenshot())).toBe(true);
         await testInfo.attach(`preview-${outlineWidth}-${value}`, { body: pixels, contentType: "image/png" });

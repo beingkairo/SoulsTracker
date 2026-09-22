@@ -137,7 +137,7 @@ public sealed class ShellPresentationTests
             await Idle();
             Assert.Single(Tree(window).OfType<TabControl>());
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Put this as a browser source in your OBS or as a Link Source in TikTok Live Studio to display it on stream");
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "The hosted overlay uses applied Desktop settings. Draft edits stay local until Apply.");
+            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "The overlay uses these settings. Click Apply to live overlay to show your changes.");
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text.Contains("does not withdraw publication consent", StringComparison.Ordinal));
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
             foreach (string field in AppearanceFields)
@@ -313,7 +313,9 @@ public sealed class ShellPresentationTests
                 Assert.Equal(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
                 Assert.Equal(0, scroll.ScrollableWidth);
                 var panel = Tree(scroll).OfType<Border>().First(x => AutomationProperties.GetName(x).EndsWith("panel", StringComparison.Ordinal));
-                Assert.InRange(panel.ActualWidth, scroll.ViewportWidth - 1, scroll.ViewportWidth + 1);
+                double gutter = tabName == "OverlayWorkspaceTab" ? 12 : 0;
+                Assert.Equal(gutter, ((FrameworkElement)scroll.Content).Margin.Right);
+                Assert.InRange(panel.ActualWidth, scroll.ViewportWidth - gutter - 1, scroll.ViewportWidth - gutter + 1);
                 scroll.ScrollToEnd();
                 await Idle();
                 Assert.Equal(scroll.ScrollableHeight, scroll.VerticalOffset, 1);

@@ -66,6 +66,25 @@ public partial class MainWindow : Window
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory) : this() =>
         this.chooseSaveDirectory = chooseSaveDirectory;
 
+    private void AppearanceRow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var row = (Grid)sender;
+        if (row.Children.Count != 2) return;
+        bool narrow = e.NewSize.Width < 350;
+        if (row.RowDefinitions.Count == 0)
+        {
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        }
+        var label = (FrameworkElement)row.Children[0];
+        var field = (FrameworkElement)row.Children[1];
+        Grid.SetColumnSpan(label, narrow ? 2 : 1);
+        Grid.SetRow(field, narrow ? 1 : 0);
+        Grid.SetColumn(field, narrow ? 0 : 1);
+        Grid.SetColumnSpan(field, narrow ? 2 : 1);
+        label.Margin = narrow ? new Thickness(0, 0, 0, 4) : new Thickness(0);
+    }
+
     internal void ConfigureAppearancePreview(string dataRoot)
     {
         LocalAppearancePreview.IsVisibleChanged += async (_, _) =>

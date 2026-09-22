@@ -189,6 +189,7 @@
 
         <Style x:Key="OverlayAppearanceRow" TargetType="Grid">
             <Setter Property="Margin" Value="0,0,0,6" />
+            <EventSetter Event="SizeChanged" Handler="AppearanceRow_SizeChanged" />
         </Style>
         <Style x:Key="DarkSlider" TargetType="Slider">
             <Setter Property="Height" Value="28" />
@@ -642,7 +643,7 @@
                 <Grid x:Name="OverlayWorkspaceLayout" Margin="24,18">
                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <ScrollViewer x:Name="OverlayConfigurationScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Overlay configuration workspace">
-                    <StackPanel>
+                    <StackPanel Margin="0,0,12,0">
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="OVERLAY CONNECTION" />
@@ -676,14 +677,13 @@
 
                             </StackPanel>
                         </Border>
-                        <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Local appearance preview panel">
-                            <local:AppearancePreview x:Name="LocalAppearancePreview" AutomationProperties.Name="Local Total Deaths appearance preview" />
-                        </Border>
                         <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Overlay appearance panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="APPEARANCE" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="The hosted overlay uses applied Desktop settings. Draft edits stay local until Apply." />
-                                        <StackPanel>
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="The overlay uses these settings. Click Apply to live overlay to show your changes." />
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <StackPanel x:Name="AppearanceFields" MaxWidth="420">
                                             <StackPanel.Resources>
                                                 <Style TargetType="TextBox" BasedOn="{StaticResource OverlayAppearanceTextBox}" />
                                                 <Style TargetType="ComboBox" BasedOn="{StaticResource OverlayAppearanceComboBox}" />
@@ -715,7 +715,12 @@
                                             </StackPanel>
 
                                         </StackPanel>
-
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Top" AutomationProperties.Name="Local appearance preview panel">
+                                        <TextBlock Style="{StaticResource PanelTitle}" Text="Preview" />
+                                        <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Preview your changes before applying them to the hosted overlay. Large designs are scaled down to fit this preview; the live overlay keeps your chosen sizes." />
+                                        <local:AppearancePreview x:Name="LocalAppearancePreview" AutomationProperties.Name="Local Total Deaths appearance preview" />
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>
