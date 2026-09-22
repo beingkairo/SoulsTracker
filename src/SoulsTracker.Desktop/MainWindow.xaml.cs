@@ -47,7 +47,12 @@ public partial class MainWindow : Window
         InitializeComponent();
         directoryFeedback = new FloatingFeedback(FloatingFeedbackLayer, CopyFeedbackOverlay);
         hotkeyFeedback = new FloatingFeedback(FloatingFeedbackLayer, HotkeySuccessOverlay);
-        AppearanceApplyStatus.GotKeyboardFocus += (_, _) => ((System.Windows.Controls.ToolTip)AppearanceApplyStatus.ToolTip).IsOpen = AppearanceApplyStatus.Text.Length > 0;
+        AppearanceApplyStatus.GotKeyboardFocus += (_, _) =>
+        {
+            var tooltip = (System.Windows.Controls.ToolTip)AppearanceApplyStatus.ToolTip;
+            tooltip.PlacementTarget = AppearanceApplyStatus;
+            tooltip.IsOpen = AppearanceApplyStatus.Text.Length > 0;
+        };
         AppearanceApplyStatus.LostKeyboardFocus += (_, _) => ((System.Windows.Controls.ToolTip)AppearanceApplyStatus.ToolTip).IsOpen = false;
         LayoutUpdated += (_, _) => { directoryFeedback.Update(); hotkeyFeedback.Update(); };
         WorkspaceTabs.SelectionChanged += (_, e) =>

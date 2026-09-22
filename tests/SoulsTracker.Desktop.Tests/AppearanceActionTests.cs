@@ -16,6 +16,80 @@ public sealed class AppearanceActionTests
     [InlineData(560, 400)]
     [InlineData(560, 760)]
     [InlineData(1060, 760)]
+    public Task ValidationDetailOpensOnFirstKeyboardFocusWithoutHover(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        var publisher = new CountingPublisher();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        var initialState = repository.State;
+        int initialPublications = publisher.Count;
+        var window = new MainWindow { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); window.Activate();
+            ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+            var apply = (Button)window.FindName("ApplyAppearanceButton");
+            var status = (TextBlock)window.FindName("AppearanceApplyStatus");
+            var tooltip = (ToolTip)status.ToolTip;
+            var detail = (TextBlock)tooltip.Content;
+            var actions = (FrameworkElement)window.FindName("AppearanceActions");
+            var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
+            apply.Focus(); await Idle();
+            var actionBounds = actions.TransformToAncestor(window).TransformBounds(new Rect(actions.RenderSize));
+            var scrollBounds = scroll.TransformToAncestor(window).TransformBounds(new Rect(scroll.RenderSize));
+            Assert.Null(tooltip.PlacementTarget);
+            Assert.False(tooltip.IsOpen);
+            vm.TotalDeathsAppearanceDraft.FontSize = "bad";
+            vm.TotalDeathsAppearanceDraft.TextColor = "bad";
+            vm.TotalDeathsAppearanceDraft.ShadowBlur = "bad";
+            apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
+            string firstDetail = Assert.IsType<string>(vm.TotalDeathsAppearanceStatus);
+            Assert.Contains("Font size", firstDetail);
+            Assert.Contains("Text color", firstDetail);
+            Assert.Contains("Shadow blur", firstDetail);
+            Assert.NotEqual(firstDetail, status.Text);
+            Assert.Equal(firstDetail, status.Tag);
+            Assert.True(status.Focus()); await Idle();
+            Assert.True(status.IsKeyboardFocused);
+            Assert.True(tooltip.IsOpen);
+            Assert.Equal(firstDetail, detail.Text);
+            Assert.Same(status, tooltip.PlacementTarget);
+            Assert.Equal(firstDetail, System.Windows.Automation.AutomationProperties.GetHelpText(status));
+            Assert.True(detail.ActualWidth > 0 && detail.ActualWidth <= 400);
+            Assert.True(detail.ActualHeight >= detail.DesiredSize.Height);
+            AppearanceGeometryTests.Capture(tooltip, $"validation-detail-{width}-{height}");
+            Assert.Equal(actionBounds, actions.TransformToAncestor(window).TransformBounds(new Rect(actions.RenderSize)));
+            Assert.Equal(scrollBounds, scroll.TransformToAncestor(window).TransformBounds(new Rect(scroll.RenderSize)));
+            apply.Focus(); await Idle();
+            Assert.False(tooltip.IsOpen);
+            vm.TotalDeathsAppearanceDraft.FontSize = "24";
+            vm.TotalDeathsAppearanceDraft.TextColor = "#123456";
+            apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
+            string updatedDetail = Assert.IsType<string>(vm.TotalDeathsAppearanceStatus);
+            Assert.Contains("Shadow blur", updatedDetail);
+            Assert.DoesNotContain("Font size", updatedDetail);
+            Assert.DoesNotContain("Text color", updatedDetail);
+            status.Focus(); await Idle();
+            Assert.True(status.IsKeyboardFocused);
+            Assert.True(tooltip.IsOpen);
+            Assert.Equal(updatedDetail, detail.Text);
+            Assert.Equal(updatedDetail, System.Windows.Automation.AutomationProperties.GetHelpText(status));
+            Assert.Equal(actionBounds, actions.TransformToAncestor(window).TransformBounds(new Rect(actions.RenderSize)));
+            Assert.Equal(scrollBounds, scroll.TransformToAncestor(window).TransformBounds(new Rect(scroll.RenderSize)));
+            apply.Focus(); await Idle();
+            Assert.False(tooltip.IsOpen);
+            Assert.Empty(repository.Saves);
+            Assert.Equal(initialState, repository.State);
+            Assert.Equal(initialPublications, publisher.Count);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(560, 400)]
+    [InlineData(560, 760)]
+    [InlineData(1060, 760)]
     public Task ActionsStayFixedAndApplyReportsRealSuccess(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.DemonsSouls);
@@ -143,4 +217,13 @@ public sealed class AppearanceActionTests
         public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Synthetic delivery failure.");
     }
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
+    private sealed class CountingPublisher : ITrackerStateChangePublisher
+    {
+        public int Count { get; private set; }
+        public Task PublishAsync(TrackerStateChanged notification, CancellationToken cancellationToken = default)
+        {
+            Count++;
+            return Task.CompletedTask;
+        }
+    }
 }
