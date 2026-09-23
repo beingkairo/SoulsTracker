@@ -52,16 +52,16 @@ function conservativeFit(): void {
 }
 // Serialize the actual renderer and its bundled styles, rather than duplicating
 // text, image or effect drawing rules. The scratch image is never displayed.
-async function measurePaint(version: number): Promise<void> {
+async function measurePaint(version: number, contentReady: Promise<void>): Promise<void> {
   if (measuring || disposed) return;
   measuring = true;
   const canvas = document.createElement("canvas");
   const image = new Image();
   releaseMeasurement = () => { canvas.width = canvas.height = 0; image.removeAttribute("src"); };
   try {
-    await document.fonts.ready;
-    await Promise.all(Array.from(target.querySelectorAll("img"), item => item.decode()));
+    await contentReady;
     if (version !== generation || disposed) return;
+    conservativeFit();
     const panel = target.querySelector<HTMLElement>("section");
     if (!panel) return;
     const inset = 128;
@@ -114,10 +114,10 @@ function schedule(): void {
   requestAnimationFrame(() => {
     scheduled = false;
     if (!pending || disposed || measuring) return;
-    renderHosted(target, { revision: "0", value: pending.value, availability: "available" }, pending.appearance, "__PREVIEW_SKULL__");
+    const contentReady = renderHosted(target, { revision: "0", value: pending.value, availability: "available" }, pending.appearance, "__PREVIEW_SKULL__");
     conservativeFit();
     target.dataset.fit = "measuring";
-    void measurePaint(generation);
+    void measurePaint(generation, contentReady);
     window.chrome.webview.postMessage("rendered");
   });
 }

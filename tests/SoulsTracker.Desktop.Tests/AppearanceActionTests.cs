@@ -16,6 +16,42 @@ public sealed class AppearanceActionTests
     [InlineData(560, 400)]
     [InlineData(560, 760)]
     [InlineData(1060, 760)]
+    public Task DockedPreviewRetainsCompleteFirstFocusValidation(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        var publisher = new CountingPublisher();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, publisher);
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        int publications = publisher.Count;
+        var window = new MainWindow { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+            ((ScrollViewer)window.FindName("OverlayConfigurationScrollViewer")).ScrollToEnd(); await Idle();
+            var preview = (AppearancePreview)window.FindName("LocalAppearancePreview");
+            Assert.Equal(height == 400 ? 72 : 96, preview.RowDefinitions[0].ActualHeight);
+            vm.TotalDeathsAppearanceDraft.FontSize = "bad";
+            vm.TotalDeathsAppearanceDraft.TextColor = "bad";
+            vm.TotalDeathsAppearanceDraft.ShadowBlur = "bad";
+            ((Button)window.FindName("ApplyAppearanceButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
+            var status = (TextBlock)window.FindName("AppearanceApplyStatus");
+            Assert.True(status.Focus()); await Idle();
+            var tooltip = (ToolTip)status.ToolTip;
+            Assert.True(tooltip.IsOpen);
+            var detail = (TextBlock)tooltip.Content;
+            Assert.Equal(vm.TotalDeathsAppearanceStatus, detail.Text);
+            Assert.Contains("Font size", detail.Text); Assert.Contains("Text color", detail.Text); Assert.Contains("Shadow blur", detail.Text);
+            Assert.True(detail.ActualHeight >= detail.DesiredSize.Height);
+            AppearanceGeometryTests.Capture(tooltip, $"docked-validation-{width}-{height}");
+            Assert.Empty(repository.Saves); Assert.Equal(publications, publisher.Count);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(560, 400)]
+    [InlineData(560, 760)]
+    [InlineData(1060, 760)]
     public Task ValidationDetailOpensOnFirstKeyboardFocusWithoutHover(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.DemonsSouls);

@@ -36,6 +36,8 @@ body {
 .souls-tracker-overlay-panel {
   box-sizing: border-box;
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   flex-direction: column;
   gap: 0.25rem;
   min-width: 0;

@@ -24,6 +24,8 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
     const preview = await context.newPage();
     const hosted = await context.newPage();
     await preview.setContent(html.replace("<script>", `<script>window.chrome={webview:{addEventListener:(name,fn)=>window.previewMessage=fn,postMessage:()=>{}}};</script><script>`));
+    // Shell transparency indicator is intentionally absent from hosted output.
+    await preview.locator("body").evaluate(node => (node as HTMLElement).style.background = "transparent");
     await hosted.setContent(`<style>${css}</style><main id="souls-tracker-overlay"></main><script>${renderer}</script>`);
     for (const outlineWidth of [0, 3]) {
       const appearance = { ...corpus.valid[4].appearance, enabled: true, title: "Preview test", titleIconMode, fontFamily: "Arial", fontSize: 32, textColor: "#AABBCC", textOpacity: 72, iconColor: "#CC8844", backgroundColor: "#223344", backgroundOpacity: 70, padding: 12, cornerRadius: 7, outlineEnabled: true, outlineWidth, outlineColor: "#112233", shadowEnabled: true, shadowColor: "#000000", shadowBlur: 5, shadowOffsetX: -2, shadowOffsetY: 3 };

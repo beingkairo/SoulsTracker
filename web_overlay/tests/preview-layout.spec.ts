@@ -9,9 +9,17 @@ import process from "node:process";
 const temporary = mkdtempSync(join(tmpdir(), "souls-preview-layout-"));
 const documentPath = join(temporary, "preview.html");
 execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/build-preview.mjs", import.meta.url)), documentPath, "--no-compile"]);
-const html = readFileSync(documentPath, "utf8").replace("<script>", `<script>window.chrome={webview:{addEventListener:(name,fn)=>window.previewMessage=fn,postMessage:()=>{}}};</script><script>`);
+const html = readFileSync(documentPath, "utf8").replace("<script>", `<script>window.previewRenderVersion=0;window.chrome={webview:{addEventListener:(name,fn)=>window.previewMessage=fn,postMessage:message=>{if(message==='rendered')window.previewRenderVersion++}}};</script><script>`);
 const corpus = JSON.parse(readFileSync(new URL("../../tests/fixtures/hosted-overlay/contracts.json", import.meta.url), "utf8"));
 test.afterAll(() => rmSync(temporary, { recursive: true, force: true }));
+
+test("checkerboard belongs only to the preview shell", async ({ page }) => {
+  await page.setViewportSize({ width: 440, height: 96 });
+  await page.setContent(html);
+  expect(await page.locator("body").evaluate(node => getComputedStyle(node).backgroundImage)).toContain("conic-gradient");
+  expect(await page.locator("main").evaluate(node => getComputedStyle(node).backgroundImage)).toBe("none");
+  expect(readFileSync(new URL("../src/overlay.css", import.meta.url), "utf8")).not.toContain("conic-gradient");
+});
 
 for (const deviceScaleFactor of [1, 2]) {
   test(`measurement matches actual browser paint at DPI ${deviceScaleFactor}`, async ({ browser }, testInfo) => {
@@ -36,6 +44,7 @@ for (const deviceScaleFactor of [1, 2]) {
         // image's origin. The independent oracle is a Chromium screenshot.
         await page.evaluate(() => { dispatchEvent(new PageTransitionEvent("pagehide")); document.querySelector<HTMLElement>("main")!.style.transform = "translate(128px, 128px)"; });
         await page.setViewportSize({ width: measurement.width / deviceScaleFactor, height: measurement.height / deviceScaleFactor });
+        await page.locator("body").evaluate(node => (node as HTMLElement).style.background = "transparent");
         const screenshot = await page.screenshot({ omitBackground: true });
         const differences = await page.evaluate(async ({ actual, expected }) => {
           const decode = async (src: string) => { const image = new Image(); image.src = src; await image.decode(); const canvas = new OffscreenCanvas(image.width, image.height); const ctx = canvas.getContext("2d")!; ctx.drawImage(image, 0, 0); return ctx.getImageData(0, 0, image.width, image.height).data; };
@@ -153,10 +162,12 @@ test("ordinary preview stays native sized and centered", async ({ page }, testIn
   expect(Math.abs(metrics.panel.x - (440 - metrics.panel.right))).toBeLessThanOrEqual(1);
 });
 
-for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
-  test(`preview fit contains full effects and centers: ${titleIconMode}`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width: 210, height: 180 });
+for (const height of [180, 96, 72, 48]) for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
+  test(`preview fit contains full effects and centers: ${titleIconMode}${height === 96 ? " compact" : height < 96 ? ` compact${height}` : ""}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 210, height });
     await page.setContent(html);
+    // Exclude only the canvas presentation surface from composition-alpha proof.
+    await page.locator("body").evaluate(node => (node as HTMLElement).style.background = "transparent");
     const records = [];
     for (const fontSize of [12, 24, 96]) for (const title of ["D", "W".repeat(40)]) for (const variant of [0, 1, 2, 3]) {
       const value = ["0", "123", "9223372036854775807", "123"][variant];
@@ -164,7 +175,9 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
         padding: variant % 2 ? 32 : 0, backgroundOpacity: variant % 2 ? 80 : 0, outlineEnabled: true, outlineWidth: variant < 2 ? 0 : 8,
         shadowEnabled: variant > 0, shadowBlur: variant === 1 ? 0 : 20, shadowOffsetX: variant === 2 ? -20 : 20, shadowOffsetY: variant === 3 ? -20 : 20 };
       const original = JSON.stringify(appearance);
+      const version = await page.evaluate(() => (window as any).previewRenderVersion);
       await page.evaluate(payload => (window as any).previewMessage({ data: payload }), { appearance, value });
+      await expect.poll(() => page.evaluate(() => (window as any).previewRenderVersion)).toBeGreaterThan(version);
       await expect(page.locator(".overlay-heading")).toHaveText(titleIconMode === "skullOnly" ? value : `${title}: ${value}`);
       await page.evaluate(async () => { await document.fonts.ready; await Promise.all(Array.from(document.images).map(image => image.decode())); await new Promise(requestAnimationFrame); });
       await expect(page.locator("main")).toHaveAttribute("data-fit", "painted");
@@ -197,12 +210,12 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
       expect(geometry.scrollX).toBe(0); expect(geometry.scrollY).toBe(0); expect(geometry.overflow).toBe("hidden");
       expect(painted.right).toBeGreaterThan(painted.left); expect(painted.bottom).toBeGreaterThan(painted.top);
       expect(painted.left).toBeGreaterThanOrEqual(6); expect(painted.top).toBeGreaterThanOrEqual(6);
-      expect(painted.right).toBeLessThanOrEqual(204); expect(painted.bottom).toBeLessThanOrEqual(174);
+      expect(painted.right).toBeLessThanOrEqual(204); expect(painted.bottom).toBeLessThanOrEqual(height - 6);
       // One CSS pixel rasterization plus a small glyph/effect optical tolerance.
       expect(Math.abs(painted.left - (210 - painted.right))).toBeLessThanOrEqual(6);
       // A clamped design fills at least one available dimension, within the
       // same six-pixel raster tolerance, rather than using blanket shrinking.
-      if (geometry.scale < 1) expect(Math.max((painted.right - painted.left) / 194, (painted.bottom - painted.top) / 164)).toBeGreaterThanOrEqual(1 - 6 / 164);
+      if (geometry.scale < 1) expect(Math.max((painted.right - painted.left) / 194, (painted.bottom - painted.top) / (height - 16))).toBeGreaterThanOrEqual(1 - 6 / (height - 16));
       expect(JSON.stringify(appearance)).toBe(original);
     }
     await testInfo.attach("geometry", { body: JSON.stringify(records), contentType: "application/json" });

@@ -239,9 +239,10 @@ public sealed class HostedConnectionPresentationTests
             measured.Measure(new Size(label.ActualWidth, double.PositiveInfinity));
             Assert.True(label.ActualHeight >= measured.DesiredSize.Height - 1);
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
-            // The outer scrollbar gutter is separate from the panel's padding.
-            Assert.Equal(12, ((FrameworkElement)scroll.Content).Margin.Right);
-            Assert.InRange(consent.ActualWidth, scroll.ViewportWidth - 47, scroll.ViewportWidth - 45);
+            // Settings-aligned outer viewport keeps margins in its padding.
+            Assert.Equal(0, ((FrameworkElement)scroll.Content).Margin.Right);
+            Assert.Equal(((ScrollViewer)window.FindName("SettingsContentScrollViewer")).Padding, scroll.Padding);
+            Assert.InRange(consent.ActualWidth, scroll.ViewportWidth - 35, scroll.ViewportWidth - 33);
             var viewportBounds = label.TransformToAncestor(scroll).TransformBounds(new Rect(label.RenderSize));
             Assert.True(viewportBounds.Top >= 0 && viewportBounds.Bottom <= scroll.ActualHeight + 1);
             Assert.Equal(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);

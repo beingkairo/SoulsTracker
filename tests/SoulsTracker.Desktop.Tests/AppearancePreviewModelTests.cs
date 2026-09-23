@@ -25,6 +25,8 @@ public sealed class AppearancePreviewModelTests
         Assert.NotNull(stream);
         using var reader = new StreamReader(stream);
         string html = reader.ReadToEnd();
+        string? evidence = Environment.GetEnvironmentVariable("SOULS_APPEARANCE_EVIDENCE");
+        if (evidence is not null) { Directory.CreateDirectory(evidence); File.WriteAllText(Path.Combine(evidence, "embedded-preview.html"), html); }
         Assert.Contains("function renderHosted(", html);
         Assert.Contains("connect-src 'none'", html);
         Assert.Contains("data:image/png;base64,", html);

@@ -1,8 +1,8 @@
 import type { HostedAppearance, HostedDeath } from "./hosted-contracts.js";
 
 // The retained compact renderer layout, with wire-validated appearance only.
-export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string): void {
-  if (!appearance.enabled) { target.replaceChildren(); return; }
+export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string): Promise<void> {
+  if (!appearance.enabled) { target.replaceChildren(); return Promise.resolve(); }
   const panel = document.createElement("section");
   panel.className = "souls-tracker-overlay-panel";
   panel.dataset.testid = "total-deaths-overlay";
@@ -41,6 +41,48 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
   target.dataset.alignment = "left";
   // One replacement keeps both channels visually atomic and bounds SVG state.
   target.replaceChildren(skullFilter(appearance), panel);
+  return alignContentEdges(panel);
+}
+
+// Padding starts at the visible content, not a font's advance box or the
+// bundled image's transparent border. Internal image/text spacing stays intact.
+let imageEdges: { source: string; left: number } | null = null;
+async function alignContentEdges(panel: HTMLElement): Promise<void> {
+  try {
+    await document.fonts.ready;
+    const image = panel.querySelector("img");
+    if (image) await image.decode();
+    if (!panel.isConnected) return;
+    const content = panel.firstElementChild as HTMLElement;
+    const style = getComputedStyle(content);
+    const canvas = document.createElement("canvas");
+    try {
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return;
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      // Match CSS nowrap's collapsible whitespace without altering the title.
+      const text = (content.textContent ?? "").replace(/[ \t\r\n\f]+/g, " ").replace(/^ | $/g, "");
+      const metrics = context.measureText(text);
+      let left = metrics.actualBoundingBoxLeft;
+      if (image) {
+        if (imageEdges?.source !== image.src) {
+          if (image.naturalWidth * image.naturalHeight > 4194304) return;
+          canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+          context.drawImage(image, 0, 0);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          let first = canvas.width;
+          for (let y = 0; y < canvas.height; y++) for (let x = 0; x < first; x++)
+            if (pixels[(y * canvas.width + x) * 4 + 3] >= 2) first = x;
+          imageEdges = { source: image.src, left: first < canvas.width ? first / canvas.width : 0 };
+        }
+        left = -imageEdges.left * Number.parseFloat(getComputedStyle(image).width);
+      }
+      content.style.marginLeft = `${left}px`;
+      content.style.marginRight = `${metrics.actualBoundingBoxRight - metrics.width}px`;
+    } finally { canvas.width = canvas.height = 0; }
+  } catch {
+    // Unavailable local fonts/images retain conservative intrinsic layout.
+  }
 }
 
 // Same raster color matrix and outside-alpha outline as the retained renderer.

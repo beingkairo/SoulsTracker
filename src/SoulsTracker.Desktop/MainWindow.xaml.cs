@@ -45,6 +45,16 @@ public partial class MainWindow : Window
         chooseSaveDirectory = ChooseSaveDirectory;
         scheduleCopyExpiry = ScheduleCopyExpiry;
         InitializeComponent();
+        LocalAppearancePreview.ScrollTarget = OverlayConfigurationScrollViewer;
+        LocalAppearancePreview.SetBinding(DataContextProperty, new System.Windows.Data.Binding(nameof(DataContext)) { Source = this });
+        LayoutUpdated += UpdatePreviewDock;
+        DockedPreviewCard.MouseWheel += (_, e) =>
+        {
+            OverlayConfigurationScrollViewer.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+            { RoutedEvent = MouseWheelEvent });
+            e.Handled = true;
+        };
+        AppearanceFields.RequestBringIntoView += AppearanceFieldBringIntoView;
         directoryFeedback = new FloatingFeedback(FloatingFeedbackLayer, CopyFeedbackOverlay);
         hotkeyFeedback = new FloatingFeedback(FloatingFeedbackLayer, HotkeySuccessOverlay);
         AppearanceApplyStatus.GotKeyboardFocus += (_, _) =>
@@ -91,6 +101,57 @@ public partial class MainWindow : Window
         {
             if (LocalAppearancePreview.IsVisible) await LocalAppearancePreview.StartBrowserAsync(dataRoot);
         };
+    }
+
+    private void AppearanceFieldBringIntoView(object sender, RequestBringIntoViewEventArgs e)
+    {
+        if (e.TargetObject is not FrameworkElement field) return;
+        bool wasDocked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
+        Dispatcher.BeginInvoke(() =>
+        {
+            // A visibility request may itself cross the docking boundary. Finish
+            // its visibility request using the newly reduced editable viewport.
+            if (!LocalAppearancePreview.IsDisposed && field.IsVisible &&
+                wasDocked != ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot)) field.BringIntoView();
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void UpdatePreviewDock(object? sender, EventArgs e)
+    {
+        if (LocalAppearancePreview.IsDisposed || !OverlayWorkspaceLayout.IsVisible || NormalPreviewSlot.ActualWidth <= 0) return;
+        var scroll = OverlayConfigurationScrollViewer;
+        if (scroll.Content is not FrameworkElement content) return;
+        bool docked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
+        if (docked) NormalPreviewSlot.Height = 180 + LocalAppearancePreview.RowDefinitions[1].ActualHeight;
+        // Content coordinates remain stable when only the presenter is inset.
+        double bottom = NormalPreviewSection.TranslatePoint(new System.Windows.Point(0, NormalPreviewSection.ActualHeight), content).Y;
+        bool dock = scroll.VerticalOffset > bottom;
+        double barWidth = scroll.ActualWidth - NormalPreviewSection.ActualWidth - 48;
+        DockedPreviewCard.Margin = new Thickness(24, 0, 24 + Math.Max(0, barWidth), 0);
+        if (docked)
+        {
+            LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+            scroll.Tag = new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54);
+        }
+        if (dock == docked) return;
+
+        if (dock)
+        {
+            NormalPreviewSlot.Height = LocalAppearancePreview.ActualHeight;
+            NormalPreviewSlot.Children.Remove(LocalAppearancePreview);
+            LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+            DockedPreviewSlot.Children.Add(LocalAppearancePreview);
+            DockedPreviewCard.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            DockedPreviewSlot.Children.Remove(LocalAppearancePreview);
+            LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(180);
+            NormalPreviewSlot.Children.Add(LocalAppearancePreview);
+            NormalPreviewSlot.Height = double.NaN;
+            DockedPreviewCard.Visibility = Visibility.Collapsed;
+            scroll.Tag = new Thickness(24, 24, 24, 70);
+        }
     }
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory, Action<string> copyDirectoryPath) : this(chooseSaveDirectory) =>
@@ -248,6 +309,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        LayoutUpdated -= UpdatePreviewDock;
         LocalAppearancePreview.Dispose();
         copyFeedbackClosed = true;
         ClearCopyFeedback();

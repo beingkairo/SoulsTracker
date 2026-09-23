@@ -195,7 +195,11 @@ public sealed class ShellPresentationTests
         var layout = (FrameworkElement)scroll.Parent;
         var bounds = control.TransformToAncestor(layout).TransformBounds(new Rect(control.RenderSize));
         Assert.True(bounds.Left >= 0 && bounds.Right <= layout.ActualWidth + 1);
-        Assert.True(bounds.Top >= scroll.ActualHeight && bounds.Bottom <= layout.ActualHeight + 1);
+        // The page scrollbar spans the action row; only the editable presenter
+        // must end above the fixed actions.
+        var viewport = Tree(scroll).OfType<ScrollContentPresenter>().First();
+        double contentBottom = viewport.TranslatePoint(new Point(0, viewport.ActualHeight), layout).Y;
+        Assert.True(bounds.Top >= contentBottom && bounds.Bottom <= layout.ActualHeight + 1);
     }
 
     private static void AssertFits(FrameworkElement control, ScrollViewer scroll)
@@ -313,9 +317,8 @@ public sealed class ShellPresentationTests
                 Assert.Equal(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
                 Assert.Equal(0, scroll.ScrollableWidth);
                 var panel = Tree(scroll).OfType<Border>().First(x => AutomationProperties.GetName(x).EndsWith("panel", StringComparison.Ordinal));
-                double gutter = tabName == "OverlayWorkspaceTab" ? 12 : 0;
-                Assert.Equal(gutter, ((FrameworkElement)scroll.Content).Margin.Right);
-                Assert.InRange(panel.ActualWidth, scroll.ViewportWidth - gutter - 1, scroll.ViewportWidth - gutter + 1);
+                Assert.Equal(0, ((FrameworkElement)scroll.Content).Margin.Right);
+                Assert.InRange(panel.ActualWidth, scroll.ViewportWidth - 1, scroll.ViewportWidth + 1);
                 scroll.ScrollToEnd();
                 await Idle();
                 Assert.Equal(scroll.ScrollableHeight, scroll.VerticalOffset, 1);

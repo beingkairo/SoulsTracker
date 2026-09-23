@@ -41,12 +41,14 @@ test("background follows current content and skull gaps match", async ({ page, r
         const glyph = text.getBoundingClientRect();
         const image = content.querySelector("img")?.getBoundingClientRect();
         const bounds = node.getBoundingClientRect();
-        return { width: bounds.width, rightPadding: bounds.right - glyph.right,
+        return { width: bounds.width, leftBearing: Number.parseFloat(getComputedStyle(content).marginLeft), rightBearing: Number.parseFloat(getComputedStyle(content).marginRight), rightPadding: bounds.right - glyph.right,
           leftPadding: (image?.left ?? glyph.left) - bounds.left, gap: image ? glyph.left - image.right : null };
       });
       measurements.push({ title, titleIconMode, ...metrics });
-      expect.soft(metrics.rightPadding).toBeCloseTo(12, 1);
-      expect.soft(metrics.leftPadding).toBeCloseTo(12, 1);
+      // Ink-edge margins supersede advance-box padding; retain configured
+      // padding and internal skull/text spacing, with independent pixel tests.
+      expect.soft(metrics.rightPadding - metrics.rightBearing).toBeCloseTo(12, 1);
+      expect.soft(metrics.leftPadding - metrics.leftBearing).toBeCloseTo(12, 1);
       await testInfo.attach(`content-${measurements.length}`, { body: await panel.screenshot(), contentType: "image/png" });
     }
   }
@@ -171,6 +173,7 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
         await expect(panel.locator("h1")).toHaveCount(heading ? 1 : 0);
         await expect(panel.locator("p")).toHaveCount(heading ? 0 : 1);
         await expect(panel.locator("img")).toHaveCount(skull ? 1 : 0);
+        await expect.poll(() => panel.locator("h1, p").evaluate(node => (node as HTMLElement).style.marginLeft)).not.toBe("");
         const metrics = await panel.evaluate(node => {
           const content = node.querySelector("h1, p")!;
           const range = document.createRange(); range.selectNodeContents(content.lastChild!);
@@ -181,20 +184,23 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
             x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
             textX: glyph.x, textRight: glyph.right, textWidth: glyph.width, textHeight: glyph.height,
             contentHeight: content.getBoundingClientRect().height,
+            marginLeft: parseFloat(getComputedStyle(content).marginLeft), marginRight: parseFloat(getComputedStyle(content).marginRight),
             skullWidth: image?.width, skullHeight: image?.height };
         });
         measurements.push({ value, ...variant, fontSize, ...metrics });
         expect.soft(metrics.font).toBeCloseTo(fontSize * (heading ? 1.15 : 2.5), 2);
         expect(metrics.x).toBe(0); expect(metrics.y).toBe(0);
         expect.soft(metrics.minimum).toBe("0px");
-        expect(metrics.textX).toBeGreaterThanOrEqual(variant.padding - 0.1);
-        expect.soft(metrics.textRight).toBeLessThanOrEqual(metrics.width - variant.padding + 0.1);
+        // Advance boxes include transparent side bearings. Shared background
+        // edges now follow ink; independent screenshot tests verify those gaps.
+        expect(metrics.textX).toBeGreaterThanOrEqual(variant.padding + metrics.marginLeft - 0.1);
+        expect.soft(metrics.textRight).toBeLessThanOrEqual(metrics.width - variant.padding - metrics.marginRight + 0.1);
         if (!heading) {
-          expect.soft(metrics.width).toBeCloseTo(metrics.textWidth + 2 * variant.padding, 1);
+          expect.soft(metrics.width).toBeCloseTo(metrics.textWidth + metrics.marginLeft + metrics.marginRight + 2 * variant.padding, 1);
           expect(metrics.height).toBeCloseTo(metrics.contentHeight + 2 * variant.padding, 1);
           if (value === "42" && fontSize === 12) expect.soft(metrics.width).toBeLessThan(256);
         } else {
-          if (!skull) expect(metrics.width).toBeCloseTo(metrics.textWidth + 2 * variant.padding, 1);
+          if (!skull) expect(metrics.width).toBeCloseTo(metrics.textWidth + metrics.marginLeft + metrics.marginRight + 2 * variant.padding, 1);
           if (skull) {
             expect(metrics.skullWidth).toBeCloseTo(fontSize * 1.15 * 2, 1);
             expect(metrics.skullHeight).toBeCloseTo(fontSize * 1.15 * 2, 1);

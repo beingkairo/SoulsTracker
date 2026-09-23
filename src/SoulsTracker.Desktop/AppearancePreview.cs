@@ -22,11 +22,12 @@ public sealed class AppearancePreview : Grid, IDisposable
     private WebView2? browser;
     private Task? startTask;
     private readonly TextBlock unavailable = new() { Text = "Local preview is loading.", TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock caption = new() { Text = "Local preview. Draft edits are not published.", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock caption = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap };
     public AppearancePreviewModel? Model { get; private set; }
     public bool IsDisposed { get; private set; }
     public bool IsReady { get; private set; }
     public int BlockedRequestCount { get; private set; }
+    internal ScrollViewer? ScrollTarget { get; set; }
 
     public AppearancePreview()
     {
@@ -114,6 +115,11 @@ public sealed class AppearancePreview : Grid, IDisposable
         if (!IsVisible || message is null || !message.StartsWith("wheel:", StringComparison.Ordinal) ||
             !double.TryParse(message.AsSpan(6), NumberStyles.Float, CultureInfo.InvariantCulture, out double delta) ||
             !double.IsFinite(delta) || Math.Abs(delta) > 600) return;
+        if (ScrollTarget is { IsVisible: true } destination)
+        {
+            destination.ScrollToVerticalOffset(destination.VerticalOffset + delta);
+            return;
+        }
         for (DependencyObject? parent = VisualTreeHelper.GetParent(this); parent is not null; parent = VisualTreeHelper.GetParent(parent))
         {
             if (parent is not ScrollViewer scroll) continue;
@@ -124,6 +130,7 @@ public sealed class AppearancePreview : Grid, IDisposable
 
     private void BindSource()
     {
+        if (ReferenceEquals(source, DataContext)) return;
         if (source is not null)
         {
             source.PropertyChanged -= SourceChanged;
@@ -151,7 +158,8 @@ public sealed class AppearancePreview : Grid, IDisposable
     {
         if (source is null || Model is null) return;
         Model.Update(source.DraftTitleIconModeChoice.Value, source.TotalDeathsText);
-        caption.Text = Model.IsRepresentative ? "Local preview uses a sample count of 123. Draft edits are not published." : "Local preview. Draft edits are not published.";
+        caption.Text = Model.IsRepresentative ? "Local preview uses a sample count of 123." : string.Empty;
+        caption.Visibility = Model.IsRepresentative ? Visibility.Visible : Visibility.Collapsed;
         SendDraft();
     }
     // HwndHost is not clipped by WPF's ScrollViewer. Limit this preview's own
@@ -171,12 +179,14 @@ public sealed class AppearancePreview : Grid, IDisposable
         private void UpdateClip(object? sender, EventArgs e)
         {
             if (!IsLoaded || Handle == nint.Zero) return;
-            ScrollContentPresenter? viewport = null;
+            FrameworkElement? viewport = null;
             for (DependencyObject? parent = VisualTreeHelper.GetParent(this); parent is not null; parent = VisualTreeHelper.GetParent(parent))
             {
                 if (parent is ScrollContentPresenter presenter) { viewport = presenter; break; }
             }
-            if (viewport is null || PresentationSource.FromVisual(viewport) is null || !GetWindowRect(Handle, out var bounds)) return;
+            // Docking must replace a previous partial-scroll native region.
+            viewport ??= this;
+            if (PresentationSource.FromVisual(viewport) is null || !GetWindowRect(Handle, out var bounds)) return;
             var top = viewport.PointToScreen(new System.Windows.Point());
             var bottom = viewport.PointToScreen(new System.Windows.Point(viewport.ActualWidth, viewport.ActualHeight));
             int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
@@ -217,6 +227,7 @@ public sealed class AppearancePreview : Grid, IDisposable
             source.TotalDeathsAppearanceDraft.PropertyChanged -= DraftChanged;
         }
         source = null;
+        ScrollTarget = null;
         IsReady = false;
         if (browser?.CoreWebView2 is { } core) core.WebMessageReceived -= BrowserMessageReceived;
         browser?.Dispose();
