@@ -39,6 +39,12 @@ public partial class MainWindow : Window
     private Action? cancelHotkeyExpiry;
     private long hotkeyOperationVersion;
     private bool savingRecordedHotkey;
+    private bool updatingPreviewDock;
+    private double? previewAnchorOffset;
+    private FrameworkElement? lastOverlayFocus;
+    private double? savedOverlayOffset;
+    private bool restoringOverlayWorkspace;
+    private DispatcherOperation? overlayRestoreOperation;
 
     public MainWindow()
     {
@@ -55,6 +61,31 @@ public partial class MainWindow : Window
             e.Handled = true;
         };
         AppearanceFields.RequestBringIntoView += AppearanceFieldBringIntoView;
+        OverlayWorkspaceLayout.IsVisibleChanged += (_, _) =>
+        {
+            if (!OverlayWorkspaceLayout.IsVisible)
+            {
+                overlayRestoreOperation?.Abort();
+                overlayRestoreOperation = null;
+                if (!restoringOverlayWorkspace) savedOverlayOffset = OverlayConfigurationScrollViewer.VerticalOffset;
+                restoringOverlayWorkspace = false;
+            }
+            else if (savedOverlayOffset.HasValue && hotkeyRecordingOrigin is null)
+            {
+                // TabItem finishes its own focus navigation before this one
+                // restoration. Do not redirect a nested focus request.
+                restoringOverlayWorkspace = true;
+                overlayRestoreOperation = Dispatcher.BeginInvoke(RestoreOverlayWorkspace, DispatcherPriority.Loaded);
+            }
+        };
+        OverlayWorkspaceLayout.GotKeyboardFocus += (_, e) =>
+        {
+            if (!restoringOverlayWorkspace) lastOverlayFocus = e.NewFocus as FrameworkElement;
+        };
+        OverlayConfigurationScrollViewer.RequestBringIntoView += (_, e) =>
+        {
+            if (restoringOverlayWorkspace) e.Handled = true;
+        };
         directoryFeedback = new FloatingFeedback(FloatingFeedbackLayer, CopyFeedbackOverlay);
         hotkeyFeedback = new FloatingFeedback(FloatingFeedbackLayer, HotkeySuccessOverlay);
         AppearanceApplyStatus.GotKeyboardFocus += (_, _) =>
@@ -75,6 +106,40 @@ public partial class MainWindow : Window
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory) : this() =>
         this.chooseSaveDirectory = chooseSaveDirectory;
+
+    private void RestoreOverlayWorkspace()
+    {
+        overlayRestoreOperation = null;
+        var scroll = OverlayConfigurationScrollViewer;
+        try
+        {
+            if (!OverlayWorkspaceLayout.IsVisible || LocalAppearancePreview.IsDisposed || hotkeyRecordingOrigin is not null) return;
+            scroll.UpdateLayout();
+            var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+            presenter.SetVerticalOffset(savedOverlayOffset ?? 0);
+            scroll.UpdateLayout();
+            // Reuse the normal geometry transaction for any resize while away.
+            restoringOverlayWorkspace = false;
+            UpdatePreviewDock(null, EventArgs.Empty);
+            scroll.UpdateLayout();
+            restoringOverlayWorkspace = true;
+            var previous = lastOverlayFocus;
+            bool visible = previous is { IsVisible: true, IsEnabled: true, Focusable: true } &&
+                OverlayWorkspaceLayout.IsAncestorOf(previous);
+            if (visible && presenter.IsAncestorOf(previous!))
+            {
+                var bounds = previous!.TransformToAncestor(presenter).TransformBounds(new Rect(previous.RenderSize));
+                visible = bounds.Width > 0 && bounds.Height > 0 &&
+                    new Rect(presenter.RenderSize).Contains(bounds);
+            }
+            if (!visible || !previous!.Focus()) AppearanceActions.Focus();
+        }
+        finally
+        {
+            restoringOverlayWorkspace = false;
+            lastOverlayFocus = Keyboard.FocusedElement as FrameworkElement;
+        }
+    }
 
     private void AppearanceRow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -105,7 +170,7 @@ public partial class MainWindow : Window
 
     private void AppearanceFieldBringIntoView(object sender, RequestBringIntoViewEventArgs e)
     {
-        if (e.TargetObject is not FrameworkElement field) return;
+        if (restoringOverlayWorkspace || e.TargetObject is not FrameworkElement field) return;
         bool wasDocked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
         Dispatcher.BeginInvoke(() =>
         {
@@ -118,40 +183,71 @@ public partial class MainWindow : Window
 
     private void UpdatePreviewDock(object? sender, EventArgs e)
     {
-        if (LocalAppearancePreview.IsDisposed || !OverlayWorkspaceLayout.IsVisible || NormalPreviewSlot.ActualWidth <= 0) return;
+        if (restoringOverlayWorkspace || updatingPreviewDock || LocalAppearancePreview.IsDisposed || !OverlayWorkspaceLayout.IsVisible || NormalPreviewSlot.ActualWidth <= 0) return;
         var scroll = OverlayConfigurationScrollViewer;
         if (scroll.Content is not FrameworkElement content) return;
-        bool docked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
-        if (docked) NormalPreviewSlot.Height = 180 + LocalAppearancePreview.RowDefinitions[1].ActualHeight;
-        // Content coordinates remain stable when only the presenter is inset.
-        double bottom = NormalPreviewSection.TranslatePoint(new System.Windows.Point(0, NormalPreviewSection.ActualHeight), content).Y;
-        bool dock = scroll.VerticalOffset > bottom;
-        double barWidth = scroll.ActualWidth - NormalPreviewSection.ActualWidth - 48;
-        DockedPreviewCard.Margin = new Thickness(24, 0, 24 + Math.Max(0, barWidth), 0);
-        if (docked)
+        var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+        if (previewAnchorOffset is double requestedOffset)
         {
-            LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
-            scroll.Tag = new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54);
+            // Inset and offset belong to one arrange transaction. Do not make
+            // another threshold decision using only its partially applied inset.
+            double arrangedOffset = Math.Clamp(requestedOffset, 0, Math.Max(0, presenter.ExtentHeight - presenter.ViewportHeight));
+            if (!presenter.IsArrangeValid || Math.Abs(presenter.VerticalOffset - arrangedOffset) > 0.01) return;
+            previewAnchorOffset = null;
         }
-        if (dock == docked) return;
+        updatingPreviewDock = true;
+        try
+        {
+            bool docked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
+            if (docked) NormalPreviewSlot.Height = 180 + LocalAppearancePreview.RowDefinitions[1].ActualHeight;
+            // Compare in normal-page coordinates, excluding the offset used to
+            // anchor the content when the compact card insets the presenter.
+            double bottom = NormalPreviewSection.TranslatePoint(new System.Windows.Point(0, NormalPreviewSection.ActualHeight), content).Y;
+            double inset = presenter.Margin.Top - scroll.Padding.Top;
+            bool dock = presenter.VerticalOffset - inset > bottom;
+            double barWidth = scroll.ActualWidth - NormalPreviewSection.ActualWidth - 48;
+            DockedPreviewCard.Margin = new Thickness(24, 0, 24 + Math.Max(0, barWidth), 0);
+            if (docked)
+            {
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+                scroll.UpdateLayout();
+                SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54));
+            }
+            if (dock == docked) return;
 
-        if (dock)
-        {
-            NormalPreviewSlot.Height = LocalAppearancePreview.ActualHeight;
-            NormalPreviewSlot.Children.Remove(LocalAppearancePreview);
-            LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
-            DockedPreviewSlot.Children.Add(LocalAppearancePreview);
-            DockedPreviewCard.Visibility = Visibility.Visible;
+            if (dock)
+            {
+                NormalPreviewSlot.Height = LocalAppearancePreview.ActualHeight;
+                NormalPreviewSlot.Children.Remove(LocalAppearancePreview);
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+                DockedPreviewSlot.Children.Add(LocalAppearancePreview);
+                DockedPreviewCard.Visibility = Visibility.Visible;
+                scroll.UpdateLayout();
+                SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54));
+            }
+            else
+            {
+                DockedPreviewSlot.Children.Remove(LocalAppearancePreview);
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(180);
+                NormalPreviewSlot.Children.Add(LocalAppearancePreview);
+                NormalPreviewSlot.Height = double.NaN;
+                DockedPreviewCard.Visibility = Visibility.Collapsed;
+                SetPreviewViewport(new Thickness(24, 24, 24, 70));
+            }
         }
-        else
-        {
-            DockedPreviewSlot.Children.Remove(LocalAppearancePreview);
-            LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(180);
-            NormalPreviewSlot.Children.Add(LocalAppearancePreview);
-            NormalPreviewSlot.Height = double.NaN;
-            DockedPreviewCard.Visibility = Visibility.Collapsed;
-            scroll.Tag = new Thickness(24, 24, 24, 70);
-        }
+        finally { updatingPreviewDock = false; }
+    }
+
+    private void SetPreviewViewport(Thickness margin)
+    {
+        var scroll = OverlayConfigurationScrollViewer;
+        var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+        if (presenter.Margin == margin) return;
+        double displacement = margin.Top - presenter.Margin.Top;
+        double offset = presenter.VerticalOffset + displacement;
+        previewAnchorOffset = offset;
+        scroll.Tag = margin;
+        presenter.SetVerticalOffset(offset);
     }
 
     internal MainWindow(Func<string, string?, string?> chooseSaveDirectory, Action<string> copyDirectoryPath) : this(chooseSaveDirectory) =>
@@ -768,17 +864,25 @@ public partial class MainWindow : Window
     private void ReturnToHotkeyRecordingOrigin()
     {
         var origin = hotkeyRecordingOrigin;
-        hotkeyRecordingOrigin = null;
-        if (copyFeedbackClosed || origin is null) return;
-        WorkspaceTabs.SelectedItem = origin;
-        WorkspaceTabs.UpdateLayout();
-        var content = FindScrollViewer(origin.Content as DependencyObject);
-        if (content is not null)
+        try
         {
-            content.Focusable = true;
-            Keyboard.Focus(content);
+            if (copyFeedbackClosed || origin is null) return;
+            // Captured-origin restoration owns focus through tab selection and
+            // layout. A queued generic return must not replace its target.
+            overlayRestoreOperation?.Abort();
+            overlayRestoreOperation = null;
+            restoringOverlayWorkspace = false;
+            WorkspaceTabs.SelectedItem = origin;
+            WorkspaceTabs.UpdateLayout();
+            var content = FindScrollViewer(origin.Content as DependencyObject);
+            if (content is not null)
+            {
+                content.Focusable = true;
+                Keyboard.Focus(content);
+            }
+            else Keyboard.Focus(WorkspaceTabs);
         }
-        else Keyboard.Focus(WorkspaceTabs);
+        finally { hotkeyRecordingOrigin = null; }
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject? element)

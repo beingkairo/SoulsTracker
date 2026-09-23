@@ -18,6 +18,8 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class AppearancePreviewLayoutTests
 {
+    private static readonly bool[] PreviewModes = [false, true];
+
     [Fact]
     public Task CompactSampleCaptionLeavesAnEditableViewport() => HostedConnectionTests.OnDispatcher(async () =>
     {
@@ -172,7 +174,10 @@ public sealed class AppearancePreviewLayoutTests
             {
                 scroll.ScrollToVerticalOffset(threshold - 1); await Idle();
                 Assert.Same(normalParent, preview.Parent);
+                var fields = (FrameworkElement)window.FindName("AppearanceFields");
+                double beforeCrossing = fields.TranslatePoint(new Point(), window).Y;
                 scroll.ScrollToVerticalOffset(threshold + 1); await Idle();
+                Assert.Equal(beforeCrossing - 2, fields.TranslatePoint(new Point(), window).Y, 1);
                 Assert.NotSame(normalParent, preview.Parent);
                 Assert.Equal(height == 400 ? 72 : 96, preview.RowDefinitions[0].ActualHeight);
                 Assert.Same(model, preview.Model);
@@ -190,8 +195,10 @@ public sealed class AppearancePreviewLayoutTests
                 Assert.True(y + preview.ActualHeight <= viewportTop);
                 double offset = scroll.VerticalOffset;
                 await Idle(); Assert.Equal(offset, scroll.VerticalOffset);
-                scroll.ScrollToVerticalOffset(threshold - 1); await Idle();
+                beforeCrossing = fields.TranslatePoint(new Point(), window).Y;
+                scroll.ScrollToVerticalOffset(scroll.VerticalOffset - 2); await Idle();
                 Assert.Same(normalParent, preview.Parent);
+                Assert.Equal(beforeCrossing + 2, fields.TranslatePoint(new Point(), window).Y, 1);
                 Assert.Equal(180, preview.RowDefinitions[0].ActualHeight);
             }
             vm.TotalDeathsAppearanceDraft.Title = "Docked draft";
@@ -213,9 +220,13 @@ public sealed class AppearancePreviewLayoutTests
             foreach (int delta in new[] { 80, -80, 600, -600 })
             {
                 double before = scroll.VerticalOffset;
+                double insetBeforeWheel = viewport.Margin.Top;
                 double expected = Math.Clamp(before + delta, 0, scroll.ScrollableHeight);
                 await core.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", JsonSerializer.Serialize(new { type = "mouseWheel", x = 40, y = 40, deltaX = 0, deltaY = delta }));
                 await Task.Delay(100); await Idle();
+                // A crossing compensates the presenter inset in the scroll offset;
+                // the requested page motion remains exactly one wheel delta.
+                expected = Math.Clamp(expected + viewport.Margin.Top - insetBeforeWheel, 0, scroll.ScrollableHeight);
                 Assert.Equal(expected, scroll.VerticalOffset, 1);
                 Assert.Same(focus, Keyboard.FocusedElement);
             }
@@ -240,6 +251,77 @@ public sealed class AppearancePreviewLayoutTests
             scroll.ScrollToHome(); await Idle();
             Assert.Same(normalParent, preview.Parent);
             Assert.Empty(repository.Saves);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(560, 400)]
+    [InlineData(560, 760)]
+    [InlineData(1060, 760)]
+    public Task TabReturnPreservesViewportAndVisibleContentFocus(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        var draft = vm.TotalDeathsAppearanceDraft;
+        draft.ShadowEnabled = true;
+        var window = new MainWindow { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+            var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
+            var viewport = Tree(scroll).OfType<ScrollContentPresenter>().First();
+            var workspace = (FrameworkElement)window.FindName("OverlayWorkspaceLayout");
+            var fields = (FrameworkElement)window.FindName("AppearanceFields");
+            var preview = (AppearancePreview)window.FindName("LocalAppearancePreview");
+            var model = preview.Model;
+            var normal = preview.Parent;
+            foreach (bool sticky in PreviewModes)
+            {
+                window.Width = width; window.Height = height; await Idle();
+                ((Button)window.FindName("ApplyAppearanceButton")).Focus();
+                scroll.ScrollToVerticalOffset(sticky ? scroll.ScrollableHeight : 0); await Idle();
+                if (sticky)
+                {
+                    Tree(Tree(fields).OfType<AppearanceNumberField>().Last()).OfType<TextBox>().Single().Focus();
+                    await Idle();
+                }
+                for (int round = 0; round < 3; round++)
+                {
+                    double offset = scroll.VerticalOffset;
+                    double fieldTop = fields.TranslatePoint(new Point(), window).Y;
+                    ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
+                    ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+                    Assert.Equal(offset, scroll.VerticalOffset, 1);
+                    Assert.Equal(fieldTop, fields.TranslatePoint(new Point(), window).Y, 1);
+                    AssertState(sticky);
+                }
+                double beforeResize = scroll.VerticalOffset, inset = viewport.Margin.Top;
+                ((TabItem)window.FindName("MainWorkspaceTab")).IsSelected = true; await Idle();
+                window.Width = width == 1060 ? 560 : 1060;
+                window.Height = height == 400 ? 760 : 400; await Idle();
+                ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+                Assert.Equal(Math.Clamp(beforeResize + viewport.Margin.Top - inset, 0, scroll.ScrollableHeight), scroll.VerticalOffset, 1);
+                AssertState(sticky);
+            }
+            Assert.Empty(repository.Saves);
+
+            void AssertState(bool sticky)
+            {
+                Assert.Equal(sticky, !ReferenceEquals(normal, preview.Parent));
+                Assert.Same(model, preview.Model);
+                Assert.Same(draft, vm.TotalDeathsAppearanceDraft);
+                var focused = Assert.IsAssignableFrom<FrameworkElement>(Keyboard.FocusedElement);
+                Assert.IsNotType<TabItem>(focused);
+                Assert.True(workspace.IsAncestorOf(focused));
+                Assert.True(focused.IsVisible && focused.IsEnabled && focused.Focusable);
+                if (viewport.IsAncestorOf(focused))
+                {
+                    var bounds = focused.TransformToAncestor(viewport).TransformBounds(new Rect(focused.RenderSize));
+                    Assert.True(bounds.Top >= -1 && bounds.Bottom <= viewport.ActualHeight + 1);
+                }
+            }
         }
         finally { window.Close(); }
     });
