@@ -61,6 +61,43 @@ for (const deviceScaleFactor of [1, 2]) {
   });
 }
 
+for (const heldStage of ["fonts", "raster"]) {
+  test(`draft content updates while previous ${heldStage} measurement waits`, async ({ page }) => {
+    await page.setContent(html);
+    await page.evaluate(stage => {
+      (window as any).measurementWaiting = false;
+      if (stage === "fonts") {
+        Object.defineProperty(document.fonts, "ready", { value: new Promise(resolve => {
+          (window as any).releaseMeasurement = () => resolve(document.fonts);
+          (window as any).measurementWaiting = true;
+        }) });
+      } else {
+        const decode = HTMLImageElement.prototype.decode;
+        HTMLImageElement.prototype.decode = function () {
+          if (!this.src.startsWith("data:image/svg+xml") || (window as any).measurementWaiting) return decode.call(this);
+          (window as any).measurementWaiting = true;
+          return new Promise<void>((resolve, reject) => {
+            (window as any).releaseMeasurement = () => decode.call(this).then(resolve, reject);
+          });
+        };
+      }
+    }, heldStage);
+    const appearance = { ...corpus.valid[4].appearance, enabled: true, title: "Total Deaths", titleIconMode: "off", fontFamily: "Arial", fontSize: 24 };
+    await page.evaluate(appearance => (window as any).previewMessage({ data: { appearance, value: "0" } }), appearance);
+    await expect(page.locator(".overlay-heading")).toHaveText("Total Deaths: 0");
+    await expect.poll(() => page.evaluate(() => (window as any).measurementWaiting)).toBe(true);
+    await page.evaluate(appearance => (window as any).previewMessage({ data: { appearance: { ...appearance, title: "Offline test" }, value: "0" } }), appearance);
+    // Deliberately do not release the older asynchronous work until the new
+    // content is visible. Increasing a delay cannot satisfy this contract.
+    await expect(page.locator(".overlay-heading")).toHaveText("Offline test: 0");
+    await page.setViewportSize({ width: 440, height: 96 });
+    await expect(page.locator(".overlay-heading")).toHaveText("Offline test: 0");
+    await page.evaluate(() => (window as any).releaseMeasurement());
+    await expect(page.locator("main")).toHaveAttribute("data-fit", "painted");
+    await expect(page.locator(".overlay-heading")).toHaveText("Offline test: 0");
+  });
+}
+
 test("measurement coalesces changes and discards stale work on resize and disposal", async ({ page }) => {
   await page.setContent(html);
   await page.evaluate(() => {
@@ -78,7 +115,7 @@ test("measurement coalesces changes and discards stale work on resize and dispos
   await page.evaluate(appearance => { for (let i = 0; i < 100; i++) (window as any).previewMessage({ data: { appearance: { ...appearance, title: `Latest ${i}` }, value: "123" } }); }, appearance);
   await page.setViewportSize({ width: 210, height: 180 });
   expect(await page.evaluate(() => (window as any).held.length)).toBe(1);
-  await expect(page.locator(".overlay-heading")).toHaveText("First: 0");
+  await expect(page.locator(".overlay-heading")).toHaveText("Latest 99: 123");
   await page.evaluate(() => (window as any).held.shift()());
   await expect(page.locator(".overlay-heading")).toHaveText("Latest 99: 123");
   await expect.poll(() => page.evaluate(() => (window as any).held.length)).toBe(1);

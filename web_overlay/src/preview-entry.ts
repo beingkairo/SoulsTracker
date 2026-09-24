@@ -113,7 +113,10 @@ function schedule(): void {
   scheduled = true;
   requestAnimationFrame(() => {
     scheduled = false;
-    if (!pending || disposed || measuring) return;
+    if (!pending || disposed) return;
+    // Draft content must not wait for an older font/image/raster measurement.
+    // measurePaint still owns one scratch buffer; its generation fence schedules
+    // the latest precise fit after stale work releases that buffer.
     const contentReady = renderHosted(target, { revision: "0", value: pending.value, availability: "available" }, pending.appearance, "__PREVIEW_SKULL__");
     conservativeFit();
     target.dataset.fit = "measuring";
