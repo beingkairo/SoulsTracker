@@ -21,6 +21,58 @@ test.beforeEach(async ({ request }) => {
   expect(acquired.status()).toBe(200);
 });
 const address = () => `${origin}/overlay/#id=${credentials.id}&read=${credentials.read}`;
+test("hosted viewport centers complete painted content at intrinsic scale", async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await publish(request, { death: { value: "42", availability: "available" }, appearance: { ...style, padding: 12, backgroundOpacity: 100 } });
+  await page.goto(address());
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 42");
+  await expect.poll(() => page.locator("h1").evaluate(node => (node as HTMLElement).style.marginLeft)).not.toBe("");
+  const pixels = await page.screenshot({ omitBackground: true });
+  await testInfo.attach("hosted-viewport", { body: pixels, contentType: "image/png" });
+  const paint = await paintedBounds(page, pixels.toString("base64"));
+  expect(Math.abs(paint.left + paint.right - 640)).toBeLessThanOrEqual(2);
+  expect(Math.abs(paint.top + paint.bottom - 360)).toBeLessThanOrEqual(2);
+});
+
+async function paintedBounds(page: any, data: string, crop?: { width: number; height: number }) {
+  const probe = await page.context().newPage();
+  try { return await probe.evaluate(async ({ data, crop }: { data: string; crop?: { width: number; height: number } }) => {
+    const image = new Image(); image.src = `data:image/png;base64,${data}`; await image.decode();
+    const width = crop?.width ?? image.width, height = crop?.height ?? image.height;
+    const canvas = new OffscreenCanvas(width, height); const context = canvas.getContext("2d")!;
+    context.drawImage(image, (width - image.width) / 2, (height - image.height) / 2);
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let left = width, top = height, right = 0, bottom = 0, maxAlpha = 0;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const alpha = pixels[(y * width + x) * 4 + 3]; maxAlpha = Math.max(maxAlpha, alpha);
+      if (alpha < 2) continue;
+      left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x + 1); bottom = Math.max(bottom, y + 1);
+    }
+    return { left, top, right, bottom, maxAlpha };
+  }, { data, crop }); } finally { await probe.close(); }
+}
+async function expectIntrinsicPlacement(page: any) {
+  const placement = await page.getByTestId("total-deaths-overlay").evaluate((node: HTMLElement) => {
+    const r = node.getBoundingClientRect(); const transform = new DOMMatrix(getComputedStyle(node).transform);
+    return { x: r.x - transform.e, y: r.y - transform.f, width: r.width, height: r.height, viewportWidth: innerWidth, viewportHeight: innerHeight, scale: transform.a };
+  });
+  expect(placement.x).toBeCloseTo((placement.viewportWidth - placement.width) / 2, 1);
+  expect(placement.y).toBeCloseTo((placement.viewportHeight - placement.height) / 2, 1);
+  expect(placement.scale).toBe(1);
+}
+test("hosted transparent composition centers glyphs and directional effects", async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await publish(request, { death: { value: "0", availability: "available" }, appearance: { ...style, title: "", fontSize: 48,
+    shadowEnabled: true, shadowBlur: 0, shadowOffsetX: -20, shadowOffsetY: 20 } });
+  await page.goto(address());
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("0");
+  await expect.poll(() => page.locator("p").evaluate(node => (node as HTMLElement).style.marginLeft)).not.toBe("");
+  const pixels = await page.screenshot({ omitBackground: true });
+  await testInfo.attach("hosted-effects", { body: pixels, contentType: "image/png" });
+  const paint = await paintedBounds(page, pixels.toString("base64"));
+  expect(Math.abs(paint.left + paint.right - 640)).toBeLessThanOrEqual(2);
+  expect(Math.abs(paint.top + paint.bottom - 360)).toBeLessThanOrEqual(2);
+});
 test("background follows current content and skull gaps match", async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 4096, height: 720 });
   await publish(request, { death: { value: "7", availability: "available" } });
@@ -59,6 +111,74 @@ test("background follows current content and skull gaps match", async ({ page, r
 const style = { enabled: true, title: "Total Deaths", fontFamily: "Arial", fontSize: 24, textColor: "#F7F6FF", textOpacity: 100,
   backgroundColor: "#15171B", backgroundOpacity: 0, padding: 0, cornerRadius: 0, outlineEnabled: true, outlineColor: "#000000", outlineWidth: 0,
   shadowEnabled: false, shadowColor: "#000000", shadowOffsetX: 2, shadowOffsetY: 2, shadowBlur: 4, titleIconMode: "off", iconColor: "#FFFFFF" };
+for (const variant of [
+  { name: "title zero", value: "0", appearance: {} },
+  { name: "blank large", value: "1234567890", appearance: { title: "", fontSize: 96 } },
+  { name: "prefix small", value: "42", appearance: { titleIconMode: "prefixSkull", fontSize: 12, padding: 12, backgroundOpacity: 70, textOpacity: 72 } },
+  { name: "skull only", value: "123", appearance: { titleIconMode: "skullOnly", padding: 32, backgroundOpacity: 100 } },
+  { name: "long large", value: "1234567890", appearance: { title: "W".repeat(40), fontSize: 96, padding: 32, backgroundOpacity: 100 } },
+  { name: "outline", value: "42", appearance: { outlineEnabled: true, outlineWidth: 8, fontSize: 48 } },
+  { name: "negative shadow", value: "42", appearance: { shadowEnabled: true, shadowBlur: 20, shadowOffsetX: -20, shadowOffsetY: -20 } },
+  { name: "positive skull shadow", value: "0", appearance: { titleIconMode: "prefixSkull", shadowEnabled: true, shadowBlur: 20, shadowOffsetX: 20, shadowOffsetY: 20, outlineEnabled: true, outlineWidth: 8 } },
+  { name: "tall skull", value: "0", appearance: { titleIconMode: "skullOnly", fontSize: 96, padding: 32, backgroundOpacity: 70, textOpacity: 45 } },
+  { name: "Segoe effects", value: "1234567890", appearance: { fontFamily: "Segoe UI", titleIconMode: "prefixSkull", shadowEnabled: true, shadowBlur: 6, shadowOffsetX: -3, shadowOffsetY: 4, padding: 12, backgroundOpacity: 25, textOpacity: 45 } }
+]) {
+  test(`hosted full-page fitting and oversized placement: ${variant.name}`, async ({ page, request }, testInfo) => {
+    const appearance = { ...style, ...variant.appearance };
+    await publish(request, { death: { value: variant.value, availability: "available" }, appearance });
+    await page.setViewportSize({ width: 6000, height: 1200 });
+    await page.goto(address());
+    const panel = page.getByTestId("total-deaths-overlay");
+    await expect(panel).toBeVisible();
+    await expect.poll(() => panel.evaluate(node => (node as HTMLElement).style.transform)).not.toBe("");
+    const reference = await panel.boundingBox();
+    const referencePixels = (await page.screenshot({ omitBackground: true })).toString("base64");
+    const complete = await paintedBounds(page, referencePixels);
+    const paintWidth = complete.right - complete.left, paintHeight = complete.bottom - complete.top;
+    expect(paintWidth).toBeGreaterThan(0); expect(paintHeight).toBeGreaterThan(0);
+    const measurements = [];
+    for (const [width, height] of [[1280, 360], [640, 360], [360, 800], [1920, 1080],
+      [paintWidth + 4, paintHeight + 4], [Math.max(1, paintWidth - 4), paintHeight + 4],
+      [paintWidth + 4, Math.max(1, paintHeight - 4)], [640, 80], [1280, 360]]) {
+      await page.setViewportSize({ width, height });
+      const geometry = await panel.evaluate(node => {
+        const bounds = node.getBoundingClientRect();
+        return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, scale: new DOMMatrix(getComputedStyle(node).transform).a,
+          documentWidth: document.documentElement.scrollWidth, documentHeight: document.documentElement.scrollHeight,
+          clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight,
+          background: getComputedStyle(document.body).backgroundColor, margin: getComputedStyle(document.body).margin,
+          overflow: getComputedStyle(document.querySelector("#souls-tracker-overlay")!).overflow };
+      });
+      const screenshot = await page.screenshot({ omitBackground: true });
+      const paint = await paintedBounds(page, screenshot.toString("base64"));
+      const projected = await paintedBounds(page, referencePixels, { width, height });
+      const fitting = width >= paintWidth && height >= paintHeight;
+      measurements.push({ width, height, fitting, paint, geometry, paintWidth, paintHeight });
+      await testInfo.attach(`viewport-${width}-${height}`, { body: screenshot, contentType: "image/png" });
+      expect.soft(geometry.width).toBeCloseTo(reference!.width, 1); expect.soft(geometry.height).toBeCloseTo(reference!.height, 1);
+      expect.soft(geometry.scale).toBe(1);
+      expect.soft(geometry.documentWidth).toBe(width); expect.soft(geometry.documentHeight).toBe(height);
+      expect.soft(geometry.clientWidth).toBe(width); expect.soft(geometry.clientHeight).toBe(height);
+      expect.soft(geometry.background).toBe("rgba(0, 0, 0, 0)"); expect.soft(geometry.margin).toBe("0px");
+      // Clipped glyph fragments need not have symmetric ink (for example 3/4).
+      // The complete composition retains its centered origin on both axes.
+      expect.soft(geometry.x - reference!.x).toBeCloseTo((width - 6000) / 2, 1);
+      expect.soft(geometry.y - reference!.y).toBeCloseTo((height - 1200) / 2, 1);
+      // Compare actual source pixels with an independent viewport crop of the
+      // complete composition, including deliberately oversized configurations.
+      for (const edge of ["left", "top", "right", "bottom"] as const)
+        expect.soft(Math.abs(paint[edge] - projected[edge])).toBeLessThanOrEqual(2);
+      if (fitting) {
+        expect.soft(Math.abs(paint.maxAlpha - complete.maxAlpha)).toBeLessThanOrEqual(1);
+        expect.soft(Math.abs(paint.left + paint.right - width)).toBeLessThanOrEqual(2);
+        expect.soft(Math.abs(paint.top + paint.bottom - height)).toBeLessThanOrEqual(2);
+        expect.soft(paint.right - paint.left).toBeGreaterThanOrEqual(paintWidth - 1);
+        expect.soft(paint.bottom - paint.top).toBeGreaterThanOrEqual(paintHeight - 1);
+      }
+    }
+    await testInfo.attach("full-page-geometry", { body: JSON.stringify(measurements, null, 2), contentType: "application/json" });
+  });
+}
 async function publish(request: any, channels: object) {
   await pacePublisherAdmission();
   const response = await request.put(`${origin}/api/v1/overlays/${credentials.id}/state`, {
@@ -106,6 +226,29 @@ test("reconnects to durable state while retaining the DOM through connection los
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
 });
 
+test("hosted paint survives reload and reconnect without placement drift", async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await publish(request, { death: { value: "42", availability: "available" }, appearance: { ...style,
+    titleIconMode: "prefixSkull", shadowEnabled: true, shadowOffsetX: -20, shadowOffsetY: 20, shadowBlur: 20, textOpacity: 72 } });
+  await page.goto(address());
+  const panel = page.getByTestId("total-deaths-overlay");
+  await expect.poll(() => panel.evaluate(node => (node as HTMLElement).style.transform)).not.toBe("");
+  const before = await page.screenshot({ omitBackground: true });
+  await page.context().setOffline(true);
+  await request.post(`${origin}/__test/disconnect`);
+  expect((await page.screenshot({ omitBackground: true })).equals(before)).toBe(true);
+  const hydrated = new Promise<void>(resolve => page.once("websocket", socket => socket.on("framereceived", event => {
+    if (String(event.payload).includes('"type":"snapshot"')) resolve();
+  })));
+  await page.context().setOffline(false);
+  await hydrated;
+  expect((await page.screenshot({ omitBackground: true })).equals(before)).toBe(true);
+  await page.reload();
+  await expect.poll(() => panel.evaluate(node => (node as HTMLElement).style.transform)).not.toBe("");
+  expect((await page.screenshot({ omitBackground: true })).equals(before)).toBe(true);
+  await testInfo.attach("hydrated-reconnected", { body: before, contentType: "image/png" });
+});
+
 for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) for (const title of ["Custom", ""]) {
   test(`real appearance ${titleIconMode} with ${title ? "title" : "blank title"}`, async ({ page, request }) => {
     const errors: string[] = [];
@@ -135,7 +278,7 @@ for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) for (const titl
       await expect(page.locator("feComposite[operator=out]")).toHaveCount(1);
       await expect(page.locator("feDropShadow")).toHaveAttribute("stdDeviation", "3");
     }
-    const bounds = await panel.boundingBox(); expect(bounds?.x).toBe(0); expect(bounds?.y).toBe(0);
+    await expectIntrinsicPlacement(page);
     expect(errors).toEqual([]);
   });
 }
@@ -189,12 +332,12 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
         });
         measurements.push({ value, ...variant, fontSize, ...metrics });
         expect.soft(metrics.font).toBeCloseTo(fontSize * (heading ? 1.15 : 2.5), 2);
-        expect(metrics.x).toBe(0); expect(metrics.y).toBe(0);
+        await expectIntrinsicPlacement(page);
         expect.soft(metrics.minimum).toBe("0px");
         // Advance boxes include transparent side bearings. Shared background
         // edges now follow ink; independent screenshot tests verify those gaps.
-        expect(metrics.textX).toBeGreaterThanOrEqual(variant.padding + metrics.marginLeft - 0.1);
-        expect.soft(metrics.textRight).toBeLessThanOrEqual(metrics.width - variant.padding - metrics.marginRight + 0.1);
+        expect(metrics.textX - metrics.x).toBeGreaterThanOrEqual(variant.padding + metrics.marginLeft - 0.1);
+        expect.soft(metrics.textRight - metrics.x).toBeLessThanOrEqual(metrics.width - variant.padding - metrics.marginRight + 0.1);
         if (!heading) {
           expect.soft(metrics.width).toBeCloseTo(metrics.textWidth + metrics.marginLeft + metrics.marginRight + 2 * variant.padding, 1);
           expect(metrics.height).toBeCloseTo(metrics.contentHeight + 2 * variant.padding, 1);
@@ -215,7 +358,7 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
         if (!heading && value === "42") {
           await page.setViewportSize({ width: 640, height: 480 });
           const compact = await panel.boundingBox();
-          expect(compact?.x).toBe(0); expect(compact?.y).toBe(0);
+          await expectIntrinsicPlacement(page);
           expect(compact?.width).toBeCloseTo(metrics.width, 1);
           await page.setViewportSize({ width: 4096, height: 720 });
         }

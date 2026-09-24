@@ -38,10 +38,74 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
     number.dataset.testid = "total-deaths-value"; number.textContent = value; panel.append(number);
   }
   target.className = "souls-tracker-total-deaths-canvas";
-  target.dataset.alignment = "left";
+  target.dataset.alignment = document.documentElement.classList.contains("hosted-overlay") ? "center" : "left";
   // One replacement keeps both channels visually atomic and bounds SVG state.
   target.replaceChildren(skullFilter(appearance), panel);
-  return alignContentEdges(panel);
+  return alignContentEdges(panel).then(() => {
+    if (target.dataset.alignment === "center" && panel.isConnected) centerHostedPaint(panel, appearance);
+  });
+}
+
+// The hosted source never fits or scales. Measure ink/effects on an offscreen
+// canvas without loading a serialized document or relaxing the page's CSP.
+// A panel-relative translation stays centered through viewport-only resizes.
+function centerHostedPaint(panel: HTMLElement, appearance: HostedAppearance): void {
+  const canvas = document.createElement("canvas");
+  try {
+    const inset = 128;
+    const bounds = panel.getBoundingClientRect();
+    canvas.width = Math.ceil(bounds.width + inset * 2);
+    canvas.height = Math.ceil(bounds.height + inset * 2);
+    if (canvas.width > 16384 || canvas.height > 16384 || canvas.width * canvas.height > 8388608) return;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return;
+    const content = panel.firstElementChild as HTMLElement;
+    const style = getComputedStyle(content);
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const node = content.lastChild!;
+    const range = document.createRange(); range.selectNodeContents(node);
+    const textBounds = range.getBoundingClientRect();
+    const text = (node.textContent ?? "").replace(/[ \t\r\n\f]+/g, " ").trim();
+    const metrics = context.measureText(text);
+    const x = textBounds.left - bounds.left + inset;
+    const y = textBounds.top - bounds.top + metrics.fontBoundingBoxAscent + inset;
+    context.fillStyle = style.color;
+    // CSS text-shadow paints the outline and shadow behind the same text ink.
+    if (appearance.shadowEnabled) {
+      context.shadowColor = appearance.shadowColor;
+      context.shadowBlur = appearance.shadowBlur;
+      context.shadowOffsetX = appearance.shadowOffsetX;
+      context.shadowOffsetY = appearance.shadowOffsetY;
+      context.fillText(text, x, y);
+      context.shadowColor = "transparent";
+    }
+    if (appearance.outlineEnabled && appearance.outlineWidth > 0) {
+      const w = appearance.outlineWidth;
+      context.fillStyle = appearance.outlineColor;
+      for (const [dx, dy] of [[-w, -w], [0, -w], [w, -w], [-w, 0], [w, 0], [-w, w], [0, w], [w, w]]) context.fillText(text, x + dx, y + dy);
+    }
+    context.fillStyle = style.color; context.fillText(text, x, y);
+    const image = content.querySelector("img");
+    if (image) {
+      const r = image.getBoundingClientRect();
+      context.filter = "url(#hosted-skull-filter)";
+      context.drawImage(image, r.left - bounds.left + inset, r.top - bounds.top + inset, r.width, r.height);
+      context.filter = "none";
+    }
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    if (appearance.backgroundOpacity > 0) { left = 0; top = 0; right = bounds.width; bottom = bounds.height; }
+    const opacity = appearance.textOpacity / 100;
+    for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
+      if (pixels[(y * canvas.width + x) * 4 + 3] * opacity < 2) continue;
+      left = Math.min(left, x - inset); top = Math.min(top, y - inset);
+      right = Math.max(right, x + 1 - inset); bottom = Math.max(bottom, y + 1 - inset);
+    }
+    if (right > left && bottom > top)
+      panel.style.transform = `translate(${(bounds.width - left - right) / 2}px, ${(bounds.height - top - bottom) / 2}px)`;
+  } catch {
+    // Keep the intrinsic panel centered if the browser cannot measure paint.
+  } finally { canvas.width = canvas.height = 0; }
 }
 
 // Padding starts at the visible content, not a font's advance box or the

@@ -10,6 +10,23 @@ body {
   font-family: "Segoe UI", sans-serif;
 }
 
+/* Hosted sources keep their configured size. Oversized content clips only at
+   the source viewport; the offline preview owns its separate proportional fit. */
+html.hosted-overlay,
+.hosted-overlay body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.hosted-overlay #souls-tracker-overlay.souls-tracker-total-deaths-canvas {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+}
+
 .souls-tracker-host-status {
   display: inline-block;
   margin: 0;
