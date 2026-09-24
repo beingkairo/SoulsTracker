@@ -63,8 +63,15 @@ public sealed class HostedConnectionPresentationTests
                     Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => AutomationProperties.GetName(x) == "Hosted URL copy feedback");
                     Assert.Empty(((TextBlock)window.FindName("DirectoryCopyStatus")).Text);
                     var overlay = (Border)window.FindName("HostedCopyFeedbackOverlay");
-                    Assert.Same(window.Content, overlay.Parent);
-                    Assert.Equal(VerticalAlignment.Bottom, overlay.VerticalAlignment);
+                    // Hosted copy feedback occupies footer layout, so it cannot
+                    // paint over the fixed Appearance actions.
+                    var footerContent = Assert.IsType<Grid>(overlay.Parent);
+                    var footer = Assert.IsType<Border>(footerContent.Parent);
+                    Assert.Same(window.Content, footer.Parent);
+                    Assert.Equal(2, Grid.GetRow(footer));
+                    var actions = (FrameworkElement)window.FindName("AppearanceActions");
+                    Assert.True(overlay.TranslatePoint(new Point(), window).Y >=
+                        actions.TranslatePoint(new Point(0, actions.ActualHeight), window).Y);
                     Assert.Equal(fail ? "Could not copy the URL. Try Copy OBS URL again." : "Read-only OBS URL copied. Keep the URL private.", feedback.Text);
                     Assert.True(feedback.IsVisible);
                     Assert.Equal(TextWrapping.Wrap, feedback.TextWrapping);

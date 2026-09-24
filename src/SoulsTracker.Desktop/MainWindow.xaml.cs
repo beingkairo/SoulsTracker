@@ -287,8 +287,7 @@ public partial class MainWindow : Window
         if (hosted)
         {
             HostedCopyStatus.Text = message;
-            CopyFeedbackKind.Text = success ? "Copied" : "Copy failed";
-            CopyFeedbackKind.Foreground = cue;
+            HostedCopyStatus.Foreground = cue;
             HostedCopyFeedbackOverlay.BorderBrush = cue;
             HostedCopyFeedbackOverlay.Visibility = Visibility.Visible;
         }
@@ -317,7 +316,6 @@ public partial class MainWindow : Window
         hostedCopyFeedbackVisible = false;
         DirectoryCopyStatus.Text = string.Empty;
         HostedCopyStatus.Text = string.Empty;
-        CopyFeedbackKind.Text = string.Empty;
         directoryFeedback?.Hide();
         CopyFeedbackOverlay.Visibility = Visibility.Collapsed;
         HostedCopyFeedbackOverlay.Visibility = Visibility.Collapsed;
@@ -899,9 +897,16 @@ public partial class MainWindow : Window
         if (DataContext is not DesktopTrackerViewModel viewModel) return;
         ClearHotkeyFeedback();
         long version = hotkeyOperationVersion;
-        if (await viewModel.ApplyGlobalHotkeysAsync() && !copyFeedbackClosed &&
-            ReferenceEquals(DataContext, viewModel) && version == hotkeyOperationVersion)
-            ShowHotkeyFeedback(ApplyHotkeysButton);
+        bool applied = await viewModel.ApplyGlobalHotkeysAsync();
+        if (copyFeedbackClosed || !ReferenceEquals(DataContext, viewModel) || version != hotkeyOperationVersion) return;
+        if (applied) ShowHotkeyFeedback(ApplyHotkeysButton);
+        else if (SettingsWorkspaceTab.IsSelected && !string.IsNullOrWhiteSpace(viewModel.GlobalHotkeyStatus))
+        {
+            // Realize the wrapped explanation before asking the existing scroll
+            // owner to reveal it. This does not move keyboard focus.
+            SettingsContentScrollViewer.UpdateLayout();
+            if (GlobalHotkeyStatusTextBlock.IsVisible) GlobalHotkeyStatusTextBlock.BringIntoView();
+        }
     }
 
     private void ClearHotkeyFeedback()

@@ -618,23 +618,6 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
-                    <!-- Persistent copy errors need scroll clearance; transient success stays outside layout. -->
-                    <Border Height="{Binding ActualHeight, ElementName=HostedCopyFeedbackOverlay}" IsHitTestVisible="False">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <MultiDataTrigger>
-                                        <MultiDataTrigger.Conditions>
-                                            <Condition Binding="{Binding Visibility, ElementName=HostedCopyFeedbackOverlay}" Value="Visible" />
-                                            <Condition Binding="{Binding Text, ElementName=CopyFeedbackKind}" Value="Copy failed" />
-                                        </MultiDataTrigger.Conditions>
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </MultiDataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                    </Border>
                 </StackPanel>
                 </ScrollViewer>
             </Grid>
@@ -829,14 +812,13 @@
         </TabControl>
 
         <Border Grid.Row="2" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,10">
-            <TextBlock HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
-        </Border>
-
-        <Border x:Name="HostedCopyFeedbackOverlay" Grid.Row="1" Panel.ZIndex="10" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="24,16" Padding="12,10" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="6" IsHitTestVisible="False" Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="CopyFeedbackKind" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
-                <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" AutomationProperties.Name="OBS URL copy status" AutomationProperties.LiveSetting="Polite" />
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Border x:Name="HostedCopyFeedbackOverlay" Margin="0,0,12,0" Padding="8,4" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
+                    <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="OBS URL copy status" AutomationProperties.LiveSetting="Polite" />
+                </Border>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
+            </Grid>
         </Border>
 
         <Canvas x:Name="FloatingFeedbackLayer" Grid.Row="1" Panel.ZIndex="11" IsHitTestVisible="False" ClipToBounds="True">
