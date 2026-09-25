@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace SoulsTracker.Infrastructure;
 
-/// <summary>Performs an explicit, user-initiated check of SoulsTracker's public GitHub releases.</summary>
+/// <summary>Checks SoulsTracker's public GitHub releases on request or after explicit startup opt-in.</summary>
 public interface IManualReleaseUpdateChecker
 {
     ValueTask<ManualReleaseUpdateResult> CheckAsync(string installedVersion, CancellationToken cancellationToken = default);

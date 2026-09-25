@@ -7,6 +7,9 @@ namespace SoulsTracker.Application;
 /// </summary>
 public interface ITrackerCommand;
 
+/// <summary>Sets the opt-in update check for future desktop launches.</summary>
+public sealed record SetCheckForUpdatesOnStartupCommand(bool Enabled) : ITrackerCommand;
+
 /// <summary>
 /// Selects one canonical, selectable game.
 /// </summary>
@@ -78,4 +81,5 @@ public enum TrackerCommandType
     UpdateLiesOfPSaveConfiguration,
     UpdateTextExports,
     LegacyImport,
+    SetCheckForUpdatesOnStartup,
 }

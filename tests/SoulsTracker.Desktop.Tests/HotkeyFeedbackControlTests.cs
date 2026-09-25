@@ -166,6 +166,9 @@ public sealed class HotkeyFeedbackControlTests
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
         vm.ConfigureGlobalHotkeys(GlobalHotkeySettings.Default, _ => Task.FromResult(GlobalHotkeyRegistrationResult.Registered));
+        // Match composed startup's completed registration. An uninitialized
+        // status row collapses on first Apply, independently of toast expiry.
+        vm.SetGlobalHotkeyStatus(GlobalHotkeyRegistrationResult.Registered.StatusMessage);
         var window = new MainWindow((_, _) => null, _ => { }) { DataContext = vm, ShowInTaskbar = false };
         try
         {
@@ -173,6 +176,7 @@ public sealed class HotkeyFeedbackControlTests
             var apply = (Button)window.FindName("ApplyHotkeysButton");
             apply.BringIntoView(); await Idle();
             var stack = (StackPanel)window.FindName("SettingsContentStack");
+            Assert.Equal(Visibility.Collapsed, ((TextBlock)window.FindName("GlobalHotkeyStatusTextBlock")).Visibility);
             var before = stack.RenderSize;
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             var status = (TextBlock)window.FindName("HotkeySuccessStatus");

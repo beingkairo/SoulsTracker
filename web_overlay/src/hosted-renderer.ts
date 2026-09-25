@@ -41,7 +41,7 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
   target.dataset.alignment = document.documentElement.classList.contains("hosted-overlay") ? "center" : "left";
   // One replacement keeps both channels visually atomic and bounds SVG state.
   target.replaceChildren(skullFilter(appearance), panel);
-  return alignContentEdges(panel).then(() => {
+  return alignContentEdges(panel, appearance.titleIconMode === "prefixSkull").then(() => {
     if (target.dataset.alignment === "center" && panel.isConnected) centerHostedPaint(panel, appearance);
   });
 }
@@ -109,9 +109,9 @@ function centerHostedPaint(panel: HTMLElement, appearance: HostedAppearance): vo
 }
 
 // Padding starts at the visible content, not a font's advance box or the
-// bundled image's transparent border. Internal image/text spacing stays intact.
-let imageEdges: { source: string; left: number } | null = null;
-async function alignContentEdges(panel: HTMLElement): Promise<void> {
+// bundled image's transparent border. Only Prefix Skull uses compact ink spacing.
+let imageEdges: { source: string; left: number; right: number } | null = null;
+async function alignContentEdges(panel: HTMLElement, compactPrefix: boolean): Promise<void> {
   try {
     await document.fonts.ready;
     const image = panel.querySelector("img");
@@ -134,12 +134,17 @@ async function alignContentEdges(panel: HTMLElement): Promise<void> {
           canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
           context.drawImage(image, 0, 0);
           const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-          let first = canvas.width;
-          for (let y = 0; y < canvas.height; y++) for (let x = 0; x < first; x++)
-            if (pixels[(y * canvas.width + x) * 4 + 3] >= 2) first = x;
-          imageEdges = { source: image.src, left: first < canvas.width ? first / canvas.width : 0 };
+          let first = canvas.width, last = -1;
+          for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++)
+            if (pixels[(y * canvas.width + x) * 4 + 3] >= 2) { first = Math.min(first, x); last = Math.max(last, x); }
+          imageEdges = { source: image.src, left: first < canvas.width ? first / canvas.width : 0,
+            right: last >= 0 ? (canvas.width - last - 1) / canvas.width : 0 };
         }
-        left = -imageEdges.left * Number.parseFloat(getComputedStyle(image).width);
+        const imageWidth = Number.parseFloat(getComputedStyle(image).width);
+        left = -imageEdges.left * imageWidth;
+        // Keep the image geometry and title/value text untouched. Compensate the
+        // transparent right border and leading glyph bearing for 4px of ink gap.
+        if (compactPrefix) image.style.marginRight = `${4 - imageEdges.right * imageWidth + metrics.actualBoundingBoxLeft}px`;
       }
       content.style.marginLeft = `${left}px`;
       content.style.marginRight = `${metrics.actualBoundingBoxRight - metrics.width}px`;

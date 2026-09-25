@@ -268,7 +268,7 @@ public sealed class SettingsHotkeyControlTests
                 if (!vm.IsGlobalHotkeyConfigurationAvailable)
                     Assert.Contains("not available for this game", vm.GlobalHotkeyUsageDescription);
                 var panels = ((StackPanel)window.FindName("SettingsContentStack")).Children.OfType<Border>().ToArray();
-                Assert.Equal("Manual update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
+                Assert.Equal("Update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
                 Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
                 RecordSettings(window, choice.GameId.Value);
                 help.BringIntoView(); await Idle();

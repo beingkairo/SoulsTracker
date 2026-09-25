@@ -98,14 +98,18 @@ test("background follows current content and skull gaps match", async ({ page, r
       });
       measurements.push({ title, titleIconMode, ...metrics });
       // Ink-edge margins supersede advance-box padding; retain configured
-      // padding and internal skull/text spacing, with independent pixel tests.
+      // padding. Independent pixel tests measure the compact Prefix Skull gap.
       expect.soft(metrics.rightPadding - metrics.rightBearing).toBeCloseTo(12, 1);
       expect.soft(metrics.leftPadding - metrics.leftBearing).toBeCloseTo(12, 1);
       await testInfo.attach(`content-${measurements.length}`, { body: await panel.screenshot(), contentType: "image/png" });
     }
   }
-  const gaps = measurements.filter(item => item.gap !== null).map(item => item.gap!);
-  for (const gap of gaps) expect.soft(gap).toBeCloseTo(gaps[0], 2);
+  for (const item of measurements.filter(item => item.gap !== null)) {
+    // Skull Only retains advance-box adjacency; Prefix Skull now compensates
+    // transparent pixels and the title's bearing without changing image size.
+    if (item.titleIconMode === "skullOnly") expect.soft(item.gap).toBeCloseTo(0, 2);
+    else expect.soft(item.gap!).toBeLessThan(0);
+  }
   await testInfo.attach("content-bounds", { body: JSON.stringify(measurements, null, 2), contentType: "application/json" });
 });
 const style = { enabled: true, title: "Total Deaths", fontFamily: "Arial", fontSize: 24, textColor: "#F7F6FF", textOpacity: 100,
@@ -137,7 +141,7 @@ for (const variant of [
     const paintWidth = complete.right - complete.left, paintHeight = complete.bottom - complete.top;
     expect(paintWidth).toBeGreaterThan(0); expect(paintHeight).toBeGreaterThan(0);
     const measurements = [];
-    for (const [width, height] of [[1280, 360], [640, 360], [360, 800], [1920, 1080],
+    for (const [width, height] of [[125, 100], [256, 100], [800, 155], [1280, 360], [640, 360], [360, 800], [1920, 1080],
       [paintWidth + 4, paintHeight + 4], [Math.max(1, paintWidth - 4), paintHeight + 4],
       [paintWidth + 4, Math.max(1, paintHeight - 4)], [640, 80], [1280, 360]]) {
       await page.setViewportSize({ width, height });

@@ -18,7 +18,7 @@ internal readonly record struct WukongSaveMetadataReadResult(
     BlackMythWukongSaveMetadata? Metadata);
 
 /// <summary>Projects persisted tracker state into the small P3-01 desktop surface.</summary>
-public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
+public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
     internal const string LocalTrackerStateReadyMessage = "Local tracker state is ready.";
     internal const string LocalTrackerStateUnavailableMessage = "Local tracker state is unavailable. Tracker controls remain disabled.";
@@ -46,6 +46,17 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     private readonly Func<string> installedVersionProvider;
     private readonly IUpdateReleasePageLauncher updateReleasePageLauncher;
     private bool isCheckingForUpdates;
+    private readonly object updateCheckGate = new();
+    private readonly CancellationTokenSource updateCheckCancellation = new();
+    private Task pendingUpdateCheck = Task.CompletedTask;
+    private bool updateChecksStopped;
+    private bool updateCheckCancellationDisposed;
+    private bool startupUpdateCheckStarted;
+    private bool startupUpdateCheckEnabled;
+    private bool updateNoticeDismissed;
+    private bool isUpdateNoticeVisible;
+    private string updateCheckTone = "Idle";
+    private string updatePreferenceStatus = "Applies the next time SoulsTracker opens.";
     private bool hasCheckedForUpdates;
     private string? updateCurrentVersion;
     private string? updateLatestVersion;
@@ -156,6 +167,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         this.liesOfPSaveDiscovery = liesOfPSaveDiscovery ?? new LiesOfPSaveDiscovery();
         this.manualReleaseUpdateChecker = manualReleaseUpdateChecker ?? new GitHubLatestReleaseUpdateChecker(ManualUpdateHttpClient);
         this.installedVersionProvider = installedVersionProvider ?? CurrentInstalledVersion;
+        updateCurrentVersion = NormalizeProductVersion(this.installedVersionProvider());
+        updateLatestVersion = "Not checked";
+        updateCheckStatus = "Not checked yet.";
         this.updateReleasePageLauncher = updateReleasePageLauncher ?? new ShellUpdateReleasePageLauncher();
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.readWukongSaveMetadataAsync = readWukongSaveMetadataAsync ?? throw new ArgumentNullException(nameof(readWukongSaveMetadataAsync));
@@ -180,34 +194,120 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
     public string? UpdateLatestVersion { get => updateLatestVersion; private set => SetField(ref updateLatestVersion, value); }
     public string? UpdateCheckStatus { get => updateCheckStatus; private set => SetField(ref updateCheckStatus, value); }
     public Uri? AvailableUpdateReleasePage { get => availableUpdateReleasePage; private set { if (SetField(ref availableUpdateReleasePage, value)) OnPropertyChanged(nameof(CanOpenAvailableUpdateReleasePage)); } }
-    public bool CanCheckForUpdates => ControlsEnabled && !IsCheckingForUpdates;
+    public bool CanCheckForUpdates => ControlsEnabled && !IsCheckingForUpdates && !updateChecksStopped;
     public bool CanRetryUpdateCheck => CanCheckForUpdates && updateCheckCanRetry;
     public bool CanOpenAvailableUpdateReleasePage => !IsCheckingForUpdates && AvailableUpdateReleasePage is not null;
 
-    public async Task CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+    public bool CheckForUpdatesOnStartup => state?.CheckForUpdatesOnStartup ?? false;
+    public string UpdatePreferenceStatus { get => updatePreferenceStatus; private set => SetField(ref updatePreferenceStatus, value); }
+    public string UpdateCheckTone { get => updateCheckTone; private set => SetField(ref updateCheckTone, value); }
+    public bool IsUpdateNoticeVisible { get => isUpdateNoticeVisible; private set => SetField(ref isUpdateNoticeVisible, value); }
+
+    public async Task SetCheckForUpdatesOnStartupAsync(bool enabled, CancellationToken cancellationToken = default)
     {
-        if (!CanCheckForUpdates) return;
+        if (!ControlsEnabled) return;
+        await SubmitAsync(new SetCheckForUpdatesOnStartupCommand(enabled), cancellationToken);
+        UpdatePreferenceStatus = CheckForUpdatesOnStartup == enabled
+            ? "Saved. Applies the next time SoulsTracker opens."
+            : "The update setting could not be saved. Your previous choice is still active.";
+        OnPropertyChanged(nameof(CheckForUpdatesOnStartup));
+    }
+
+    /// <summary>Called once after desktop startup; the owned check never delays readers or input.</summary>
+    public void StartStartupUpdateCheck()
+    {
+        lock (updateCheckGate)
+        {
+            if (startupUpdateCheckStarted || state is null || updateChecksStopped) return;
+            startupUpdateCheckStarted = true;
+            if (startupUpdateCheckEnabled) pendingUpdateCheck = CheckForUpdatesAsync();
+        }
+    }
+
+    public Task CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+    {
+        lock (updateCheckGate)
+        {
+            if (IsCheckingForUpdates) return pendingUpdateCheck;
+            if (!CanCheckForUpdates) return Task.CompletedTask;
+            return pendingUpdateCheck = CheckForUpdatesCoreAsync(cancellationToken);
+        }
+    }
+
+    public async Task StopUpdateChecksAsync()
+    {
+        Task pending;
+        lock (updateCheckGate)
+        {
+            if (!updateChecksStopped)
+            {
+                updateChecksStopped = true;
+                updateCheckCancellation.Cancel();
+            }
+            pending = pendingUpdateCheck;
+        }
+        await pending;
+        lock (updateCheckGate)
+        {
+            if (!updateCheckCancellationDisposed)
+            {
+                updateCheckCancellation.Dispose();
+                updateCheckCancellationDisposed = true;
+            }
+        }
+        IsUpdateNoticeVisible = false;
+        OnPropertyChanged(nameof(CanCheckForUpdates));
+        OnPropertyChanged(nameof(CanRetryUpdateCheck));
+    }
+
+    public ValueTask DisposeAsync() => new(StopUpdateChecksAsync());
+
+    public void DismissUpdateNotice()
+    {
+        updateNoticeDismissed = true;
+        IsUpdateNoticeVisible = false;
+    }
+
+    public void OpenUpdateProductPage()
+    {
+        if (!IsUpdateNoticeVisible || updateChecksStopped) return;
+        if (!updateReleasePageLauncher.TryOpen(new Uri("https://beingkairo.com/tools/souls-tracker/")))
+            UpdateCheckStatus = "The product page could not be opened. Try again.";
+    }
+
+    private async Task CheckForUpdatesCoreAsync(CancellationToken cancellationToken)
+    {
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, updateCheckCancellation.Token);
+        cancellationToken = linkedCancellation.Token;
         IsCheckingForUpdates = true;
         updateCheckCanRetry = false;
-        AvailableUpdateReleasePage = null;
         string installedVersion = NormalizeProductVersion(installedVersionProvider());
         UpdateCurrentVersion = installedVersion;
-        UpdateLatestVersion = "Checking…";
+        UpdateLatestVersion ??= "Not checked";
         HasCheckedForUpdates = true;
         UpdateCheckStatus = "Checking for updates…";
         try
         {
             ManualReleaseUpdateResult result = await manualReleaseUpdateChecker.CheckAsync(installedVersion, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            IsUpdateNoticeVisible = result.Status == ManualReleaseUpdateStatus.UpdateAvailable && !updateNoticeDismissed;
+            UpdateCheckTone = result.Status switch
+            {
+                ManualReleaseUpdateStatus.UpToDate => "Current",
+                ManualReleaseUpdateStatus.UpdateAvailable => "Available",
+                _ => "Error",
+            };
             switch (result.Status)
             {
-                case ManualReleaseUpdateStatus.UpToDate: UpdateLatestVersion = result.AvailableVersion ?? UpdateCurrentVersion; UpdateCheckStatus = "All up to date."; break;
-                case ManualReleaseUpdateStatus.UpdateAvailable: UpdateLatestVersion = result.AvailableVersion ?? "Unavailable"; UpdateCheckStatus = "New version out!"; AvailableUpdateReleasePage = result.ReleasePage; break;
+                case ManualReleaseUpdateStatus.UpToDate: UpdateLatestVersion = result.AvailableVersion ?? UpdateCurrentVersion; UpdateCheckStatus = "All up to date."; AvailableUpdateReleasePage = null; break;
+                case ManualReleaseUpdateStatus.UpdateAvailable: UpdateLatestVersion = result.AvailableVersion ?? "Unavailable"; UpdateCheckStatus = "New version out!"; AvailableUpdateReleasePage = result.ReleasePage; IsUpdateNoticeVisible = !updateNoticeDismissed; break;
                 case ManualReleaseUpdateStatus.RateLimited: SetRetryableUpdateFailure("GitHub asked you to try again later."); break;
                 case ManualReleaseUpdateStatus.InvalidResponse or ManualReleaseUpdateStatus.InvalidInstalledVersion: SetRetryableUpdateFailure("Update information could not be verified. Try again or open the official Releases page."); break;
                 default: SetRetryableUpdateFailure("Couldn’t reach GitHub right now. Check your connection and try again."); break;
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { UpdateLatestVersion = "Unavailable"; UpdateCheckStatus = "Update check cancelled. Try again when you’re ready."; updateCheckCanRetry = true; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { SetRetryableUpdateFailure("Update check cancelled. Try again when you’re ready."); }
+        catch (Exception) { SetRetryableUpdateFailure("Couldn’t reach GitHub right now. Check your connection and try again."); }
         finally { IsCheckingForUpdates = false; OnPropertyChanged(nameof(CanRetryUpdateCheck)); }
     }
 
@@ -221,6 +321,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
 
     private void SetRetryableUpdateFailure(string status)
     {
+        IsUpdateNoticeVisible = false;
+        UpdateCheckTone = "Error";
         updateCheckCanRetry = true;
         AvailableUpdateReleasePage = new Uri("https://github.com/beingkairo/SoulsTracker/releases");
         UpdateLatestVersion = "Unavailable";
@@ -888,6 +990,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
                 return;
             }
 
+            startupUpdateCheckEnabled = result.State!.CheckForUpdatesOnStartup;
             ApplyCommittedState(result.State!);
             if (state?.SelectedGameId == GameId.EldenRing)
             {
@@ -1230,6 +1333,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
         string? previousSource = state is null ? null : EffectiveDeathTotalResult.SourceIdentityFor(state);
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
+        OnPropertyChanged(nameof(CheckForUpdatesOnStartup));
 
         if (state.SelectedGameId != GameId.BlackMythWukong ||
             !string.Equals(previousWukongSavePath, state.BlackMythWukongSave.LocalPath, StringComparison.Ordinal))

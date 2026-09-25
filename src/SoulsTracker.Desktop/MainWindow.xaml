@@ -384,12 +384,20 @@
 
         <Border Grid.Row="0" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,16">
             <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <Image x:Name="SoulsTrackerSkullIcon" Width="38" Height="38" VerticalAlignment="Center" Source="/SoulsTracker.Desktop;component/assets/branding/souls-tracker-skull-compact.png" AutomationProperties.Name="SoulsTracker skull application icon" />
                 <StackPanel Grid.Column="1" Margin="12,0,0,0">
                     <TextBlock FontSize="22" FontWeight="SemiBold" Text="SoulsTracker" />
                     <TextBlock x:Name="HeaderSubtitleTextBlock" Style="{StaticResource MutedText}" Text="Just a simple death tracker." />
                 </StackPanel>
+                <Border x:Name="UpdateNotice" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" Padding="8" Background="{StaticResource SurfaceBrush}" Visibility="{Binding IsUpdateNoticeVisible, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.LiveSetting="Polite">
+                    <WrapPanel>
+                        <TextBlock Text="A newer version is available." Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button x:Name="OpenUpdateProductPageButton" Content="View update" Click="OpenUpdateProductPage_Click" AutomationProperties.Name="View update on the SoulsTracker website" />
+                        <Button x:Name="DismissUpdateNoticeButton" Content="Dismiss" Margin="8,0,0,0" Click="DismissUpdateNotice_Click" AutomationProperties.Name="Dismiss update notice for this session" />
+                    </WrapPanel>
+                </Border>
             </Grid>
         </Border>
 
@@ -742,21 +750,37 @@
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" Focusable="True" IsTabStop="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,24,24,16" AutomationProperties.Name="Settings workspace content">
                 <StackPanel x:Name="SettingsContentStack">
-                    <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Manual update check settings">
+                    <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Update check settings">
                         <StackPanel>
                             <TextBlock Style="{StaticResource PanelTitle}" Text="UPDATES" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Checks GitHub for the latest updates." />
                             <WrapPanel>
                                 <Button x:Name="CheckForUpdatesButton" Content="Check for updates" Click="CheckForUpdates_Click" IsEnabled="{Binding CanCheckForUpdates}" AutomationProperties.Name="Check for updates" />
-                                <Button x:Name="RetryUpdateCheckButton" Margin="8,0,0,0" Content="Retry" Click="CheckForUpdates_Click" IsEnabled="{Binding CanRetryUpdateCheck}" Visibility="{Binding CanRetryUpdateCheck, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Retry update check" />
-                                <Button x:Name="OpenUpdateReleasePageButton" Margin="8,0,0,0" Content="Open release page" Click="OpenUpdateReleasePage_Click" IsEnabled="{Binding CanOpenAvailableUpdateReleasePage}" Visibility="{Binding CanOpenAvailableUpdateReleasePage, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Open available update release page" />
+                                <Button x:Name="RetryUpdateCheckButton" Margin="8,0,0,0" Content="Retry" Click="CheckForUpdates_Click" IsEnabled="{Binding CanRetryUpdateCheck}" AutomationProperties.Name="Retry update check" />
+                                <Button x:Name="OpenUpdateReleasePageButton" Margin="8,0,0,0" Content="Open release page" Click="OpenUpdateReleasePage_Click" IsEnabled="{Binding CanOpenAvailableUpdateReleasePage}" AutomationProperties.Name="Open available update release page" />
                             </WrapPanel>
-                            <StackPanel x:Name="UpdateVersionSummary" Margin="0,8,0,0" Visibility="{Binding HasCheckedForUpdates, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Update check result" AutomationProperties.LiveSetting="Polite">
+                            <StackPanel x:Name="UpdateVersionSummary" Margin="0,8,0,0" AutomationProperties.Name="Update check result" AutomationProperties.LiveSetting="Polite">
                                 <TextBlock Style="{StaticResource MutedText}"><Run Text="Current Version: " /><Run Text="{Binding UpdateCurrentVersion, Mode=OneWay}" /></TextBlock>
                                 <TextBlock Style="{StaticResource MutedText}"><Run Text="Latest Version: " /><Run Text="{Binding UpdateLatestVersion, Mode=OneWay}" /></TextBlock>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,4,0,0" Text="Status: " />
-                                <TextBlock x:Name="UpdateCheckStatusTextBlock" Style="{StaticResource MutedText}" Text="{Binding UpdateCheckStatus}" AutomationProperties.Name="Update check status" />
+                                <Grid Margin="0,4,0,0" MinHeight="54">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="UpdateStatusLabel" Style="{StaticResource MutedText}" Text="Status:" Margin="0,0,8,0" />
+                                    <TextBlock x:Name="UpdateCheckStatusTextBlock" Grid.Column="1" Text="{Binding UpdateCheckStatus}" VerticalAlignment="Top" AutomationProperties.Name="Update check status">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding UpdateCheckTone}" Value="Current"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding UpdateCheckTone}" Value="Available"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding UpdateCheckTone}" Value="Error"><Setter Property="Foreground" Value="{StaticResource DangerBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsCheckingForUpdates}" Value="True"><Setter Property="Foreground" Value="{StaticResource WaitingBrush}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
                             </StackPanel>
+                            <CheckBox x:Name="CheckForUpdatesOnStartupCheckBox" Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Click="CheckForUpdatesOnStartup_Click" AutomationProperties.Name="Check for updates on startup" />
+                            <TextBlock x:Name="UpdatePreferenceStatusTextBlock" Style="{StaticResource MutedText}" MinHeight="32" Text="{Binding UpdatePreferenceStatus}" AutomationProperties.Name="Startup update setting status" AutomationProperties.LiveSetting="Polite" />
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Global hotkeys settings">

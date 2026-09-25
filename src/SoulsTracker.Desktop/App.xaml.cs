@@ -15,6 +15,7 @@ public partial class App : System.Windows.Application, IDisposable
     private readonly DesktopShutdownCoordinator shutdownCoordinator;
     private readonly DesktopStartupController singleInstanceStartup;
     private SerializedTrackerCoordinator? coordinator;
+    private DesktopTrackerViewModel? trackerViewModel;
     private DesktopGlobalHotkeyService? globalHotkeys;
     private bool mainWindowCloseRequested;
     private bool finalShutdownRequested;
@@ -93,6 +94,7 @@ public partial class App : System.Windows.Application, IDisposable
             new SqliteConfirmedLegacyImportCommitter(repository));
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
+        trackerViewModel = viewModel;
         viewModel.ConfigureHostedOverlay(hostedConnection);
 
         textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() =>
@@ -170,6 +172,7 @@ public partial class App : System.Windows.Application, IDisposable
             runtimeReaderCancellation = new CancellationTokenSource();
             runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
         }
+        if (!mainWindowCloseRequested) viewModel.StartStartupUpdateCheck();
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
@@ -252,7 +255,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
     }
 
-    private ValueTask DisposeGlobalHotkeysAsync()
+    private async ValueTask DisposeGlobalHotkeysAsync()
     {
         startupCancellation.Cancel();
         if (MainWindow is not null) MainWindow.IsEnabled = false;
@@ -266,7 +269,7 @@ public partial class App : System.Windows.Application, IDisposable
             globalHotkeys = null;
         }
 
-        return ValueTask.CompletedTask;
+        if (trackerViewModel is not null) await trackerViewModel.DisposeAsync();
     }
 
     private static GlobalHotkeySettings ToDesktopHotkeys(SoulsTracker.Domain.GlobalHotkeyConfiguration source)

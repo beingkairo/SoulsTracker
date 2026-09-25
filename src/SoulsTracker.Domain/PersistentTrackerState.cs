@@ -47,7 +47,8 @@ public sealed class PersistentTrackerState
 
         BlackMythWukongSaveConfiguration? blackMythWukongSave = null,
         EldenRingMissedDeathAdjustments? eldenRingMissedDeathAdjustments = null,
-        LiesOfPSaveConfiguration? liesOfPSave = null)
+        LiesOfPSaveConfiguration? liesOfPSave = null,
+        bool checkForUpdatesOnStartup = false)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -62,6 +63,7 @@ public sealed class PersistentTrackerState
         ArgumentNullException.ThrowIfNull(overlayConfiguration);
 
         SchemaVersion = schemaVersion;
+        CheckForUpdatesOnStartup = checkForUpdatesOnStartup;
         SelectedGameId = selectedGameId;
 
         ManualDemonsSoulsDeathCounter = manualDemonsSoulsDeathCounter ?? ManualDeathCounter.CreateFor(GameId.DemonsSouls);
@@ -84,6 +86,9 @@ public sealed class PersistentTrackerState
     /// Gets the persisted schema version.
     /// </summary>
     public int SchemaVersion { get; }
+
+    /// <summary>Gets whether the next desktop launch may check for updates.</summary>
+    public bool CheckForUpdatesOnStartup { get; }
 
     /// <summary>
     /// Gets the selected canonical game. Legacy absent values normalize to Demon Souls.
