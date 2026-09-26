@@ -45,6 +45,48 @@ public partial class MainWindow : Window
     private double? savedOverlayOffset;
     private bool restoringOverlayWorkspace;
     private DispatcherOperation? overlayRestoreOperation;
+    private DispatcherOperation? updateNoticePresentation;
+    private StartupUpdateDialog? updateDialog;
+    private bool updateDialogShown;
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        if (DataContext is DesktopTrackerViewModel { IsUpdateNoticeVisible: true }) QueueUpdateNotice();
+    }
+
+    private void QueueUpdateNotice()
+    {
+        if (copyFeedbackClosed) return;
+        updateNoticePresentation?.Abort();
+        // Dispatch outside the update operation/lock, after initial rendering and startup.
+        updateNoticePresentation = Dispatcher.BeginInvoke(PresentUpdateNotice, DispatcherPriority.Background);
+    }
+
+    private void PresentUpdateNotice()
+    {
+        updateNoticePresentation = null;
+        if (copyFeedbackClosed) return;
+        if (DataContext is not DesktopTrackerViewModel { IsUpdateNoticeVisible: true } vm)
+        {
+            updateDialog?.Close();
+            return;
+        }
+        if (!IsVisible || updateDialogShown) return;
+        updateDialogShown = true;
+        var previousFocus = Keyboard.FocusedElement as FrameworkElement;
+        updateDialog = new StartupUpdateDialog(vm.UpdateNoticeText, vm.OpenUpdateProductPage) { Owner = this, Resources = Resources };
+        try { updateDialog.ShowDialog(); }
+        finally
+        {
+            updateDialog = null;
+            vm.DismissUpdateNotice();
+            if (!copyFeedbackClosed && IsVisible && IsEnabled)
+            {
+                if (previousFocus is not { IsVisible: true, IsEnabled: true } || !previousFocus.Focus()) WorkspaceTabs.Focus();
+            }
+        }
+    }
 
     public MainWindow()
     {
@@ -344,6 +386,8 @@ public partial class MainWindow : Window
 
     private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        updateNoticePresentation?.Abort();
+        updateDialog?.Close();
         ClearHotkeyFeedback();
         (e.OldValue as DesktopTrackerViewModel)?.CancelHotkeyRecording();
         hotkeyRecordingOrigin = null;
@@ -373,6 +417,7 @@ public partial class MainWindow : Window
 
     private void DirectoryCopyContext_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(DesktopTrackerViewModel.IsUpdateNoticeVisible)) QueueUpdateNotice();
         if (e.PropertyName == nameof(DesktopTrackerViewModel.TotalDeathsAppearanceStatus))
             Dispatcher.BeginInvoke(UpdateAppearanceFeedback);
         if (e.PropertyName == nameof(DesktopTrackerViewModel.IsEldenRingNoticeVisible))
@@ -406,6 +451,8 @@ public partial class MainWindow : Window
         LayoutUpdated -= UpdatePreviewDock;
         LocalAppearancePreview.Dispose();
         copyFeedbackClosed = true;
+        updateNoticePresentation?.Abort();
+        updateDialog?.Close();
         ClearCopyFeedback();
         ClearHotkeyFeedback();
         (DataContext as DesktopTrackerViewModel)?.CancelHotkeyRecording();
@@ -1048,14 +1095,7 @@ public partial class MainWindow : Window
         if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox checkBox)
             await viewModel.SetCheckForUpdatesOnStartupAsync(checkBox.IsChecked == true);
     }
-    private void OpenUpdateProductPage_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.OpenUpdateProductPage();
-    }
-    private void DismissUpdateNotice_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel) viewModel.DismissUpdateNotice();
-    }
+
     private void OpenUpdateReleasePage_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel) viewModel.OpenAvailableUpdateReleasePage();

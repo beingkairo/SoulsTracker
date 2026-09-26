@@ -78,7 +78,7 @@ public sealed class ShellPresentationTests
                 IsLiesOfPChangeVisible = true,
                 IsLiesOfPCancelVisible = true,
                 HasCheckedForUpdates = true,
-                CanRetryUpdateCheck = true,
+                CanCheckForUpdates = true,
                 CanOpenAvailableUpdateReleasePage = true,
                 UpdateCurrentVersion = "1.3.2",
                 UpdateLatestVersion = "1.3.3",

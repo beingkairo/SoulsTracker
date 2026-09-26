@@ -12,8 +12,8 @@ public sealed class ManualUpdateBindingTests
 
         Assert.Contains("x:Name=\"CheckForUpdatesButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanCheckForUpdates}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"RetryUpdateCheckButton\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("CanRetryUpdateCheck", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RetryUpdateCheck", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Retry update check", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"OpenUpdateReleasePageButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CanOpenAvailableUpdateReleasePage", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"UpdateCheckStatusTextBlock\"", xaml, StringComparison.Ordinal);

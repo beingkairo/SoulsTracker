@@ -20,7 +20,7 @@ public sealed class DesktopTrackerViewModelCharacterizationTests
         Assert.Equal("v2.0.0", tracker.UpdateLatestVersion);
         Assert.Equal("New version out!", tracker.UpdateCheckStatus);
         Assert.True(tracker.CanOpenAvailableUpdateReleasePage);
-        Assert.False(tracker.CanRetryUpdateCheck);
+        Assert.True(tracker.CanCheckForUpdates);
     }
 
     [Fact]
@@ -32,9 +32,9 @@ public sealed class DesktopTrackerViewModelCharacterizationTests
 
         await tracker.CheckForUpdatesAsync();
 
-        Assert.True(tracker.CanRetryUpdateCheck);
+        Assert.True(tracker.CanCheckForUpdates);
         Assert.Equal("Unavailable", tracker.UpdateLatestVersion);
-        Assert.Equal(new Uri("https://github.com/beingkairo/SoulsTracker/releases"), tracker.AvailableUpdateReleasePage);
+        Assert.Equal(new Uri("https://beingkairo.com/tools/souls-tracker/"), tracker.AvailableUpdateReleasePage);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class DesktopTrackerViewModelCharacterizationTests
 
         await tracker.CheckForUpdatesAsync(cancellation.Token);
 
-        Assert.True(tracker.CanRetryUpdateCheck);
+        Assert.True(tracker.CanCheckForUpdates);
         Assert.Equal("Update check cancelled. Try again when you’re ready.", tracker.UpdateCheckStatus);
         Assert.Equal("Unavailable", tracker.UpdateLatestVersion);
     }
