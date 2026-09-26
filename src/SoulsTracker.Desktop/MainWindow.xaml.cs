@@ -1093,7 +1093,22 @@ public partial class MainWindow : Window
     private async void CheckForUpdatesOnStartup_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox checkBox)
+        {
             await viewModel.SetCheckForUpdatesOnStartupAsync(checkBox.IsChecked == true);
+            if (!string.IsNullOrEmpty(viewModel.UpdatePreferenceStatus))
+            {
+                // Let the failure binding expand before asking the Settings scroller
+                // to reveal it. Keep keyboard focus on the restored checkbox.
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (UpdatePreferenceStatusTextBlock.IsVisible)
+                    {
+                        UpdatePreferenceStatusTextBlock.UpdateLayout();
+                        UpdatePreferenceStatusTextBlock.BringIntoView();
+                    }
+                }, DispatcherPriority.Loaded);
+            }
+        }
     }
 
     private void OpenUpdateReleasePage_Click(object sender, RoutedEventArgs e)
