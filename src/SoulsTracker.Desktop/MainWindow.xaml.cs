@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private double? savedOverlayOffset;
     private bool restoringOverlayWorkspace;
     private DispatcherOperation? overlayRestoreOperation;
+    private DispatcherOperation? previewFocusRestoreOperation;
     private DispatcherOperation? updateNoticePresentation;
     private StartupUpdateDialog? updateDialog;
     private bool updateDialogShown;
@@ -257,6 +258,10 @@ public partial class MainWindow : Window
             }
             if (dock == docked) return;
 
+            // Reparenting the native preview can transiently clear keyboard focus.
+            // Preserve an existing, usable focus target across this layout-only move.
+            var focusedBeforeMove = Keyboard.FocusedElement as FrameworkElement;
+
             if (dock)
             {
                 NormalPreviewSlot.Height = LocalAppearancePreview.ActualHeight;
@@ -276,6 +281,15 @@ public partial class MainWindow : Window
                 DockedPreviewCard.Visibility = Visibility.Collapsed;
                 SetPreviewViewport(new Thickness(24, 24, 24, 70));
             }
+            if (Keyboard.FocusedElement is null && focusedBeforeMove is { IsVisible: true, IsEnabled: true, Focusable: true })
+                focusedBeforeMove.Focus();
+            previewFocusRestoreOperation?.Abort();
+            previewFocusRestoreOperation = focusedBeforeMove is null ? null : Dispatcher.BeginInvoke(() =>
+            {
+                previewFocusRestoreOperation = null;
+                if (Keyboard.FocusedElement is null && focusedBeforeMove is { IsVisible: true, IsEnabled: true, Focusable: true })
+                    focusedBeforeMove.Focus();
+            }, DispatcherPriority.Loaded);
         }
         finally { updatingPreviewDock = false; }
     }
