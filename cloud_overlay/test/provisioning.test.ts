@@ -14,10 +14,11 @@ const claim = { v: 1, requestId: "6".repeat(32), readVerifier: verifier(id, "rea
 
 afterEach(() => reset());
 
-function request(identity = id, token = grant, body: unknown = claim) {
+function request(identity = id, token: string | null = grant, body: unknown = claim) {
+  const headers = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
+  if (token !== null) headers.set("Authorization", `Setup ${token}`);
   return new Request(`https://overlay.test/api/v1/overlays/${identity}/provision`, {
-    method: "POST", headers: { Authorization: `Setup ${token}`, "Content-Type": "application/json", "Cache-Control": "no-store" },
-    body: JSON.stringify(body)
+    method: "POST", headers, body: JSON.stringify(body)
   });
 }
 
@@ -42,20 +43,51 @@ it("denies unknown and non-slot identities before limiter and namespace access",
   expect(getByName).not.toHaveBeenCalled();
 });
 
-it("fails closed for wrong grants and unavailable admission without namespace access", async () => {
+it("admits a known-slot wrong grant before denying it without namespace access", async () => {
   const getByName = vi.fn();
-  const good = environment({ OVERLAYS: { getByName } as unknown as Env["OVERLAYS"] });
-  expect((await worker.fetch(request(id, readCapability), good)).status).toBe(403);
-  expect(good.PROVISIONING_RATE_LIMITER).toBeDefined();
-  for (const replacement of [undefined, { limit: async () => ({}) }, { limit: async () => { throw new Error("private"); } }] as const) {
-    const result = await worker.fetch(request(), environment({ OVERLAYS: { getByName } as unknown as Env["OVERLAYS"],
-      PROVISIONING_RATE_LIMITER: replacement as unknown as RateLimit }));
-    expect(result.status).toBe(503);
+  const limit = vi.fn(async () => ({ success: true }));
+  const result = await worker.fetch(request(id, readCapability), environment({
+    OVERLAYS: { getByName } as unknown as Env["OVERLAYS"], PROVISIONING_RATE_LIMITER: { limit }
+  }));
+  expect(result.status).toBe(403);
+  expect(limit).toHaveBeenCalledOnce();
+  expect(limit).toHaveBeenCalledWith({ key: `overlay-v1:setup:${id}` });
+  expect(getByName).not.toHaveBeenCalled();
+});
+
+it("does not let missing or malformed setup authorization bypass admission", async () => {
+  const getByName = vi.fn();
+  const limit = vi.fn(async () => ({ success: true }));
+  for (const token of [null, "malformed"] as const) {
+    const result = await worker.fetch(request(id, token), environment({
+      OVERLAYS: { getByName } as unknown as Env["OVERLAYS"], PROVISIONING_RATE_LIMITER: { limit }
+    }));
+    expect(result.status).toBe(403);
   }
-  const denied = await worker.fetch(request(), environment({ OVERLAYS: { getByName } as unknown as Env["OVERLAYS"],
-    PROVISIONING_RATE_LIMITER: { limit: async () => ({ success: false }) } as RateLimit }));
+  expect(limit).toHaveBeenCalledTimes(2);
+  expect(getByName).not.toHaveBeenCalled();
+});
+
+it("fails closed on rate denial or unavailable admission before comparing the grant", async () => {
+  const getByName = vi.fn();
+  const deniedLimit = vi.fn(async () => ({ success: false }));
+  const denied = await worker.fetch(request(id, readCapability), environment({
+    OVERLAYS: { getByName } as unknown as Env["OVERLAYS"], PROVISIONING_RATE_LIMITER: { limit: deniedLimit }
+  }));
   expect(denied.status).toBe(429);
+  expect(await denied.json()).toEqual({ error: "rate_limited" });
   expect(denied.headers.get("Retry-After")).toBe("60");
+  expect(deniedLimit).toHaveBeenCalledOnce();
+
+  for (const replacement of [undefined, { limit: async () => ({}) }, { limit: async () => { throw new Error("private"); } }] as const) {
+    const result = await worker.fetch(request(id, readCapability), environment({
+      OVERLAYS: { getByName } as unknown as Env["OVERLAYS"],
+      PROVISIONING_RATE_LIMITER: replacement as unknown as RateLimit
+    }));
+    expect(result.status).toBe(503);
+    expect(await result.json()).toEqual({ error: "admission_unavailable" });
+    expect(result.headers.get("Retry-After")).toBe("60");
+  }
   expect(getByName).not.toHaveBeenCalled();
 });
 

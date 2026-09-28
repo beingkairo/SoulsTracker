@@ -38,12 +38,10 @@ export default {
       if (!Array.isArray(ids) || ids.length > 16 ||
         !ids.every(value => typeof value === "string" && /^[0-9a-f]{32}$/.test(value)) ||
         !ids.includes(id)) return reject(404, "not_found");
+      let provisioningSlot: ProvisioningSlot | undefined;
       if (action === "provision") {
-        const slot = provisioningSlots(env, ids).find(value => value.overlayId === id);
-        if (!slot) return reject(404, "not_found");
-        const grant = authorizeSetup(request);
-        if (!equalVerifier(slot.setupVerifier, verifier(id, "setup", grant))) return reject(403, "forbidden");
-        if (request.headers.has("Cookie")) return reject(400, "invalid_protocol");
+        provisioningSlot = provisioningSlots(env, ids).find(value => value.overlayId === id);
+        if (!provisioningSlot) return reject(404, "not_found");
       } else if (action === "live") {
         if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return reject(404, "not_found");
         if (!env.BROWSER_ORIGIN || request.headers.get("Origin") !== env.BROWSER_ORIGIN)
@@ -71,6 +69,11 @@ export default {
         const limited = response(429, { error: "rate_limited" });
         limited.headers.set("Retry-After", "60");
         return limited;
+      }
+      if (action === "provision") {
+        const grant = authorizeSetup(request);
+        if (!equalVerifier(provisioningSlot!.setupVerifier, verifier(id, "setup", grant))) return reject(403, "forbidden");
+        if (request.headers.has("Cookie")) return reject(400, "invalid_protocol");
       }
       return await env.OVERLAYS.getByName(id).fetch(request);
     } catch (error) { return failure(error); }

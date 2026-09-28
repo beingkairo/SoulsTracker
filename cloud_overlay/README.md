@@ -49,11 +49,11 @@ behavior. No live infrastructure is needed for these tests.
 
 `POST /api/v1/overlays/{id}/provision` exists only for an identity present in both
 `PROVISIONED_IDS` and the bounded `PROVISIONING_SLOTS` configuration. It requires
-`Authorization: Setup <grant>`, exact-origin HTTPS, no cookies, strict JSON containing
-one request ID plus separate role/identity-bound read and write verifiers, and a
-dedicated rate-limit admission before Durable Object lookup. Unknown/non-slot IDs,
-incorrect grants, unavailable admission, malformed input, and used/conflicting slots
-fail closed.
+`Authorization: Setup <setup-grant>`. It also requires exact-origin HTTPS, no cookies,
+and strict JSON containing one request ID plus separate role/identity-bound read and
+write verifiers, with a dedicated rate-limit admission before Durable Object lookup.
+Unknown/non-slot IDs, incorrect grants, unavailable admission, malformed input, and
+used/conflicting slots fail closed.
 
 An empty matching Durable Object installs the supplied verifiers, default channels,
 and exact request digest transactionally. The same authenticated request is
