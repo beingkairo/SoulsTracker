@@ -108,6 +108,9 @@ public sealed class HostedProvisioningTests
 
     [Theory]
     [InlineData("{}")]
+    [InlineData("{\"x\":1,\"y\":\"provisioned\"}")]
+    [InlineData("{\"v\":\"1\",\"status\":\"provisioned\"}")]
+    [InlineData("{\"v\":1,\"status\":1}")]
     [InlineData("{\"v\":1,\"status\":\"wrong\"}")]
     [InlineData("{\"v\":1,\"status\":\"provisioned\",\"extra\":true}")]
     public async Task ClientRejectsMalformedSuccessWithoutExposingResponse(string response)

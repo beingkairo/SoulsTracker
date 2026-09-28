@@ -114,6 +114,41 @@ public sealed class HostedSetupConnectionTests
     });
 
     [Fact]
+    public async Task ReplacementSenderConstructionFailureRetainsPreviousActiveConnectionAndPendingSetup() => await OnDispatcher(async () =>
+    {
+        string root = NewRoot();
+        try
+        {
+            var active = new HostedPublisherConfigurationStore(Path.Combine(root, "active.private"),
+                new CurrentUserDpapiSecretProtector(), [Origin]);
+            HostedPublisherConfiguration original = HostedPublisherConfiguration.Create(Origin,
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", new string('b', 64), new string('c', 64), [Origin]);
+            await active.SaveAsync(original);
+            int created = 0;
+            HostedOverlayPublisher? originalSender = null;
+            await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, active, config =>
+            {
+                if (Interlocked.Increment(ref created) == 2) throw new InvalidOperationException("synthetic construction failure");
+                return originalSender = new HostedOverlayPublisher(config, new Server());
+            }, PendingStore(root), new HostedOverlayProvisioningClient(Origin,
+                new Handler((_, _) => Task.FromResult(Ack()))), (_, _) => Task.CompletedTask);
+            await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
+
+            await connection.SetUpAsync(Code, consent: true, replacementConfirmed: true);
+
+            Assert.Equal(2, created);
+            Assert.NotNull(originalSender);
+            Assert.NotEqual(HostedPublisherStatus.Stopped, originalSender.Status);
+            Assert.Equal(original.BuildReadUrl(), (await active.LoadAsync())!.BuildReadUrl());
+            Assert.NotNull(await PendingStore(root).LoadPendingAsync());
+            string? copied = null;
+            Assert.True(connection.CopyReadUrl(value => copied = value));
+            Assert.Equal(original.BuildReadUrl(), copied);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
     public async Task PauseRestartResumeAndConfirmedAbandonPreserveExactPendingState() => await OnDispatcher(async () =>
     {
         string root = NewRoot();

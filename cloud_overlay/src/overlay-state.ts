@@ -121,6 +121,27 @@ export class OverlayState extends DurableObject<Env> {
     this.ctx.storage.sql.exec("INSERT INTO records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", key, JSON.stringify(value));
   }
 
+  private exactProvisionReplay(rows: { key: string; value: string }[], claim: ReturnType<typeof provisioning>, claimDigest: string): boolean {
+    if (rows.length !== 3 || rows.map(row => row.key).sort().join(",") !== "appearance,control,death") return false;
+    try {
+      const values = Object.fromEntries(rows.map(row => [row.key, JSON.parse(row.value)])) as Record<string, unknown>;
+      const control = values.control;
+      if (control === null || typeof control !== "object" || Array.isArray(control)) return false;
+      const stored = control as Record<string, unknown>;
+      const keys = ["readVerifier", "writeVerifier", "epoch", "generation", "readGeneration", "session", "last", "rotation", "provision"];
+      if (Object.keys(stored).length !== keys.length || keys.some(key => !Object.hasOwn(stored, key))) return false;
+      const provision = stored.provision;
+      if (provision === null || typeof provision !== "object" || Array.isArray(provision)) return false;
+      const recovery = provision as Record<string, unknown>;
+      return Object.keys(recovery).length === 2 && Object.hasOwn(recovery, "requestId") && Object.hasOwn(recovery, "digest") &&
+        stored.readVerifier === claim.readVerifier && stored.writeVerifier === claim.writeVerifier &&
+        stored.epoch === "0" && stored.generation === "0" && stored.readGeneration === "0" &&
+        stored.session === null && stored.last === null && stored.rotation === null &&
+        recovery.requestId === claim.requestId && recovery.digest === claimDigest &&
+        values.death === null && digest(values.appearance) === digest(defaultAppearance);
+    } catch { return false; }
+  }
+
   private initialControl(id: string, token: string): Control {
     // Installed only through authenticated deployment; ignored once control exists.
     try {
@@ -154,14 +175,11 @@ export class OverlayState extends DurableObject<Env> {
         const claim = provisioning(await readBody(request));
         const claimDigest = digest(claim);
         const acknowledged = this.ctx.storage.transactionSync(() => {
-          const existing = this.load<Control>("control");
-          if (existing) {
-            if (existing.provision?.requestId === claim.requestId && existing.provision.digest === claimDigest)
-              return { v: 1, status: "provisioned" };
+          const rows = this.ctx.storage.sql.exec<{ key: string; value: string }>("SELECT key,value FROM records").toArray();
+          if (rows.length) {
+            if (this.exactProvisionReplay(rows, claim, claimDigest)) return { v: 1, status: "provisioned" };
             return reject(409, "slot_unavailable");
           }
-          if (this.ctx.storage.sql.exec("SELECT key FROM records LIMIT 1").toArray().length)
-            return reject(409, "slot_unavailable");
           const control: Control = { readVerifier: claim.readVerifier, writeVerifier: claim.writeVerifier,
             epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null,
             provision: { requestId: claim.requestId, digest: claimDigest } };

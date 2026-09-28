@@ -92,6 +92,26 @@ it("denies changed reuse existing and orphan state without mutation", async () =
   expect((await rows()).map(row => row.key)).toEqual(["death"]);
 });
 
+it("denies exact replay when initialized storage is missing malformed or extended", async () => {
+  const mutations = [
+    (state: DurableObjectState) => state.storage.sql.exec("DELETE FROM records WHERE key='death'"),
+    (state: DurableObjectState) => state.storage.sql.exec("UPDATE records SET value='{}' WHERE key='death'"),
+    (state: DurableObjectState) => state.storage.sql.exec("UPDATE records SET value='{}' WHERE key='appearance'"),
+    (state: DurableObjectState) => {
+      const row = state.storage.sql.exec<{ value: string }>("SELECT value FROM records WHERE key='control'").toArray()[0];
+      state.storage.sql.exec("UPDATE records SET value=? WHERE key='control'", JSON.stringify({ ...JSON.parse(row.value), extra: true }));
+    }
+  ];
+  for (const mutate of mutations) {
+    expect((await worker.fetch(request(), environment())).status).toBe(200);
+    await runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => mutate(state));
+    const partial = await rows();
+    expect((await worker.fetch(request(), environment())).status).toBe(409);
+    expect(await rows()).toEqual(partial);
+    await reset();
+  }
+});
+
 it("selects one concurrent claim and rolls back partial storage failure", async () => {
   const alternate = { ...claim, requestId: "9".repeat(32), readVerifier: verifier(id, "read", "a".repeat(64)) };
   const results = await Promise.all([worker.fetch(request(), environment()), worker.fetch(request(id, grant, alternate), environment())]);

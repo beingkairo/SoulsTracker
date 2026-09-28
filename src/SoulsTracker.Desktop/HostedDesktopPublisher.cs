@@ -27,8 +27,8 @@ internal sealed class HostedDesktopPublisher : ITrackerStateChangePublisher, IAs
 
     internal void Attach(HostedOverlayPublisher? next)
     {
+        if (!stopped) next?.Offer(latest);
         sender = next;
-        if (!stopped) sender?.Offer(latest);
     }
 
     private void Offer(HostedOverlayEnvelope envelope)

@@ -69,7 +69,10 @@ public sealed class HostedOverlayProvisioningClient : IDisposable
                     using var document = JsonDocument.Parse(bytes, new() { MaxDepth = 2 });
                     JsonElement root = document.RootElement;
                     if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != 2 ||
-                        root.GetProperty("v").GetRawText() != "1" || root.GetProperty("status").GetString() != "provisioned")
+                        !root.TryGetProperty("v", out JsonElement version) ||
+                        !root.TryGetProperty("status", out JsonElement status) ||
+                        version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out int parsedVersion) || parsedVersion != 1 ||
+                        status.ValueKind != JsonValueKind.String || status.GetString() != "provisioned")
                         return new(HostedProvisioningResultKind.Protocol);
                     return new(HostedProvisioningResultKind.Provisioned);
                 }

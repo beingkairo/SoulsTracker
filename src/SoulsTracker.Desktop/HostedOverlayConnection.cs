@@ -134,7 +134,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
             statusText = configuration is null ? "Set up the overlay to connect." : "Overlay ready";
         });
 
-    internal Task ReconnectAsync() => !CanReconnect ? Task.CompletedTask : RunOperationAsync(ConnectAsync);
+    internal Task ReconnectAsync() => !CanReconnect ? Task.CompletedTask : RunOperationAsync(ReconnectCoreAsync);
 
     internal Task RemoveAsync(bool confirmed) => !confirmed || !CanRemove ? Task.CompletedTask : RunOperationAsync(async () =>
     {
@@ -183,12 +183,33 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
 
     private async Task ConnectAsync()
     {
-        await RetireAsync();
         if (closing || setupStopped || configuration is null) return;
-        sender = createSender(configuration);
-        sender.StatusChanged += SenderStatusChanged;
-        adapter!.Attach(sender);
+        HostedOverlayPublisher next = createSender(configuration);
+        await ActivateSenderAsync(next);
+    }
+
+    private async Task ReconnectCoreAsync()
+    {
+        await RetireAsync();
+        await ConnectAsync();
+    }
+
+    private async Task ActivateSenderAsync(HostedOverlayPublisher next)
+    {
+        var previous = sender;
+        next.StatusChanged += SenderStatusChanged;
+        try { adapter!.Attach(next); }
+        catch
+        {
+            next.StatusChanged -= SenderStatusChanged;
+            await next.DisposeAsync();
+            throw;
+        }
+        sender = next;
         UpdateSenderStatus();
+        if (previous is null) return;
+        previous.StatusChanged -= SenderStatusChanged;
+        await previous.DisposeAsync();
     }
 
     private async Task ProvisionAndPromoteAsync()
@@ -236,11 +257,28 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
             }
 
             if (pending is not { Phase: HostedProvisioningPhase.Acknowledged } acknowledged) continue;
-            await store.SaveAsync(acknowledged.Configuration, stop.Token);
-            if (closing || setupStopped) return;
+            HostedPublisherConfiguration? previousConfiguration = configuration;
+            HostedOverlayPublisher next = createSender(acknowledged.Configuration);
+            try { await store.SaveAsync(acknowledged.Configuration, stop.Token); }
+            catch
+            {
+                await next.DisposeAsync();
+                throw;
+            }
+            if (closing || setupStopped)
+            {
+                await next.DisposeAsync();
+                return;
+            }
+            try { await ActivateSenderAsync(next); }
+            catch
+            {
+                if (previousConfiguration is null) await store.RemoveAsync(stop.Token);
+                else await store.SaveAsync(previousConfiguration, stop.Token);
+                throw;
+            }
             configuration = acknowledged.Configuration;
             pairingMayExist = true;
-            await ConnectAsync();
             await pendingStore!.RemovePendingAsync(stop.Token);
             pending = null;
             statusText = "Overlay ready";
