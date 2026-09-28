@@ -10,14 +10,14 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class HostedConnectionTests
 {
     [Fact]
-    public async Task FailedReplaceAndRemoveRetainProtectedPairingAndCloseFencesReconnect() => await OnDispatcher(async () =>
+    public async Task FailedRemoveRetainsProtectedPairingAndCloseFencesReconnect() => await OnDispatcher(async () =>
     {
         string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try
         {
-            string target = Path.Combine(root, "private.bin"), source = Path.Combine(root, "source.json");
+            string target = Path.Combine(root, "private.bin");
             var store = new HostedPublisherConfigurationStore(target, new CurrentUserDpapiSecretProtector(), [Configuration().DisplayOrigin]);
-            await store.SaveAsync(Configuration()); await File.WriteAllBytesAsync(source, Configuration().Encode());
+            await store.SaveAsync(Configuration());
             int created = 0;
             HostedOverlayPublisher? sender = null;
             await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config =>
@@ -28,7 +28,6 @@ public sealed class HostedConnectionTests
             await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
             await using (var locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
             {
-                await connection.ImportAsync(source, true);
                 Assert.True(connection.CanCopy);
                 await connection.RemoveAsync(true);
                 Assert.True(connection.CanCopy);
@@ -66,7 +65,7 @@ public sealed class HostedConnectionTests
             await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, _ => throw new InvalidOperationException("must not construct"));
             await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
             Assert.False(connection.CanCopy);
-            Assert.True(connection.CanImport);
+            Assert.False(connection.CanReconnect);
             Assert.Contains("failed", connection.StatusText, StringComparison.Ordinal);
             Assert.DoesNotContain("must not construct", connection.StatusText);
             Assert.True(connection.CanRemove);
@@ -88,6 +87,7 @@ public sealed class HostedConnectionTests
         try
         {
             var store = new HostedPublisherConfigurationStore(Path.Combine(root, "pairing.private"), new CurrentUserDpapiSecretProtector(), [Configuration().DisplayOrigin]);
+            await store.SaveAsync(Configuration());
             await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config => new HostedOverlayPublisher(config, new Server()));
             await using var coordinator = new SoulsTracker.Application.SerializedTrackerCoordinator(new SqliteTrackerStateRepository(root, "tracker.db"), connection);
             var vm = new DesktopTrackerViewModel(coordinator);
@@ -99,25 +99,24 @@ public sealed class HostedConnectionTests
                 ((System.Windows.Controls.TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
                 await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-                var guidance = ConnectionText(window).Single(text => text.StartsWith("Import an operator-issued", StringComparison.Ordinal));
-                Assert.Equal("Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. Pairing must use https://overlay.beingkairo.com.", guidance);
+                var guidance = ConnectionText(window).Single(text => text.StartsWith("Add this URL", StringComparison.Ordinal));
+                Assert.Equal("Add this URL as a browser source in your streaming software.", guidance);
+                Assert.Contains("Overlay", ConnectionText(window));
+                Assert.Contains("SoulsTracker sends your displayed death count and overlay appearance online so you can use the overlay in your streaming software.", ConnectionText(window));
+                Assert.Contains("Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.", ConnectionText(window));
                 Assert.Contains("https://overlay.beingkairo.com", HostedProductionOrigins.Approved);
                 Assert.DoesNotContain("No production host is authorized in this build.", guidance);
                 var copy = (System.Windows.Controls.Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
-                var import = (System.Windows.Controls.Button)window.FindName("ImportHostedPairingButton");
+                var setup = (System.Windows.Controls.Button)window.FindName("SetUpHostedOverlayButton");
                 var consent = (System.Windows.Controls.CheckBox)window.FindName("HostedConsentCheckBox");
-                Assert.Equal("I agree to hosted publication when importing pairing", Assert.IsType<System.Windows.Controls.TextBlock>(consent.Content).Text);
-                Assert.False(copy.IsEnabled);
-                Assert.False(import.IsEnabled);
+                Assert.Equal("I agree to online overlay publication", Assert.IsType<System.Windows.Controls.TextBlock>(consent.Content).Text);
+                Assert.Equal("Copy URL", copy.Content);
+                Assert.Equal("Set up overlay", setup.Content);
+                Assert.True(copy.IsEnabled);
+                Assert.False(setup.IsEnabled);
                 consent.IsChecked = true;
                 await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-                Assert.True(import.IsEnabled);
-                Assert.True(import.Focusable);
-                string source = Path.Combine(root, "source.json");
-                await File.WriteAllBytesAsync(source, Configuration().Encode());
-                await connection.ImportAsync(source, true);
-                await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-                Assert.True(copy.IsEnabled);
+                Assert.False(setup.IsEnabled);
                 var host = (System.Windows.Controls.TextBlock)window.FindName("HostedHostTextBlock");
                 Assert.Equal(Configuration().DisplayOrigin, host.Text);
                 Assert.DoesNotContain(new string('b', 64), host.Text);
@@ -135,15 +134,14 @@ public sealed class HostedConnectionTests
     });
 
     [Fact]
-    public async Task PairingRequiresConsentAndReconnectSeedsOnlyAcceptedCurrentState() => await OnDispatcher(async () =>
+    public async Task ExistingPairingReconnectSeedsOnlyAcceptedCurrentState() => await OnDispatcher(async () =>
     {
         string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
-            string source = Path.Combine(root, "pairing.json");
-            await File.WriteAllBytesAsync(source, Configuration().Encode());
             var store = new HostedPublisherConfigurationStore(Path.Combine(root, "pairing.private"), new CurrentUserDpapiSecretProtector(), [Configuration().DisplayOrigin]);
+            await store.SaveAsync(Configuration());
             var servers = new List<Server>();
             var senders = new List<HostedOverlayPublisher>();
             await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config =>
@@ -153,14 +151,11 @@ public sealed class HostedConnectionTests
             });
             var state = RuntimePublicationSessionTests.Selected(GameId.EldenRing);
             await connection.InitializeAsync(state);
-            Assert.False(connection.CanCopy);
-            await connection.ImportAsync(source, false);
-            Assert.Empty(servers);
+            Assert.True(connection.CanCopy);
             var session = new RuntimePublicationSession(); session.SelectState(state);
             session.CompleteRead(session.BeginRead(state), state, RuntimeGameReadResult.Synced(new RuntimeGameObservation(
                 state.SelectedGameId, 41, DateTimeOffset.UtcNow, EffectiveDeathTotalResult.SourceIdentityFor(state))), _ => { },
                 accepted => connection.PublishAccepted(state, accepted));
-            await connection.ImportAsync(source, true);
             await WaitUntil(() => servers[0].Value == "41" && senders[0].Status == HostedPublisherStatus.Ready);
             await WaitUntil(() => connection.StatusText.Contains("acknowledged", StringComparison.Ordinal));
             Assert.True(connection.CanCopy);
@@ -176,7 +171,7 @@ public sealed class HostedConnectionTests
             await connection.RemoveAsync(true);
             Assert.False(connection.CanCopy);
             Assert.Null(await store.LoadAsync());
-            Assert.True(File.Exists(source));
+
         }
         finally { Directory.Delete(root, true); }
     });

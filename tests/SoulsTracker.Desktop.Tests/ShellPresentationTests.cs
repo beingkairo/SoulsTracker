@@ -136,7 +136,7 @@ public sealed class ShellPresentationTests
             vm.DraftTitleIconModeChoice = vm.TitleIconModes.Single(x => x.Value == OverlayTitleIconMode.PrefixSkull);
             await Idle();
             Assert.Single(Tree(window).OfType<TabControl>());
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Put this as a browser source in your OBS or as a Link Source in TikTok Live Studio to display it on stream");
+            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Add this URL as a browser source in your streaming software.");
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "The overlay uses these settings. Click Apply to live overlay to show your changes.");
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text.Contains("does not withdraw publication consent", StringComparison.Ordinal));
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");

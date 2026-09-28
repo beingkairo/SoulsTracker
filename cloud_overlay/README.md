@@ -3,8 +3,9 @@
 This package contains a Worker API, SQLite-backed Durable Object,
 and hosted browser assets from `web_overlay`. Desktop composes the hosted publisher
 behind explicit protected pairing to https://overlay.beingkairo.com only.
-The configuration admits no identities until operator provisioning. There are
-no public provisioning endpoints or account credentials in the production entry.
+The configuration admits no identities until operator provisioning. The narrowly
+scoped provisioning route accepts only pre-admitted slots and their one-time setup
+grants; there is no anonymous identity creation or operator credential in Desktop.
 
 ## Local verification
 
@@ -41,8 +42,25 @@ The exact `sharp` override fixes the local tooling's transitive libheif advisory
 The suite exercises real SQLite rollback using failing SQL triggers, concurrent
 requests, response-loss retries, graceful object eviction and forced object
 restart. These checks establish local storage behavior. They do not prove
-Cloudflare network failover, deployed hibernation, deployment migration, or OBS
+Cloudflare network failover, deployed hibernation, deployment migration, or browser
 behavior. No live infrastructure is needed for these tests.
+
+## Provisioning API
+
+`POST /api/v1/overlays/{id}/provision` exists only for an identity present in both
+`PROVISIONED_IDS` and the bounded `PROVISIONING_SLOTS` configuration. It requires
+`Authorization: Setup <grant>`, exact-origin HTTPS, no cookies, strict JSON containing
+one request ID plus separate role/identity-bound read and write verifiers, and a
+dedicated rate-limit admission before Durable Object lookup. Unknown/non-slot IDs,
+incorrect grants, unavailable admission, malformed input, and used/conflicting slots
+fail closed.
+
+An empty matching Durable Object installs the supplied verifiers, default channels,
+and exact request digest transactionally. The same authenticated request is
+idempotent; changed replay, existing control, orphan records, or partial state cannot
+replace authority. Provisioning does not acquire a publisher session, publish state,
+advance revisions, or broadcast. Raw read/write capabilities are generated and
+retained by Desktop and never sent on this route.
 
 ## Write API
 
@@ -166,24 +184,25 @@ check actual CSP behavior, asset loading and cache headers.
 
 ## Before any live use
 
-Live deployment, operator provisioning/recovery, pairing delivery, edge abuse/rate
-controls and real network/OBS parity require separate verification. The configuration
+Live deployment, operator provisioning/recovery, private setup-code delivery, edge
+abuse/rate controls, and real network/browser parity require separate verification. The configuration
 disables worker/preview URLs and observability and contains no account ID.
-Do not treat passing local tests as proof of deployed or OBS behavior.
+Do not treat passing local tests as proof of deployed browser behavior.
 
-The bounded Windows operator tool in `operator/provision.py` prepares a new
-owner-only directory under LocalAppData/SoulsTrackerOperator. It generates one
-random identity and independent read/write capabilities only when explicitly run.
-The pairing file is ready for the existing consent-based Desktop import; never
-copy its contents into a command, log or report. It is not deleted automatically.
-The tool is not part of the Worker bundle and never deploys resources.
+The bounded Windows operator tool in `operator/provision.py` prepares a new owner-only
+directory under LocalAppData/SoulsTrackerOperator. `prepare-setup` generates bounded
+pre-admitted identities, independent setup grants, private setup codes, and runtime
+configuration containing setup verifiers only. Deliver each code privately and never
+copy it into a command, log, report, or source-controlled file. The legacy `prepare`
+action remains available for controlled version-1 compatibility preparation. The tool
+is not part of the Worker bundle and never deploys resources.
 
 Temporary `BOOTSTRAP` deployment configuration contains only version, exact
 overlayId and role/ID-bound read/write verifiers. An authenticated GET publisher
 can initialize an empty matching object transactionally. Existing control always
 takes precedence; replay cannot replace credentials, sessions or channels.
 Remove the binding by deploying the generated runtime configuration without
-`--keep-vars`, then verify persisted status again before importing pairing.
+`--keep-vars`, then verify persisted status again before issuing a setup code.
 Never deploy test entries. Keep the Worker name, class, binding and v1 migration
 unchanged across deployments. A custom domain must not replace an existing DNS
 resource. Account selection, DNS inspection and deployment access are operator

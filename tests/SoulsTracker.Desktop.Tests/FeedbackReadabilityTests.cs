@@ -103,7 +103,7 @@ public sealed class FeedbackReadabilityTests
             var before = Bounds(apply, window);
             copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Equal(1, copies);
-            Assert.Equal(fail ? "Could not copy the URL. Try Copy OBS URL again." : "Read-only OBS URL copied. Keep the URL private.", status.Text);
+            Assert.Equal(fail ? "Could not copy the Overlay URL. Try Copy URL again." : "URL copied", status.Text);
             Assert.Same(copy, Keyboard.FocusedElement);
             scroll.ScrollToEnd(); await Idle();
             Assert.True(((FrameworkElement)window.FindName("DockedPreviewCard")).IsVisible);

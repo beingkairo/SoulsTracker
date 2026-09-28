@@ -19,9 +19,9 @@ public sealed class HostedConnectionPresentationTests
 {
     private static readonly bool[] CopyFailures = [false, true];
     [Theory]
-    [InlineData(HttpStatusCode.Unauthorized, HostedPublisherStatus.CredentialsRequired, "Credentials rejected. Import replacement pairing from the operator.")]
+    [InlineData(HttpStatusCode.Unauthorized, HostedPublisherStatus.CredentialsRequired, "Connection access was rejected. Set up a replacement with a new code.")]
     [InlineData(HttpStatusCode.Conflict, HostedPublisherStatus.Conflict, "Another publisher owns this overlay. Close it before explicitly reconnecting.")]
-    [InlineData(HttpStatusCode.BadRequest, HostedPublisherStatus.InvalidProtocol, "Hosted publication paused. Check pairing with the operator before reconnecting.")]
+    [InlineData(HttpStatusCode.BadRequest, HostedPublisherStatus.InvalidProtocol, "Online publication paused. Contact the operator before reconnecting.")]
     public async Task CopyPreservesBoundDeliveryInstructions(HttpStatusCode code, HostedPublisherStatus expected, string instruction) => await OnDispatcher(async () =>
     {
         string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -43,7 +43,7 @@ public sealed class HostedConnectionPresentationTests
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
                 await WaitUntil(() => sender!.Status == expected && connection.StatusText == instruction);
                 await Idle();
-                var delivery = Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Hosted delivery status");
+                var delivery = Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Overlay delivery status");
                 var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
                 foreach (bool fail in CopyFailures)
                 {
@@ -60,7 +60,6 @@ public sealed class HostedConnectionPresentationTests
                     Assert.True(delivery.IsVisible);
                     Assert.Equal(expected, sender!.Status);
                     var feedback = (TextBlock)window.FindName("HostedCopyStatus");
-                    Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => AutomationProperties.GetName(x) == "Hosted URL copy feedback");
                     Assert.Empty(((TextBlock)window.FindName("DirectoryCopyStatus")).Text);
                     var overlay = (Border)window.FindName("HostedCopyFeedbackOverlay");
                     // Hosted copy feedback occupies footer layout, so it cannot
@@ -72,7 +71,7 @@ public sealed class HostedConnectionPresentationTests
                     var actions = (FrameworkElement)window.FindName("AppearanceActions");
                     Assert.True(overlay.TranslatePoint(new Point(), window).Y >=
                         actions.TranslatePoint(new Point(0, actions.ActualHeight), window).Y);
-                    Assert.Equal(fail ? "Could not copy the URL. Try Copy OBS URL again." : "Read-only OBS URL copied. Keep the URL private.", feedback.Text);
+                    Assert.Equal(fail ? "Could not copy the Overlay URL. Try Copy URL again." : "URL copied", feedback.Text);
                     Assert.True(feedback.IsVisible);
                     Assert.Equal(TextWrapping.Wrap, feedback.TextWrapping);
                     foreach (var element in Tree(window))
@@ -91,7 +90,6 @@ public sealed class HostedConnectionPresentationTests
     });
 
     [Theory]
-    [InlineData("import")]
     [InlineData("reconnect")]
     [InlineData("remove")]
     [InlineData("stop")]
@@ -106,10 +104,9 @@ public sealed class HostedConnectionPresentationTests
             await store.SaveAsync(Configuration());
             await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config => new HostedOverlayPublisher(config, new RejectHandler(HttpStatusCode.Unauthorized)));
             await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
-            await WaitUntil(() => connection.StatusText.StartsWith("Credentials", StringComparison.Ordinal));
+            await WaitUntil(() => connection.StatusText.StartsWith("Connection access", StringComparison.Ordinal));
             Assert.True(connection.CopyReadUrl(_ => { }));
             string feedback = connection.CopyFeedbackText;
-            await connection.ImportAsync("unused", false);
             await connection.RemoveAsync(false);
             Assert.Equal(feedback, connection.CopyFeedbackText);
             bool sawReset = false;
@@ -117,7 +114,6 @@ public sealed class HostedConnectionPresentationTests
             Task operation = Task.CompletedTask;
             switch (action)
             {
-                case "import": operation = connection.ImportAsync(Path.Combine(root, "missing.json"), true); break;
                 case "reconnect": operation = connection.ReconnectAsync(); break;
                 case "remove": operation = connection.RemoveAsync(true); break;
                 case "stop": connection.StopSetup(); break;
@@ -168,18 +164,18 @@ public sealed class HostedConnectionPresentationTests
                 ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
                 await WaitUntil(() => Volatile.Read(ref requests) == 1);
-                await CheckCopy("Hosted delivery pending.");
+                await CheckCopy("Overlay delivery pending.");
                 firstRequest.SetResult();
                 await WaitUntil(() => connection.StatusText.StartsWith("Retrying", StringComparison.Ordinal));
                 Assert.StartsWith("Could not copy", connection.CopyFeedbackText, StringComparison.Ordinal);
-                await CheckCopy("Retrying hosted delivery. Local tracking and TXT continue.");
+                await CheckCopy("Retrying online delivery. Local tracking and TXT continue.");
                 retry.SetResult();
                 await WaitUntil(() => connection.StatusText.StartsWith("Latest offered", StringComparison.Ordinal));
                 Assert.StartsWith("Could not copy", connection.CopyFeedbackText, StringComparison.Ordinal);
                 await CheckCopy("Latest offered state acknowledged. Waiting for accepted game data if none is available yet.");
                 await sender!.DisposeAsync();
-                await WaitUntil(() => connection.StatusText == "Hosted publisher stopped.");
-                await CheckCopy("Hosted publisher stopped.");
+                await WaitUntil(() => connection.StatusText == "Overlay publisher stopped.");
+                await CheckCopy("Overlay publisher stopped.");
                 await connection.DisposeAsync();
                 await Idle();
                 Assert.Empty(connection.CopyFeedbackText);
@@ -188,7 +184,7 @@ public sealed class HostedConnectionPresentationTests
                 async Task CheckCopy(string status)
                 {
                     await Idle();
-                    var delivery = Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Hosted delivery status");
+                    var delivery = Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Overlay delivery status");
                     var feedback = (TextBlock)window.FindName("HostedCopyStatus");
                     var senderStatus = sender!.Status;
                     int before = Volatile.Read(ref requests);
@@ -205,7 +201,7 @@ public sealed class HostedConnectionPresentationTests
                         Assert.Equal(Configuration().BuildReadUrl(), copied);
                         Assert.Equal(status, delivery.Text);
                         Assert.Equal(connection.CopyFeedbackText, feedback.Text);
-                        Assert.StartsWith(fail ? "Could not copy" : "Read-only OBS URL copied", feedback.Text, StringComparison.Ordinal);
+                        Assert.StartsWith(fail ? "Could not copy" : "URL copied", feedback.Text, StringComparison.Ordinal);
                         Assert.Equal(senderStatus, sender.Status);
                         Assert.Equal(before, Volatile.Read(ref requests));
                     }
@@ -233,12 +229,12 @@ public sealed class HostedConnectionPresentationTests
             await Idle();
             window.UpdateLayout();
             var label = Tree(consent).OfType<TextBlock>().Single();
-            Assert.Equal("I agree to hosted publication when importing pairing", label.Text);
+            Assert.Equal("I agree to online overlay publication", label.Text);
             Assert.Equal(TextWrapping.Wrap, label.TextWrapping);
             Assert.Same(label, consent.Content);
             Assert.True(consent.Focusable && consent.IsTabStop);
             Assert.NotNull(consent.FocusVisualStyle);
-            Assert.Equal("Consent to hosted publication", System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(consent).GetName());
+            Assert.Equal("Consent to online overlay publication", System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(consent).GetName());
             var bounds = label.TransformToAncestor(consent).TransformBounds(new Rect(label.RenderSize));
             Assert.True(bounds.Left >= 0 && bounds.Right <= consent.ActualWidth + 1);
             Assert.True(bounds.Top >= -1 && bounds.Bottom <= consent.ActualHeight + 1, $"Label bounds {bounds}; checkbox {consent.RenderSize}");

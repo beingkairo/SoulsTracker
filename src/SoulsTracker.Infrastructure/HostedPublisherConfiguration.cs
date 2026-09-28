@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace SoulsTracker.Infrastructure;
@@ -31,6 +33,15 @@ public sealed class HostedPublisherConfiguration
     }
 
     internal static bool Hex(string? value, int length) => value?.Length == length && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+    internal static HostedPublisherConfiguration Generate(string origin, string overlayId, IEnumerable<string> approvedOrigins)
+    {
+        string read = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        string write;
+        do write = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)); while (write == read);
+        return Create(origin, overlayId, read, write, approvedOrigins);
+    }
+    internal static string Verifier(string overlayId, string role, string capability) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes($"overlay-v1:{overlayId}:{role}:{capability}")));
     public string BuildReadUrl() => $"{Origin}/overlay/#id={OverlayId}&read={ReadCapability}";
     public override string ToString() => "Hosted publisher configuration (protected)";
 

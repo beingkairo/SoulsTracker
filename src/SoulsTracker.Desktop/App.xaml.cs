@@ -83,9 +83,13 @@ public partial class App : System.Windows.Application, IDisposable
     private async Task StartTrackerCoreAsync()
     {
         DesktopDataRootSelection stateSelection = dataRootSelection ?? throw new InvalidOperationException("The desktop data root was not initialized.");
+        var protector = new CurrentUserDpapiSecretProtector();
         hostedConnection = new HostedOverlayConnection(Dispatcher,
             new HostedPublisherConfigurationStore(Path.Combine(stateSelection.RootPath, "hosted-pairing.private"),
-                new CurrentUserDpapiSecretProtector(), HostedProductionOrigins.Approved));
+                protector, HostedProductionOrigins.Approved),
+            pendingStore: new HostedProvisioningStateStore(Path.Combine(stateSelection.RootPath, "overlay-setup.private"),
+                protector, HostedProductionOrigins.Approved),
+            provisioningClient: new HostedOverlayProvisioningClient(HostedProductionOrigins.Approved.Single()));
         textExportPublisher = new TextExportStatePublisher();
         var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
         coordinator = new SerializedTrackerCoordinator(repository,

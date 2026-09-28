@@ -639,33 +639,30 @@
                     <StackPanel>
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource PanelTitle}" Text="OVERLAY CONNECTION" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Pairing sends the accepted death display and applied appearance, including your title and font name, to Cloudflare. Cloudflare retains the last published state and processes connection metadata. Game saves, paths and character details stay local." />
-                                <CheckBox x:Name="HostedConsentCheckBox" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsEnabled="{Binding HostedOverlay.CanImport, FallbackValue=False}" AutomationProperties.Name="Consent to hosted publication">
-                                    <TextBlock Text="I agree to hosted publication when importing pairing" TextWrapping="Wrap" />
+                                <TextBlock Style="{StaticResource PanelTitle}" Text="Overlay" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="SoulsTracker sends your displayed death count and overlay appearance online so you can use the overlay in your streaming software." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,10" Text="Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to." />
+                                <CheckBox x:Name="HostedConsentCheckBox" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsEnabled="{Binding HostedOverlay.CanSetUp, FallbackValue=False}" Checked="HostedSetupInput_Changed" Unchecked="HostedSetupInput_Changed" AutomationProperties.Name="Consent to online overlay publication">
+                                    <TextBlock Text="I agree to online overlay publication" TextWrapping="Wrap" />
                                 </CheckBox>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Import an operator-issued version 1 JSON file. It contains sensitive read and write capabilities; protect the original file. Import does not delete it. Pairing must use https://overlay.beingkairo.com." />
-                                <Button x:Name="ImportHostedPairingButton" Content="Import / Replace pairing" Click="ImportHostedPairing_Click" AutomationProperties.Name="Import or replace hosted pairing">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Setter Property="IsEnabled" Value="False" />
-                                            <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
-                                                <Condition Binding="{Binding HostedOverlay.CanImport}" Value="True" />
-                                                <Condition Binding="{Binding IsChecked, ElementName=HostedConsentCheckBox}" Value="True" />
-                                            </MultiDataTrigger.Conditions><Setter Property="IsEnabled" Value="True" /></MultiDataTrigger></Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <TextBlock x:Name="HostedHostTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,4" Text="{Binding HostedOverlay.Host}" AutomationProperties.Name="Hosted overlay host" />
-                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.Name="Hosted delivery status" />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,8,0,4" Text="Setup code" />
+                                <PasswordBox x:Name="HostedSetupCodePasswordBox" MaxLength="101" PasswordChanged="HostedSetupInput_Changed" AutomationProperties.Name="Overlay setup code" AutomationProperties.HelpText="Enter the private setup code." />
+                                <Button x:Name="SetUpHostedOverlayButton" Margin="0,8,0,0" Content="Set up overlay" IsEnabled="False" Click="SetUpHostedOverlay_Click" AutomationProperties.Name="Set up overlay" />
+                                <WrapPanel Margin="0,8,0,0" Visibility="{Binding HostedOverlay.HasPendingSetup, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                                    <Button Content="Pause setup" IsEnabled="{Binding HostedOverlay.CanPauseSetup}" Click="PauseHostedSetup_Click" AutomationProperties.Name="Pause overlay setup" />
+                                    <Button Content="Resume setup" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanResumeSetup}" Click="ResumeHostedSetup_Click" AutomationProperties.Name="Resume overlay setup" />
+                                    <Button Content="Abandon setup" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanAbandonSetup}" Click="AbandonHostedSetup_Click" AutomationProperties.Name="Abandon overlay setup" />
+                                </WrapPanel>
+                                <TextBlock x:Name="HostedHostTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,4" Text="{Binding HostedOverlay.Host}" AutomationProperties.Name="Overlay address" />
+                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.Name="Overlay delivery status" />
                                 <WrapPanel Margin="0,8,0,8">
-                                    <Button x:Name="CopyTotalDeathsOverlayUrlButton" Content="Copy OBS URL" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" AutomationProperties.Name="Copy read-only OBS URL" />
-                                    <Button Content="Reconnect" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanReconnect, FallbackValue=False}" Click="ReconnectHosted_Click" AutomationProperties.Name="Reconnect hosted publisher" />
-                                    <Button Content="Remove pairing" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanRemove, FallbackValue=False}" Click="RemoveHostedPairing_Click" AutomationProperties.Name="Remove local hosted pairing" />
+                                    <Button x:Name="CopyTotalDeathsOverlayUrlButton" Content="Copy URL" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" AutomationProperties.Name="Copy URL" />
+                                    <Button Content="Reconnect" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanReconnect, FallbackValue=False}" Click="ReconnectHosted_Click" AutomationProperties.Name="Reconnect overlay publisher" />
+                                    <Button Content="Remove connection" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanRemove, FallbackValue=False}" Click="RemoveHostedPairing_Click" AutomationProperties.Name="Remove local overlay connection" />
                                 </WrapPanel>
 
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Put this as a browser source in your OBS or as a Link Source in TikTok Live Studio to display it on stream" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Keep the read-only URL private. Total Deaths below controls visibility only; it does not withdraw publication consent." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Add this URL as a browser source in your streaming software." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Keep the Overlay URL private. Total Deaths below controls visibility only; it does not withdraw publication consent." />
                                 <CheckBox x:Name="TotalDeathsOverlayEnabledCheckBox" Content="Total Deaths" IsChecked="{Binding IsTotalDeathsOverlayEnabled, Mode=OneWay}" IsEnabled="{Binding PresentationControlsEnabled}" Checked="TotalDeathsOverlayEnabled_Checked" Unchecked="TotalDeathsOverlayEnabled_Unchecked" AutomationProperties.Name="Show Total Deaths overlay" />
 
                             </StackPanel>
@@ -673,7 +670,7 @@
                         <Border x:Name="NormalPreviewSection" Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Local appearance preview panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="Preview" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Preview your changes before applying them to the hosted overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes." />
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes." />
                                 <Grid x:Name="NormalPreviewSlot">
                                     <local:AppearancePreview x:Name="LocalAppearancePreview" AutomationProperties.Name="Local Total Deaths appearance preview" />
                                 </Grid>
@@ -828,10 +825,10 @@
                     </Border>
 
 
-                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="OBS text export settings">
+                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Streaming text export settings">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource PanelTitle}" Text="OBS TEXT EXPORT" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Write local TXT files for OBS Text sources." />
+                            <TextBlock Style="{StaticResource PanelTitle}" Text="STREAMING TEXT EXPORT" />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="Write local TXT files for text sources in your streaming software." />
                             <StackPanel x:Name="DeathsExportToggleRow" Orientation="Horizontal">
                                 <CheckBox x:Name="DeathsExportEnabledCheckBox" Height="16" IsChecked="{Binding IsDeathsExportEnabled, Mode=OneWay}" Checked="DeathsExportEnabled_Checked" Unchecked="DeathsExportEnabled_Unchecked" AutomationProperties.Name="Enable writing Deaths to txt file">
                                     <TextBlock><Run Text="Enable writing " /><Run FontWeight="Bold" Text="Deaths" /><Run Text=" to txt file" /></TextBlock>
@@ -850,7 +847,7 @@
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <Border x:Name="HostedCopyFeedbackOverlay" Margin="0,0,12,0" Padding="8,4" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
-                    <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="OBS URL copy status" AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="Overlay URL copy status" AutomationProperties.LiveSetting="Polite" />
                 </Border>
                 <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
             </Grid>

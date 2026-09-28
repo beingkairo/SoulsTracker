@@ -19,6 +19,25 @@ def verifier(identity, role, capability):
     return hashlib.sha256(f"overlay-v1:{identity}:{role}:{capability}".encode("ascii")).hexdigest()
 
 
+def deployment_config(account_id, artifact, identities, slots):
+    return {
+        "name": "soulstracker-cloud-overlay", "account_id": account_id,
+        "main": str(artifact / "index.js"), "no_bundle": True, "find_additional_modules": False,
+        "compatibility_date": "2026-08-15", "compatibility_flags": ["nodejs_compat"],
+        "workers_dev": False, "preview_urls": False, "send_metrics": False, "observability": {"enabled": False},
+        "routes": [{"pattern": "overlay.beingkairo.com", "custom_domain": True}],
+        "vars": {"PROVISIONED_IDS": identities, "PROVISIONING_SLOTS": slots, "BROWSER_ORIGIN": ORIGIN},
+        "assets": {"directory": str(artifact / "assets"), "run_worker_first": ["/api/*"]},
+        "ratelimits": [
+            {"name": "PUBLISHER_RATE_LIMITER", "namespace_id": "450501", "simple": {"limit": 60, "period": 60}},
+            {"name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": {"limit": 120, "period": 60}},
+            {"name": "PROVISIONING_RATE_LIMITER", "namespace_id": "450503", "simple": {"limit": 10, "period": 60}}
+        ],
+        "durable_objects": {"bindings": [{"name": "OVERLAYS", "class_name": "OverlayState"}]},
+        "migrations": [{"tag": "v1", "new_sqlite_classes": ["OverlayState"]}]
+    }
+
+
 def private_directory(path):
     # Refuse shared/synced working trees. The new leaf contains no data until
     # inheritance is removed and an owner-only ACL has been installed.
@@ -57,21 +76,7 @@ def prepare(inputs, directory, artifact):
     if read == write:
         raise ValueError("Independent capabilities required")
     pairing = {"version": 1, "origin": ORIGIN, "overlayId": identity, "readCapability": read, "writeCapability": write}
-    config = {
-        "name": "soulstracker-cloud-overlay", "account_id": inputs["accountId"],
-        "main": str(artifact / "index.js"), "no_bundle": True, "find_additional_modules": False,
-        "compatibility_date": "2026-08-15", "compatibility_flags": ["nodejs_compat"],
-        "workers_dev": False, "preview_urls": False, "send_metrics": False, "observability": {"enabled": False},
-        "routes": [{"pattern": "overlay.beingkairo.com", "custom_domain": True}],
-        "vars": {"PROVISIONED_IDS": [identity], "BROWSER_ORIGIN": ORIGIN},
-        "assets": {"directory": str(artifact / "assets"), "run_worker_first": ["/api/*"]},
-        "ratelimits": [
-            {"name": "PUBLISHER_RATE_LIMITER", "namespace_id": "450501", "simple": {"limit": 60, "period": 60}},
-            {"name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": {"limit": 120, "period": 60}}
-        ],
-        "durable_objects": {"bindings": [{"name": "OVERLAYS", "class_name": "OverlayState"}]},
-        "migrations": [{"tag": "v1", "new_sqlite_classes": ["OverlayState"]}]
-    }
+    config = deployment_config(inputs["accountId"], artifact, [identity], [])
     # Exclusive creation: never overwrite a previous identity or pairing bundle.
     for name, value in [("pairing.json", pairing), ("runtime.wrangler.json", config)]:
         with (directory / name).open("x", encoding="utf-8") as file:
@@ -79,6 +84,33 @@ def prepare(inputs, directory, artifact):
     config["vars"]["BOOTSTRAP"] = {"v": 1, "overlayId": identity,
         "readVerifier": verifier(identity, "read", read), "writeVerifier": verifier(identity, "write", write)}
     with (directory / "bootstrap.wrangler.json").open("x", encoding="utf-8") as file:
+        json.dump(config, file, indent=2)
+
+
+def prepare_setup(inputs, directory, artifact):
+    if set(inputs) != {"accountId", "origin", "existingIds", "slotCount"} or inputs["origin"] != ORIGIN or \
+            not re.fullmatch(r"[0-9a-f]{32}", inputs["accountId"]) or type(inputs["slotCount"]) is not int or \
+            inputs["slotCount"] < 1 or inputs["slotCount"] > 16 or not isinstance(inputs["existingIds"], list) or \
+            len(inputs["existingIds"]) + inputs["slotCount"] > 16 or len(set(inputs["existingIds"])) != len(inputs["existingIds"]) or \
+            not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value) for value in inputs["existingIds"]):
+        raise ValueError("Invalid approved setup inputs")
+    artifact = artifact.resolve(strict=True)
+    if not (artifact / "index.js").is_file() or not (artifact / "assets").is_dir():
+        raise ValueError("Reviewed production artifact required")
+    private_directory(directory)
+    codes, slots = [], []
+    identities = list(inputs["existingIds"])
+    for _ in range(inputs["slotCount"]):
+        identity, grant = secrets.token_hex(16), secrets.token_hex(32)
+        if identity in identities:
+            raise ValueError("Independent setup slots required")
+        identities.append(identity)
+        codes.append({"version": 1, "setupCode": f"st1.{identity}.{grant}"})
+        slots.append({"v": 1, "overlayId": identity, "setupVerifier": verifier(identity, "setup", grant)})
+    config = deployment_config(inputs["accountId"], artifact, identities, slots)
+    with (directory / "setup-codes.json").open("x", encoding="utf-8") as file:
+        json.dump(codes, file, indent=2)
+    with (directory / "runtime.wrangler.json").open("x", encoding="utf-8") as file:
         json.dump(config, file, indent=2)
 
 
@@ -109,7 +141,7 @@ def probe(pairing):
 
 def main():
     parser = argparse.ArgumentParser(description="Private operator preparation and explicit provisioning verification; never deploys.")
-    parser.add_argument("action", choices=["prepare", "initialize", "verify"])
+    parser.add_argument("action", choices=["prepare", "prepare-setup", "initialize", "verify"])
     parser.add_argument("--inputs", type=Path)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--artifact", type=Path)
@@ -117,6 +149,8 @@ def main():
     try:
         if args.action == "prepare":
             prepare(json.loads(args.inputs.read_text(encoding="utf-8")), args.directory, args.artifact)
+        elif args.action == "prepare-setup":
+            prepare_setup(json.loads(args.inputs.read_text(encoding="utf-8")), args.directory, args.artifact)
         else:
             pairing = json.loads((args.directory / "pairing.json").read_text(encoding="utf-8"))
             receipt = args.directory / "receipt.json"

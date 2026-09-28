@@ -5,7 +5,7 @@ Thank you for helping improve SoulsTracker.
 ## Before opening a pull request
 
 1. Keep changes focused and include tests for changed behavior.
-2. Do not commit build output, local databases, OBS URLs, tokens, save files, game paths, or personal files.
+2. Do not commit build output, local databases, Overlay URLs, setup codes, tokens, save files, game paths, or personal files.
 3. Preserve the read-only game-memory boundary: no game memory writes, injection, input automation, save editing, or gameplay automation.
 4. Run the build and test commands from the README.
 

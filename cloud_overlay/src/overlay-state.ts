@@ -2,7 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import { maximumHostedBytes, validateHostedJsonTokens } from "../../web_overlay/src/hosted-contracts";
 import type { HostedAppearance, HostedDeath, HostedEnvelope } from "../../web_overlay/src/hosted-contracts";
 import type { Env } from "./index";
-import { acquisition, authorize, capability, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, shape, stateWrite, verifier } from "./protocol";
+import { provisioningSlots } from "./index";
+import { acquisition, authorize, authorizeSetup, capability, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, provisioning, readBody, reject, response, rotation, route, shape, stateWrite, verifier } from "./protocol";
 
 interface Status {
   v: 1; epoch: string; generation: string;
@@ -21,6 +22,7 @@ interface Control {
   session: { expectedEpoch: string; sessionRequestId: string; ack: Status & { sessionRequestId: string } } | null;
   last: { sequence: string; digest: string; ack: StateAck } | null;
   rotation: { rotationId: string; digest: string; ack: RotationAck } | null;
+  provision?: { requestId: string; digest: string };
 }
 
 type ReaderAttachment = { phase: "pending"; id: string; deadline: number } |
@@ -142,6 +144,33 @@ export class OverlayState extends DurableObject<Env> {
     try {
       const { id, action } = route(request);
       if (action === "live") return this.live(id);
+      if (action === "provision") {
+        const ids: unknown = this.env.PROVISIONED_IDS;
+        if (!Array.isArray(ids) || !ids.every(value => typeof value === "string")) return reject(403, "forbidden");
+        const slot = provisioningSlots(this.env, ids).find(value => value.overlayId === id);
+        const grant = authorizeSetup(request);
+        if (!slot || !this.ctx.id.equals(this.env.OVERLAYS.idFromName(id)) ||
+          !equalVerifier(slot.setupVerifier, verifier(id, "setup", grant))) return reject(403, "forbidden");
+        const claim = provisioning(await readBody(request));
+        const claimDigest = digest(claim);
+        const acknowledged = this.ctx.storage.transactionSync(() => {
+          const existing = this.load<Control>("control");
+          if (existing) {
+            if (existing.provision?.requestId === claim.requestId && existing.provision.digest === claimDigest)
+              return { v: 1, status: "provisioned" };
+            return reject(409, "slot_unavailable");
+          }
+          if (this.ctx.storage.sql.exec("SELECT key FROM records LIMIT 1").toArray().length)
+            return reject(409, "slot_unavailable");
+          const control: Control = { readVerifier: claim.readVerifier, writeVerifier: claim.writeVerifier,
+            epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null,
+            provision: { requestId: claim.requestId, digest: claimDigest } };
+          this.ctx.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?),('death','null'),('appearance',?)",
+            JSON.stringify(control), JSON.stringify(defaultAppearance));
+          return { v: 1, status: "provisioned" };
+        });
+        return response(200, acknowledged);
+      }
       const token = authorize(request);
       const body = action === "publisher" ? undefined : await readBody(request);
       const session = action === "session" ? acquisition(body) : undefined;

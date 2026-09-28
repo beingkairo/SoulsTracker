@@ -79,7 +79,7 @@ public sealed class AppearancePreviewLayoutTests
             Assert.True(preview.ActualWidth > content.ActualWidth - 40, "Preview must use the full panel width.");
             Assert.Equal(((FrameworkElement)window.FindName("AppearanceFields")).ActualWidth - 120, font.ActualWidth, 1);
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Preview");
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Preview your changes before applying them to the hosted overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes.");
+            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes.");
             Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text == "Local preview. Draft edits are not published.");
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "The overlay uses these settings. Click Apply to live overlay to show your changes.");
             Assert.True(scroll.ExtentWidth <= scroll.ViewportWidth + 1);
