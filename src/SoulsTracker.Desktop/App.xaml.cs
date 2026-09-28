@@ -145,7 +145,12 @@ public partial class App : System.Windows.Application, IDisposable
                         "DarkSoulsII.exe",
                         "1,0,3,0",
                         "1,0,3,0",
-                        "0045931B8914504531B7864A9488D396DC50CBAF524964016E1D69C3D1173131"))),
+                        "0045931B8914504531B7864A9488D396DC50CBAF524964016E1D69C3D1173131"),
+                        new ProcessModuleFileIdentity(
+                            "DarkSoulsII.exe",
+                            "1,0,3,0",
+                            "1,0,3,0",
+                            "3095FC38140C267A5BC7289FD17C5DA5CBF5DBBDD3667116242F905C3509EFC3"))),
                 new DarkSoulsIIIActiveCharacterDeathReader(
                     new ExactNameDarkSoulsIIIProcessEnumerator(),
                     new WindowsReadOnlyProcessAttachmentFactory(),

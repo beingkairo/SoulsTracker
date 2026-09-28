@@ -315,19 +315,31 @@ public sealed class UnverifiedDarkSoulsIIScholarIdentityValidator : IDarkSoulsII
     public ValueTask<bool> ValidateAttachedAsync(IReadOnlyProcessAttachment attachment, CancellationToken cancellationToken) => ValueTask.FromResult(false);
 }
 
-/// <summary>Uses exact, QA-supplied DS2 Scholar identity fields without normalization or fallback.</summary>
-public sealed class ExactDarkSoulsIIScholarIdentityValidator(ProcessModuleFileIdentity expected) : IDarkSoulsIIScholarIdentityValidator
+/// <summary>Uses exact, QA-supplied DS2 Scholar identity profiles without normalization or fallback.</summary>
+public sealed class ExactDarkSoulsIIScholarIdentityValidator : IDarkSoulsIIScholarIdentityValidator
 {
-    private readonly ProcessModuleFileIdentity expected = expected ?? throw new ArgumentNullException(nameof(expected));
+    private readonly ProcessModuleFileIdentity[] expectedProfiles;
+
+    public ExactDarkSoulsIIScholarIdentityValidator(params ProcessModuleFileIdentity[] expectedProfiles)
+    {
+        ArgumentNullException.ThrowIfNull(expectedProfiles);
+        if (expectedProfiles.Length == 0 || expectedProfiles.Any(static profile => profile is null))
+        {
+            throw new ArgumentException("At least one non-null exact identity profile is required.", nameof(expectedProfiles));
+        }
+
+        this.expectedProfiles = [.. expectedProfiles];
+    }
 
     public async ValueTask<bool> ValidateAttachedAsync(IReadOnlyProcessAttachment attachment, CancellationToken cancellationToken)
     {
         ReadOnlyModuleIdentityResult actual = await attachment.QueryMainModuleIdentityAsync(cancellationToken).ConfigureAwait(false);
         return actual.Outcome == ReadOnlyModuleIdentityOutcome.Available && actual.Identity is not null &&
-            string.Equals(actual.Identity.ExecutableFileName, expected.ExecutableFileName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(actual.Identity.FileVersion, expected.FileVersion, StringComparison.Ordinal) &&
-            string.Equals(actual.Identity.ProductVersion, expected.ProductVersion, StringComparison.Ordinal) &&
-            string.Equals(actual.Identity.Sha256, expected.Sha256, StringComparison.OrdinalIgnoreCase);
+            expectedProfiles.Any(expected =>
+                string.Equals(actual.Identity.ExecutableFileName, expected.ExecutableFileName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(actual.Identity.FileVersion, expected.FileVersion, StringComparison.Ordinal) &&
+                string.Equals(actual.Identity.ProductVersion, expected.ProductVersion, StringComparison.Ordinal) &&
+                string.Equals(actual.Identity.Sha256, expected.Sha256, StringComparison.OrdinalIgnoreCase));
     }
 }
 

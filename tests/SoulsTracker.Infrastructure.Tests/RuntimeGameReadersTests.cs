@@ -233,6 +233,23 @@ public sealed class RuntimeGameReadersTests
             validator).ReadAsync(default);
         Assert.Equal(RuntimeGameReaderStatus.WaitingForActiveCharacter, waiting!.Status);
         Assert.Null(waiting.Observation);
+
+        var recheckCandidate = new Ds2Candidate();
+        var recheckAttachment = new Attachment(
+            ds2,
+            ReadOnlyMainModuleBaseResult.Available(0x1000),
+            new Plan(PointerBytes(0x2000), ReadOnlyMemoryReadResult.Succeeded(8)),
+            new Plan(PointerBytes(0x3000), ReadOnlyMemoryReadResult.Succeeded(8)),
+            new Plan(PointerBytes(0x4000), ReadOnlyMemoryReadResult.Succeeded(8)));
+        var recheckValidator = new SequencedDs2IdentityValidator(true, false);
+        Assert.Null(await new DarkSoulsIIScholarActiveCharacterDeathReader(
+            new Ds2Enumerator(recheckCandidate),
+            new AttachmentFactory(recheckAttachment),
+            recheckValidator).ReadAsync(default));
+        Assert.Equal(2, recheckValidator.Calls);
+        Assert.Equal([8, 8, 8], recheckAttachment.BufferLengths);
+        Assert.True(recheckCandidate.Disposed);
+        Assert.True(recheckAttachment.Disposed);
     }
 
     [Fact]
@@ -243,6 +260,50 @@ public sealed class RuntimeGameReadersTests
         Assert.True(await validator.ValidateAttachedAsync(new Attachment(expected, PointerBytes(1), ValueBytes(1)), default));
         ProcessModuleFileIdentity mismatch = expected with { FileVersion = "1.0.3.0" };
         Assert.False(await validator.ValidateAttachedAsync(new Attachment(mismatch, PointerBytes(1), ValueBytes(1)), default));
+    }
+
+    [Fact]
+    public async Task Ds2ExactIdentityValidatorAcceptsEachExplicitlyValidatedLayoutProfileAndRejectsUnknownHash()
+    {
+        ProcessModuleFileIdentity original = new("DarkSoulsII.exe", "1,0,3,0", "1,0,3,0", "0045931B8914504531B7864A9488D396DC50CBAF524964016E1D69C3D1173131");
+        ProcessModuleFileIdentity observed = original with { Sha256 = "3095FC38140C267A5BC7289FD17C5DA5CBF5DBBDD3667116242F905C3509EFC3" };
+        var validator = new ExactDarkSoulsIIScholarIdentityValidator(original, observed);
+
+        Assert.True(await validator.ValidateAttachedAsync(new Attachment(original, PointerBytes(1), ValueBytes(1)), default));
+        Assert.True(await validator.ValidateAttachedAsync(new Attachment(observed, PointerBytes(1), ValueBytes(1)), default));
+        Assert.False(await validator.ValidateAttachedAsync(
+            new Attachment(observed with { Sha256 = new string('0', 64) }, PointerBytes(1), ValueBytes(1)),
+            default));
+    }
+
+    [Fact]
+    public async Task Ds2ReaderRecoversAfterTheProcessClosesAndReopensWithAnAcceptedProfile()
+    {
+        ProcessModuleFileIdentity observed = new(
+            "DarkSoulsII.exe",
+            "1,0,3,0",
+            "1,0,3,0",
+            "3095FC38140C267A5BC7289FD17C5DA5CBF5DBBDD3667116242F905C3509EFC3");
+        var restartedCandidate = new Ds2Candidate();
+        var attachment = new Attachment(
+            observed,
+            ReadOnlyMainModuleBaseResult.Available(0x1000),
+            new Plan(PointerBytes(0x2000), ReadOnlyMemoryReadResult.Succeeded(8)),
+            new Plan(PointerBytes(0x3000), ReadOnlyMemoryReadResult.Succeeded(8)),
+            new Plan(PointerBytes(0x4000), ReadOnlyMemoryReadResult.Succeeded(8)),
+            new Plan(ValueBytes(20), ReadOnlyMemoryReadResult.Succeeded(4)));
+        var reader = new DarkSoulsIIScholarActiveCharacterDeathReader(
+            new SequencedDs2Enumerator([], [restartedCandidate]),
+            new AttachmentFactory(attachment),
+            new ExactDarkSoulsIIScholarIdentityValidator(observed));
+
+        Assert.Null(await reader.ReadAsync(default));
+        RuntimeGameReadResult? reopened = await reader.ReadAsync(default);
+
+        Assert.Equal(RuntimeGameReaderStatus.Synced, reopened!.Status);
+        Assert.Equal(20, reopened.Observation!.TotalDeaths.Value);
+        Assert.True(restartedCandidate.Disposed);
+        Assert.True(attachment.Disposed);
     }
 
     [Fact]
@@ -603,11 +664,32 @@ public sealed class RuntimeGameReadersTests
         public ValueTask<IReadOnlyList<SoulsTracker.Infrastructure.IDarkSoulsIIScholarProcessCandidate>> EnumerateExactCandidatesAsync(CancellationToken cancellationToken) => ValueTask.FromResult<IReadOnlyList<SoulsTracker.Infrastructure.IDarkSoulsIIScholarProcessCandidate>>(candidates);
     }
 
+    private sealed class SequencedDs2Enumerator(params Ds2Candidate[][] polls) : SoulsTracker.Infrastructure.IDarkSoulsIIScholarProcessEnumerator
+    {
+        private readonly Queue<Ds2Candidate[]> polls = new(polls);
+
+        public ValueTask<IReadOnlyList<IDarkSoulsIIScholarProcessCandidate>> EnumerateExactCandidatesAsync(CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IReadOnlyList<IDarkSoulsIIScholarProcessCandidate>>(polls.Dequeue());
+    }
+
     private sealed class Ds2Candidate : SoulsTracker.Infrastructure.IDarkSoulsIIScholarProcessCandidate
     {
         public int ProcessId => 43;
         public bool Disposed { get; private set; }
         public ValueTask DisposeAsync() { Disposed = true; return ValueTask.CompletedTask; }
+    }
+
+    private sealed class SequencedDs2IdentityValidator(params bool[] results) : IDarkSoulsIIScholarIdentityValidator
+    {
+        private readonly Queue<bool> results = new(results);
+
+        public int Calls { get; private set; }
+
+        public ValueTask<bool> ValidateAttachedAsync(IReadOnlyProcessAttachment attachment, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return ValueTask.FromResult(results.Dequeue());
+        }
     }
 
     private sealed class Ds3Enumerator(params Ds3Candidate[] candidates) : SoulsTracker.Infrastructure.IDarkSoulsIIIProcessEnumerator
