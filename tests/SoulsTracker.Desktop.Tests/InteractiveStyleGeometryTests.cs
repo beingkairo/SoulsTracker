@@ -11,6 +11,101 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class InteractiveStyleGeometryTests
 {
+    [Fact]
+    public Task RepresentativeControlsKeepKeyboardFocusCuesButNotPointerCues() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var window = new MainWindow((_, _) => null, _ => { })
+        {
+            ShowInTaskbar = false,
+            DataContext = new
+            {
+                ControlsEnabled = true,
+                IsEldenRingSelected = true,
+                IsEldenRingBrowseVisible = false,
+                IsEldenRingChangeVisible = true,
+                EldenRingDirectoryPath = "C:\\synthetic-save",
+                PresentationControlsEnabled = true,
+                HostedOverlay = new { CanCopy = true, UrlText = "https://overlay.beingkairo.com/overlay/#synthetic" }
+            }
+        };
+        try
+        {
+            window.Show(); await Idle();
+            var main = (TabItem)window.FindName("MainWorkspaceTab");
+            var overlay = (TabItem)window.FindName("OverlayWorkspaceTab");
+            var settings = (TabItem)window.FindName("SettingsWorkspaceTab");
+            var representatives = new (TabItem Tab, Control Control)[]
+            {
+                (main, main),
+                (overlay, overlay),
+                (settings, settings),
+                (overlay, (Button)window.FindName("ApplyAppearanceButton")),
+                (main, DirectoryPresentationControlTests.Tree(window).OfType<Button>().Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Change Elden Ring save directory")),
+                (main, DirectoryPresentationControlTests.Tree(window).OfType<Button>().Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Refresh Elden Ring saves")),
+                (main, DirectoryPresentationControlTests.Tree(window).OfType<Button>().Single(x => x.IsVisible && System.Windows.Automation.AutomationProperties.GetName(x) == "Copy directory path")),
+                (overlay, (Button)window.FindName("CopyTotalDeathsOverlayUrlButton"))
+            };
+
+            foreach (var (tab, control) in representatives)
+            {
+                tab.IsSelected = true; control.BringIntoView(); await Idle();
+                var restingBorder = control is Button restingButton
+                    ? ((Border)restingButton.Template.FindName("ButtonBorder", restingButton)).BorderBrush
+                    : null;
+                Keyboard.ClearFocus();
+                SetInputModality(Mouse.PrimaryDevice); Hover(control);
+                control.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+                control.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                await Idle();
+                Assert.True(control.IsKeyboardFocusWithin, System.Windows.Automation.AutomationProperties.GetName(control));
+                var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(control);
+                Assert.NotNull(layer);
+                Assert.DoesNotContain(layer.GetAdorners(control) ?? [], adorner => adorner.IsVisible);
+                if (control is Button button)
+                    Assert.Equal(restingBorder, ((Border)button.Template.FindName("ButtonBorder", button)).BorderBrush);
+
+                Keyboard.ClearFocus();
+                SetInputModality(Keyboard.PrimaryDevice);
+                Assert.True(control.Focus()); await Idle();
+                Assert.Contains(layer.GetAdorners(control) ?? [], adorner => adorner.IsVisible);
+            }
+
+        }
+        finally { Hover(null); Clipboard.Clear(); window.Close(); }
+    });
+
+    [Fact]
+    public Task SharedButtonKeepsEnterAndSpaceKeyboardActivation() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        int clicks = 0;
+        var window = new MainWindow { ShowInTaskbar = false };
+        var button = new Button { Content = "Activate" };
+        button.Click += (_, _) => clicks++;
+        window.Content = button;
+        try
+        {
+            window.Show(); await Idle();
+            SetInputModality(Keyboard.PrimaryDevice); Assert.True(button.Focus());
+            var keyboard = new PressedKeyboard(Key.Enter);
+            button.RaiseEvent(new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Enter)
+            { RoutedEvent = Keyboard.KeyDownEvent });
+            Assert.Equal(1, clicks);
+
+            keyboard.Pressed = Key.Space;
+            button.RaiseEvent(new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
+            { RoutedEvent = Keyboard.KeyDownEvent });
+            Assert.True(button.IsPressed);
+            keyboard.Pressed = Key.None;
+            button.RaiseEvent(new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
+            { RoutedEvent = Keyboard.KeyUpEvent });
+            Assert.Equal(2, clicks);
+            Assert.False(button.IsPressed);
+        }
+        finally { window.Close(); }
+    });
+
     [Theory]
     [InlineData("button")]
     [InlineData("copy")]
@@ -83,32 +178,41 @@ public sealed class InteractiveStyleGeometryTests
                 Assert.True(control.Focus()); await Idle();
                 Assert.True(control.IsKeyboardFocusWithin);
                 Assert.IsAssignableFrom<KeyboardDevice>(InputManager.Current.MostRecentInputDevice);
-                if (family == "color")
+                if (family is "button" or "copy" or "help" or "tab" or "slider" or "color")
                 {
                     var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(control);
                     Assert.NotNull(layer);
                     Assert.Contains(layer.GetAdorners(control) ?? [], adorner => adorner.IsVisible);
                 }
-                if (family is "button" or "copy" or "help")
-                {
-                    var border = (Border)control.Template.FindName(family == "help" ? "HelpCircle" : "ButtonBorder", control);
-                    Assert.Equal(window.FindResource("AccentBrush"), border.BorderBrush);
-                }
-                if (family == "slider")
-                    Assert.Equal(1, ((Border)control.Template.FindName("FocusRing", control)).Opacity);
             }
             Assert.Equal(baseline, Geometry(control));
             Assert.Equal(panelSize, panel.DesiredSize);
             if (control.Focusable)
             {
                 neutral.Focus(); await Idle();
-                // Establish the mouse input modality without OS cursor movement;
-                // focus the loaded target through WPF and verify both states.
+                // Drive the loaded control through WPF's pointer down/up route.
                 SetInputModality(Mouse.PrimaryDevice);
-                Assert.True(control.Focus());
+                Hover(control);
+                control.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+                if (family is "button" or "copy" or "help" or "tab") Assert.True(control.IsKeyboardFocusWithin);
+                if (!control.IsKeyboardFocusWithin) Assert.True(control.Focus());
+                control.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
                 await Idle();
                 Assert.True(control.IsKeyboardFocusWithin);
                 Assert.IsAssignableFrom<MouseDevice>(InputManager.Current.MostRecentInputDevice);
+                if (family is "button" or "copy" or "help")
+                {
+                    var border = (Border)control.Template.FindName(family == "help" ? "HelpCircle" : "ButtonBorder", control);
+                    Assert.NotEqual(window.FindResource("AccentBrush"), border.BorderBrush);
+                }
+                if (family is "button" or "copy" or "help" or "tab" or "slider" or "color")
+                {
+                    var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(control);
+                    Assert.NotNull(layer);
+                    Assert.DoesNotContain(layer.GetAdorners(control) ?? [], adorner => adorner.IsVisible);
+                }
                 Assert.Equal(baseline, Geometry(control));
             }
             if (control is ButtonBase button)
@@ -118,6 +222,8 @@ public sealed class InteractiveStyleGeometryTests
                 button.RaiseEvent(new KeyEventArgs(new PressedKeyboard(), PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
                 { RoutedEvent = Keyboard.KeyDownEvent });
                 Assert.True(button.IsPressed);
+                if (family is "button" or "copy")
+                    Assert.Equal(window.FindResource("SelectionBrush"), ((Border)control.Template.FindName("ButtonBorder", control)).Background);
                 window.UpdateLayout();
                 Assert.Equal(baseline, Geometry(control));
                 button.IsEnabled = false; await Idle();
@@ -190,9 +296,10 @@ public sealed class InteractiveStyleGeometryTests
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
 
-    private sealed class PressedKeyboard() : KeyboardDevice(InputManager.Current)
+    private sealed class PressedKeyboard(Key pressed = Key.Space) : KeyboardDevice(InputManager.Current)
     {
-        protected override KeyStates GetKeyStatesFromSystem(Key key) => key == Key.Space ? KeyStates.Down : KeyStates.None;
+        internal Key Pressed { get; set; } = pressed;
+        protected override KeyStates GetKeyStatesFromSystem(Key key) => key == Pressed ? KeyStates.Down : KeyStates.None;
     }
 
 

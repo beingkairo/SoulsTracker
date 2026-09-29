@@ -84,6 +84,7 @@
         <Style TargetType="Button">
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="12,5" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
             <Setter Property="Background" Value="#343B48" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
@@ -96,8 +97,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#454F61" /></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource SelectionBrush}" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45" /></Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -179,7 +180,6 @@
                             </Border>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Trigger>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HelpCircle" Property="BorderBrush" Value="{StaticResource PrimaryTextBrush}" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -212,6 +212,7 @@
         <Style x:Key="DarkSlider" TargetType="Slider">
             <Setter Property="Height" Value="28" />
             <Setter Property="Focusable" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
@@ -233,10 +234,8 @@
                                     </Thumb>
                                 </Track.Thumb>
                             </Track>
-                            <Border x:Name="FocusRing" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" Opacity="0" CornerRadius="4" IsHitTestVisible="False" />
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusRing" Property="Opacity" Value="1" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -659,13 +658,11 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="Overlay" />
                                 <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to." />
-                                <Border Padding="8" Background="#191D23" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBox Margin="0,0,8,0" Height="34" Padding="0" BorderThickness="0" Background="Transparent" VerticalAlignment="Center" FontFamily="Consolas" IsReadOnly="True" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
-                                        <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
-                                    </Grid>
-                                </Border>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBox Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" IsReadOnly="True" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
+                                    <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
+                                </Grid>
                                 <TextBlock Margin="0,8,0,0" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.LiveSetting="Polite">
                                     <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
                                 </TextBlock>
@@ -849,18 +846,15 @@
         </TabControl>
 
         <Border Grid.Row="2" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,10">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Border x:Name="HostedCopyFeedbackOverlay" Margin="0,0,12,0" Padding="8,4" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
-                    <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="Overlay URL copy status" AutomationProperties.LiveSetting="Polite" />
-                </Border>
-                <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
-            </Grid>
+            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
         </Border>
 
         <Canvas x:Name="FloatingFeedbackLayer" Grid.Row="1" Panel.ZIndex="11" IsHitTestVisible="False" ClipToBounds="True">
             <Border x:Name="CopyFeedbackOverlay" Padding="8,5" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
                 <TextBlock x:Name="DirectoryCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="Directory copy status" AutomationProperties.LiveSetting="Polite" />
+            </Border>
+            <Border x:Name="HostedCopyFeedbackOverlay" Padding="8,5" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock x:Name="HostedCopyStatus" Style="{StaticResource OptionalSaveFeedback}" Margin="0" AutomationProperties.Name="Overlay URL copy status" AutomationProperties.LiveSetting="Polite" />
             </Border>
             <Border x:Name="HotkeySuccessOverlay" Padding="8,5" Background="{StaticResource ElevatedSurfaceBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" CornerRadius="4" IsHitTestVisible="False" Visibility="Collapsed">
                 <TextBlock x:Name="HotkeySuccessStatus" Style="{StaticResource OptionalSaveFeedback}" Foreground="{StaticResource SuccessBrush}" Margin="0" AutomationProperties.Name="Hotkey apply confirmation" AutomationProperties.LiveSetting="Polite" />

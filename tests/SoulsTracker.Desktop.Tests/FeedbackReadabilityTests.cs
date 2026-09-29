@@ -105,7 +105,13 @@ public sealed class FeedbackReadabilityTests
             Assert.Equal(1, copies);
             Assert.Equal(fail ? "Could not copy the Overlay URL. Try Copy URL again." : "URL copied", status.Text);
             Assert.Same(copy, Keyboard.FocusedElement);
+            var layer = (Canvas)window.FindName("FloatingFeedbackLayer");
+            Assert.Same(layer, box.Parent);
+            Assert.Equal(new Size(), layer.DesiredSize);
+            Assert.True(box.IsVisible);
+            Assert.False(Bounds(box, window).IntersectsWith(Bounds(copy, window)));
             scroll.ScrollToEnd(); await Idle();
+            Assert.False(box.IsVisible);
             Assert.True(((FrameworkElement)window.FindName("DockedPreviewCard")).IsVisible);
             AppearanceGeometryTests.Capture(window, $"feedback-{width}-{height}-{fail}");
             AssertContained(status, (FrameworkElement)window.Content);
@@ -123,6 +129,8 @@ public sealed class FeedbackReadabilityTests
             Assert.Same(reset, Keyboard.FocusedElement);
             var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
             Assert.True(presenter.ActualHeight >= 32, $"Editable viewport: {presenter.ActualHeight}");
+            copy.BringIntoView(); await Idle();
+            Assert.True(box.IsVisible);
             await Task.Delay(TimeSpan.FromSeconds(4.5)); await Idle();
             Assert.True(box.IsVisible);
             await Task.Delay(TimeSpan.FromSeconds(0.7)); await Idle();

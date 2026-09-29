@@ -24,7 +24,7 @@ public sealed class HostedConnectionPresentationTests
     private static readonly string OverlayId = "a1" + new string('0', 62);
 
     [Fact]
-    public async Task CopyFeedbackIsTransientCapabilitySafeAndBelowAppearanceActions() => await OnDispatcher(async () =>
+    public async Task CopyFeedbackFloatsBelowItsButtonWithoutAffectingLayout() => await OnDispatcher(async () =>
     {
         string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try
@@ -34,22 +34,45 @@ public sealed class HostedConnectionPresentationTests
             await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config => new HostedOverlayPublisher(config, new Server()));
             await using var coordinator = new SerializedTrackerCoordinator(new SqliteTrackerStateRepository(root, "tracker.db"), connection);
             var vm = new DesktopTrackerViewModel(coordinator); vm.ConfigureHostedOverlay(connection);
-            var window = new MainWindow { DataContext = vm, ShowActivated = false, ShowInTaskbar = false };
+            var expiries = new List<Expiry>();
+            var window = new MainWindow((_, _) => null, _ => { }, (delay, callback) =>
+            {
+                var expiry = new Expiry(delay, callback);
+                expiries.Add(expiry);
+                return () => expiry.Cancelled = true;
+            }) { DataContext = vm, ShowActivated = false, ShowInTaskbar = false };
             try
             {
                 window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
-                Assert.True(connection.CopyReadUrl(_ => { }));
+                await Idle();
+                var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
+                var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
+                double extent = scroll.ExtentHeight;
+                copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await Idle();
                 var feedback = (TextBlock)window.FindName("HostedCopyStatus");
                 Assert.Equal("URL copied", feedback.Text);
                 var overlay = (Border)window.FindName("HostedCopyFeedbackOverlay");
-                var footerContent = Assert.IsType<Grid>(overlay.Parent);
-                var footer = Assert.IsType<Border>(footerContent.Parent);
-                Assert.Same(window.Content, footer.Parent);
-                Assert.Equal(2, Grid.GetRow(footer));
-                var actions = (FrameworkElement)window.FindName("AppearanceActions");
-                Assert.True(overlay.TranslatePoint(new Point(), window).Y >= actions.TranslatePoint(new Point(0, actions.ActualHeight), window).Y);
+                var layer = (Canvas)window.FindName("FloatingFeedbackLayer");
+                Assert.Same(layer, overlay.Parent);
+                Assert.Equal(new Size(), layer.DesiredSize);
+                Assert.Equal(extent, scroll.ExtentHeight);
+                Rect copyBounds = copy.TransformToVisual(layer).TransformBounds(new Rect(copy.RenderSize));
+                Rect feedbackBounds = overlay.TransformToVisual(layer).TransformBounds(new Rect(overlay.RenderSize));
+                Assert.True(feedbackBounds.Top >= copyBounds.Bottom || feedbackBounds.Bottom <= copyBounds.Top);
+                Assert.InRange(Math.Abs(feedbackBounds.Right - copyBounds.Right), 0, 1);
+                Assert.Null(window.FindName("HostedCopyFeedbackFooter"));
+                copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(2, expiries.Count);
+                Assert.Equal(TimeSpan.FromSeconds(5), expiries[0].Delay);
+                Assert.True(expiries[0].Cancelled);
+                Assert.False(expiries[1].Cancelled);
+                expiries[0].Callback();
+                Assert.Equal("URL copied", feedback.Text);
+                expiries[1].Callback();
+                Assert.Empty(feedback.Text);
+                Assert.Equal(Visibility.Collapsed, overlay.Visibility);
                 foreach (var element in Tree(window))
                 {
                     string surface = AutomationProperties.GetName(element) + AutomationProperties.GetHelpText(element)
@@ -114,6 +137,7 @@ public sealed class HostedConnectionPresentationTests
                 await Idle(); window.UpdateLayout();
 
                 var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
+                var ordinary = new TextBox { Style = (Style)window.FindResource(typeof(TextBox)), Text = "Single line" };
                 var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
                 var row = Assert.IsType<Grid>(url.Parent);
                 Assert.Same(row, copy.Parent);
@@ -125,8 +149,13 @@ public sealed class HostedConnectionPresentationTests
                 Rect urlBounds = url.TransformToAncestor(row).TransformBounds(new Rect(url.RenderSize));
                 Rect copyBounds = copy.TransformToAncestor(row).TransformBounds(new Rect(copy.RenderSize));
                 Assert.True(urlBounds.Top < copyBounds.Bottom && copyBounds.Top < urlBounds.Bottom);
-                Assert.True(copyBounds.Bottom <= urlBounds.Bottom + 1, $"URL {urlBounds}; copy {copyBounds}");
-                Assert.InRange(row.ActualHeight, 30, 34);
+                Assert.InRange(Math.Abs((urlBounds.Top + urlBounds.Height / 2) - (copyBounds.Top + copyBounds.Height / 2)), 0, 1);
+                Assert.Equal(url.MinHeight, url.ActualHeight, 1);
+                Assert.Equal(ordinary.Padding, url.Padding);
+                Assert.Equal(ordinary.BorderThickness, url.BorderThickness);
+                Assert.Equal(ordinary.Background, url.Background);
+                Assert.IsNotType<Border>(row.Parent);
+                Assert.InRange(row.ActualHeight, 32, 34);
 
                 var urlScroll = Tree(url).OfType<ScrollViewer>().Single();
                 Assert.True(urlScroll.ExtentWidth > urlScroll.ViewportWidth);
@@ -270,4 +299,10 @@ public sealed class HostedConnectionPresentationTests
     }
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
     { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => send(request, cancellationToken); }
+    private sealed class Expiry(TimeSpan delay, Action callback)
+    {
+        internal TimeSpan Delay { get; } = delay;
+        internal Action Callback { get; } = callback;
+        internal bool Cancelled { get; set; }
+    }
 }

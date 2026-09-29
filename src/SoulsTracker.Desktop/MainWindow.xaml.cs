@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private TabItem? hotkeyRecordingOrigin;
     private FrameworkElement? hotkeyRecordingAnchor;
     private FloatingFeedback? directoryFeedback;
+    private FloatingFeedback? hostedFeedback;
     private FloatingFeedback? hotkeyFeedback;
     private Action? cancelHotkeyExpiry;
     private long hotkeyOperationVersion;
@@ -130,6 +131,7 @@ public partial class MainWindow : Window
             if (restoringOverlayWorkspace) e.Handled = true;
         };
         directoryFeedback = new FloatingFeedback(FloatingFeedbackLayer, CopyFeedbackOverlay);
+        hostedFeedback = new FloatingFeedback(FloatingFeedbackLayer, HostedCopyFeedbackOverlay);
         hotkeyFeedback = new FloatingFeedback(FloatingFeedbackLayer, HotkeySuccessOverlay);
         AppearanceApplyStatus.GotKeyboardFocus += (_, _) =>
         {
@@ -138,13 +140,13 @@ public partial class MainWindow : Window
             tooltip.IsOpen = AppearanceApplyStatus.Text.Length > 0;
         };
         AppearanceApplyStatus.LostKeyboardFocus += (_, _) => ((System.Windows.Controls.ToolTip)AppearanceApplyStatus.ToolTip).IsOpen = false;
-        LayoutUpdated += (_, _) => { directoryFeedback.Update(); hotkeyFeedback.Update(); };
+        LayoutUpdated += (_, _) => { directoryFeedback.Update(); hostedFeedback.Update(); hotkeyFeedback.Update(); };
         WorkspaceTabs.SelectionChanged += (_, e) =>
         {
             if (!ReferenceEquals(e.Source, WorkspaceTabs)) return;
             if (OverlayWorkspaceTab.IsSelected && DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection })
                 _ = connection.EnsureProvisionedAsync();
-            if (!hostedCopyFeedbackVisible) ClearCopyFeedback();
+            ClearCopyFeedback();
             if (hotkeyRecordingOrigin is null) ClearHotkeyFeedback();
         };
     }
@@ -348,6 +350,7 @@ public partial class MainWindow : Window
             HostedCopyStatus.Foreground = cue;
             HostedCopyFeedbackOverlay.BorderBrush = cue;
             HostedCopyFeedbackOverlay.Visibility = Visibility.Visible;
+            hostedFeedback?.Show(CopyTotalDeathsOverlayUrlButton, OverlayConfigurationScrollViewer);
         }
         else
         {
@@ -375,6 +378,7 @@ public partial class MainWindow : Window
         DirectoryCopyStatus.Text = string.Empty;
         HostedCopyStatus.Text = string.Empty;
         directoryFeedback?.Hide();
+        hostedFeedback?.Hide();
         CopyFeedbackOverlay.Visibility = Visibility.Collapsed;
         HostedCopyFeedbackOverlay.Visibility = Visibility.Collapsed;
     }
