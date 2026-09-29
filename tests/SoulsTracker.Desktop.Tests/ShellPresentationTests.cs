@@ -136,8 +136,9 @@ public sealed class ShellPresentationTests
             vm.DraftTitleIconModeChoice = vm.TitleIconModes.Single(x => x.Value == OverlayTitleIconMode.PrefixSkull);
             await Idle();
             Assert.Single(Tree(window).OfType<TabControl>());
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.");
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "The overlay uses these settings. Click Apply to live overlay to show your changes.");
+            Assert.Equal("Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.", AutomationProperties.GetHelpText((Button)window.FindName("OverlayHelpButton")));
+            Assert.Equal("The overlay uses these settings. Click Apply to live overlay to show your changes.", AutomationProperties.GetHelpText((Button)window.FindName("AppearanceHelpButton")));
+            Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text.StartsWith("Your overlay URL is a private link", StringComparison.Ordinal) || x.Text.StartsWith("The overlay uses these settings", StringComparison.Ordinal));
             Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text.Contains("publication consent", StringComparison.OrdinalIgnoreCase));
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
             foreach (string field in AppearanceFields)

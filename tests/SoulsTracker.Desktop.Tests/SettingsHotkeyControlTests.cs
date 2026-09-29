@@ -241,13 +241,16 @@ public sealed class SettingsHotkeyControlTests
         Assert.Equal(failure, vm.GlobalHotkeyStatus);
     });
 
-    [Fact]
-    public Task SettingsEntryAndReturnKeepHelpClosedForEveryGame() => HostedConnectionTests.OnDispatcher(async () =>
+    [Theory]
+    [InlineData(560, 400)]
+    [InlineData(560, 760)]
+    [InlineData(1060, 760)]
+    public Task SettingsEntryAndReturnKeepHelpClosedForEveryGame(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.DemonsSouls);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
-        var window = new MainWindow((_, _) => null, _ => { }) { DataContext = vm, ShowInTaskbar = false };
+        var window = new MainWindow((_, _) => null, _ => { }) { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle();
@@ -267,18 +270,35 @@ public sealed class SettingsHotkeyControlTests
                 Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, field.IsEnabled);
                 if (!vm.IsGlobalHotkeyConfigurationAvailable)
                     Assert.Contains("not available for this game", vm.GlobalHotkeyUsageDescription);
+                Assert.DoesNotContain(DirectoryPresentationControlTests.Tree(window).OfType<TextBlock>(),
+                    x => x.GetBindingExpression(TextBlock.TextProperty)?.ParentBinding.Path?.Path == nameof(vm.GlobalHotkeyUsageDescription));
+                string expectedHelp = vm.GlobalHotkeyUsageDescription + " Choose a field to record. Enter saves; Esc cancels. Both return to the view where recording started.";
+                Assert.Equal(expectedHelp, System.Windows.Automation.AutomationProperties.GetHelpText(help));
+                Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, ((TextBox)window.FindName("DecrementHotkeyTextBox")).IsEnabled);
+                Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, ((Button)window.FindName("ApplyHotkeysButton")).IsEnabled);
                 var panels = ((StackPanel)window.FindName("SettingsContentStack")).Children.OfType<Border>().ToArray();
                 Assert.Equal("Update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
                 Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
                 RecordSettings(window, choice.GameId.Value);
                 help.BringIntoView(); await Idle();
+                var heading = Assert.IsType<StackPanel>(help.Parent);
+                var panel = Assert.IsType<StackPanel>(heading.Parent);
+                var incrementRow = (FrameworkElement)field.Parent;
+                Assert.InRange(incrementRow.TranslatePoint(new Point(), panel).Y - (heading.TranslatePoint(new Point(), panel).Y + heading.ActualHeight), 7.5, 8.5);
+                Assert.True(ToolTipService.GetIsEnabled(help));
+                Assert.Equal(60000, ToolTipService.GetShowDuration(help));
                 Assert.True(help.Focus()); await Idle();
                 Assert.True(tooltip.IsOpen);
+                Assert.Equal(expectedHelp, Assert.IsType<TextBlock>(tooltip.Content).Text);
+                AppearanceGeometryTests.Capture(window, $"section-hotkeys-{choice.GameId.Value}-{width}x{height}");
+
+                AppearanceGeometryTests.Capture(tooltip, $"tooltip-hotkeys-{choice.GameId.Value}-{width}x{height}");
                 Assert.True(ToolTipService.GetIsEnabled(help));
                 main.Focus(); main.IsSelected = true; await Idle();
                 Assert.False(help.IsVisible);
                 settings.Focus(); settings.IsSelected = true; await Idle();
                 Assert.False(tooltip.IsOpen);
+                SectionHelpControlTests.AssertPointerAvailable(help);
                 main.Focus(); main.IsSelected = true; await Idle();
             }
             // Exercise WPF TabItem mouse-selection routing separately from

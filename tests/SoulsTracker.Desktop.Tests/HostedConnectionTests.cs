@@ -53,8 +53,10 @@ public sealed class HostedConnectionTests
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
                 await Idle();
                 var text = Tree(window).OfType<TextBlock>().Select(x => x.Text).ToArray();
-                Assert.Contains("Overlay", text);
-                Assert.Contains("Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.", text);
+                Assert.Contains("OVERLAY", text);
+                const string explanation = "Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.";
+                Assert.Equal(explanation, AutomationProperties.GetHelpText((Button)window.FindName("OverlayHelpButton")));
+                Assert.DoesNotContain(explanation, text);
                 Assert.DoesNotContain(text, value => value.Contains("browser source", StringComparison.OrdinalIgnoreCase));
                 Assert.DoesNotContain(text, value => value.Contains("publication", StringComparison.OrdinalIgnoreCase));
                 Assert.Null(window.FindName("SetUpHostedOverlayButton"));
@@ -62,7 +64,7 @@ public sealed class HostedConnectionTests
                 Assert.Null(window.FindName("HostedHostTextBlock"));
                 var panel = Tree(window).OfType<Border>().Single(x => AutomationProperties.GetName(x) == "Overlay connection panel");
                 var panelContent = Assert.IsType<StackPanel>(panel.Child);
-                Assert.Equal(3, panelContent.Children.OfType<FrameworkElement>().Count(x => x.IsVisible));
+                Assert.Equal(2, panelContent.Children.OfType<FrameworkElement>().Count(x => x.IsVisible));
                 var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
                 Assert.True(url.IsReadOnly && url.Focusable);
                 Assert.Equal(Configuration().BuildReadUrl(), url.Text);

@@ -78,10 +78,12 @@ public sealed class AppearancePreviewLayoutTests
             Assert.True(previewInContent.Y + preview.ActualHeight < fontInContent.Y, "Preview must precede the controls in flow.");
             Assert.True(preview.ActualWidth > content.ActualWidth - 40, "Preview must use the full panel width.");
             Assert.Equal(((FrameworkElement)window.FindName("AppearanceFields")).ActualWidth - 120, font.ActualWidth, 1);
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Preview");
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes.");
+            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "PREVIEW");
+            Assert.Equal("Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes.", System.Windows.Automation.AutomationProperties.GetHelpText((Button)window.FindName("PreviewHelpButton")));
+            Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text.StartsWith("Preview your changes", StringComparison.Ordinal));
             Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text == "Local preview. Draft edits are not published.");
-            Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.Text == "The overlay uses these settings. Click Apply to live overlay to show your changes.");
+            Assert.Equal("The overlay uses these settings. Click Apply to live overlay to show your changes.", System.Windows.Automation.AutomationProperties.GetHelpText((Button)window.FindName("AppearanceHelpButton")));
+            Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text.StartsWith("The overlay uses these settings", StringComparison.Ordinal));
             Assert.True(scroll.ExtentWidth <= scroll.ViewportWidth + 1);
             Assert.Empty(repository.Saves);
         }
@@ -117,7 +119,7 @@ public sealed class AppearancePreviewLayoutTests
             Assert.Equal(normal, bar.TransformToAncestor(window).TransformBounds(new Rect(bar.RenderSize)));
             var card = Assert.IsType<Border>(window.FindName("DockedPreviewCard"));
             Assert.True(card.IsVisible);
-            Assert.Contains(Tree(card).OfType<TextBlock>(), x => x.Text == "Preview" && x.IsVisible);
+            Assert.Contains(Tree(card).OfType<TextBlock>(), x => x.Text == "PREVIEW" && x.IsVisible);
             Assert.DoesNotContain(Tree(card).OfType<TextBlock>(), x => x.Text.StartsWith("Preview your changes", StringComparison.Ordinal));
             var bounds = card.TransformToAncestor(window).TransformBounds(new Rect(card.RenderSize));
             Assert.True(bounds.Right < normal.Left);
