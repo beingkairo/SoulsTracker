@@ -86,15 +86,32 @@ public sealed class HostedProvisioningState
             ReadCapability == configuration.ReadCapability && WriteCapability == configuration.WriteCapability);
 
     internal byte[] Encode() => IsPreReleaseVersion1
-        ? JsonSerializer.SerializeToUtf8Bytes(new { version = 1, origin = Origin,
-            slotId = PriorConfiguration?.OverlayId, setupGrant = LegacySetupGrant, requestId = RequestId,
-            readCapability = ReadCapability, writeCapability = WriteCapability, readVerifier = ReadVerifier,
-            writeVerifier = WriteVerifier, phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged",
-            paused = false })
-        : JsonSerializer.SerializeToUtf8Bytes(new { version = 2, origin = Origin,
-            requestId = RequestId, readCapability = ReadCapability, writeCapability = WriteCapability,
-            readVerifier = ReadVerifier, writeVerifier = WriteVerifier,
-            phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged", overlayId = OverlayId });
+        ? JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 1,
+            origin = Origin,
+            slotId = PriorConfiguration?.OverlayId,
+            setupGrant = LegacySetupGrant,
+            requestId = RequestId,
+            readCapability = ReadCapability,
+            writeCapability = WriteCapability,
+            readVerifier = ReadVerifier,
+            writeVerifier = WriteVerifier,
+            phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged",
+            paused = false
+        })
+        : JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2,
+            origin = Origin,
+            requestId = RequestId,
+            readCapability = ReadCapability,
+            writeCapability = WriteCapability,
+            readVerifier = ReadVerifier,
+            writeVerifier = WriteVerifier,
+            phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged",
+            overlayId = OverlayId
+        });
 
     internal static HostedProvisioningState Decode(byte[] bytes, IEnumerable<string> approvedOrigins)
     {

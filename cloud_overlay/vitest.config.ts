@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [cloudflareTest({
-    wrangler: { configPath: "./wrangler.jsonc" },
+    wrangler: { configPath: "./test/worker.wrangler.jsonc" },
     miniflare: {
       ratelimits: {
         PUBLISHER_RATE_LIMITER: { namespace_id: "950501", simple: { limit: 60, period: 60 } },
@@ -11,7 +11,8 @@ export default defineConfig({
         CREATE_CLIENT_RATE_LIMITER: { namespace_id: "950503", simple: { limit: 1000, period: 60 } },
         CREATE_SERVICE_RATE_LIMITER: { namespace_id: "950504", simple: { limit: 1000, period: 60 } }
       },
-      bindings: { BROWSER_ORIGIN: "https://overlay.test", PROVISIONING_CEILING: "100",
+      bindings: { BROWSER_ORIGIN: "https://overlay.test", PROVISIONING_CONFIGURATION_VERSION: "1",
+        PROVISIONING_CEILING: "100", PROVISIONING_HARD_MAXIMUM: "1000",
         PROVISIONED_IDS: ["11111111111111111111111111111111", "22222222222222222222222222222222"] }
     }
   })],

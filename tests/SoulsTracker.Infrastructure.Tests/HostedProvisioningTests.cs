@@ -119,10 +119,20 @@ public sealed class HostedProvisioningTests
     public void PreReleasePendingDecodesOnlyForBoundedLocalMigration()
     {
         string id = new('1', 32), read = new('2', 64), write = new('3', 64);
-        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new { version = 1, origin = Origin, slotId = id,
-            setupGrant = new string('4', 64), requestId = new string('5', 32), readCapability = read, writeCapability = write,
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 1,
+            origin = Origin,
+            slotId = id,
+            setupGrant = new string('4', 64),
+            requestId = new string('5', 32),
+            readCapability = read,
+            writeCapability = write,
             readVerifier = HostedPublisherConfiguration.Verifier(id, "read", read),
-            writeVerifier = HostedPublisherConfiguration.Verifier(id, "write", write), phase = "claiming", paused = false });
+            writeVerifier = HostedPublisherConfiguration.Verifier(id, "write", write),
+            phase = "claiming",
+            paused = false
+        });
         HostedProvisioningState state = HostedProvisioningState.Decode(bytes, [Origin]);
         Assert.True(state.IsPreReleaseVersion1);
         Assert.Equal(HostedProvisioningPhase.Claiming, state.Phase);

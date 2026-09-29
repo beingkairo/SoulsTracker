@@ -1,0 +1,19 @@
+{
+  "name": "soulstracker-cloud-overlay-test",
+  "main": "../src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [
+      { "name": "OVERLAYS", "class_name": "OverlayState" },
+      { "name": "PROVISIONING_AUTHORITY", "class_name": "ProvisioningAuthority" }
+    ]
+  },
+  "migrations": [
+    { "tag": "test-v1", "new_sqlite_classes": ["OverlayState", "ProvisioningAuthority"] }
+  ]
+}

@@ -15,6 +15,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     private readonly HostedProvisioningStateStore? pendingStore;
     private readonly HostedOverlayProvisioningClient? provisioningClient;
     private readonly Func<HostedPublisherConfiguration, HostedOverlayPublisher> createSender;
+    private readonly Action<HostedDesktopPublisher, HostedOverlayPublisher> attachSender;
     private readonly Func<TimeSpan, CancellationToken, Task> retryDelay;
     private readonly CancellationTokenSource stop = new();
     private HostedPublisherConfiguration? configuration;
@@ -29,12 +30,14 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         Func<HostedPublisherConfiguration, HostedOverlayPublisher>? createSender = null,
         HostedProvisioningStateStore? pendingStore = null,
         HostedOverlayProvisioningClient? provisioningClient = null,
-        Func<TimeSpan, CancellationToken, Task>? retryDelay = null)
+        Func<TimeSpan, CancellationToken, Task>? retryDelay = null,
+        Action<HostedDesktopPublisher, HostedOverlayPublisher>? attachSender = null)
     {
         this.dispatcher = dispatcher; this.store = store; this.pendingStore = pendingStore;
         this.provisioningClient = provisioningClient;
         this.createSender = createSender ?? (config => new HostedOverlayPublisher(config));
         this.retryDelay = retryDelay ?? Task.Delay;
+        this.attachSender = attachSender ?? ((adapter, next) => adapter.Attach(next));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -136,11 +139,13 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     {
         HostedPublisherConfiguration nextConfiguration = acknowledged.Configuration(HostedProductionOrigins.Approved);
         await store.SaveAsync(nextConfiguration, stop.Token);
-        configuration = nextConfiguration;
         HostedOverlayPublisher next = createSender(nextConfiguration);
         await ActivateSenderAsync(next);
-        await pendingStore!.RemovePendingAsync(stop.Token);
-        pending = null; canRetry = false; statusText = string.Empty;
+        configuration = nextConfiguration;
+        try { await pendingStore!.RemovePendingAsync(stop.Token); pending = null; }
+        catch (OperationCanceledException) when (closing || setupStopped) { throw; }
+        catch { }
+        canRetry = false; statusText = string.Empty;
     }
 
     internal bool CopyReadUrl(Action<string> copy)
@@ -175,7 +180,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     private async Task ActivateSenderAsync(HostedOverlayPublisher next)
     {
         HostedOverlayPublisher? previous = sender;
-        try { adapter!.Attach(next); }
+        try { attachSender(adapter!, next); }
         catch { await next.DisposeAsync(); throw; }
         sender = next;
         if (previous is not null) await previous.DisposeAsync();

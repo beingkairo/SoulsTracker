@@ -25,9 +25,11 @@ npm audit
 It does not deploy. Do not omit that flag. Tests use the official Cloudflare
 Vitest pool and local workerd with SQLite storage. They inject synthetic
 verifiers through `runInDurableObject`; no application database is accessed.
-The tracked production configuration omits anonymous-create rate bindings and a
-creation ceiling, so anonymous creation fails closed until later owner-approved
-deployment configuration supplies them.
+The tracked production configuration omits anonymous-create rate bindings, the
+provisioning-authority binding and migration, and all ceiling configuration, so
+anonymous creation fails closed until a later owner-approved deployment configuration
+supplies them. The separate test Worker configuration provides deterministic local
+authority, limiter, configuration-version, ceiling and hard-maximum fixtures only.
 There is no production HTTP override. Playwright starts a separate test-only
 Wrangler configuration on local TLS at port 8799. That harness injects synthetic
 credentials into isolated workerd storage and can disconnect readers; its entry

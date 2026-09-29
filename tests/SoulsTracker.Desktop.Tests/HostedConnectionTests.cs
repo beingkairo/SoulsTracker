@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -59,9 +60,15 @@ public sealed class HostedConnectionTests
                 Assert.Null(window.FindName("SetUpHostedOverlayButton"));
                 Assert.Null(window.FindName("HostedConsentCheckBox"));
                 Assert.Null(window.FindName("HostedHostTextBlock"));
+                var panel = Tree(window).OfType<Border>().Single(x => AutomationProperties.GetName(x) == "Overlay connection panel");
+                var panelContent = Assert.IsType<StackPanel>(panel.Child);
+                Assert.Equal(3, panelContent.Children.OfType<FrameworkElement>().Count(x => x.IsVisible));
                 var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
                 Assert.True(url.IsReadOnly && url.Focusable);
                 Assert.Equal(Configuration().BuildReadUrl(), url.Text);
+                Assert.True(url.Focus());
+                url.SelectAll();
+                Assert.Equal(url.Text.Length, url.SelectionLength);
                 var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
                 Assert.Equal("Copy URL", AutomationProperties.GetName(copy));
                 Assert.Equal("Copy URL", copy.ToolTip);
@@ -134,7 +141,8 @@ public sealed class HostedConnectionTests
                 catch (Exception error) { completion.SetException(error); }
             });
             Dispatcher.Run();
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
         try { await completion.Task.WaitAsync(TimeSpan.FromSeconds(30)); }
         finally { Assert.True(thread.Join(TimeSpan.FromSeconds(5))); }

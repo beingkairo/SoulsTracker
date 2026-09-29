@@ -17,12 +17,10 @@
   "assets": { "directory": "../web_overlay/dist/hosted", "run_worker_first": ["/api/*"] },
   "durable_objects": {
     "bindings": [
-      { "name": "OVERLAYS", "class_name": "OverlayState" },
-      { "name": "PROVISIONING_AUTHORITY", "class_name": "ProvisioningAuthority" }
+      { "name": "OVERLAYS", "class_name": "OverlayState" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["OverlayState"] },
-    { "tag": "v2", "new_sqlite_classes": ["ProvisioningAuthority"] }
+    { "tag": "v1", "new_sqlite_classes": ["OverlayState"] }
   ]
 }

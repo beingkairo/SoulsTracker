@@ -71,10 +71,23 @@ public sealed class HostedPublisherConfiguration
     public override string ToString() => "Hosted publisher configuration (protected)";
 
     internal byte[] Encode() => Version == 1
-        ? JsonSerializer.SerializeToUtf8Bytes(new { version = 1, origin = Origin, overlayId = OverlayId,
-            readCapability = ReadCapability, writeCapability = WriteCapability })
-        : JsonSerializer.SerializeToUtf8Bytes(new { version = 2, origin = Origin, overlayId = OverlayId,
-            requestId = RequestId, readCapability = ReadCapability, writeCapability = WriteCapability });
+        ? JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 1,
+            origin = Origin,
+            overlayId = OverlayId,
+            readCapability = ReadCapability,
+            writeCapability = WriteCapability
+        })
+        : JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2,
+            origin = Origin,
+            overlayId = OverlayId,
+            requestId = RequestId,
+            readCapability = ReadCapability,
+            writeCapability = WriteCapability
+        });
 
     internal static HostedPublisherConfiguration Decode(byte[] bytes, IEnumerable<string> origins)
     {
