@@ -188,6 +188,79 @@ public sealed class HostedSetupConnectionTests
     });
 
     [Fact]
+    public async Task RestartedSenderConstructionFailureKeepsSavedPromotionRecoverableWithoutCreate() => await OnDispatcher(async () =>
+    {
+        string root = NewRoot();
+        try
+        {
+            var pendingStore = PendingStore(root);
+            HostedProvisioningState acknowledged = HostedProvisioningState.Create(Origin, [Origin]).Acknowledged(OverlayId);
+            await pendingStore.SavePendingAsync(acknowledged);
+            var active = ActiveStore(Path.Combine(root, "active.private"));
+            await active.SaveAsync(acknowledged.Configuration([Origin]));
+            int constructions = 0, requests = 0;
+            await using var restarted = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, active, config =>
+            {
+                if (Interlocked.Increment(ref constructions) == 1) throw new InvalidOperationException("synthetic restart construction failure");
+                return new HostedOverlayPublisher(config, new Server());
+            }, pendingStore, new HostedOverlayProvisioningClient(Origin,
+                new Handler((_, _) => { requests++; throw new InvalidOperationException("must not create"); })), (_, _) => Task.CompletedTask);
+
+            await restarted.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
+            Assert.False(restarted.CanCopy);
+            Assert.True(restarted.CanRetry);
+            Assert.Equal(string.Empty, restarted.UrlText);
+            Assert.NotNull(await pendingStore.LoadPendingAsync());
+
+            await restarted.RetryAsync();
+            Assert.Equal(0, requests);
+            Assert.Equal(2, constructions);
+            Assert.True(restarted.CanCopy);
+            Assert.False(restarted.CanRetry);
+            Assert.Null(await pendingStore.LoadPendingAsync());
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public async Task RestartedSenderAttachmentFailureKeepsSavedPromotionRecoverableWithoutCreate() => await OnDispatcher(async () =>
+    {
+        string root = NewRoot();
+        try
+        {
+            var pendingStore = PendingStore(root);
+            HostedProvisioningState acknowledged = HostedProvisioningState.Create(Origin, [Origin]).Acknowledged(OverlayId);
+            await pendingStore.SavePendingAsync(acknowledged);
+            var active = ActiveStore(Path.Combine(root, "active.private"));
+            await active.SaveAsync(acknowledged.Configuration([Origin]));
+            int attachments = 0, requests = 0;
+            await using var restarted = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, active,
+                config => new HostedOverlayPublisher(config, new Server()), pendingStore,
+                new HostedOverlayProvisioningClient(Origin,
+                    new Handler((_, _) => { requests++; throw new InvalidOperationException("must not create"); })),
+                (_, _) => Task.CompletedTask, (adapter, sender) =>
+                {
+                    if (Interlocked.Increment(ref attachments) == 1) throw new InvalidOperationException("synthetic restart attachment failure");
+                    adapter.Attach(sender);
+                });
+
+            await restarted.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
+            Assert.False(restarted.CanCopy);
+            Assert.True(restarted.CanRetry);
+            Assert.Equal(string.Empty, restarted.UrlText);
+            Assert.NotNull(await pendingStore.LoadPendingAsync());
+
+            await restarted.RetryAsync();
+            Assert.Equal(0, requests);
+            Assert.Equal(2, attachments);
+            Assert.True(restarted.CanCopy);
+            Assert.False(restarted.CanRetry);
+            Assert.Null(await pendingStore.LoadPendingAsync());
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
     public async Task ActiveSaveFailureRetainsAcknowledgedPendingForExactLocalRetry() => await OnDispatcher(async () =>
     {
         string root = NewRoot();

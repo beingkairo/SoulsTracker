@@ -15,7 +15,7 @@ Demon Souls uses a manual counter.
 3. Open the **Overlay** tab. SoulsTracker automatically prepares one private Overlay URL the first time you use it.
 4. Use the icon-only **Copy URL** control and add the URL to your streaming software.
 
-This development build connects only to https://overlay.beingkairo.com. No account, login, setup code, or operator action is required. Local tracking and TXT output do not require the Overlay or an internet connection.
+This development build connects only to https://overlay.beingkairo.com. No account, login, or operator action is required. Local tracking and TXT output do not require the Overlay or an internet connection.
 
 The Total Deaths overlay works at any size.
 

@@ -18,7 +18,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     private readonly Action<HostedDesktopPublisher, HostedOverlayPublisher> attachSender;
     private readonly Func<TimeSpan, CancellationToken, Task> retryDelay;
     private readonly CancellationTokenSource stop = new();
-    private HostedPublisherConfiguration? configuration;
+    private HostedPublisherConfiguration? configuration, persistedConfiguration;
     private HostedProvisioningState? pending;
     private HostedDesktopPublisher? adapter;
     private HostedOverlayPublisher? sender;
@@ -61,15 +61,24 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         adapter = new HostedDesktopPublisher(null, initial);
         return RunOperationAsync(async () =>
         {
-            configuration = await store.LoadAsync(stop.Token);
-            if (configuration is not null) await ConnectAsync();
-            if (pendingStore is null) return;
-            pending = await pendingStore.LoadPendingAsync(stop.Token);
-            if (configuration is not null)
+            persistedConfiguration = await store.LoadAsync(stop.Token);
+            if (persistedConfiguration is not null)
             {
-                if (pending?.Matches(configuration) == true) { await pendingStore.RemovePendingAsync(stop.Token); pending = null; }
+                try
+                {
+                    await ConnectAsync(persistedConfiguration);
+                    configuration = persistedConfiguration;
+                }
+                finally
+                {
+                    if (pendingStore is not null) pending = await pendingStore.LoadPendingAsync(stop.Token);
+                }
+                if (pendingStore is not null && pending?.Matches(configuration) == true)
+                { await pendingStore.RemovePendingAsync(stop.Token); pending = null; }
                 return;
             }
+            if (pendingStore is null) return;
+            pending = await pendingStore.LoadPendingAsync(stop.Token);
             if (pending is not null || provisioningRequested)
                 await RecoverOrProvisionAsync(allowNewRequest: provisioningRequested);
         }, showFailure: true);
@@ -79,7 +88,9 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     {
         dispatcher.VerifyAccess();
         provisioningRequested = true;
-        if (configuration is not null || pendingStore is null || provisioningClient is null || closing || setupStopped)
+        bool canRecoverSavedPromotion = persistedConfiguration is not null && pending?.Matches(persistedConfiguration) == true;
+        if (configuration is not null || (persistedConfiguration is not null && !canRecoverSavedPromotion) ||
+            pendingStore is null || provisioningClient is null || closing || setupStopped)
             return Task.CompletedTask;
         if (adapter is null || busy) return operation ?? Task.CompletedTask;
         return RunOperationAsync(() => RecoverOrProvisionAsync(allowNewRequest: true), showFailure: true);
@@ -139,6 +150,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     {
         HostedPublisherConfiguration nextConfiguration = acknowledged.Configuration(HostedProductionOrigins.Approved);
         await store.SaveAsync(nextConfiguration, stop.Token);
+        persistedConfiguration = nextConfiguration;
         HostedOverlayPublisher next = createSender(nextConfiguration);
         await ActivateSenderAsync(next);
         configuration = nextConfiguration;
@@ -166,15 +178,23 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         {
             try { await action(); }
             catch (OperationCanceledException) when (closing || setupStopped) { }
-            catch { if (showFailure) { canRetry = configuration is null && pending is not null; statusText = "The overlay URL could not be prepared. Check your connection and try again."; } }
+            catch
+            {
+                if (showFailure)
+                {
+                    canRetry = configuration is null && pending is not null &&
+                        (persistedConfiguration is null || pending.Matches(persistedConfiguration));
+                    statusText = "The overlay URL could not be prepared. Check your connection and try again.";
+                }
+            }
             finally { busy = false; if (!closing) Changed(); }
         }
     }
 
-    private async Task ConnectAsync()
+    private async Task ConnectAsync(HostedPublisherConfiguration nextConfiguration)
     {
-        if (closing || setupStopped || configuration is null) return;
-        await ActivateSenderAsync(createSender(configuration));
+        if (closing || setupStopped) return;
+        await ActivateSenderAsync(createSender(nextConfiguration));
     }
 
     private async Task ActivateSenderAsync(HostedOverlayPublisher next)
