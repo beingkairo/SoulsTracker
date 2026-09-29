@@ -53,7 +53,7 @@ public sealed class HostedConnectionTests
                 await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
                 await Idle();
                 var text = Tree(window).OfType<TextBlock>().Select(x => x.Text).ToArray();
-                Assert.Contains("OVERLAY", text);
+                Assert.Contains("OVERLAY URL", text);
                 const string explanation = "Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.";
                 Assert.Equal(explanation, AutomationProperties.GetHelpText((Button)window.FindName("OverlayHelpButton")));
                 Assert.DoesNotContain(explanation, text);

@@ -281,10 +281,10 @@ public sealed class SettingsHotkeyControlTests
                 Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
                 RecordSettings(window, choice.GameId.Value);
                 help.BringIntoView(); await Idle();
-                var heading = Assert.IsType<StackPanel>(help.Parent);
-                var panel = Assert.IsType<StackPanel>(heading.Parent);
-                var incrementRow = (FrameworkElement)field.Parent;
-                Assert.InRange(incrementRow.TranslatePoint(new Point(), panel).Y - (heading.TranslatePoint(new Point(), panel).Y + heading.ActualHeight), 7.5, 8.5);
+                var heading = Assert.IsType<HeaderedContentControl>(help.Parent);
+                heading.ApplyTemplate();
+                var divider = Assert.IsType<Border>(heading.Template.FindName("PrimarySectionHeaderDivider", heading));
+                Assert.Equal(new Thickness(0, 4, 0, 8), divider.Margin);
                 Assert.True(ToolTipService.GetIsEnabled(help));
                 Assert.Equal(60000, ToolTipService.GetShowDuration(help));
                 Assert.True(help.Focus()); await Idle();

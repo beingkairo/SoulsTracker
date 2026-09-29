@@ -395,7 +395,7 @@ public partial class MainWindow : Window
         if (sender is System.Windows.Controls.Button { ToolTip: System.Windows.Controls.ToolTip help } button)
         {
             help.PlacementTarget = button;
-            help.IsOpen = true;
+            help.IsOpen = !restoringOverlayWorkspace;
         }
     }
 

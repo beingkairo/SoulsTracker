@@ -52,8 +52,23 @@
         </Style>
         <Style x:Key="PrimarySectionTitle" TargetType="TextBlock" BasedOn="{StaticResource PanelTitle}">
             <Setter Property="FontSize" Value="14" />
-            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="PrimarySectionHeader" TargetType="HeaderedContentControl">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="HeaderedContentControl">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="PrimarySectionHeaderTitle" Style="{StaticResource PrimarySectionTitle}" Text="{TemplateBinding Header}" />
+                                <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Border x:Name="PrimarySectionHeaderDivider" Margin="0,4,0,8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Opacity="0.45" SnapsToDevicePixels="True" />
+                        </StackPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="MutedText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
@@ -430,7 +445,7 @@
                 <StackPanel>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Game session panel">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource PanelTitle}" Text="GAME SESSION" />
+                            <HeaderedContentControl x:Name="GameSessionSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="GAME SESSION" />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,10" Text="Choose the game currently being tracked." />
                             <ComboBox x:Name="GameSelector"
                                       ItemsSource="{Binding GameChoices}"
@@ -587,12 +602,11 @@
 
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death counter panel">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource PanelTitle}" Text="TOTAL DEATHS" VerticalAlignment="Center" />
+                            <HeaderedContentControl x:Name="TotalDeathsSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="TOTAL DEATHS">
                                 <Button x:Name="ManualCounterHelpButton" Style="{StaticResource ContextHelpButton}" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Manual counter hotkeys help" AutomationProperties.HelpText="Customizable hotkeys for increasing and decreasing the count can be found in the Settings tab.">
                                     <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                 </Button>
-                            </StackPanel>
+                            </HeaderedContentControl>
                             <TextBlock x:Name="TotalDeathsTextBlock" Margin="0,6,0,0" Text="{Binding TotalDeathsText}" TextWrapping="Wrap" AutomationProperties.Name="Current total deaths">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -668,12 +682,11 @@
                     <StackPanel>
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="OVERLAY" />
+                                <HeaderedContentControl x:Name="OverlaySectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="OVERLAY URL">
                                     <Button x:Name="OverlayHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Overlay help" AutomationProperties.HelpText="Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.">
                                         <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                     </Button>
-                                </StackPanel>
+                                </HeaderedContentControl>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBox Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" IsReadOnly="True" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
@@ -687,12 +700,11 @@
                         </Border>
                         <Border x:Name="NormalPreviewSection" Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Local appearance preview panel">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="PREVIEW" />
+                                <HeaderedContentControl x:Name="PreviewSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="PREVIEW">
                                     <Button x:Name="PreviewHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Preview help" AutomationProperties.HelpText="Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes.">
                                         <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                     </Button>
-                                </StackPanel>
+                                </HeaderedContentControl>
                                 <Grid x:Name="NormalPreviewSlot">
                                     <local:AppearancePreview x:Name="LocalAppearancePreview" AutomationProperties.Name="Local Total Deaths appearance preview" />
                                 </Grid>
@@ -700,12 +712,11 @@
                         </Border>
                         <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Overlay appearance panel">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="APPEARANCE" />
+                                <HeaderedContentControl x:Name="AppearanceSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="APPEARANCE">
                                     <Button x:Name="AppearanceHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Appearance help" AutomationProperties.HelpText="The overlay uses these settings. Click Apply to live overlay to show your changes.">
                                         <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                     </Button>
-                                </StackPanel>
+                                </HeaderedContentControl>
                                         <StackPanel x:Name="AppearanceFields">
                                             <StackPanel.Resources>
                                                 <Style TargetType="TextBox" BasedOn="{StaticResource OverlayAppearanceTextBox}" />
@@ -744,14 +755,13 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Border x:Name="DockedPreviewCard" Grid.RowSpan="2" Style="{StaticResource Panel}" Padding="16,4" Margin="24,0,41,0" VerticalAlignment="Top" Visibility="Collapsed" AutomationProperties.Name="Compact appearance preview panel">
+                <Border x:Name="DockedPreviewCard" Grid.RowSpan="2" Style="{StaticResource Panel}" Padding="16,0" Margin="24,0,41,0" VerticalAlignment="Top" Visibility="Collapsed" AutomationProperties.Name="Compact appearance preview panel">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                            <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="PREVIEW" />
+                        <HeaderedContentControl x:Name="DockedPreviewSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="PREVIEW">
                             <Button x:Name="DockedPreviewHelpButton" MinHeight="24" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Preview help" AutomationProperties.HelpText="{Binding ElementName=PreviewHelpButton, Path=(AutomationProperties.HelpText)}">
                                 <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                             </Button>
-                        </StackPanel>
+                        </HeaderedContentControl>
                         <Grid x:Name="DockedPreviewSlot"/>
                     </StackPanel>
                 </Border>
@@ -773,12 +783,11 @@
                 <StackPanel x:Name="SettingsContentStack">
                     <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Update check settings">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="UPDATES" />
+                            <HeaderedContentControl x:Name="UpdatesSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="UPDATES">
                                 <Button x:Name="UpdatesHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Updates help" AutomationProperties.HelpText="Checks GitHub for the latest updates.">
                                     <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                 </Button>
-                            </StackPanel>
+                            </HeaderedContentControl>
                             <WrapPanel>
                                 <Button x:Name="CheckForUpdatesButton" Content="Check for updates" Click="CheckForUpdates_Click" IsEnabled="{Binding CanCheckForUpdates}" AutomationProperties.Name="Check for updates" />
 
@@ -828,12 +837,11 @@
                     </Border>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Global hotkeys settings">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="GLOBAL HOTKEYS" />
+                            <HeaderedContentControl x:Name="GlobalHotkeysSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="GLOBAL HOTKEYS">
                                 <Button x:Name="GlobalHotkeysHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Global hotkeys help" AutomationProperties.HelpText="{Binding GlobalHotkeyUsageDescription, StringFormat={}{0} Choose a field to record. Enter saves; Esc cancels. Both return to the view where recording started.}">
                                     <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                 </Button>
-                            </StackPanel>
+                            </HeaderedContentControl>
                             <DockPanel Margin="0,0,0,5"><TextBlock Width="90" VerticalAlignment="Center" Text="Increment" /><TextBox x:Name="IncrementHotkeyTextBox" IsEnabled="{Binding IsGlobalHotkeyConfigurationAvailable}" IsReadOnly="True" Text="{Binding PendingIncrementHotkey, Mode=OneWay}" GotKeyboardFocus="IncrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Increment global hotkey" /></DockPanel>
                             <DockPanel><TextBlock Width="90" VerticalAlignment="Center" Text="Decrement" /><TextBox x:Name="DecrementHotkeyTextBox" IsEnabled="{Binding IsGlobalHotkeyConfigurationAvailable}" IsReadOnly="True" Text="{Binding PendingDecrementHotkey, Mode=OneWay}" GotKeyboardFocus="DecrementHotkeyTextBox_GotKeyboardFocus" AutomationProperties.Name="Decrement global hotkey" /></DockPanel>
                             <Button x:Name="ApplyHotkeysButton" IsEnabled="{Binding IsGlobalHotkeyConfigurationAvailable}" Margin="0,8,0,0" HorizontalAlignment="Left" Click="ApplyHotkeysButton_Click" Content="Apply hotkeys" AutomationProperties.Name="Apply global hotkeys" />
@@ -853,12 +861,11 @@
 
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Streaming text export settings">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Style="{StaticResource PrimarySectionTitle}" Text="STREAMING TEXT EXPORT" />
+                            <HeaderedContentControl x:Name="StreamingTextExportSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="STREAMING TEXT EXPORT">
                                 <Button x:Name="StreamingTextExportHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Streaming text export help" AutomationProperties.HelpText="Write local TXT files for text sources in your streaming software.">
                                     <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                 </Button>
-                            </StackPanel>
+                            </HeaderedContentControl>
                             <StackPanel x:Name="DeathsExportToggleRow" Orientation="Horizontal">
                                 <CheckBox x:Name="DeathsExportEnabledCheckBox" Height="16" IsChecked="{Binding IsDeathsExportEnabled, Mode=OneWay}" Checked="DeathsExportEnabled_Checked" Unchecked="DeathsExportEnabled_Unchecked" AutomationProperties.Name="Enable writing Deaths to txt file">
                                     <TextBlock><Run Text="Enable writing " /><Run FontWeight="Bold" Text="Deaths" /><Run Text=" to txt file" /></TextBlock>

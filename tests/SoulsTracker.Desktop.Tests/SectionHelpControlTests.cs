@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
@@ -13,6 +14,8 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class SectionHelpControlTests
 {
+    private static readonly string[] OverlayHelpNames = ["Overlay", "Preview", "Appearance", "DockedPreview"];
+
     public static IEnumerable<object[]> SectionCases()
     {
         foreach (var (width, height) in new[] { (560, 400), (560, 760), (1060, 760) })
@@ -50,18 +53,16 @@ public sealed class SectionHelpControlTests
             var hit = window.InputHitTest(help.TranslatePoint(new Point(help.ActualWidth / 2, help.ActualHeight / 2), window));
             Assert.True(ReferenceEquals(help, hit) || help.IsAncestorOf(Assert.IsAssignableFrom<DependencyObject>(hit)));
             Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.Text == text);
-            var row = Assert.IsType<StackPanel>(help.Parent);
-            var title = Assert.Single(row.Children.OfType<TextBlock>());
-            Assert.Equal(Orientation.Horizontal, row.Orientation);
+            var header = Assert.IsType<HeaderedContentControl>(help.Parent);
+            header.ApplyTemplate();
+            var title = Assert.IsType<TextBlock>(header.Template.FindName("PrimarySectionHeaderTitle", header));
+            var divider = Assert.IsType<Border>(header.Template.FindName("PrimarySectionHeaderDivider", header));
             Assert.Equal(VerticalAlignment.Center, title.VerticalAlignment);
-            Assert.Equal(8, row.Margin.Bottom);
-            var panel = Assert.IsType<StackPanel>(row.Parent);
-            var next = Assert.IsAssignableFrom<FrameworkElement>(panel.Children[panel.Children.IndexOf(row) + 1]);
-            Assert.InRange(next.TranslatePoint(new Point(), panel).Y - (row.TranslatePoint(new Point(), panel).Y + row.ActualHeight), 7.5, 8.5);
-            Assert.InRange(Math.Abs(title.TranslatePoint(new Point(0, title.ActualHeight / 2), row).Y - help.TranslatePoint(new Point(0, help.ActualHeight / 2), row).Y), 0, 0.5);
+            Assert.Equal(new Thickness(0, 4, 0, 8), divider.Margin);
+            Assert.InRange(Math.Abs(title.TranslatePoint(new Point(0, title.ActualHeight / 2), header).Y - help.TranslatePoint(new Point(0, help.ActualHeight / 2), header).Y), 0, 0.5);
             var scroll = (ScrollViewer)window.FindName(workspace == "Overlay" ? "OverlayConfigurationScrollViewer" : "SettingsContentScrollViewer");
             var viewport = Tree(scroll).OfType<ScrollContentPresenter>().First();
-            scroll.ScrollToVerticalOffset(scroll.VerticalOffset + row.TranslatePoint(new Point(), viewport).Y);
+            scroll.ScrollToVerticalOffset(scroll.VerticalOffset + header.TranslatePoint(new Point(), viewport).Y);
             await Idle();
             Assert.True(help.Focus()); await Idle();
             Assert.True(help.IsKeyboardFocused);
@@ -108,11 +109,12 @@ public sealed class SectionHelpControlTests
             Assert.True(help.IsVisible && help.IsHitTestVisible && help.IsEnabled && help.IsTabStop);
             Assert.True(ToolTipService.GetIsEnabled(help));
             Assert.Equal(60000, ToolTipService.GetShowDuration(help));
-            var row = Assert.IsType<StackPanel>(help.Parent);
-            var title = Assert.Single(row.Children.OfType<TextBlock>());
+            var header = Assert.IsType<HeaderedContentControl>(help.Parent);
+            header.ApplyTemplate();
+            var title = Assert.IsType<TextBlock>(header.Template.FindName("PrimarySectionHeaderTitle", header));
+            var divider = Assert.IsType<Border>(header.Template.FindName("PrimarySectionHeaderDivider", header));
             Assert.Equal(VerticalAlignment.Center, title.VerticalAlignment);
-            // Retain the compact card's two-DIP gap and a usable 32-by-24 hit target.
-            Assert.Equal(2, row.Margin.Bottom);
+            Assert.Equal(new Thickness(0, 4, 0, 8), divider.Margin);
             Assert.True(help.ActualWidth >= 32 && help.ActualHeight >= 24);
             Assert.DoesNotContain(Tree(card).OfType<TextBlock>(), x => x.Text == AutomationProperties.GetHelpText(help));
             Assert.True(help.Focus()); await Idle();
@@ -142,7 +144,7 @@ public sealed class SectionHelpControlTests
     [InlineData(560, 400)]
     [InlineData(560, 760)]
     [InlineData(1060, 760)]
-    public Task PrimaryHeadersShareBoldTypographyWithoutRestylingContent(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
+    public Task PrimaryHeadersShareOneRegularHeaderAndDividerWithoutRestylingContent(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.DemonsSouls);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
@@ -152,46 +154,93 @@ public sealed class SectionHelpControlTests
         {
             window.Show(); await Idle();
             Style? sharedStyle = null;
+            Brush? sharedDividerBrush = null;
             foreach (var (workspace, sections) in new[]
             {
-                ("Overlay", new[] { ("Overlay", "OVERLAY"), ("Preview", "PREVIEW"), ("Appearance", "APPEARANCE") }),
+                ("Main", new[] { ("GameSession", "GAME SESSION"), ("TotalDeaths", "TOTAL DEATHS") }),
+                ("Overlay", new[] { ("Overlay", "OVERLAY URL"), ("Preview", "PREVIEW"), ("Appearance", "APPEARANCE") }),
                 ("Settings", new[] { ("Updates", "UPDATES"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "STREAMING TEXT EXPORT") })
             })
             {
                 ((TabItem)window.FindName(workspace + "WorkspaceTab")).IsSelected = true; await Idle();
                 foreach (var (section, label) in sections)
                 {
-                    var help = (Button)window.FindName(section + "HelpButton");
-                    var row = (StackPanel)help.Parent;
-                    var title = row.Children.OfType<TextBlock>().Single();
+                    var header = Assert.IsType<HeaderedContentControl>(window.FindName(section + "SectionHeader"));
+                    header.ApplyTemplate();
+                    var title = Assert.IsType<TextBlock>(header.Template.FindName("PrimarySectionHeaderTitle", header));
+                    var divider = Assert.IsType<Border>(header.Template.FindName("PrimarySectionHeaderDivider", header));
+                    Assert.Equal(label, header.Header);
                     Assert.Equal(label, title.Text);
-                    Assert.Equal(FontWeights.Bold, title.FontWeight);
+                    Assert.Equal(FontWeights.Normal, title.FontWeight);
                     Assert.Equal(14, title.FontSize);
                     sharedStyle ??= title.Style;
                     Assert.Same(sharedStyle, title.Style);
                     Assert.Equal(DependencyProperty.UnsetValue, title.ReadLocalValue(TextBlock.FontSizeProperty));
                     Assert.Equal(DependencyProperty.UnsetValue, title.ReadLocalValue(TextBlock.FontWeightProperty));
-                    Assert.Equal(new Thickness(8, 0, 0, 0), help.Margin);
-                    Assert.Equal(new Thickness(0, 0, 0, 8), row.Margin);
-                    foreach (var body in Tree((StackPanel)row.Parent).OfType<TextBlock>().Where(x => !ReferenceEquals(x, title)))
+                    sharedDividerBrush ??= divider.BorderBrush;
+                    Assert.Same(sharedDividerBrush, divider.BorderBrush);
+                    Assert.Equal(new Thickness(0, 0, 0, 1), divider.BorderThickness);
+                    Assert.Equal(0.45, divider.Opacity);
+                    Assert.Equal(new Thickness(0, 4, 0, 8), divider.Margin);
+                    var help = Tree(header).OfType<Button>().SingleOrDefault();
+                    if (help is not null) Assert.Equal(new Thickness(8, 0, 0, 0), help.Margin);
+                    foreach (var body in Tree((FrameworkElement)header.Parent).OfType<TextBlock>().Where(x => !ReferenceEquals(x, title)))
                     {
                         Assert.NotSame(sharedStyle, body.Style);
-                        Assert.True(body.FontSize < title.FontSize, $"Content inherited heading size: {body.Text}");
                     }
-                    Assert.True(help.FontSize < title.FontSize);
+                    if (help is not null) Assert.True(help.FontSize < title.FontSize);
                 }
+                AppearanceGeometryTests.Capture(window, $"primary-headers-{workspace}-{width}x{height}");
             }
             ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
             ((ScrollViewer)window.FindName("OverlayConfigurationScrollViewer")).ScrollToEnd(); await Idle();
-            var dockedHelp = (Button)window.FindName("DockedPreviewHelpButton");
-            var dockedTitle = ((StackPanel)dockedHelp.Parent).Children.OfType<TextBlock>().Single();
-            Assert.Equal("PREVIEW", dockedTitle.Text);
+            var dockedHeader = (HeaderedContentControl)window.FindName("DockedPreviewSectionHeader");
+            dockedHeader.ApplyTemplate();
+            var dockedTitle = (TextBlock)dockedHeader.Template.FindName("PrimarySectionHeaderTitle", dockedHeader);
+            var dockedDivider = (Border)dockedHeader.Template.FindName("PrimarySectionHeaderDivider", dockedHeader);
+            Assert.Equal("PREVIEW", dockedHeader.Header);
             Assert.Same(sharedStyle, dockedTitle.Style);
             Assert.Equal(14, dockedTitle.FontSize);
-            Assert.Equal(FontWeights.Bold, dockedTitle.FontWeight);
+            Assert.Equal(FontWeights.Normal, dockedTitle.FontWeight);
             Assert.Equal(DependencyProperty.UnsetValue, dockedTitle.ReadLocalValue(TextBlock.FontSizeProperty));
-            Assert.Equal(new Thickness(8, 0, 0, 0), dockedHelp.Margin);
+            Assert.Same(sharedDividerBrush, dockedDivider.BorderBrush);
+            Assert.Equal(new Thickness(0, 0, 0, 1), dockedDivider.BorderThickness);
             Assert.Empty(repository.Saves);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task OverlayNavigationAndResponsiveLayoutDoNotOpenHelpUntilIntentionalFocus() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var window = new MainWindow { Width = 560, Height = 760, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); window.Activate(); await Idle();
+            var main = (TabItem)window.FindName("MainWorkspaceTab");
+            var overlay = (TabItem)window.FindName("OverlayWorkspaceTab");
+            var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
+            var helps = OverlayHelpNames
+                .Select(x => (Button)window.FindName(x + "HelpButton")).ToArray();
+
+            foreach (var help in helps) Assert.False(((ToolTip)help.ToolTip).IsOpen);
+            overlay.IsSelected = true; await Idle();
+            foreach (var help in helps) Assert.False(((ToolTip)help.ToolTip).IsOpen);
+            main.IsSelected = true; await Idle(); overlay.IsSelected = true; await Idle();
+            window.Width = 1060; window.Height = 760; await Idle();
+            scroll.ScrollToEnd(); await Idle(); scroll.ScrollToTop(); await Idle();
+            foreach (var help in helps) Assert.False(((ToolTip)help.ToolTip).IsOpen);
+
+            var overlayHelp = helps[0];
+            Assert.True(overlayHelp.Focus()); await Idle();
+            Assert.True(((ToolTip)overlayHelp.ToolTip).IsOpen);
+            main.IsSelected = true; await Idle();
+            Assert.False(((ToolTip)overlayHelp.ToolTip).IsOpen);
+            overlay.IsSelected = true; await Idle();
+            Assert.False(((ToolTip)overlayHelp.ToolTip).IsOpen);
+            Assert.True(overlayHelp.IsKeyboardFocused);
+            Assert.True(((FrameworkElement)window.FindName("AppearanceActions")).Focus()); await Idle();
+            Assert.False(((ToolTip)overlayHelp.ToolTip).IsOpen);
         }
         finally { window.Close(); }
     });
