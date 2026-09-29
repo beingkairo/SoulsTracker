@@ -38,11 +38,13 @@ function harness(random = 0.5) {
   return { client, sockets, rendered, urls, timers, advance };
 }
 
-test("strict fragment-only identity rejects duplicates, styles, queries and malformed encodings", () => {
-  const base = `https://overlay.test/overlay/#id=${"1".repeat(32)}&read=${"2".repeat(64)}`;
+test("strict canonical page and fragment-only identity reject alternate routes, duplicates, styles, queries and malformed encodings", () => {
+  const base = `https://overlay.test/soulstracker/#id=${"1".repeat(32)}&read=${"2".repeat(64)}`;
   expect(parseHostedLocation(base)?.id).toBe("1".repeat(32));
-  for (const url of [base + "&read=x", base + "&title=x", base.replace("/overlay/#", "/overlay/?id=x#"),
-    base.replace("https:", "http:"), base.replace("#id=", "#%69d="), base.replace("&read=", "&write="), base + "&", base.replace("#id=", "#id=%")])
+  for (const url of [base + "&read=x", base + "&title=x", base.replace("/soulstracker/#", "/soulstracker/?id=x#"),
+    base.replace("/soulstracker/", "/overlay/"), base.replace("/soulstracker/", "/"), base.replace("/soulstracker/", "/soulstracker"),
+    base.replace("https:", "http:"), base.replace("overlay.test", "user@overlay.test"), base.replace("#id=", "#%69d="),
+    base.replace("&read=", "&write="), base + "&", base.replace("#id=", "#id=%")])
     expect(parseHostedLocation(url)).toBeNull();
 });
 test("authenticates only in the first message and applies combined snapshots atomically without precision loss", () => {

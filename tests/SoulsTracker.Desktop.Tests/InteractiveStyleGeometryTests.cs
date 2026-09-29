@@ -25,7 +25,7 @@ public sealed class InteractiveStyleGeometryTests
                 IsEldenRingChangeVisible = true,
                 EldenRingDirectoryPath = "C:\\synthetic-save",
                 PresentationControlsEnabled = true,
-                HostedOverlay = new { CanCopy = true, UrlText = "https://overlay.beingkairo.com/overlay/#synthetic" }
+                HostedOverlay = new { CanCopy = true, UrlText = "https://overlay.beingkairo.com/soulstracker/#synthetic" }
             }
         };
         try
@@ -128,7 +128,7 @@ public sealed class InteractiveStyleGeometryTests
                 IsEldenRingChangeVisible = true,
                 EldenRingDirectoryPath = "C:\\synthetic-save",
                 PresentationControlsEnabled = true,
-                HostedOverlay = new { CanCopy = true, UrlText = "https://overlay.beingkairo.com/overlay/#synthetic" }
+                HostedOverlay = new { CanCopy = true, UrlText = "https://overlay.beingkairo.com/soulstracker/#synthetic" }
             }
         };
         try

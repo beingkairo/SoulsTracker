@@ -49,7 +49,7 @@ public sealed class HostedSetupConnectionTests
             Assert.Null(await pending.LoadPendingAsync());
             string? copied = null;
             Assert.True(connection.CopyReadUrl(value => copied = value));
-            Assert.StartsWith(Origin + "/overlay/#id=" + OverlayId + "&read=", copied, StringComparison.Ordinal);
+            Assert.StartsWith(Origin + "/soulstracker/#id=" + OverlayId + "&read=", copied, StringComparison.Ordinal);
             Assert.Equal("URL copied", connection.CopyFeedbackText);
         }
         finally { Directory.Delete(root, true); }

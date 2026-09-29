@@ -117,7 +117,7 @@ public sealed class HostedConfigurationTests
             var loaded = await store.LoadAsync();
             Assert.NotNull(loaded);
             Assert.Equal(configuration.BuildReadUrl(), loaded.BuildReadUrl());
-            Assert.Equal(Origin + "/overlay/#id=" + new string('a', 32) + "&read=" + new string('b', 64), loaded.BuildReadUrl());
+            Assert.Equal(Origin + "/soulstracker/#id=" + new string('a', 32) + "&read=" + new string('b', 64), loaded.BuildReadUrl());
             Assert.DoesNotContain(new string('c', 64), loaded.BuildReadUrl());
             Assert.DoesNotContain(new string('b', 64), JsonSerializer.Serialize(configuration));
             Assert.DoesNotContain(new string('c', 64), configuration.ToString());

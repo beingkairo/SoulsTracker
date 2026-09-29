@@ -278,7 +278,7 @@ public sealed class HostedConnectionPresentationTests
                 Assert.True(copy.IsEnabled);
                 Assert.False(retry.IsVisible);
                 Assert.Equal(string.Empty, connection.StatusText);
-                Assert.Equal(Origin + "/overlay/#id=" + OverlayId, url.Text[..url.Text.IndexOf("&read=", StringComparison.Ordinal)]);
+                Assert.Equal(Origin + "/soulstracker/#id=" + OverlayId, url.Text[..url.Text.IndexOf("&read=", StringComparison.Ordinal)]);
             }
             finally { window.Close(); }
         }

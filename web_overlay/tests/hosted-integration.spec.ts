@@ -21,7 +21,7 @@ test.beforeEach(async ({ request }) => {
   credentials = await provision(request); sequence = 0;
   await acquire(request, credentials);
 });
-const address = () => `${origin}/overlay/#id=${credentials.id}&read=${credentials.read}`;
+const address = () => `${origin}/soulstracker/#id=${credentials.id}&read=${credentials.read}`;
 test("hosted viewport centers complete painted content at intrinsic scale", async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 640, height: 360 });
   await publish(request, { death: { value: "42", availability: "available" }, appearance: { ...style, padding: 12, backgroundOpacity: 100 } });
@@ -397,7 +397,7 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
 }
 
 test("credential-free shell and hashed assets have cache and same-origin security headers", async ({ request }) => {
-  const shell = await request.get(`${origin}/overlay/`); expect(shell.status()).toBe(200);
+  const shell = await request.get(`${origin}/soulstracker/`); expect(shell.status()).toBe(200);
   expect(shell.headers()["cache-control"]).toBe("public, max-age=0, must-revalidate");
   expect(shell.headers()["etag"]).toBeTruthy();
   expect(shell.headers()["referrer-policy"]).toBe("no-referrer");
@@ -405,7 +405,7 @@ test("credential-free shell and hashed assets have cache and same-origin securit
   expect(shell.headers()["content-security-policy"]).toContain("connect-src 'self'");
   const text = await shell.text();
   expect(text.includes(credentials.read) || text.includes(credentials.write)).toBe(false);
-  const cached = await request.get(`${origin}/overlay/`, { headers: { "If-None-Match": shell.headers()["etag"] } });
+  const cached = await request.get(`${origin}/soulstracker/`, { headers: { "If-None-Match": shell.headers()["etag"] } });
   expect(cached.status()).toBe(304);
   const pending = [...text.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)].map(match => match[1]);
   const seen = new Set<string>();
@@ -426,6 +426,12 @@ test("credential-free shell and hashed assets have cache and same-origin securit
   expect(publisher.headers()["set-cookie"]).toBeUndefined();
 });
 
+test("former overlay page is not found without redirect", async ({ request }) => {
+  const response = await request.get(`${origin}/overlay/`, { maxRedirects: 0 });
+  expect(response.status()).toBe(404);
+  expect(response.headers()["location"]).toBeUndefined();
+});
+
 test("URL styles and duplicate credentials do not open a read connection or render", async ({ page }) => {
   let sockets = 0; page.on("websocket", () => sockets++);
   await page.goto(address() + "&title=Changed");
@@ -438,7 +444,7 @@ test("URL styles and duplicate credentials do not open a read connection or rend
 test("a corrected read fragment starts one new client after invalid credentials", async ({ page, request }) => {
   await publish(request, { death: { value: "7", availability: "available" } });
   const opened = page.waitForEvent("websocket");
-  await page.goto(`${origin}/overlay/#id=${credentials.id}&read=${"0".repeat(64)}`);
+  await page.goto(`${origin}/soulstracker/#id=${credentials.id}&read=${"0".repeat(64)}`);
   const socket = await opened; if (!socket.isClosed()) await socket.waitForEvent("close");
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
   let reconnects = 0; page.on("websocket", () => reconnects++);

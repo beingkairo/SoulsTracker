@@ -143,7 +143,7 @@ configuration denies access. Request origins must also match the configured orig
 Cookies, Authorization headers, query credentials and WebSocket subprotocols
 are rejected on this route.
 
-The credential-free `/overlay/` page accepts only the fragment shape
+The credential-free `/soulstracker/` page accepts only the fragment shape
 `#id=<overlay-id>&read=<read-capability>`, with canonical lowercase hexadecimal
 values. Queries, duplicate/extra fields and old style fragments are invalid.
 The read capability is sent in the first socket message as

@@ -5,7 +5,7 @@ export function parseHostedLocation(address: string): HostedLocation | null {
   try {
     const url = new URL(address);
     const match = /^#id=([0-9a-f]{32}|[0-9a-f]{64})&read=([0-9a-f]{64})$/.exec(url.hash);
-    if (url.protocol !== "https:" || url.search || url.username || url.password || !match) return null;
+    if (url.protocol !== "https:" || url.pathname !== "/soulstracker/" || url.search || url.username || url.password || !match) return null;
     return { id: match[1], read: match[2], origin: url.origin };
   } catch { return null; }
 }

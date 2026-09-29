@@ -67,7 +67,7 @@ public sealed class HostedPublisherConfiguration
         Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes($"overlay-v1:{overlayId}:{role}:{capability}")));
     internal static string VerifierV2(string requestId, string role, string capability) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes($"overlay-v2:{requestId}:{role}:{capability}")));
-    public string BuildReadUrl() => $"{Origin}/overlay/#id={OverlayId}&read={ReadCapability}";
+    public string BuildReadUrl() => $"{Origin}/soulstracker/#id={OverlayId}&read={ReadCapability}";
     public override string ToString() => "Hosted publisher configuration (protected)";
 
     internal byte[] Encode() => Version == 1

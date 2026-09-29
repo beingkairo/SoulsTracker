@@ -1,10 +1,11 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-await mkdir(resolve(root, "dist/hosted/overlay"), { recursive: true });
 const hosted = resolve(root, "dist/hosted");
+await rm(resolve(hosted, "overlay"), { recursive: true, force: true });
+await mkdir(resolve(hosted, "soulstracker"), { recursive: true });
 await mkdir(resolve(hosted, "assets"), { recursive: true });
 const emit = async (name, extension, content) => {
   const hash = createHash("sha256").update(content).digest("hex");
@@ -22,6 +23,6 @@ for (const name of ["hosted-contracts", "hosted-client", "hosted-renderer", "hos
   source = source.replaceAll("__HOSTED_SKULL__", skull);
   modules.set(name, await emit(name, "js", source));
 }
-const shell = await readFile(resolve(root, "hosted/overlay/index.html"), "utf8");
-await writeFile(resolve(hosted, "overlay/index.html"), shell.replace("__CSS__", css).replace("__ENTRY__", modules.get("hosted-entry")));
+const shell = await readFile(resolve(root, "hosted/soulstracker/index.html"), "utf8");
+await writeFile(resolve(hosted, "soulstracker/index.html"), shell.replace("__CSS__", css).replace("__ENTRY__", modules.get("hosted-entry")));
 await copyFile(resolve(root, "hosted/_headers"), resolve(hosted, "_headers"));
