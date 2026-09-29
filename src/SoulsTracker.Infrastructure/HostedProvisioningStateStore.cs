@@ -9,120 +9,162 @@ public enum HostedProvisioningPhase
     Acknowledged,
 }
 
-/// <summary>Complete recoverable setup request. Secret members are internal to Infrastructure.</summary>
+/// <summary>Complete recoverable anonymous create request. Secret members stay inside Infrastructure.</summary>
 public sealed class HostedProvisioningState
 {
     internal string Origin { get; }
-    internal string SlotId { get; }
-    internal string SetupGrant { get; }
     internal string RequestId { get; }
+    internal string ReadCapability { get; }
+    internal string WriteCapability { get; }
     internal string ReadVerifier { get; }
     internal string WriteVerifier { get; }
-    public HostedPublisherConfiguration Configuration { get; }
+    internal string? OverlayId { get; }
+    private string? LegacySetupGrant { get; }
+    public HostedPublisherConfiguration? PriorConfiguration { get; }
+    public bool IsPreReleaseVersion1 { get; }
     public HostedProvisioningPhase Phase { get; }
-    public bool Paused { get; }
 
-    private HostedProvisioningState(string origin, string slotId, string setupGrant, string requestId,
-        HostedPublisherConfiguration configuration, string readVerifier, string writeVerifier,
-        HostedProvisioningPhase phase, bool paused)
+    private HostedProvisioningState(string origin, string requestId, string readCapability, string writeCapability,
+        string readVerifier, string writeVerifier, HostedProvisioningPhase phase, string? overlayId,
+        HostedPublisherConfiguration? priorConfiguration = null, bool isPreReleaseVersion1 = false,
+        string? legacySetupGrant = null)
     {
         Origin = origin;
-        SlotId = slotId;
-        SetupGrant = setupGrant;
         RequestId = requestId;
-        Configuration = configuration;
+        ReadCapability = readCapability;
+        WriteCapability = writeCapability;
         ReadVerifier = readVerifier;
         WriteVerifier = writeVerifier;
         Phase = phase;
-        Paused = paused;
+        OverlayId = overlayId;
+        PriorConfiguration = priorConfiguration;
+        IsPreReleaseVersion1 = isPreReleaseVersion1;
+        LegacySetupGrant = legacySetupGrant;
     }
 
-    public static bool IsSetupCodeShape(string? value) => TryReadCode(value, out _, out _);
-
-    public static HostedProvisioningState Create(string origin, string setupCode, IEnumerable<string> approvedOrigins)
+    public static HostedProvisioningState Create(string origin, IEnumerable<string> approvedOrigins,
+        Func<int, byte[]>? entropy = null)
     {
-        if (!TryReadCode(setupCode, out string? slotId, out string? grant))
-            throw new ArgumentException("Invalid setup code.");
-        var configuration = HostedPublisherConfiguration.Generate(origin, slotId!, approvedOrigins);
-        return new(origin, slotId!, grant!, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)), configuration,
-            HostedPublisherConfiguration.Verifier(slotId!, "read", configuration.ReadCapability),
-            HostedPublisherConfiguration.Verifier(slotId!, "write", configuration.WriteCapability),
-            HostedProvisioningPhase.Claiming, paused: false);
+        entropy ??= RandomNumberGenerator.GetBytes;
+        string requestId = Next(entropy), read = Next(entropy), write = Next(entropy);
+        if (requestId == read || requestId == write || read == write) throw new InvalidOperationException("Independent provisioning values required.");
+        _ = HostedPublisherConfiguration.CreateV2(origin, new string('0', 64), requestId, read, write, approvedOrigins);
+        return new(origin, requestId, read, write, HostedPublisherConfiguration.VerifierV2(requestId, "read", read),
+            HostedPublisherConfiguration.VerifierV2(requestId, "write", write), HostedProvisioningPhase.Claiming, null);
     }
 
-    public HostedProvisioningState WithPaused(bool paused) => new(Origin, SlotId, SetupGrant, RequestId,
-        Configuration, ReadVerifier, WriteVerifier, Phase, paused);
-
-    public HostedProvisioningState Acknowledged() => new(Origin, SlotId, SetupGrant, RequestId,
-        Configuration, ReadVerifier, WriteVerifier, HostedProvisioningPhase.Acknowledged, paused: false);
-
-    private static bool TryReadCode(string? value, out string? slotId, out string? grant)
+    private static string Next(Func<int, byte[]> entropy)
     {
-        slotId = grant = null;
-        if (value is null) return false;
-        string[] parts = value.Split('.', StringSplitOptions.None);
-        if (parts.Length != 3 || parts[0] != "st1" || !HostedPublisherConfiguration.Hex(parts[1], 32) ||
-            !HostedPublisherConfiguration.Hex(parts[2], 64)) return false;
-        slotId = parts[1];
-        grant = parts[2];
-        return true;
+        byte[] bytes = entropy(32);
+        if (bytes.Length != 32) throw new InvalidOperationException("Provisioning entropy must contain 32 bytes.");
+        try { return Convert.ToHexStringLower(bytes); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    internal byte[] Encode() => JsonSerializer.SerializeToUtf8Bytes(new
+    public HostedProvisioningState Acknowledged(string overlayId)
     {
-        version = 1,
-        origin = Origin,
-        slotId = SlotId,
-        setupGrant = SetupGrant,
-        requestId = RequestId,
-        readCapability = Configuration.ReadCapability,
-        writeCapability = Configuration.WriteCapability,
-        readVerifier = ReadVerifier,
-        writeVerifier = WriteVerifier,
-        phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged",
-        paused = Paused,
-    });
+        int expectedLength = IsPreReleaseVersion1 ? 32 : 64;
+        if (!HostedPublisherConfiguration.Hex(overlayId, expectedLength) ||
+            (IsPreReleaseVersion1 && PriorConfiguration?.OverlayId != overlayId))
+            throw new ArgumentException("Invalid overlay identity.");
+        return new(Origin, RequestId, ReadCapability, WriteCapability, ReadVerifier, WriteVerifier,
+            HostedProvisioningPhase.Acknowledged, overlayId, PriorConfiguration, IsPreReleaseVersion1,
+            LegacySetupGrant);
+    }
+
+    public HostedPublisherConfiguration Configuration(IEnumerable<string> approvedOrigins) =>
+        IsPreReleaseVersion1 && PriorConfiguration is not null ? PriorConfiguration :
+        HostedPublisherConfiguration.CreateV2(Origin, OverlayId ?? throw new InvalidOperationException(), RequestId,
+            ReadCapability, WriteCapability, approvedOrigins);
+
+    public bool Matches(HostedPublisherConfiguration configuration) =>
+        (IsPreReleaseVersion1 && PriorConfiguration?.Origin == configuration.Origin &&
+            PriorConfiguration.OverlayId == configuration.OverlayId &&
+            PriorConfiguration.ReadCapability == configuration.ReadCapability &&
+            PriorConfiguration.WriteCapability == configuration.WriteCapability) ||
+        (!IsPreReleaseVersion1 && OverlayId == configuration.OverlayId && RequestId == configuration.RequestId &&
+            ReadCapability == configuration.ReadCapability && WriteCapability == configuration.WriteCapability);
+
+    internal byte[] Encode() => IsPreReleaseVersion1
+        ? JsonSerializer.SerializeToUtf8Bytes(new { version = 1, origin = Origin,
+            slotId = PriorConfiguration?.OverlayId, setupGrant = LegacySetupGrant, requestId = RequestId,
+            readCapability = ReadCapability, writeCapability = WriteCapability, readVerifier = ReadVerifier,
+            writeVerifier = WriteVerifier, phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged",
+            paused = false })
+        : JsonSerializer.SerializeToUtf8Bytes(new { version = 2, origin = Origin,
+            requestId = RequestId, readCapability = ReadCapability, writeCapability = WriteCapability,
+            readVerifier = ReadVerifier, writeVerifier = WriteVerifier,
+            phase = Phase == HostedProvisioningPhase.Claiming ? "claiming" : "acknowledged", overlayId = OverlayId });
 
     internal static HostedProvisioningState Decode(byte[] bytes, IEnumerable<string> approvedOrigins)
     {
         using var document = JsonDocument.Parse(bytes, new() { MaxDepth = 2 });
         JsonElement root = document.RootElement;
-        string[] fields = ["version", "origin", "slotId", "setupGrant", "requestId", "readCapability",
-            "writeCapability", "readVerifier", "writeVerifier", "phase", "paused"];
-        if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != fields.Length ||
-            fields.Any(field => !root.TryGetProperty(field, out _)) || root.GetProperty("version").GetRawText() != "1")
-            throw new JsonException();
-        string origin = root.GetProperty("origin").GetString()!;
-        string slotId = root.GetProperty("slotId").GetString()!;
-        string grant = root.GetProperty("setupGrant").GetString()!;
-        string requestId = root.GetProperty("requestId").GetString()!;
-        string read = root.GetProperty("readCapability").GetString()!;
-        string write = root.GetProperty("writeCapability").GetString()!;
-        string readVerifier = root.GetProperty("readVerifier").GetString()!;
-        string writeVerifier = root.GetProperty("writeVerifier").GetString()!;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out JsonElement version) ||
+            version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out int parsedVersion)) throw new JsonException();
+        return parsedVersion switch
+        {
+            2 => DecodeV2(root, approvedOrigins),
+            1 => DecodeV1(root, approvedOrigins),
+            _ => throw new JsonException(),
+        };
+    }
+
+    private static HostedProvisioningState DecodeV2(JsonElement root, IEnumerable<string> origins)
+    {
+        string[] fields = ["version", "origin", "requestId", "readCapability", "writeCapability", "readVerifier", "writeVerifier", "phase", "overlayId"];
+        RequireFields(root, fields);
+        string origin = String(root, "origin"), requestId = String(root, "requestId"), read = String(root, "readCapability"),
+            write = String(root, "writeCapability"), readVerifier = String(root, "readVerifier"), writeVerifier = String(root, "writeVerifier");
+        string? overlayId = root.GetProperty("overlayId").ValueKind == JsonValueKind.Null ? null : String(root, "overlayId");
+        HostedProvisioningPhase phase = ParsePhase(root);
+        if (!HostedPublisherConfiguration.Hex(requestId, 64) || !HostedPublisherConfiguration.Hex(read, 64) ||
+            !HostedPublisherConfiguration.Hex(write, 64) || read == write || requestId == read || requestId == write ||
+            !HostedPublisherConfiguration.Hex(readVerifier, 64) || !HostedPublisherConfiguration.Hex(writeVerifier, 64) ||
+            readVerifier == writeVerifier || readVerifier != HostedPublisherConfiguration.VerifierV2(requestId, "read", read) ||
+            writeVerifier != HostedPublisherConfiguration.VerifierV2(requestId, "write", write) ||
+            (phase == HostedProvisioningPhase.Claiming && overlayId is not null) ||
+            (phase == HostedProvisioningPhase.Acknowledged && !HostedPublisherConfiguration.Hex(overlayId, 64))) throw new JsonException();
+        _ = HostedPublisherConfiguration.CreateV2(origin, overlayId ?? new string('0', 64), requestId, read, write, origins);
+        return new(origin, requestId, read, write, readVerifier, writeVerifier, phase, overlayId);
+    }
+
+    private static HostedProvisioningState DecodeV1(JsonElement root, IEnumerable<string> origins)
+    {
+        string[] fields = ["version", "origin", "slotId", "setupGrant", "requestId", "readCapability", "writeCapability",
+            "readVerifier", "writeVerifier", "phase", "paused"];
+        RequireFields(root, fields);
+        string origin = String(root, "origin"), slotId = String(root, "slotId"), grant = String(root, "setupGrant"),
+            requestId = String(root, "requestId"), read = String(root, "readCapability"), write = String(root, "writeCapability"),
+            readVerifier = String(root, "readVerifier"), writeVerifier = String(root, "writeVerifier");
         if (!HostedPublisherConfiguration.Hex(slotId, 32) || !HostedPublisherConfiguration.Hex(grant, 64) ||
             !HostedPublisherConfiguration.Hex(requestId, 32) || !HostedPublisherConfiguration.Hex(readVerifier, 64) ||
             !HostedPublisherConfiguration.Hex(writeVerifier, 64) || readVerifier == writeVerifier ||
-            HostedPublisherConfiguration.Verifier(slotId, "setup", grant).Length != 64)
-            throw new JsonException();
-        var configuration = HostedPublisherConfiguration.Create(origin, slotId, read, write, approvedOrigins);
-        if (readVerifier != HostedPublisherConfiguration.Verifier(slotId, "read", read) ||
-            writeVerifier != HostedPublisherConfiguration.Verifier(slotId, "write", write)) throw new JsonException();
-        HostedProvisioningPhase phase = root.GetProperty("phase").GetString() switch
-        {
-            "claiming" => HostedProvisioningPhase.Claiming,
-            "acknowledged" => HostedProvisioningPhase.Acknowledged,
-            _ => throw new JsonException(),
-        };
-        if (root.GetProperty("paused").ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException();
-        return new(origin, slotId, grant, requestId, configuration, readVerifier, writeVerifier, phase,
-            root.GetProperty("paused").GetBoolean());
+            readVerifier != HostedPublisherConfiguration.Verifier(slotId, "read", read) ||
+            writeVerifier != HostedPublisherConfiguration.Verifier(slotId, "write", write) ||
+            root.GetProperty("paused").ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException();
+        HostedProvisioningPhase phase = ParsePhase(root);
+        var configuration = HostedPublisherConfiguration.Create(origin, slotId, read, write, origins);
+        return new(origin, requestId, read, write, readVerifier, writeVerifier, phase,
+            phase == HostedProvisioningPhase.Acknowledged ? slotId : null, configuration, isPreReleaseVersion1: true,
+            legacySetupGrant: grant);
     }
 
+    private static void RequireFields(JsonElement root, string[] fields)
+    {
+        if (root.EnumerateObject().Count() != fields.Length || fields.Any(field => !root.TryGetProperty(field, out _))) throw new JsonException();
+    }
+    private static string String(JsonElement root, string name) => root.GetProperty(name).GetString() ?? throw new JsonException();
+    private static HostedProvisioningPhase ParsePhase(JsonElement root) => root.GetProperty("phase").GetString() switch
+    {
+        "claiming" => HostedProvisioningPhase.Claiming,
+        "acknowledged" => HostedProvisioningPhase.Acknowledged,
+        _ => throw new JsonException(),
+    };
     public override string ToString() => "Hosted provisioning state (protected)";
 }
 
-/// <summary>Separate bounded DPAPI record for an exact recoverable setup request.</summary>
+/// <summary>Separate bounded DPAPI record for an exact recoverable create request.</summary>
 public sealed class HostedProvisioningStateStore
 {
     private readonly string path;
@@ -153,7 +195,7 @@ public sealed class HostedProvisioningStateStore
             File.Move(temporary, path, overwrite: true);
         }
         catch (OperationCanceledException) { throw; }
-        catch { throw new InvalidOperationException("Unable to save protected pending overlay setup; previous state retained."); }
+        catch { throw new InvalidOperationException("Unable to save protected pending overlay state; previous state retained."); }
         finally
         {
             if (plaintext is not null) CryptographicOperations.ZeroMemory(plaintext);
@@ -178,7 +220,7 @@ public sealed class HostedProvisioningStateStore
             return HostedProvisioningState.Decode(plaintext, origins);
         }
         catch (OperationCanceledException) { throw; }
-        catch { throw new InvalidOperationException("Unable to load protected pending overlay setup."); }
+        catch { throw new InvalidOperationException("Unable to load protected pending overlay state."); }
         finally { if (plaintext is not null) CryptographicOperations.ZeroMemory(plaintext); }
     }
 
@@ -186,6 +228,6 @@ public sealed class HostedProvisioningStateStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         try { File.Delete(path); }
-        catch { throw new InvalidOperationException("Unable to remove protected pending overlay setup."); }
+        catch { throw new InvalidOperationException("Unable to remove protected pending overlay state."); }
     }, cancellationToken);
 }

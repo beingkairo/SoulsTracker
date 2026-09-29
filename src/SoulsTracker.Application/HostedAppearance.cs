@@ -34,7 +34,8 @@ public sealed record HostedAppearance
         return new HostedAppearance
         {
             Revision = revision,
-            Enabled = presentation.IsTotalDeathsEnabled,
+            // Hosted Total Deaths remains visible now that the visibility control is gone.
+            Enabled = true,
             Title = a.Title,
             FontFamily = a.FontFamily,
             FontSize = a.FontSize,

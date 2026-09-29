@@ -91,7 +91,7 @@ public sealed class HostedCommittedPublisherTests
             state = await coordinator.SetTextExportConfigurationAsync(new(Path.Combine(root, "deaths.txt"), true));
             await WaitUntil(() => sender.Status == HostedPublisherStatus.Ready);
             state = (await coordinator.SubmitAsync(new UpdateOverlayPresentationCommand(false, false))).CommittedState!;
-            await WaitUntil(() => server.Writes.Any(body => JsonDocument.Parse(body).RootElement.TryGetProperty("appearance", out var a) && !a.GetProperty("enabled").GetBoolean()));
+            await WaitUntil(() => server.Writes.Any(body => JsonDocument.Parse(body).RootElement.TryGetProperty("appearance", out var a) && a.GetProperty("enabled").GetBoolean()));
             await WaitUntil(() => sender.Status == HostedPublisherStatus.Ready);
             Assert.All(server.Writes, body => Assert.False(JsonDocument.Parse(body).RootElement.TryGetProperty("death", out _)));
             int second = 0;
@@ -107,12 +107,13 @@ public sealed class HostedCommittedPublisherTests
             Deliver(Read(90));
             int beforeAppearance = server.Writes.Count;
             state = (await coordinator.SubmitAsync(new UpdateOverlayPresentationCommand(true, false))).CommittedState!;
-            await WaitUntil(() => server.Writes.Count > beforeAppearance && sender.Status == HostedPublisherStatus.Ready);
-            using (var appearanceOnly = JsonDocument.Parse(server.Writes.Last()))
+            Assert.Equal(beforeAppearance, server.Writes.Count);
+            Assert.All(server.Writes, body =>
             {
-                Assert.True(appearanceOnly.RootElement.TryGetProperty("appearance", out _));
-                Assert.False(appearanceOnly.RootElement.TryGetProperty("death", out _));
-            }
+                using var document = JsonDocument.Parse(body);
+                if (document.RootElement.TryGetProperty("appearance", out JsonElement appearance))
+                    Assert.True(appearance.GetProperty("enabled").GetBoolean());
+            });
             Assert.Equal("100", server.Value);
             var delayed = session.BeginRead(state);
             var oldState = state;

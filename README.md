@@ -12,10 +12,10 @@ Demon Souls uses a manual counter.
 
 1. Open SoulsTracker, choose your game on the **Main** tab, and pick a save or character when prompted.
 2. Configure the retained overlay appearance and optional local text export.
-3. On the **Overlay** tab, read the disclosure, explicitly consent, enter your private setup code, and choose **Set up overlay**.
-4. Enable **Total Deaths** for visibility, then use **Copy URL** and add the URL as a browser source in your streaming software. Visibility is separate from publication consent.
+3. Open the **Overlay** tab. SoulsTracker automatically prepares one private Overlay URL the first time you use it.
+4. Use the icon-only **Copy URL** control and add the URL to your streaming software.
 
-This development build connects only to https://overlay.beingkairo.com. Setup requires a private operator-issued code for a pre-approved overlay. Local tracking and TXT output do not require setup or an internet connection.
+This development build connects only to https://overlay.beingkairo.com. No account, login, setup code, or operator action is required. Local tracking and TXT output do not require the Overlay or an internet connection.
 
 The Total Deaths overlay works at any size.
 
@@ -23,7 +23,7 @@ After setup, SoulsTracker sends the accepted death display and applied appearanc
 
 Existing local overlay URLs need one deliberate replacement. Styles embedded in old URLs are not migrated: reproduce them in Desktop appearance settings before switching. The Overlay URL has no style overrides. Fonts must be installed on the streaming PC; existing title-icon Apply and number-only font-size limitations remain.
 
-Keep the setup code and Overlay URL private. **Reconnect** explicitly starts a new publisher session; close another publisher first if a conflict is reported. **Remove connection** stops publication and deletes only this PC's protected active connection. It does not delete a recoverable pending setup, revoke online access, or delete online state. Contact the operator for revocation, reset, or deletion. Abandon a pending setup only after the operator confirms its code has been invalidated or reset.
+Keep the Overlay URL private. Anyone who has it can view the overlay. If automatic preparation is temporarily unavailable, **Try again** resumes the same protected request instead of creating another identity.
 
 Choose Directory and Refresh help with save locations. Save-based counters update after the game saves.
 
@@ -37,7 +37,7 @@ The **Settings** tab includes TXT output for text sources, update checks, and gl
 
 SoulsTracker reads approved game data and save data, then leaves game files and game memory untouched. Local settings, save selection and counters remain on your PC.
 
-Opt-in online publication sends the accepted display value/availability and applied appearance, including custom title and font name, to Cloudflare. It sends no game/save paths, character/slot names or raw observations. Cloudflare processes connection metadata and retains the latest published state. Successful protected setup records consent across restarts. No localhost fallback is used.
+Opening the Overlay tab prepares online publication and sends the accepted display value/availability and applied appearance, including custom title and font name, to Cloudflare. It sends no game/save paths, character/slot names or raw observations. Cloudflare processes connection metadata and retains the latest published state. No localhost fallback is used.
 
 Game updates can change saved data. Keep SoulsTracker current and follow each game's online and anti-cheat rules.
 

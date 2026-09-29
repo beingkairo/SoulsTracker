@@ -640,31 +640,18 @@
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="Overlay" />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,8" Text="SoulsTracker sends your displayed death count and overlay appearance online so you can use the overlay in your streaming software." />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,10" Text="Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to." />
-                                <CheckBox x:Name="HostedConsentCheckBox" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsEnabled="{Binding HostedOverlay.CanSetUp, FallbackValue=False}" Checked="HostedSetupInput_Changed" Unchecked="HostedSetupInput_Changed" AutomationProperties.Name="Consent to online overlay publication">
-                                    <TextBlock Text="I agree to online overlay publication" TextWrapping="Wrap" />
-                                </CheckBox>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,8,0,4" Text="Setup code" />
-                                <PasswordBox x:Name="HostedSetupCodePasswordBox" MaxLength="101" PasswordChanged="HostedSetupInput_Changed" AutomationProperties.Name="Overlay setup code" AutomationProperties.HelpText="Enter the private setup code." />
-                                <Button x:Name="SetUpHostedOverlayButton" Margin="0,8,0,0" Content="Set up overlay" IsEnabled="False" Click="SetUpHostedOverlay_Click" AutomationProperties.Name="Set up overlay" />
-                                <WrapPanel Margin="0,8,0,0" Visibility="{Binding HostedOverlay.HasPendingSetup, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
-                                    <Button Content="Pause setup" IsEnabled="{Binding HostedOverlay.CanPauseSetup}" Click="PauseHostedSetup_Click" AutomationProperties.Name="Pause overlay setup" />
-                                    <Button Content="Resume setup" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanResumeSetup}" Click="ResumeHostedSetup_Click" AutomationProperties.Name="Resume overlay setup" />
-                                    <Button Content="Abandon setup" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanAbandonSetup}" Click="AbandonHostedSetup_Click" AutomationProperties.Name="Abandon overlay setup" />
-                                </WrapPanel>
-                                <TextBlock x:Name="HostedHostTextBlock" Style="{StaticResource MutedText}" Margin="0,8,0,4" Text="{Binding HostedOverlay.Host}" AutomationProperties.Name="Overlay address" />
-                                <TextBlock Style="{StaticResource MutedText}" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.Name="Overlay delivery status" />
-                                <WrapPanel Margin="0,8,0,8">
-                                    <Button x:Name="CopyTotalDeathsOverlayUrlButton" Content="Copy URL" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" AutomationProperties.Name="Copy URL" />
-                                    <Button Content="Reconnect" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanReconnect, FallbackValue=False}" Click="ReconnectHosted_Click" AutomationProperties.Name="Reconnect overlay publisher" />
-                                    <Button Content="Remove connection" Margin="8,0,0,0" IsEnabled="{Binding HostedOverlay.CanRemove, FallbackValue=False}" Click="RemoveHostedPairing_Click" AutomationProperties.Name="Remove local overlay connection" />
-                                </WrapPanel>
-
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Add this URL as a browser source in your streaming software." />
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" Text="Keep the Overlay URL private. Total Deaths below controls visibility only; it does not withdraw publication consent." />
-                                <CheckBox x:Name="TotalDeathsOverlayEnabledCheckBox" Content="Total Deaths" IsChecked="{Binding IsTotalDeathsOverlayEnabled, Mode=OneWay}" IsEnabled="{Binding PresentationControlsEnabled}" Checked="TotalDeathsOverlayEnabled_Checked" Unchecked="TotalDeathsOverlayEnabled_Unchecked" AutomationProperties.Name="Show Total Deaths overlay" />
-
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,10" Text="Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to." />
+                                <Border Padding="8" Background="#191D23" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBox Margin="0,0,8,0" Padding="0" BorderThickness="0" Background="Transparent" FontFamily="Consolas" IsReadOnly="True" Focusable="True" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
+                                        <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
+                                    </Grid>
+                                </Border>
+                                <TextBlock Margin="0,8,0,0" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.LiveSetting="Polite">
+                                    <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
+                                </TextBlock>
+                                <Button Margin="0,8,0,0" HorizontalAlignment="Left" Content="Try again" IsEnabled="{Binding HostedOverlay.CanRetry}" Visibility="{Binding HostedOverlay.CanRetry, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" Click="RetryHostedOverlay_Click" AutomationProperties.Name="Try preparing overlay URL again" />
                             </StackPanel>
                         </Border>
                         <Border x:Name="NormalPreviewSection" Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Local appearance preview panel">

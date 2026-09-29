@@ -7,8 +7,10 @@ export class Rejection extends Error {
 }
 export function reject(status: number, code: string): never { throw new Rejection(status, code); }
 export const digest = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
-export const verifier = (id: string, role: "read" | "write" | "setup", capability: string): string =>
+export const verifier = (id: string, role: "read" | "write", capability: string): string =>
   createHash("sha256").update(`overlay-v1:${id}:${role}:${capability}`).digest("hex");
+export const verifierV2 = (requestId: string, role: "read" | "write", capability: string): string =>
+  createHash("sha256").update(`overlay-v2:${requestId}:${role}:${capability}`).digest("hex");
 export function equalVerifier(a: string, b: string): boolean {
   return /^[0-9a-f]{64}$/.test(a) && /^[0-9a-f]{64}$/.test(b) &&
     timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
@@ -22,11 +24,7 @@ export function authorize(request: Request): string {
   if (!match) return reject(403, "forbidden");
   return match[1];
 }
-export function authorizeSetup(request: Request): string {
-  const match = /^Setup ([0-9a-f]{64})$/.exec(request.headers.get("Authorization") ?? "");
-  if (!match) return reject(403, "forbidden");
-  return match[1];
-}
+
 export function response(status: number, body: unknown): Response {
   return Response.json(body, { status, headers: {
     "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"
@@ -35,14 +33,14 @@ export function response(status: number, body: unknown): Response {
 export function failure(error: unknown): Response {
   return error instanceof Rejection ? response(error.status, { error: error.code }) : response(500, { error: "storage_failure" });
 }
-export type Route = "publisher" | "session" | "state" | "credentials" | "live" | "provision";
+export type Route = "publisher" | "session" | "state" | "credentials" | "live";
 export function route(request: Request): { id: string; action: Route } {
   const url = new URL(request.url);
   if (url.protocol !== "https:") return reject(400, "https_required");
-  const match = /^\/api\/v1\/overlays\/([0-9a-f]{32})\/(publisher|session|state|credentials|live|provision)$/.exec(url.pathname);
+  const match = /^\/api\/v1\/overlays\/([0-9a-f]{32}|[0-9a-f]{64})\/(publisher|session|state|credentials|live)$/.exec(url.pathname);
   if (!match || url.search || url.hash) return reject(404, "not_found");
   const action = match[2] as Route;
-  const methods = { publisher: "GET", session: "POST", state: "PUT", credentials: "POST", live: "GET", provision: "POST" };
+  const methods = { publisher: "GET", session: "POST", state: "PUT", credentials: "POST", live: "GET" };
   if (request.method !== methods[action]) return reject(405, "method_not_allowed");
   return { id: match[1], action };
 }
@@ -116,7 +114,8 @@ export function provisioning(value: unknown): Provisioning {
     if (body.v !== 1 || typeof body.readVerifier !== "string" || typeof body.writeVerifier !== "string" ||
       !/^[0-9a-f]{64}$/.test(body.readVerifier) || !/^[0-9a-f]{64}$/.test(body.writeVerifier) ||
       body.readVerifier === body.writeVerifier) return reject(400, "invalid_body");
-    return { v: 1, requestId: identity(body.requestId), readVerifier: body.readVerifier, writeVerifier: body.writeVerifier };
+    if (typeof body.requestId !== "string" || !/^[0-9a-f]{64}$/.test(body.requestId)) return reject(400, "invalid_body");
+    return { v: 1, requestId: body.requestId, readVerifier: body.readVerifier, writeVerifier: body.writeVerifier };
   } catch { return reject(400, "invalid_body"); }
 }
 

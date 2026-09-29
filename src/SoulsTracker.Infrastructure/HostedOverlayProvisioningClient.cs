@@ -9,12 +9,12 @@ public enum HostedProvisioningResultKind
 {
     Provisioned,
     Retry,
-    Denied,
-    Used,
     Protocol,
 }
 
-public sealed record HostedProvisioningResult(HostedProvisioningResultKind Kind, TimeSpan? RetryAfter = null);
+public sealed record HostedProvisioningResult(HostedProvisioningResultKind Kind, string? OverlayId = null,
+    TimeSpan? RetryAfter = null);
+public enum HostedLegacyProbeResult { Valid, DefinitiveInvalid, Ambiguous }
 
 /// <summary>One exact no-redirect provisioning request to the fixed approved origin.</summary>
 public sealed class HostedOverlayProvisioningClient : IDisposable
@@ -41,14 +41,12 @@ public sealed class HostedOverlayProvisioningClient : IDisposable
     public async Task<HostedProvisioningResult> ProvisionAsync(HostedProvisioningState state,
         CancellationToken cancellationToken = default)
     {
-        if (state.Configuration.DisplayOrigin != origin) return new(HostedProvisioningResultKind.Protocol);
+        if (state.Origin != origin || state.IsPreReleaseVersion1) return new(HostedProvisioningResultKind.Protocol);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post,
-                $"{origin}/api/v1/overlays/{state.SlotId}/provision");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Setup", state.SetupGrant);
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{origin}/api/v1/overlays");
             request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
             byte[] body = JsonSerializer.SerializeToUtf8Bytes(new
             {
@@ -68,24 +66,23 @@ public sealed class HostedOverlayProvisioningClient : IDisposable
                 {
                     using var document = JsonDocument.Parse(bytes, new() { MaxDepth = 2 });
                     JsonElement root = document.RootElement;
-                    if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != 2 ||
+                    if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != 3 ||
                         !root.TryGetProperty("v", out JsonElement version) ||
                         !root.TryGetProperty("status", out JsonElement status) ||
+                        !root.TryGetProperty("overlayId", out JsonElement overlayId) ||
                         version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out int parsedVersion) || parsedVersion != 1 ||
-                        status.ValueKind != JsonValueKind.String || status.GetString() != "provisioned")
+                        status.ValueKind != JsonValueKind.String || status.GetString() != "provisioned" ||
+                        overlayId.ValueKind != JsonValueKind.String || !HostedPublisherConfiguration.Hex(overlayId.GetString(), 64))
                         return new(HostedProvisioningResultKind.Protocol);
-                    return new(HostedProvisioningResultKind.Provisioned);
+                    return new(HostedProvisioningResultKind.Provisioned, overlayId.GetString());
                 }
                 catch (JsonException) { return new(HostedProvisioningResultKind.Protocol); }
                 finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes); }
             }
-            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                return new(HostedProvisioningResultKind.Denied);
-            if (response.StatusCode == HttpStatusCode.Conflict)
-                return new(HostedProvisioningResultKind.Used);
-            if (response.StatusCode == HttpStatusCode.RequestTimeout || response.StatusCode == HttpStatusCode.TooManyRequests ||
+            if (response.StatusCode == HttpStatusCode.Conflict || response.StatusCode == HttpStatusCode.RequestTimeout ||
+                response.StatusCode == HttpStatusCode.TooManyRequests ||
                 (int)response.StatusCode >= 500)
-                return new(HostedProvisioningResultKind.Retry, RetryAfter(response));
+                return new(HostedProvisioningResultKind.Retry, RetryAfter: RetryAfter(response));
             return new(HostedProvisioningResultKind.Protocol);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -100,6 +97,30 @@ public sealed class HostedOverlayProvisioningClient : IDisposable
         {
             return new(HostedProvisioningResultKind.Retry);
         }
+    }
+
+    public async Task<HostedLegacyProbeResult> ProbePreReleaseAsync(HostedPublisherConfiguration configuration,
+        CancellationToken cancellationToken = default)
+    {
+        if (configuration.Version != 1 || configuration.DisplayOrigin != origin) return HostedLegacyProbeResult.DefinitiveInvalid;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                $"{origin}/api/v1/overlays/{configuration.OverlayId}/publisher");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration.WriteCapability);
+            request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
+            using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
+                timeout.Token).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.OK) return HostedLegacyProbeResult.Valid;
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+                return HostedLegacyProbeResult.DefinitiveInvalid;
+            return HostedLegacyProbeResult.Ambiguous;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return HostedLegacyProbeResult.Ambiguous; }
+        catch (HttpRequestException) { return HostedLegacyProbeResult.Ambiguous; }
+        catch (IOException) { return HostedLegacyProbeResult.Ambiguous; }
     }
 
     private static TimeSpan? RetryAfter(HttpResponseMessage response)

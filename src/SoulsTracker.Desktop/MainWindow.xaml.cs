@@ -142,6 +142,8 @@ public partial class MainWindow : Window
         WorkspaceTabs.SelectionChanged += (_, e) =>
         {
             if (!ReferenceEquals(e.Source, WorkspaceTabs)) return;
+            if (OverlayWorkspaceTab.IsSelected && DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection })
+                _ = connection.EnsureProvisionedAsync();
             if (!hostedCopyFeedbackVisible) ClearCopyFeedback();
             if (hotkeyRecordingOrigin is null) ClearHotkeyFeedback();
         };
@@ -488,13 +490,11 @@ public partial class MainWindow : Window
         // Rebinding never revives an old copy notification.
         lastHostedCopyFeedback = connection?.CopyFeedbackText ?? string.Empty;
         if (connection is not null) connection.PropertyChanged += HostedCopyFeedback_PropertyChanged;
-        UpdateHostedSetupButton();
     }
 
     private void HostedCopyFeedback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (copyFeedbackClosed || sender is not HostedOverlayConnection connection || !ReferenceEquals(connection, copyFeedbackConnection)) return;
-        UpdateHostedSetupButton();
         string message = connection.CopyFeedbackText;
         if (message == lastHostedCopyFeedback) return;
         lastHostedCopyFeedback = message;
@@ -994,35 +994,6 @@ public partial class MainWindow : Window
         });
     }
 
-    private async void TotalDeathsOverlayEnabled_Checked(object sender, RoutedEventArgs e) =>
-        await SetTotalDeathsOverlayEnabledAsync(isEnabled: true);
-
-
-    private async void TotalDeathsOverlayEnabled_Unchecked(object sender, RoutedEventArgs e) =>
-        await SetTotalDeathsOverlayEnabledAsync(isEnabled: false);
-
-    private async Task SetTotalDeathsOverlayEnabledAsync(bool isEnabled)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && viewModel.IsTotalDeathsOverlayEnabled != isEnabled)
-        {
-            await viewModel.SetTotalDeathsOverlayEnabledAsync(isEnabled);
-        }
-    }
-
-    private async void TotalDeathsGameName_Checked(object sender, RoutedEventArgs e) =>
-        await SetTotalDeathsGameNameAsync(showGameName: true);
-
-    private async void TotalDeathsGameName_Unchecked(object sender, RoutedEventArgs e) =>
-        await SetTotalDeathsGameNameAsync(showGameName: false);
-
-    private async Task SetTotalDeathsGameNameAsync(bool showGameName)
-    {
-        if (DataContext is DesktopTrackerViewModel viewModel && viewModel.ShowTotalDeathsGameName != showGameName)
-        {
-            await viewModel.SetShowTotalDeathsGameNameAsync(showGameName);
-        }
-    }
-
 
     private async void ApplyTotalDeathsAppearance_Click(object sender, RoutedEventArgs e)
     {
@@ -1071,58 +1042,9 @@ public partial class MainWindow : Window
         if (previous == lastHostedCopyFeedback) ShowCopyFeedback(connection.CopyFeedbackText, success, hosted: true);
     }
 
-    private void HostedSetupInput_Changed(object sender, RoutedEventArgs e) => UpdateHostedSetupButton();
-
-    private void UpdateHostedSetupButton()
+    private async void RetryHostedOverlay_Click(object sender, RoutedEventArgs e)
     {
-        if (SetUpHostedOverlayButton is null) return;
-        SetUpHostedOverlayButton.IsEnabled = DataContext is DesktopTrackerViewModel { HostedOverlay.CanSetUp: true } &&
-            HostedConsentCheckBox.IsChecked == true && HostedProvisioningState.IsSetupCodeShape(HostedSetupCodePasswordBox.Password);
-    }
-
-    private async void SetUpHostedOverlay_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not DesktopTrackerViewModel { HostedOverlay: { CanSetUp: true } connection } ||
-            HostedConsentCheckBox.IsChecked != true || !HostedProvisioningState.IsSetupCodeShape(HostedSetupCodePasswordBox.Password)) return;
-        bool replacement = !connection.CanCopy || System.Windows.MessageBox.Show(this,
-            "Replace the current overlay connection? It stays active until the new setup is ready.",
-            "Replace overlay connection", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
-        if (!replacement) return;
-        await connection.SetUpAsync(HostedSetupCodePasswordBox.Password, consent: true, replacementConfirmed: true,
-            () => HostedSetupCodePasswordBox.Clear());
-    }
-
-    private async void PauseHostedSetup_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.PauseSetupAsync();
-    }
-
-    private async void ResumeHostedSetup_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.ResumeSetupAsync();
-    }
-
-    private async void AbandonHostedSetup_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not DesktopTrackerViewModel { HostedOverlay: { CanAbandonSetup: true } connection }) return;
-        bool confirmed = System.Windows.MessageBox.Show(this,
-            "Only abandon setup after the operator has invalidated or reset this setup code. Has the operator confirmed that this is complete? Deleting the protected request first can permanently strand the online setup.",
-            "Abandon overlay setup", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
-        await connection.AbandonSetupAsync(confirmed);
-    }
-
-    private async void ReconnectHosted_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.ReconnectAsync();
-    }
-
-    private async void RemoveHostedPairing_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not DesktopTrackerViewModel { HostedOverlay: { CanRemove: true } connection }) return;
-        bool confirmed = System.Windows.MessageBox.Show(this,
-            "Stop online publication and remove the protected overlay connection from this PC? Online state and access will not be revoked or deleted. Contact the operator for remote revocation or deletion. Any pending setup remains protected.",
-            "Remove local overlay connection", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
-        await connection.RemoveAsync(confirmed);
+        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.RetryAsync();
     }
 
     private static void CopyOverlayUrl(System.Windows.Controls.Button? button, string? value)

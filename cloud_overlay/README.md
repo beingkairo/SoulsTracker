@@ -1,11 +1,9 @@
 # Hosted overlay state service
 
 This package contains a Worker API, SQLite-backed Durable Object,
-and hosted browser assets from `web_overlay`. Desktop composes the hosted publisher
-behind explicit protected pairing to https://overlay.beingkairo.com only.
-The configuration admits no identities until operator provisioning. The narrowly
-scoped provisioning route accepts only pre-admitted slots and their one-time setup
-grants; there is no anonymous identity creation or operator credential in Desktop.
+and hosted browser assets from `web_overlay`. Desktop composes the publisher for
+https://overlay.beingkairo.com only. First use creates one anonymous identity through
+a fixed verifier-only route. Desktop contains no account or provider credential.
 
 ## Local verification
 
@@ -27,7 +25,9 @@ npm audit
 It does not deploy. Do not omit that flag. Tests use the official Cloudflare
 Vitest pool and local workerd with SQLite storage. They inject synthetic
 verifiers through `runInDurableObject`; no application database is accessed.
-The production configuration admits no overlay identities by default.
+The tracked production configuration omits anonymous-create rate bindings and a
+creation ceiling, so anonymous creation fails closed until later owner-approved
+deployment configuration supplies them.
 There is no production HTTP override. Playwright starts a separate test-only
 Wrangler configuration on local TLS at port 8799. That harness injects synthetic
 credentials into isolated workerd storage and can disconnect readers; its entry
@@ -47,20 +47,21 @@ behavior. No live infrastructure is needed for these tests.
 
 ## Provisioning API
 
-`POST /api/v1/overlays/{id}/provision` exists only for an identity present in both
-`PROVISIONED_IDS` and the bounded `PROVISIONING_SLOTS` configuration. It requires
-`Authorization: Setup ***`. It also requires exact-origin HTTPS, no cookies,
-and strict JSON containing one request ID plus separate role/identity-bound read and
-write verifiers, with a dedicated rate-limit admission before Durable Object lookup.
-Unknown/non-slot IDs, incorrect grants, unavailable admission, malformed input, and
-used/conflicting slots fail closed.
+`POST /api/v1/overlays` is the only public create operation. It accepts no path ID,
+authorization, cookie, account, or management authority. Before checking the method,
+headers, content type, body, or namespace, every create-surface attempt consumes a
+provider client/network admission check and a service-wide admission check. Missing,
+malformed, denied, or throwing admission bindings fail closed with bounded generic
+responses.
 
-An empty matching Durable Object installs the supplied verifiers, default channels,
-and exact request digest transactionally. The same authenticated request is
-idempotent; changed replay, existing control, orphan records, or partial state cannot
-replace authority. Provisioning does not acquire a publisher session, publish state,
-advance revisions, or broadcast. Raw read/write capabilities are generated and
-retained by Desktop and never sent on this route.
+The strict body contains a 256-bit request identity plus separate request-bound read
+and write verifiers. Raw capabilities remain protected in Desktop and never cross the
+create boundary. One global Durable Object serializes a transactional allocation
+ledger and hard ceiling, mints a namespace identity, and initializes that exact empty
+target through an internal-only method. Reserved allocations remain counted and
+replayable. Exact replay returns the same identity even at the ceiling; changed replay,
+existing target state, collision, and ceiling denial fail generically. Creation does
+not acquire a publisher session, publish state, advance revisions, or broadcast.
 
 ## Write API
 
@@ -73,10 +74,11 @@ These write-authorized HTTPS endpoints exist under `/api/v1/overlays/{id}`:
 
 Every endpoint requires `Authorization: Bearer <write-capability>`. Query
 credentials, cookie authentication, CORS access and other routes/methods are not
-supported. Responses are `no-store`. IDs and request IDs are lowercase 32-digit
-hexadecimal strings. Capabilities are separate random 256-bit values encoded as
-64 lowercase hexadecimal digits. Only SHA-256 verifiers bound to identity and
-role are stored; equality checks use the runtime's timing-safe primitive.
+supported. Responses are `no-store`. Capabilities are separate random 256-bit
+values encoded as 64 lowercase hexadecimal digits. Legacy IDs are lowercase 32-digit
+hexadecimal strings; version-2 request identities and namespace-issued identities use
+canonical 64-digit lowercase hexadecimal forms. Version-1 verifiers remain identity-bound, while
+version-2 verifiers are request-bound. Equality checks use the runtime's timing-safe primitive.
 
 Mutations require `Content-Type: application/json`, version `1`, strict field
 allowlists, valid UTF-8, unique JSON keys, and at most 8192 bytes. Compressed bodies
@@ -184,29 +186,31 @@ check actual CSP behavior, asset loading and cache headers.
 
 ## Before any live use
 
-Live deployment, operator provisioning/recovery, private setup-code delivery, edge
-abuse/rate controls, and real network/browser parity require separate verification. The configuration
-disables worker/preview URLs and observability and contains no account ID.
+Live deployment, legacy seeding, production creation rates/ceiling, edge abuse
+controls, and real network/browser parity require separate owner-approved verification.
+The configuration disables worker/preview URLs and observability and contains no account ID.
 Do not treat passing local tests as proof of deployed browser behavior.
 
-The bounded Windows operator tool in `operator/provision.py` prepares a new owner-only
-directory under LocalAppData/SoulsTrackerOperator. `prepare-setup` generates bounded
-pre-admitted identities, independent setup grants, private setup codes, and runtime
-configuration containing setup verifiers only. Deliver each code privately and never
-copy it into a command, log, report, or source-controlled file. The legacy `prepare`
-action remains available for controlled version-1 compatibility preparation. The tool
-is not part of the Worker bundle and never deploys resources.
+The bounded Windows operator tool in `operator/provision.py` remains only for controlled
+version-1 compatibility preparation and recovery. It creates an owner-only directory
+under LocalAppData/SoulsTrackerOperator. It is not part of the Worker bundle and never
+deploys resources. Anonymous creation has no operator-issued user artifact.
 
 Temporary `BOOTSTRAP` deployment configuration contains only version, exact
 overlayId and role/ID-bound read/write verifiers. An authenticated GET publisher
 can initialize an empty matching object transactionally. Existing control always
 takes precedence; replay cannot replace credentials, sessions or channels.
 Remove the binding by deploying the generated runtime configuration without
-`--keep-vars`, then verify persisted status again before issuing a setup code.
+`--keep-vars`, then verify persisted status again.
 Never deploy test entries. Keep the Worker name, class, binding and v1 migration
 unchanged across deployments. A custom domain must not replace an existing DNS
 resource. Account selection, DNS inspection and deployment access are operator
 prerequisites, not application settings.
+
+The deployed browser assets must match the reviewed Desktop appearance contract before
+anonymous creation is enabled. Retained local preview-equivalence and prefix-gap tests
+cover custom skull color, prefix mode, title visibility, scale, clipping, and D1 geometry;
+the currently deployed production artifact still requires a later parity rollout.
 
 Run operator checks with `python -m unittest discover -s cloud_overlay/operator -v`
 from the repository root. They use synthetic capabilities and no network access;

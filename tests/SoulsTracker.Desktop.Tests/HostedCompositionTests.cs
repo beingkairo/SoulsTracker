@@ -110,8 +110,7 @@ public sealed class HostedCompositionTests
             await coordinator.DisposeAsync();
             await text.DisposeAsync();
             Assert.Equal("Total Deaths: 1", await File.ReadAllTextAsync(state.TextExports.DeathsPath!));
-            Task reconnect = connection.ReconnectAsync();
-            await connection.DisposeAsync(); await reconnect;
+            await connection.DisposeAsync();
             Assert.Empty(server.Writes);
             Assert.Equal(HostedPublisherStatus.Stopped, sender!.Status);
         }

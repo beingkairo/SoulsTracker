@@ -2,8 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { maximumHostedBytes, validateHostedJsonTokens } from "../../web_overlay/src/hosted-contracts";
 import type { HostedAppearance, HostedDeath, HostedEnvelope } from "../../web_overlay/src/hosted-contracts";
 import type { Env } from "./index";
-import { provisioningSlots } from "./index";
-import { acquisition, authorize, authorizeSetup, capability, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, provisioning, readBody, reject, response, rotation, route, shape, stateWrite, verifier } from "./protocol";
+import { acquisition, authorize, capability, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, shape, stateWrite, verifier, verifierV2, type Provisioning } from "./protocol";
 
 interface Status {
   v: 1; epoch: string; generation: string;
@@ -22,7 +21,8 @@ interface Control {
   session: { expectedEpoch: string; sessionRequestId: string; ack: Status & { sessionRequestId: string } } | null;
   last: { sequence: string; digest: string; ack: StateAck } | null;
   rotation: { rotationId: string; digest: string; ack: RotationAck } | null;
-  provision?: { requestId: string; digest: string };
+  authVersion?: 2;
+  requestId?: string;
 }
 
 type ReaderAttachment = { phase: "pending"; id: string; deadline: number } |
@@ -85,7 +85,7 @@ export class OverlayState extends DurableObject<Env> {
       const attachment = socket.deserializeAttachment() as ReaderAttachment;
       if (attachment.phase !== "pending") throw new Error();
       const control = this.load<Control>("control");
-      if (!control || !equalVerifier(control.readVerifier, verifier(attachment.id, "read", token))) {
+      if (!control || !equalVerifier(control.readVerifier, this.roleVerifier(control, attachment.id, "read", token))) {
         socket.close(4401, "Invalid read access"); return;
       }
       const count = this.ctx.getWebSockets().filter(s => s.readyState === WebSocket.OPEN &&
@@ -121,24 +121,42 @@ export class OverlayState extends DurableObject<Env> {
     this.ctx.storage.sql.exec("INSERT INTO records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", key, JSON.stringify(value));
   }
 
-  private exactProvisionReplay(rows: { key: string; value: string }[], claim: ReturnType<typeof provisioning>, claimDigest: string): boolean {
+  private roleVerifier(control: Control, id: string, role: "read" | "write", capabilityValue: string): string {
+    return control.authVersion === 2 && typeof control.requestId === "string"
+      ? verifierV2(control.requestId, role, capabilityValue)
+      : verifier(id, role, capabilityValue);
+  }
+
+  private exactProvisionReplay(rows: { key: string; value: string }[], claim: Provisioning): boolean {
     if (rows.length !== 3 || rows.map(row => row.key).sort().join(",") !== "appearance,control,death") return false;
     try {
       const values = Object.fromEntries(rows.map(row => [row.key, JSON.parse(row.value)])) as Record<string, unknown>;
       const control = values.control;
       if (control === null || typeof control !== "object" || Array.isArray(control)) return false;
       const stored = control as Record<string, unknown>;
-      const keys = ["readVerifier", "writeVerifier", "epoch", "generation", "readGeneration", "session", "last", "rotation", "provision"];
-      if (Object.keys(stored).length !== keys.length || keys.some(key => !Object.hasOwn(stored, key))) return false;
-      const provision = stored.provision;
-      if (provision === null || typeof provision !== "object" || Array.isArray(provision)) return false;
-      const recovery = provision as Record<string, unknown>;
-      return Object.keys(recovery).length === 2 && Object.hasOwn(recovery, "requestId") && Object.hasOwn(recovery, "digest") &&
+      const keys = ["readVerifier", "writeVerifier", "epoch", "generation", "readGeneration", "session", "last", "rotation", "authVersion", "requestId"];
+      return Object.keys(stored).length === keys.length && keys.every(key => Object.hasOwn(stored, key)) &&
+        stored.authVersion === 2 && stored.requestId === claim.requestId &&
         stored.readVerifier === claim.readVerifier && stored.writeVerifier === claim.writeVerifier &&
         stored.epoch === "0" && stored.generation === "0" && stored.readGeneration === "0" &&
         stored.session === null && stored.last === null && stored.rotation === null &&
-        recovery.requestId === claim.requestId && recovery.digest === claimDigest &&
         values.death === null && digest(values.appearance) === digest(defaultAppearance);
+    } catch { return false; }
+  }
+
+  async provisionV2(expectedId: string, claim: Provisioning): Promise<boolean> {
+    try {
+      if (!/^[0-9a-f]{64}$/.test(expectedId) || !this.ctx.id.equals(this.env.OVERLAYS.idFromString(expectedId))) return false;
+      return this.ctx.storage.transactionSync(() => {
+        const rows = this.ctx.storage.sql.exec<{ key: string; value: string }>("SELECT key,value FROM records").toArray();
+        if (rows.length) return this.exactProvisionReplay(rows, claim);
+        const control: Control = { readVerifier: claim.readVerifier, writeVerifier: claim.writeVerifier,
+          epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null,
+          authVersion: 2, requestId: claim.requestId };
+        this.ctx.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?),('death','null'),('appearance',?)",
+          JSON.stringify(control), JSON.stringify(defaultAppearance));
+        return true;
+      });
     } catch { return false; }
   }
 
@@ -165,30 +183,6 @@ export class OverlayState extends DurableObject<Env> {
     try {
       const { id, action } = route(request);
       if (action === "live") return this.live(id);
-      if (action === "provision") {
-        const ids: unknown = this.env.PROVISIONED_IDS;
-        if (!Array.isArray(ids) || !ids.every(value => typeof value === "string")) return reject(403, "forbidden");
-        const slot = provisioningSlots(this.env, ids).find(value => value.overlayId === id);
-        const grant = authorizeSetup(request);
-        if (!slot || !this.ctx.id.equals(this.env.OVERLAYS.idFromName(id)) ||
-          !equalVerifier(slot.setupVerifier, verifier(id, "setup", grant))) return reject(403, "forbidden");
-        const claim = provisioning(await readBody(request));
-        const claimDigest = digest(claim);
-        const acknowledged = this.ctx.storage.transactionSync(() => {
-          const rows = this.ctx.storage.sql.exec<{ key: string; value: string }>("SELECT key,value FROM records").toArray();
-          if (rows.length) {
-            if (this.exactProvisionReplay(rows, claim, claimDigest)) return { v: 1, status: "provisioned" };
-            return reject(409, "slot_unavailable");
-          }
-          const control: Control = { readVerifier: claim.readVerifier, writeVerifier: claim.writeVerifier,
-            epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null,
-            provision: { requestId: claim.requestId, digest: claimDigest } };
-          this.ctx.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?),('death','null'),('appearance',?)",
-            JSON.stringify(control), JSON.stringify(defaultAppearance));
-          return { v: 1, status: "provisioned" };
-        });
-        return response(200, acknowledged);
-      }
       const token = authorize(request);
       const body = action === "publisher" ? undefined : await readBody(request);
       const session = action === "session" ? acquisition(body) : undefined;
@@ -197,7 +191,7 @@ export class OverlayState extends DurableObject<Env> {
       const committed = this.ctx.storage.transactionSync((): CommitResult => {
         const control = this.load<Control>("control") ??
           (action === "publisher" ? this.initialControl(id, token) : reject(403, "forbidden"));
-        if (!control || !equalVerifier(control.writeVerifier, verifier(id, "write", token))) return reject(403, "forbidden");
+        if (!control || !equalVerifier(control.writeVerifier, this.roleVerifier(control, id, "write", token))) return reject(403, "forbidden");
         let death = this.load<HostedDeath | null>("death") ?? null;
         let appearance = this.load<HostedAppearance>("appearance") ?? defaultAppearance;
         if (this.load("death") === undefined) this.save("death", death);
@@ -205,8 +199,8 @@ export class OverlayState extends DurableObject<Env> {
         const status = (): Status => ({ v: 1, epoch: control.epoch, generation: control.generation,
           death: channelStatus(death), appearance: channelStatus(appearance) });
         if (rotate) {
-          const readVerifier = rotate.readCapability ? verifier(id, "read", rotate.readCapability) : undefined;
-          const writeVerifier = rotate.writeCapability ? verifier(id, "write", rotate.writeCapability) : undefined;
+          const readVerifier = rotate.readCapability ? this.roleVerifier(control, id, "read", rotate.readCapability) : undefined;
+          const writeVerifier = rotate.writeCapability ? this.roleVerifier(control, id, "write", rotate.writeCapability) : undefined;
           const requestDigest = digest({ v: 1, rotationId: rotate.rotationId, expectedGeneration: rotate.expectedGeneration, readVerifier, writeVerifier });
           if (control.rotation?.rotationId === rotate.rotationId) {
             if (control.rotation.digest !== requestDigest) return reject(409, "rotation_conflict");
@@ -216,8 +210,8 @@ export class OverlayState extends DurableObject<Env> {
           // Keep capabilities distinct across roles and require actual replacements.
           if ((readVerifier && equalVerifier(readVerifier, control.readVerifier)) ||
             (writeVerifier && equalVerifier(writeVerifier, control.writeVerifier)) ||
-            (rotate.readCapability && equalVerifier(verifier(id, "write", rotate.readCapability), control.writeVerifier)) ||
-            (rotate.writeCapability && equalVerifier(verifier(id, "read", rotate.writeCapability), control.readVerifier)) ||
+            (rotate.readCapability && equalVerifier(this.roleVerifier(control, id, "write", rotate.readCapability), control.writeVerifier)) ||
+            (rotate.writeCapability && equalVerifier(this.roleVerifier(control, id, "read", rotate.writeCapability), control.readVerifier)) ||
             (rotate.readCapability && rotate.readCapability === rotate.writeCapability)) return reject(400, "invalid_rotation");
           control.epoch = increment(control.epoch);
           control.generation = increment(control.generation);

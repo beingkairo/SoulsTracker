@@ -103,63 +103,21 @@ class ProvisionTests(unittest.TestCase):
             for config in [bootstrap, runtime]:
                 self.assertEqual(config["ratelimits"], [
                     {"name": "PUBLISHER_RATE_LIMITER", "namespace_id": "450501", "simple": {"limit": 60, "period": 60}},
-                    {"name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": {"limit": 120, "period": 60}},
-                    {"name": "PROVISIONING_RATE_LIMITER", "namespace_id": "450503", "simple": {"limit": 10, "period": 60}}
+                    {"name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": {"limit": 120, "period": 60}}
                 ])
                 text = json.dumps(config)
                 self.assertNotIn("2" * 64, text)
                 self.assertNotIn("3" * 64, text)
                 self.assertEqual(config["vars"]["PROVISIONED_IDS"], ["1" * 32])
-                self.assertEqual(config["durable_objects"]["bindings"], [{"name": "OVERLAYS", "class_name": "OverlayState"}])
+                self.assertEqual(config["durable_objects"]["bindings"], [
+                    {"name": "OVERLAYS", "class_name": "OverlayState"},
+                    {"name": "PROVISIONING_AUTHORITY", "class_name": "ProvisioningAuthority"}
+                ])
+                self.assertNotIn("PROVISIONING_CEILING", config["vars"])
+                self.assertFalse(any(item["name"].startswith("CREATE_") for item in config["ratelimits"]))
                 self.assertFalse(config["workers_dev"])
                 self.assertFalse(config["preview_urls"])
                 self.assertFalse(config["find_additional_modules"])
-
-    def test_setup_preparation_emits_private_codes_and_verifier_only_runtime_config(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            artifact = root / "artifact"
-            artifact.mkdir()
-            (artifact / "index.js").write_text("export default {}", encoding="utf-8")
-            (artifact / "assets").mkdir()
-            inputs = {"accountId": "a" * 32, "origin": provision.ORIGIN,
-                      "existingIds": ["0" * 32], "slotCount": 2}
-            entropy = ["1" * 32, "2" * 64, "3" * 32, "4" * 64]
-            with patch.object(provision, "private_directory", side_effect=lambda path: path.mkdir()), \
-                    patch.object(provision.secrets, "token_hex", side_effect=entropy):
-                provision.prepare_setup(inputs, root / "private", artifact)
-            codes = json.loads((root / "private/setup-codes.json").read_text())
-            config = json.loads((root / "private/runtime.wrangler.json").read_text())
-            self.assertEqual(codes, [
-                {"version": 1, "setupCode": "st1." + "1" * 32 + "." + "2" * 64},
-                {"version": 1, "setupCode": "st1." + "3" * 32 + "." + "4" * 64}
-            ])
-            self.assertEqual(config["vars"]["PROVISIONED_IDS"], ["0" * 32, "1" * 32, "3" * 32])
-            self.assertEqual(config["vars"]["PROVISIONING_SLOTS"], [
-                {"v": 1, "overlayId": "1" * 32,
-                 "setupVerifier": provision.verifier("1" * 32, "setup", "2" * 64)},
-                {"v": 1, "overlayId": "3" * 32,
-                 "setupVerifier": provision.verifier("3" * 32, "setup", "4" * 64)}
-            ])
-            runtime = json.dumps(config)
-            self.assertNotIn("st1.", runtime)
-            self.assertNotIn("2" * 64, runtime)
-            self.assertNotIn("4" * 64, runtime)
-            self.assertNotIn("BOOTSTRAP", config["vars"])
-
-    def test_setup_preparation_rejects_unbounded_or_malformed_inputs_before_entropy(self):
-        invalid = [
-            {"accountId": "a" * 32, "origin": provision.ORIGIN, "existingIds": [], "slotCount": 0},
-            {"accountId": "a" * 32, "origin": provision.ORIGIN, "existingIds": ["0" * 32] * 2, "slotCount": 1},
-            {"accountId": "a" * 32, "origin": provision.ORIGIN, "existingIds": [str(i).zfill(32) for i in range(16)], "slotCount": 1}
-        ]
-        for inputs in invalid:
-            with patch.object(provision.secrets, "token_hex") as random, patch.object(provision, "private_directory") as mkdir:
-                with self.assertRaises(ValueError):
-                    provision.prepare_setup(inputs, Path("unused"), Path("unused"))
-                random.assert_not_called()
-                mkdir.assert_not_called()
-
 
 if __name__ == "__main__":
     unittest.main()

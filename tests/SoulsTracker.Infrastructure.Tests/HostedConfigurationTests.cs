@@ -23,33 +23,6 @@ public sealed class HostedConfigurationTests
             Assert.Throws<ArgumentException>(() => HostedPublisherConfiguration.Create(origin, new('a', 32), new('b', 64), new('c', 64), HostedProductionOrigins.Approved));
     }
 
-    [Fact]
-    public async Task ImportIsBoundedAndRemovalOnlyTouchesProtectedPairing()
-    {
-        if (!OperatingSystem.IsWindows()) return;
-        string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        try
-        {
-            string source = Path.Combine(directory, "operator.json");
-            string target = Path.Combine(directory, "hosted.private");
-            await File.WriteAllBytesAsync(source, Configuration().Encode());
-            var store = new HostedPublisherConfigurationStore(target, new CurrentUserDpapiSecretProtector(), [Origin]);
-            var imported = await store.ReadPairingAsync(source);
-            Assert.Equal(Origin, imported.DisplayOrigin);
-            await store.SaveAsync(imported);
-            await using (var locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
-                await Assert.ThrowsAsync<InvalidOperationException>(() => store.RemoveAsync());
-            Assert.NotNull(await store.LoadAsync());
-            await store.RemoveAsync();
-            Assert.Null(await store.LoadAsync());
-            Assert.True(File.Exists(source));
-            await File.WriteAllBytesAsync(source, new byte[8193]);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => store.ReadPairingAsync(source));
-            Assert.Equal(["https://overlay.beingkairo.com"], HostedProductionOrigins.Approved);
-        }
-        finally { Directory.Delete(directory, true); }
-    }
 
     [Theory]
     [InlineData("http://publisher.example.test")]

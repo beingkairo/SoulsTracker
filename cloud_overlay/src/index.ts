@@ -1,48 +1,80 @@
+import { isIP } from "node:net";
 import { OverlayState } from "./overlay-state";
-import { authorize, authorizeSetup, equalVerifier, failure, reject, response, route, verifier } from "./protocol";
-export { OverlayState };
+import { ProvisioningAuthority } from "./provisioning-authority";
+import { authorize, failure, reject, response, route } from "./protocol";
+export { OverlayState, ProvisioningAuthority };
 
 export interface Env {
   OVERLAYS: DurableObjectNamespace<OverlayState>;
+  PROVISIONING_AUTHORITY?: DurableObjectNamespace<ProvisioningAuthority>;
   PROVISIONED_IDS: string[];
   BROWSER_ORIGIN?: string;
   BOOTSTRAP?: unknown;
-  PROVISIONING_SLOTS?: unknown;
+  PROVISIONING_CEILING?: unknown;
   PUBLISHER_RATE_LIMITER: RateLimit;
   LIVE_RATE_LIMITER: RateLimit;
-  PROVISIONING_RATE_LIMITER: RateLimit;
+  CREATE_CLIENT_RATE_LIMITER?: RateLimit;
+  CREATE_SERVICE_RATE_LIMITER?: RateLimit;
 }
 
-export interface ProvisioningSlot { v: 1; overlayId: string; setupVerifier: string }
-export function provisioningSlots(env: Env, ids: string[]): ProvisioningSlot[] {
-  const value = env.PROVISIONING_SLOTS;
-  if (!Array.isArray(value) || value.length > 16) return [];
-  const slots: ProvisioningSlot[] = [];
-  for (const item of value) {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) return [];
-    const record = item as Record<string, unknown>;
-    if (Object.keys(record).length !== 3 || record.v !== 1 || typeof record.overlayId !== "string" ||
-      typeof record.setupVerifier !== "string" || !/^[0-9a-f]{32}$/.test(record.overlayId) ||
-      !/^[0-9a-f]{64}$/.test(record.setupVerifier) || !ids.includes(record.overlayId) ||
-      slots.some(slot => slot.overlayId === record.overlayId)) return [];
-    slots.push(record as unknown as ProvisioningSlot);
+function retry(status: 429 | 503, error: "rate_limited" | "admission_unavailable"): Response {
+  const result = response(status, { error });
+  result.headers.set("Retry-After", "60");
+  return result;
+}
+
+async function admission(limiter: RateLimit | undefined, key: string): Promise<"admit" | "deny" | "unavailable"> {
+  try {
+    const admitted = (await limiter!.limit({ key })).success;
+    if (typeof admitted !== "boolean") return "unavailable";
+    return admitted ? "admit" : "deny";
+  } catch { return "unavailable"; }
+}
+
+async function create(request: Request, env: Env, url: URL): Promise<Response> {
+  const clientValue = request.headers.get("CF-Connecting-IP");
+  const clientKey = clientValue !== null && isIP(clientValue) !== 0 ? clientValue : "invalid";
+  const client = await admission(env.CREATE_CLIENT_RATE_LIMITER, `overlay-v2:create:client:${clientKey}`);
+  const service = await admission(env.CREATE_SERVICE_RATE_LIMITER, "overlay-v2:create:service");
+  if (clientValue === null || isIP(clientValue) === 0 || client === "unavailable" || service === "unavailable")
+    return retry(503, "admission_unavailable");
+  if (client === "deny" || service === "deny") return retry(429, "rate_limited");
+
+  if (url.protocol !== "https:" || url.origin !== env.BROWSER_ORIGIN) return reject(403, "forbidden");
+  if (url.search || url.hash) return reject(404, "not_found");
+  if (request.method !== "POST") return reject(405, "method_not_allowed");
+  if (request.headers.has("Cookie") || request.headers.has("Authorization")) return reject(400, "invalid_protocol");
+  const { provisioning, readBody } = await import("./protocol");
+  const claim = provisioning(await readBody(request));
+  try {
+    const authority = env.PROVISIONING_AUTHORITY;
+    if (!authority) return retry(503, "admission_unavailable");
+    const result = await authority.getByName("global").provision(claim);
+    if (!result.ok) return response(409, { error: "creation_unavailable" });
+    return response(200, { v: 1, status: "provisioned", overlayId: result.overlayId });
+  } catch { return response(503, { error: "storage_failure" }); }
+}
+
+function validateOverlayId(env: Env, id: string): DurableObjectId | null {
+  if (id.length === 32) {
+    const ids: unknown = env.PROVISIONED_IDS;
+    if (!Array.isArray(ids) || ids.length > 16 ||
+      !ids.every(value => typeof value === "string" && /^[0-9a-f]{32}$/.test(value)) || !ids.includes(id))
+      return reject(404, "not_found");
+    return null;
   }
-  return slots;
+  try { return env.OVERLAYS.idFromString(id); }
+  catch { return reject(404, "not_found"); }
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/overlays") return await create(request, env, url);
       const { id, action } = route(request);
-      const ids: unknown = env.PROVISIONED_IDS;
-      if (!Array.isArray(ids) || ids.length > 16 ||
-        !ids.every(value => typeof value === "string" && /^[0-9a-f]{32}$/.test(value)) ||
-        !ids.includes(id)) return reject(404, "not_found");
-      let provisioningSlot: ProvisioningSlot | undefined;
-      if (action === "provision") {
-        provisioningSlot = provisioningSlots(env, ids).find(value => value.overlayId === id);
-        if (!provisioningSlot) return reject(404, "not_found");
-      } else if (action === "live") {
+      const targetId = validateOverlayId(env, id);
+      if (action === "live") {
         if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return reject(404, "not_found");
         if (!env.BROWSER_ORIGIN || request.headers.get("Origin") !== env.BROWSER_ORIGIN)
           return reject(403, "forbidden");
@@ -52,30 +84,13 @@ export default {
         if (request.headers.has("Cookie") || request.headers.has("Sec-WebSocket-Protocol") || request.headers.has("Authorization"))
           return reject(400, "invalid_protocol");
       } else authorize(request);
-      if (!env.BROWSER_ORIGIN || new URL(request.url).origin !== env.BROWSER_ORIGIN)
-        return reject(403, "forbidden");
-      const limiter = action === "live" ? env.LIVE_RATE_LIMITER :
-        action === "provision" ? env.PROVISIONING_RATE_LIMITER : env.PUBLISHER_RATE_LIMITER;
-      let admitted: boolean;
-      try {
-        admitted = (await limiter.limit({ key: action === "provision" ? `overlay-v1:setup:${id}` : `overlay-v1:${id}` })).success;
-        if (typeof admitted !== "boolean") throw new Error();
-      } catch {
-        const unavailable = response(503, { error: "admission_unavailable" });
-        unavailable.headers.set("Retry-After", "60");
-        return unavailable;
-      }
-      if (!admitted) {
-        const limited = response(429, { error: "rate_limited" });
-        limited.headers.set("Retry-After", "60");
-        return limited;
-      }
-      if (action === "provision") {
-        const grant = authorizeSetup(request);
-        if (!equalVerifier(provisioningSlot!.setupVerifier, verifier(id, "setup", grant))) return reject(403, "forbidden");
-        if (request.headers.has("Cookie")) return reject(400, "invalid_protocol");
-      }
-      return await env.OVERLAYS.getByName(id).fetch(request);
+      if (!env.BROWSER_ORIGIN || url.origin !== env.BROWSER_ORIGIN) return reject(403, "forbidden");
+      const limiter = action === "live" ? env.LIVE_RATE_LIMITER : env.PUBLISHER_RATE_LIMITER;
+      const admitted = await admission(limiter, `overlay-v1:${id}`);
+      if (admitted === "unavailable") return retry(503, "admission_unavailable");
+      if (admitted === "deny") return retry(429, "rate_limited");
+      const stub = targetId === null ? env.OVERLAYS.getByName(id) : env.OVERLAYS.get(targetId);
+      return await stub.fetch(request);
     } catch (error) { return failure(error); }
   }
 } satisfies ExportedHandler<Env>;
