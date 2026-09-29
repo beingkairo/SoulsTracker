@@ -92,6 +92,51 @@ public sealed class HostedConnectionPresentationTests
         finally { window.Close(); }
     });
 
+    [Theory]
+    [InlineData(560d, 400d)]
+    [InlineData(560d, 760d)]
+    [InlineData(1060d, 760d)]
+    public async Task ConfiguredUrlAndCopyStayInOneCompactRow(double width, double height) => await OnDispatcher(async () =>
+    {
+        string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            var store = new HostedPublisherConfigurationStore(Path.Combine(root, "pairing.private"), new CurrentUserDpapiSecretProtector(), [Configuration().DisplayOrigin]);
+            await store.SaveAsync(Configuration());
+            await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config => new HostedOverlayPublisher(config, new Server()));
+            await using var coordinator = new SerializedTrackerCoordinator(new SqliteTrackerStateRepository(root, "tracker.db"), connection);
+            var vm = new DesktopTrackerViewModel(coordinator); vm.ConfigureHostedOverlay(connection);
+            var window = new MainWindow { DataContext = vm, Width = width, Height = height, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
+                await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
+                await Idle(); window.UpdateLayout();
+
+                var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
+                var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
+                var row = Assert.IsType<Grid>(url.Parent);
+                Assert.Same(row, copy.Parent);
+                Assert.Equal(Grid.GetRow(url), Grid.GetRow(copy));
+                Assert.Equal(VerticalAlignment.Center, url.VerticalAlignment);
+                Assert.Equal(VerticalAlignment.Center, copy.VerticalAlignment);
+                Assert.Equal(TextWrapping.NoWrap, url.TextWrapping);
+
+                Rect urlBounds = url.TransformToAncestor(row).TransformBounds(new Rect(url.RenderSize));
+                Rect copyBounds = copy.TransformToAncestor(row).TransformBounds(new Rect(copy.RenderSize));
+                Assert.True(urlBounds.Top < copyBounds.Bottom && copyBounds.Top < urlBounds.Bottom);
+                Assert.True(copyBounds.Bottom <= urlBounds.Bottom + 1, $"URL {urlBounds}; copy {copyBounds}");
+                Assert.InRange(row.ActualHeight, 30, 34);
+
+                var urlScroll = Tree(url).OfType<ScrollViewer>().Single();
+                Assert.True(urlScroll.ExtentWidth > urlScroll.ViewportWidth);
+                Assert.True(urlScroll.ExtentHeight <= urlScroll.ViewportHeight + 1);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
     [Fact]
     public async Task LongUrlKeepsHorizontalAccessAndTraversesDirectlyBetweenFieldAndCopy() => await OnDispatcher(async () =>
     {
