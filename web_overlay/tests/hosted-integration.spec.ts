@@ -3,22 +3,23 @@ import { test, expect } from "@playwright/test";
 test.describe.configure({ mode: "serial" });
 const origin = "https://localhost:8799";
 test.use({ ignoreHTTPSErrors: true });
-let credentials: { id: string; read: string; write: string };
+type Credentials = { id: string; read: string; write: string };
+let credentials: Credentials;
 let sequence: number;
-let lastPublisherAdmission = 0;
-async function pacePublisherAdmission(): Promise<void> {
-  // Sessions and publishes share one retained 60/minute budget across tests.
-  const remaining = 1200 - (Date.now() - lastPublisherAdmission);
-  if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
-  lastPublisherAdmission = Date.now();
+async function provision(request: any): Promise<Credentials> {
+  const response = await request.post(`${origin}/__test/provision`);
+  expect(response.status()).toBe(200);
+  return response.json();
 }
-test.beforeEach(async ({ request }) => {
-  credentials = await (await request.post(`${origin}/__test/provision`)).json(); sequence = 0;
-  await pacePublisherAdmission();
-  const acquired = await request.post(`${origin}/api/v1/overlays/${credentials.id}/session`, {
-    headers: { Authorization: `Bearer ${credentials.write}` }, data: { v: 1, expectedEpoch: "0", sessionRequestId: "3".repeat(32) }
+async function acquire(request: any, target: Credentials): Promise<void> {
+  const acquired = await request.post(`${origin}/api/v1/overlays/${target.id}/session`, {
+    headers: { Authorization: `Bearer ${target.write}` }, data: { v: 1, expectedEpoch: "0", sessionRequestId: "3".repeat(32) }
   });
   expect(acquired.status()).toBe(200);
+}
+test.beforeEach(async ({ request }) => {
+  credentials = await provision(request); sequence = 0;
+  await acquire(request, credentials);
 });
 const address = () => `${origin}/overlay/#id=${credentials.id}&read=${credentials.read}`;
 test("hosted viewport centers complete painted content at intrinsic scale", async ({ page, request }, testInfo) => {
@@ -81,7 +82,6 @@ test("background follows current content and skull gaps match", async ({ page, r
   const measurements = [];
   for (const title of ["A long synthetic counter title", "X", ""]) {
     for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
       await publish(request, { appearance: { ...style, title, titleIconMode, padding: 12, backgroundOpacity: 100 } });
       await expect(panel).toHaveText(title && titleIconMode !== "skullOnly" ? `${title}: 7` : "7");
       await expect(panel).toHaveCSS("padding", "12px");
@@ -184,7 +184,6 @@ for (const variant of [
   });
 }
 async function publish(request: any, channels: object) {
-  await pacePublisherAdmission();
   const response = await request.put(`${origin}/api/v1/overlays/${credentials.id}/state`, {
     headers: { Authorization: `Bearer ${credentials.write}` }, data: { v: 1, epoch: "1", sessionRequestId: "3".repeat(32), sequence: String(++sequence), ...channels }
   });
@@ -215,18 +214,18 @@ test("reconnects to durable state while retaining the DOM through connection los
   await publish(request, { death: { value: "42", availability: "available" } });
   await page.goto(address()); await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 42");
   await page.context().setOffline(true);
-  await request.post(`${origin}/__test/disconnect`);
+  await request.post(`${origin}/__test/disconnect`, { data: { id: credentials.id } });
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 42");
   await publish(request, { death: { value: "0", availability: "available" } });
   await page.context().setOffline(false);
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0", { timeout: 10000 });
   await publish(request, { death: { value: null, availability: "unavailable" } });
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0");
-  await request.post(`${origin}/__test/disconnect`);
+  await request.post(`${origin}/__test/disconnect`, { data: { id: credentials.id } });
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0");
   await publish(request, { appearance: { ...style, enabled: false } });
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
-  await request.post(`${origin}/__test/disconnect`);
+  await request.post(`${origin}/__test/disconnect`, { data: { id: credentials.id } });
   await expect(page.locator("#souls-tracker-overlay")).toBeEmpty();
 });
 
@@ -239,7 +238,7 @@ test("hosted paint survives reload and reconnect without placement drift", async
   await expect.poll(() => panel.evaluate(node => (node as HTMLElement).style.transform)).not.toBe("");
   const before = await page.screenshot({ omitBackground: true });
   await page.context().setOffline(true);
-  await request.post(`${origin}/__test/disconnect`);
+  await request.post(`${origin}/__test/disconnect`, { data: { id: credentials.id } });
   expect((await page.screenshot({ omitBackground: true })).equals(before)).toBe(true);
   const hydrated = new Promise<void>(resolve => page.once("websocket", socket => socket.on("framereceived", event => {
     if (String(event.payload).includes('"type":"snapshot"')) resolve();
@@ -251,6 +250,33 @@ test("hosted paint survives reload and reconnect without placement drift", async
   await expect.poll(() => panel.evaluate(node => (node as HTMLElement).style.transform)).not.toBe("");
   expect((await page.screenshot({ omitBackground: true })).equals(before)).toBe(true);
   await testInfo.attach("hydrated-reconnected", { body: before, contentType: "image/png" });
+});
+
+test("isolated harness identities finish publish after another live session closes", async ({ page, request }) => {
+  await publish(request, { death: { value: "7", availability: "available" } });
+  const opened = page.waitForEvent("websocket");
+  await page.goto(address());
+  const firstSocket = await opened;
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 7");
+
+  const next = await provision(request);
+  expect(next.id).toMatch(/^[0-9a-f]{64}$/);
+  expect(next.id).not.toBe(credentials.id);
+  await acquire(request, next);
+
+  const closed = firstSocket.waitForEvent("close");
+  const disconnected = await request.post(`${origin}/__test/disconnect`, {
+    data: { id: credentials.id }, timeout: 10000
+  });
+  expect(disconnected.status()).toBe(204);
+  await closed;
+
+  const completed = await request.put(`${origin}/api/v1/overlays/${next.id}/state`, {
+    headers: { Authorization: `Bearer ${next.write}` }, timeout: 10000,
+    data: { v: 1, epoch: "1", sessionRequestId: "3".repeat(32), sequence: "1",
+      appearance: { ...style, title: "Isolated", fontSize: 24 } }
+  });
+  expect(completed.status()).toBe(200);
 });
 
 for (const titleIconMode of ["off", "prefixSkull", "skullOnly"]) for (const title of ["Custom", ""]) {
@@ -307,8 +333,6 @@ for (const value of ["0", "42", "9223372036854775807", null]) {
     ]) {
       let previous: { width: number; height: number } | undefined;
       for (const fontSize of [12, 24, 48, 96]) {
-        // Respect the local Worker's retained 60/minute publisher admission budget.
-        await new Promise(resolve => setTimeout(resolve, 1500));
         await publish(request, { appearance: { ...style, ...variant, fontSize, backgroundOpacity: 100 } });
         await expect(panel).toHaveCSS("font-size", `${fontSize}px`);
         await expect(panel).toHaveCSS("padding", `${variant.padding}px`);
