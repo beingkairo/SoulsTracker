@@ -113,32 +113,34 @@ public sealed class HostedConnectionPresentationTests
                 var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
                 var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
                 var urlScroll = Tree(url).OfType<ScrollViewer>().Single();
-                var scrollButtons = Tree(url).OfType<RepeatButton>().ToArray();
-                Assert.NotEmpty(scrollButtons);
-                Assert.All(scrollButtons, button => Assert.True(string.IsNullOrEmpty(AutomationProperties.GetName(button))));
+                Assert.Equal(ScrollBarVisibility.Hidden, url.HorizontalScrollBarVisibility);
+                Assert.Empty(Tree(url).OfType<ScrollBar>());
+                Assert.Empty(Tree(url).OfType<RepeatButton>());
+                Assert.DoesNotContain(Tree(url).OfType<Control>(), control =>
+                    !ReferenceEquals(control, url)
+                    && control.Focusable
+                    && string.IsNullOrEmpty(AutomationProperties.GetName(control)));
                 Assert.True(url.Text.Length > 100);
                 Assert.True(urlScroll.ExtentWidth > urlScroll.ViewportWidth);
 
                 url.SelectAll();
                 Assert.Equal(url.Text.Length, url.SelectionLength);
                 Assert.Equal(url.Text, url.SelectedText);
-                string? copiedUrl = null;
-                Assert.True(connection.CopyReadUrl(value => copiedUrl = value));
-                Assert.Equal(url.Text, copiedUrl);
-                urlScroll.ScrollToHorizontalOffset(urlScroll.ScrollableWidth);
+                Clipboard.Clear();
+                copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(url.Text, Clipboard.GetText());
+                Assert.True(url.Focus());
+                url.CaretIndex = url.Text.Length;
                 await Idle();
                 Assert.True(urlScroll.HorizontalOffset > 0);
 
-                Assert.True(url.Focus());
                 Assert.True(url.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next)));
                 Assert.Same(copy, Keyboard.FocusedElement);
-                Assert.DoesNotContain(Keyboard.FocusedElement, scrollButtons);
 
                 Assert.True(copy.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous)));
                 Assert.Same(url, Keyboard.FocusedElement);
-                Assert.DoesNotContain(Keyboard.FocusedElement, scrollButtons);
             }
-            finally { window.Close(); }
+            finally { Clipboard.Clear(); window.Close(); }
         }
         finally { Directory.Delete(root, true); }
     });

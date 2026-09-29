@@ -145,6 +145,24 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="OverlayUrlTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="HorizontalScrollBarVisibility" Value="Hidden" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" Focusable="False" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                                <ScrollViewer.Template>
+                                    <ControlTemplate TargetType="ScrollViewer">
+                                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}" />
+                                    </ControlTemplate>
+                                </ScrollViewer.Template>
+                            </ScrollViewer>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ContextHelpButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Content" Value="?" />
             <Setter Property="Width" Value="32" />
@@ -644,7 +662,7 @@
                                 <Border Padding="8" Background="#191D23" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBox Margin="0,0,8,0" Padding="0" BorderThickness="0" Background="Transparent" FontFamily="Consolas" IsReadOnly="True" Focusable="True" HorizontalScrollBarVisibility="Auto" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
+                                        <TextBox Margin="0,0,8,0" Padding="0" BorderThickness="0" Background="Transparent" FontFamily="Consolas" IsReadOnly="True" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
                                         <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
                                     </Grid>
                                 </Border>
