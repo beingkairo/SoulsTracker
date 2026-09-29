@@ -33,12 +33,8 @@ public sealed class InteractiveStyleGeometryTests
             window.Show(); await Idle();
             var main = (TabItem)window.FindName("MainWorkspaceTab");
             var overlay = (TabItem)window.FindName("OverlayWorkspaceTab");
-            var settings = (TabItem)window.FindName("SettingsWorkspaceTab");
             var representatives = new (TabItem Tab, Control Control)[]
             {
-                (main, main),
-                (overlay, overlay),
-                (settings, settings),
                 (overlay, (Button)window.FindName("ApplyAppearanceButton")),
                 (main, DirectoryPresentationControlTests.Tree(window).OfType<Button>().Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Change Elden Ring save directory")),
                 (main, DirectoryPresentationControlTests.Tree(window).OfType<Button>().Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Refresh Elden Ring saves")),
@@ -74,6 +70,114 @@ public sealed class InteractiveStyleGeometryTests
 
         }
         finally { Hover(null); Clipboard.Clear(); window.Close(); }
+    });
+
+    [Fact]
+    public Task PointerActivationSelectsEachWorkspaceTabWithoutLeavingAFocusCue() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var window = new MainWindow { ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await Idle();
+            var tabs = (TabControl)window.FindName("WorkspaceTabs");
+            var main = (TabItem)window.FindName("MainWorkspaceTab");
+            var overlay = (TabItem)window.FindName("OverlayWorkspaceTab");
+            var settings = (TabItem)window.FindName("SettingsWorkspaceTab");
+
+            foreach (var (prior, target) in new[] { (main, overlay), (overlay, settings), (settings, main) })
+            {
+                prior.IsSelected = true; await Idle();
+                Assert.False(target.IsSelected);
+                var surface = (Border)target.Template.FindName("TabSurface", target);
+                var restingBackground = surface.Background;
+
+                Keyboard.ClearFocus();
+                SetInputModality(Mouse.PrimaryDevice); Hover(target); await Idle();
+                Assert.NotEqual(restingBackground, surface.Background);
+                target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+                Assert.True(target.IsSelected);
+                Assert.Same(target, tabs.SelectedItem);
+                Assert.Equal(window.FindResource("SelectionBrush"), surface.Background);
+                target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                await Idle();
+
+                Assert.True(target.IsSelected);
+                Assert.Equal(window.FindResource("SelectionBrush"), surface.Background);
+                Assert.Equal(window.FindResource("AccentBrush"), surface.BorderBrush);
+                var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(target);
+                Assert.NotNull(layer);
+                Assert.DoesNotContain(layer.GetAdorners(target) ?? [], adorner => adorner.IsVisible);
+            }
+        }
+        finally { Hover(null); window.Close(); }
+    });
+
+    [Fact]
+    public Task WorkspaceKeyboardInputMovesThroughTabsAndRepresentativeControlsWithFocusCues() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var window = new MainWindow((_, _) => null, _ => { })
+        {
+            ShowInTaskbar = false,
+            DataContext = new
+            {
+                ControlsEnabled = true,
+                IsEldenRingSelected = true,
+                IsEldenRingBrowseVisible = false,
+                IsEldenRingChangeVisible = true,
+                EldenRingDirectoryPath = "C:\\synthetic-save",
+                PresentationControlsEnabled = true,
+                HostedOverlay = new { CanCopy = true, UrlText = "https://overlay.beingkairo.com/overlay/#synthetic" }
+            }
+        };
+        try
+        {
+            window.Show(); await Idle();
+            var main = (TabItem)window.FindName("MainWorkspaceTab");
+            var overlay = (TabItem)window.FindName("OverlayWorkspaceTab");
+            var settings = (TabItem)window.FindName("SettingsWorkspaceTab");
+
+            FocusByKeyboard(main); await Idle();
+            SendKey(main, window, Key.Right); await Idle();
+            AssertKeyboardFocus(overlay);
+            overlay.IsSelected = true; await Idle(); FocusByKeyboard(overlay); await Idle();
+            SendKey(overlay, window, Key.Left); await Idle();
+            AssertKeyboardFocus(main);
+            overlay.IsSelected = true; await Idle(); FocusByKeyboard(overlay); await Idle();
+            SendKey(overlay, window, Key.Right); await Idle();
+            AssertKeyboardFocus(settings);
+
+            main.IsSelected = true; await Idle();
+            var mainButtons = DirectoryPresentationControlTests.Tree(window).OfType<Button>().ToArray();
+            var directoryCopy = mainButtons.Single(x => x.IsVisible && System.Windows.Automation.AutomationProperties.GetName(x) == "Copy directory path");
+            var change = mainButtons.Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Change Elden Ring save directory");
+            var refresh = mainButtons.Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Refresh Elden Ring saves");
+            FocusByKeyboard(directoryCopy); await Idle();
+            AssertKeyboardFocus(directoryCopy);
+            SendKey(directoryCopy, window, Key.Tab); await Idle();
+            AssertKeyboardFocus(change);
+            SendKey(change, window, Key.Tab); await Idle();
+            AssertKeyboardFocus(refresh);
+            SendKey(refresh, window, Key.Tab, ModifierKeys.Shift); await Idle();
+            AssertKeyboardFocus(change);
+
+            overlay.IsSelected = true; await Idle();
+            var url = DirectoryPresentationControlTests.Tree(window).OfType<TextBox>().Single(x => System.Windows.Automation.AutomationProperties.GetName(x) == "Overlay URL");
+            var copyUrl = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
+            FocusByKeyboard(url); await Idle();
+            SendKey(url, window, Key.Tab); await Idle();
+            AssertKeyboardFocus(copyUrl);
+
+            var apply = (Button)window.FindName("ApplyAppearanceButton");
+            var reset = (Button)window.FindName("ResetSelectedOverlayAppearanceButton");
+            FocusByKeyboard(apply); await Idle();
+            SendKey(apply, window, Key.Tab); await Idle();
+            AssertKeyboardFocus(reset);
+            SendKey(reset, window, Key.Tab, ModifierKeys.Shift); await Idle();
+            AssertKeyboardFocus(apply);
+        }
+        finally { window.Close(); }
     });
 
     [Fact]
@@ -282,6 +386,34 @@ public sealed class InteractiveStyleGeometryTests
     private static void SetInputModality(InputDevice device) =>
         typeof(InputManager).GetProperty(nameof(InputManager.MostRecentInputDevice))!.SetValue(InputManager.Current, device);
 
+    private static void FocusByKeyboard(Control control)
+    {
+        SetInputModality(Keyboard.PrimaryDevice);
+        Assert.True(control.Focus());
+    }
+
+    private static void SendKey(UIElement target, Window window, Key key, ModifierKeys modifiers = ModifierKeys.None)
+    {
+        Assert.Same(target, Keyboard.FocusedElement);
+        KeyboardDevice keyboard = modifiers == ModifierKeys.None
+            ? Keyboard.PrimaryDevice
+            : new PressedKeyboard(key, modifiers);
+        if (!ReferenceEquals(keyboard, Keyboard.PrimaryDevice))
+            keyboard.Focus(target);
+        InputManager.Current.ProcessInput(new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, key)
+        { RoutedEvent = Keyboard.KeyDownEvent });
+        InputManager.Current.ProcessInput(new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, key)
+        { RoutedEvent = Keyboard.KeyUpEvent });
+    }
+
+    private static void AssertKeyboardFocus(Control control)
+    {
+        Assert.True(control.IsKeyboardFocused, System.Windows.Automation.AutomationProperties.GetName(control));
+        var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(control);
+        Assert.NotNull(layer);
+        Assert.Contains(layer.GetAdorners(control) ?? [], adorner => adorner.IsVisible);
+    }
+
     private static string[] Geometry(FrameworkElement root) => DirectoryPresentationControlTests.Tree(root)
         .OfType<FrameworkElement>().Where(element => element is not System.Windows.Documents.Adorner).Prepend(root).Select(element =>
         {
@@ -296,10 +428,16 @@ public sealed class InteractiveStyleGeometryTests
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
 
-    private sealed class PressedKeyboard(Key pressed = Key.Space) : KeyboardDevice(InputManager.Current)
+    private sealed class PressedKeyboard(Key pressed = Key.Space, ModifierKeys modifiers = ModifierKeys.None) : KeyboardDevice(InputManager.Current)
     {
         internal Key Pressed { get; set; } = pressed;
-        protected override KeyStates GetKeyStatesFromSystem(Key key) => key == Pressed ? KeyStates.Down : KeyStates.None;
+        protected override KeyStates GetKeyStatesFromSystem(Key key) =>
+            key == Pressed ||
+            key == Key.LeftShift && modifiers.HasFlag(ModifierKeys.Shift) ||
+            key == Key.LeftCtrl && modifiers.HasFlag(ModifierKeys.Control) ||
+            key == Key.LeftAlt && modifiers.HasFlag(ModifierKeys.Alt)
+                ? KeyStates.Down
+                : KeyStates.None;
     }
 
 

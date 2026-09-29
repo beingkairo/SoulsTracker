@@ -277,6 +277,13 @@
                             <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="IsSelected" Value="False" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="TabSurface" Property="Background" Value="#454F61" />
+                            </MultiTrigger>
                             <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabSurface" Property="Background" Value="{StaticResource SelectionBrush}" /><Setter TargetName="TabSurface" Property="BorderBrush" Value="{StaticResource AccentBrush}" /><Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="TabSurface" Property="Opacity" Value="0.45" /></Trigger>
                         </ControlTemplate.Triggers>
