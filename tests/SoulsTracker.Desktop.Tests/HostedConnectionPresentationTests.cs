@@ -5,6 +5,8 @@ using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using SoulsTracker.Application;
@@ -88,6 +90,57 @@ public sealed class HostedConnectionPresentationTests
             Assert.True(bounds.Left >= 0 && bounds.Right <= scroll.ActualWidth + 1);
         }
         finally { window.Close(); }
+    });
+
+    [Fact]
+    public async Task LongUrlKeepsHorizontalAccessAndTraversesDirectlyBetweenFieldAndCopy() => await OnDispatcher(async () =>
+    {
+        string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            var store = new HostedPublisherConfigurationStore(Path.Combine(root, "pairing.private"), new CurrentUserDpapiSecretProtector(), [Configuration().DisplayOrigin]);
+            await store.SaveAsync(Configuration());
+            await using var connection = new HostedOverlayConnection(Dispatcher.CurrentDispatcher, store, config => new HostedOverlayPublisher(config, new Server()));
+            await using var coordinator = new SerializedTrackerCoordinator(new SqliteTrackerStateRepository(root, "tracker.db"), connection);
+            var vm = new DesktopTrackerViewModel(coordinator); vm.ConfigureHostedOverlay(connection);
+            var window = new MainWindow { DataContext = vm, Width = 560, Height = 400, ShowInTaskbar = false };
+            try
+            {
+                window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
+                await connection.InitializeAsync(RuntimePublicationSessionTests.Selected(GameId.DemonsSouls));
+                await Idle(); window.UpdateLayout();
+
+                var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
+                var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
+                var urlScroll = Tree(url).OfType<ScrollViewer>().Single();
+                var scrollButtons = Tree(url).OfType<RepeatButton>().ToArray();
+                Assert.NotEmpty(scrollButtons);
+                Assert.All(scrollButtons, button => Assert.True(string.IsNullOrEmpty(AutomationProperties.GetName(button))));
+                Assert.True(url.Text.Length > 100);
+                Assert.True(urlScroll.ExtentWidth > urlScroll.ViewportWidth);
+
+                url.SelectAll();
+                Assert.Equal(url.Text.Length, url.SelectionLength);
+                Assert.Equal(url.Text, url.SelectedText);
+                string? copiedUrl = null;
+                Assert.True(connection.CopyReadUrl(value => copiedUrl = value));
+                Assert.Equal(url.Text, copiedUrl);
+                urlScroll.ScrollToHorizontalOffset(urlScroll.ScrollableWidth);
+                await Idle();
+                Assert.True(urlScroll.HorizontalOffset > 0);
+
+                Assert.True(url.Focus());
+                Assert.True(url.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next)));
+                Assert.Same(copy, Keyboard.FocusedElement);
+                Assert.DoesNotContain(Keyboard.FocusedElement, scrollButtons);
+
+                Assert.True(copy.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous)));
+                Assert.Same(url, Keyboard.FocusedElement);
+                Assert.DoesNotContain(Keyboard.FocusedElement, scrollButtons);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, true); }
     });
 
     [Fact]

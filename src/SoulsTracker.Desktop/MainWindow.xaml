@@ -644,7 +644,7 @@
                                 <Border Padding="8" Background="#191D23" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBox Margin="0,0,8,0" Padding="0" BorderThickness="0" Background="Transparent" FontFamily="Consolas" IsReadOnly="True" Focusable="True" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
+                                        <TextBox Margin="0,0,8,0" Padding="0" BorderThickness="0" Background="Transparent" FontFamily="Consolas" IsReadOnly="True" Focusable="True" HorizontalScrollBarVisibility="Auto" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
                                         <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
                                     </Grid>
                                 </Border>
