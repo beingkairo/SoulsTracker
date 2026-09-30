@@ -42,7 +42,8 @@ public sealed class DirectoryCopyFeedbackControlTests
         {
             copies.Add(path);
             if (fail) throw new IOException("Synthetic clipboard failure");
-        }) { DataContext = vm, Width = 560, Height = 760, ShowInTaskbar = false };
+        })
+        { DataContext = vm, Width = 560, Height = 760, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle();
@@ -103,7 +104,8 @@ public sealed class DirectoryCopyFeedbackControlTests
         {
             copies.Add(path);
             if (fail) throw new IOException("Synthetic clipboard failure");
-        }) { DataContext = vm, Width = 560, Height = 760, ShowInTaskbar = false };
+        })
+        { DataContext = vm, Width = 560, Height = 760, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle();
@@ -161,7 +163,8 @@ public sealed class DirectoryCopyFeedbackControlTests
         {
             copies.Add(path);
             if (fail) throw new IOException("Synthetic clipboard failure");
-        }) { DataContext = vm, Width = 560, Height = 760, ShowInTaskbar = false };
+        })
+        { DataContext = vm, Width = 560, Height = 760, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle();

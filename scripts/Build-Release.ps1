@@ -109,7 +109,17 @@ Invoke-External npm @("run", "check", "--prefix", (Join-Path $root "cloud_overla
 Invoke-External npm @("run", "build", "--prefix", (Join-Path $root "cloud_overlay"))
 Invoke-External npm @("test", "--prefix", (Join-Path $root "cloud_overlay"))
 Invoke-External dotnet @("format", $solution, "--no-restore", "--verify-no-changes")
-Invoke-External dotnet @("build", $solution, "--configuration", "Release", "--no-restore")
+Invoke-External dotnet @(
+    "build",
+    $solution,
+    "--configuration",
+    "Release",
+    "--no-restore",
+    "--no-incremental",
+    '-p:DebugType=None',
+    '-p:DebugSymbols=false',
+    '-p:CopyOutputSymbolsToPublishDirectory=false'
+)
 
 if (-not $SkipTests) {
     Invoke-External dotnet @("test", $solution, "--configuration", "Release", "--no-build")

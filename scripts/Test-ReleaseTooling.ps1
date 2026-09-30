@@ -40,6 +40,12 @@ function Invoke-FakeCommand([string]$Tool, [object[]]$Arguments) {
     # Resolve the caller's case state through the scope chain, including called scripts.
     $packageCaseState.Calls.Add($command)
     $global:LASTEXITCODE = 0
+    if ($Tool -eq 'dotnet' -and $Arguments[0] -eq 'build') {
+        Assert-True ($Arguments -ccontains '--no-incremental') 'Release build must regenerate binaries with release-only debug settings.'
+        foreach ($option in @('-p:DebugType=None', '-p:DebugSymbols=false', '-p:CopyOutputSymbolsToPublishDirectory=false')) {
+            Assert-True ($Arguments -ccontains $option) 'Release build must suppress end-user debug paths before publish.'
+        }
+    }
     if ($Tool -eq 'dotnet' -and $Arguments[0] -eq 'publish') {
         $packageCaseState.Publishes++
         Assert-True ($Arguments[1] -eq (Join-Path $packageCaseState.Fixture 'src\SoulsTracker.Desktop\SoulsTracker.Desktop.csproj')) 'Publish must name Desktop explicitly.'

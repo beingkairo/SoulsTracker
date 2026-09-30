@@ -40,7 +40,8 @@ public sealed class HostedConnectionPresentationTests
                 var expiry = new Expiry(delay, callback);
                 expiries.Add(expiry);
                 return () => expiry.Cancelled = true;
-            }) { DataContext = vm, ShowActivated = false, ShowInTaskbar = false };
+            })
+            { DataContext = vm, ShowActivated = false, ShowInTaskbar = false };
             try
             {
                 window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;

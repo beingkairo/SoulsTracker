@@ -45,7 +45,8 @@ public sealed class SaveDirectoryControlTests
             picks++;
             observed.Add((notifications.Count, ReferenceEquals(committed, repository.State), ReferenceEquals(selected, SelectedChoice(vm, game))));
             return result;
-        }, _ => { }) { DataContext = vm, ShowInTaskbar = false };
+        }, _ => { })
+        { DataContext = vm, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle(); notifications.Clear();
@@ -97,8 +98,11 @@ public sealed class SaveDirectoryControlTests
         File.SetLastWriteTimeUtc(paired, DateTime.UtcNow.AddMinutes(1));
         if (characters > 1) CreateSave("lp", directory, 2);
         var before = Directory.GetFiles(directory).ToDictionary(x => x, File.ReadAllBytes);
-        var repository = new MemoryRepository(Game("lp")) { State = new(1, Game("lp"), OverlayConfiguration.Default,
-            liesOfPSave: new(selected, selectedDirectory ? directory : null)) };
+        var repository = new MemoryRepository(Game("lp"))
+        {
+            State = new(1, Game("lp"), OverlayConfiguration.Default,
+            liesOfPSave: new(selected, selectedDirectory ? directory : null))
+        };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         for (int restart = 0; restart < 2; restart++)
         {
@@ -234,8 +238,11 @@ public sealed class SaveDirectoryControlTests
         using var fixture = new SaveDirectoryWorkflowTests();
         string directory = Path.Combine(fixture.Root, "chosen");
         string path = CreateSave("er", directory);
-        var repository = new MemoryRepository(Game("er")) { State = new(1, Game("er"), SoulsTracker.Domain.OverlayConfiguration.Default,
-            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, -1, directory)) };
+        var repository = new MemoryRepository(Game("er"))
+        {
+            State = new(1, Game("er"), SoulsTracker.Domain.OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, -1, directory))
+        };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var vm = CreateViewModel(coordinator);
         var window = new MainWindow((_, _) => null) { DataContext = vm, ShowActivated = false, ShowInTaskbar = false };

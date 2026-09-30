@@ -300,8 +300,11 @@ public sealed class SaveDirectoryWorkflowTests : IDisposable
     {
         string directory = Path.Combine(Root, "selected");
         string path = CreateSave("er", directory);
-        var repository = new MemoryRepository(GameId.EldenRing) { State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
-            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, -1, directory)) };
+        var repository = new MemoryRepository(GameId.EldenRing)
+        {
+            State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, -1, directory))
+        };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var vm = CreateViewModel(coordinator);
         await vm.InitializeAsync();
@@ -356,8 +359,11 @@ public sealed class SaveDirectoryWorkflowTests : IDisposable
     {
         string old = CreateSave("er", Path.Combine(Root, "old"));
         string next = CreateSave("er", Path.Combine(Root, "next"));
-        var repository = new MemoryRepository(GameId.EldenRing) { State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
-            eldenRingNoticeAcknowledged: true, eldenRingSave: new(old, 0, Path.GetDirectoryName(old))) };
+        var repository = new MemoryRepository(GameId.EldenRing)
+        {
+            State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(old, 0, Path.GetDirectoryName(old)))
+        };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var empty = new EmptyDiscovery();
         var vm = new DesktopTrackerViewModel(coordinator, new UnavailableProfileReader(throws), empty, empty, liesOfPSaveDiscovery: empty);
@@ -417,8 +423,11 @@ public sealed class SaveDirectoryWorkflowTests : IDisposable
     {
         string path = CreateSave("er", Path.Combine(Root, "legacy"));
         byte[] before = File.ReadAllBytes(path);
-        var repository = new MemoryRepository(GameId.EldenRing) { State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
-            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, 0)) };
+        var repository = new MemoryRepository(GameId.EldenRing)
+        {
+            State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, 0))
+        };
         var configuration = repository.State.EldenRingSave;
         var source = EffectiveDeathTotalResult.SourceIdentityFor(repository.State);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
@@ -461,8 +470,11 @@ public sealed class SaveDirectoryWorkflowTests : IDisposable
             File.WriteAllBytes(path, contents);
         }
         byte[] before = File.ReadAllBytes(path);
-        var repository = new MemoryRepository(GameId.EldenRing) { State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
-            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, slot)) };
+        var repository = new MemoryRepository(GameId.EldenRing)
+        {
+            State = new(1, GameId.EldenRing, OverlayConfiguration.Default,
+            eldenRingNoticeAcknowledged: true, eldenRingSave: new(path, slot))
+        };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var empty = new EmptyDiscovery();
         var reader = new UnavailableProfileReader(false) { ReadAvailableProfiles = !rescan };

@@ -163,8 +163,14 @@ public sealed class DirectoryPresentationControlTests
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(Path.Combine(output, name + ".png")); encoder.Save(stream);
         var metrics = Tree(window).OfType<FrameworkElement>().Where(x => x.IsVisible && (x is Button or TextBlock or ComboBox))
-            .Select(x => new { type = x.GetType().Name, name = AutomationProperties.GetName(x), text = (x as TextBlock)?.Text,
-                bounds = x.TransformToAncestor(content).TransformBounds(new Rect(x.RenderSize)).ToString(System.Globalization.CultureInfo.InvariantCulture), enabled = x.IsEnabled });
+            .Select(x => new
+            {
+                type = x.GetType().Name,
+                name = AutomationProperties.GetName(x),
+                text = (x as TextBlock)?.Text,
+                bounds = x.TransformToAncestor(content).TransformBounds(new Rect(x.RenderSize)).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                enabled = x.IsEnabled
+            });
         File.WriteAllText(Path.Combine(output, name + ".json"), System.Text.Json.JsonSerializer.Serialize(metrics));
     }
     private sealed class Discovery(DiscoveredLocalSave choice) : ILocalSaveDiscovery
