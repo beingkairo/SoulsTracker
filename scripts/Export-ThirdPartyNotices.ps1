@@ -72,6 +72,7 @@ $null = Read-RequiredText (Join-Path $root 'LICENSE')
 $expected = @{
     'Microsoft.NETCore.App.Runtime.win-x64' = '10.0.9'
     'Microsoft.WindowsDesktop.App.Runtime.win-x64' = '10.0.9'
+    'Microsoft.Web.WebView2' = '1.0.4191.47'
     'Microsoft.Data.Sqlite.Core' = '10.0.10'
     'SourceGear.sqlite3' = '3.50.4.5'
     'SQLitePCLRaw.bundle_e_sqlite3' = '3.0.3'
@@ -80,6 +81,11 @@ $expected = @{
     'SQLitePCLRaw.provider.e_sqlite3' = '3.0.3'
 }
 $products = @('SoulsTracker.Desktop', 'SoulsTracker.Application', 'SoulsTracker.Domain', 'SoulsTracker.Infrastructure', 'SoulsTracker.Overlay')
+$webView2References = @{
+    'Microsoft.Web.WebView2.Core' = 'lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll'
+    'Microsoft.Web.WebView2.WinForms' = 'lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll'
+    'Microsoft.Web.WebView2.Wpf' = 'lib_manual/net5.0-windows10.0.17763.0/Microsoft.Web.WebView2.Wpf.dll'
+}
 $version = & (Join-Path $root 'eng/Get-Version.ps1')
 $seen = @{}
 $projectCount = 0
@@ -93,6 +99,10 @@ foreach ($key in $deps.libraries.Keys) {
     if ($type -eq 'project') {
         Assert-Distribution ($name -cin $products -and $resolved -ceq $version) 'Unsupported product inventory drift.'
         $projectCount++
+        continue
+    }
+    if ($type -eq 'reference') {
+        Assert-Distribution ($webView2References.ContainsKey($name) -and $resolved -ceq $expected['Microsoft.Web.WebView2']) 'Unsupported WebView2 reference inventory drift.'
         continue
     }
     if ($type -eq 'runtimepack') { $name = $name -creplace '^runtimepack\.', '' }
@@ -126,6 +136,8 @@ $textHashes = @{
     'sqlite-native-license' = '99464c3a88df7b708ce59e462cdcb85f72dfc9b1335b4fcc68be56131b634b95'
     'sqlitepcl-license' = 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'
     'sqlitepcl-notice' = 'b038376ce12e87dc738874110969591b90620eaac5c73ffa4abef991da48188e'
+    'webview2-license' = '2b39e78c5ea2ac66e1351236372b7d676ceca22b432fd9275f10b77f64abc3ef'
+    'webview2-notice' = '2af716b165689ef8b88869a3f0f4584c52631b1c0f55a9d9902e5027000043ef'
 }
 $normalized = $reviewed.Replace("`r`n", "`n")
 foreach ($id in $textHashes.Keys) {
@@ -153,8 +165,25 @@ foreach ($key in $target.Keys) {
                 $pack = ($key -creplace '^runtimepack\.', '').ToLowerInvariant()
                 $directory = if ($group -eq 'native') { 'native' } else { 'lib/net10.0' }
                 $upstream[$relative] = "$pack/runtimes/win-x64/$directory/$asset"
+            } elseif ($deps.libraries[$key].type -eq 'reference') {
+                $name = ($key -split '/', 2)[0]
+                Assert-Distribution ($webView2References.ContainsKey($name)) 'Unsupported reference asset inventory drift.'
+                $upstream[$relative] = "microsoft.web.webview2/$($expected['Microsoft.Web.WebView2'])/$($webView2References[$name])"
             }
         }
+    }
+}
+$webView2Version = $expected['Microsoft.Web.WebView2']
+if (@($deps.libraries.Keys | Where-Object { $deps.libraries[$_].type -eq 'reference' }).Count -gt 0) {
+    $webView2AdditionalAssets = @{
+        'Microsoft.Web.WebView2.Core.xml' = "microsoft.web.webview2/$webView2Version/lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Core.xml"
+        'Microsoft.Web.WebView2.WinForms.xml' = "microsoft.web.webview2/$webView2Version/lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.xml"
+        'Microsoft.Web.WebView2.Wpf.xml' = "microsoft.web.webview2/$webView2Version/lib_manual/net5.0-windows10.0.17763.0/Microsoft.Web.WebView2.Wpf.xml"
+        'runtimes/win-x64/native/WebView2Loader.dll' = "microsoft.web.webview2/$webView2Version/runtimes/win-x64/native/WebView2Loader.dll"
+    }
+    foreach ($relative in $webView2AdditionalAssets.Keys) {
+        $null = $allowed.Add($relative)
+        $upstream[$relative] = $webView2AdditionalAssets[$relative]
     }
 }
 # Windows Desktop satellite files are described by the restored pack, not Desktop deps.json.

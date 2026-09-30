@@ -221,7 +221,11 @@ try {
     }
     $installer = Get-Content -Raw (Join-Path $root 'installer/SoulsTracker.iss')
     $filesSection = [regex]::Match($installer, '(?s)\[Files\]\s*(.*?)\s*\[Icons\]').Groups[1].Value.Trim()
-    Assert-Content ($filesSection -ceq 'Source: "{#BuildOutput}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs') 'Installer recursive shared-payload inclusion rule changed.'
+    $expectedFiles = @(
+        'Source: "{#BuildOutput}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs',
+        'Source: "{#WebView2Bootstrapper}"; Flags: dontcopy'
+    ) -join [Environment]::NewLine
+    Assert-Content ($filesSection.Replace("`r`n", "`n") -ceq $expectedFiles.Replace("`r`n", "`n")) 'Installer payload and WebView2 bootstrapper inclusion rules changed.'
     Write-Output "Portable archive entries/bytes and installer recursive include equivalence passed ($($files.Count) files). Installer runtime behavior was not exercised."
 } finally {
     Remove-Item -LiteralPath $archiveRoot -Recurse -Force

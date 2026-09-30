@@ -1,0 +1,146 @@
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSScriptRoot
+$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-webview2-installer-' + [guid]::NewGuid().ToString('N'))
+$acquisitionScript = Join-Path $root 'scripts/Get-WebView2Bootstrapper.ps1'
+
+function Assert-True([bool]$Condition, [string]$Message) {
+    if (-not $Condition) { throw $Message }
+}
+
+function Assert-Rejected([scriptblock]$Action, [string]$Expected) {
+    $caught = $null
+    try { & $Action | Out-Null } catch { $caught = $_.Exception.Message }
+    Assert-True ($null -ne $caught -and $caught.Contains($Expected)) "Expected rejection containing '$Expected'; got '$caught'."
+}
+
+try {
+    . $acquisitionScript -DefineFunctionsOnly
+
+    $script:requestedUri = $null
+    $script:downloadMode = 'valid'
+    function Invoke-WebRequest {
+        param([uri]$Uri, [string]$OutFile)
+        $script:requestedUri = $Uri.AbsoluteUri
+        if ($script:downloadMode -eq 'network-failure') { throw 'Synthetic network failure.' }
+        [byte[]]$bytes = if ($script:downloadMode -eq 'empty') { ,([byte[]]::new(0)) } else { ,([Text.Encoding]::UTF8.GetBytes('synthetic signed bootstrapper')) }
+        [IO.File]::WriteAllBytes($OutFile, $bytes)
+    }
+    function Get-AuthenticodeSignature {
+        param([string]$LiteralPath)
+        $certificate = [pscustomobject]@{
+            Subject = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'
+        }
+        $certificate | Add-Member -MemberType ScriptMethod -Name GetNameInfo -Value { param($Type, $ForIssuer) 'Microsoft Corporation' }
+        [pscustomobject]@{ Status = [System.Management.Automation.SignatureStatus]::Valid; SignerCertificate = $certificate }
+    }
+
+    $destination = Join-Path $fixtureRoot 'MicrosoftEdgeWebview2Setup.exe'
+    $result = Save-OfficialWebView2Bootstrapper -DestinationPath $destination
+
+    Assert-True ($script:requestedUri -ceq 'https://go.microsoft.com/fwlink/p/?LinkId=2124703') 'Acquisition must use the official Microsoft Evergreen Bootstrapper link.'
+    Assert-True (Test-Path -LiteralPath $destination -PathType Leaf) 'Verified bootstrapper was not recorded at the requested path.'
+    Assert-True ($result.Path -ceq $destination) 'Acquisition did not return the exact recorded path.'
+    Assert-True ($result.Sha256 -ceq (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash) 'Acquisition did not return the recorded file SHA-256.'
+    Assert-True ($result.SignerSubject.Contains('O=Microsoft Corporation')) 'Acquisition did not record the verified publisher.'
+    Assert-True (@(Get-ChildItem -LiteralPath $fixtureRoot -Filter '*.download').Count -eq 0) 'Acquisition left a temporary download behind.'
+
+    Write-Output 'WebView2 bootstrapper acquisition success case passed.'
+
+    $invalidSignature = [pscustomobject]@{
+        Status = [System.Management.Automation.SignatureStatus]::HashMismatch
+        SignerCertificate = $null
+    }
+    Assert-Rejected {
+        Assert-MicrosoftWebView2BootstrapperSignature -Path 'synthetic.exe' -Signature $invalidSignature
+    } 'invalid Authenticode signature'
+    Write-Output 'WebView2 bootstrapper invalid-signature case passed.'
+
+    $wrongCertificate = [pscustomobject]@{ Subject = 'CN=Example Publisher, O=Example Publisher, C=US' }
+    $wrongCertificate | Add-Member -MemberType ScriptMethod -Name GetNameInfo -Value { param($Type, $ForIssuer) 'Example Publisher' }
+    $wrongPublisher = [pscustomobject]@{
+        Status = [System.Management.Automation.SignatureStatus]::Valid
+        SignerCertificate = $wrongCertificate
+    }
+    Assert-Rejected {
+        Assert-MicrosoftWebView2BootstrapperSignature -Path 'synthetic.exe' -Signature $wrongPublisher
+    } 'publisher is not Microsoft Corporation'
+    Write-Output 'WebView2 bootstrapper wrong-publisher case passed.'
+
+    $script:downloadMode = 'empty'
+    $emptyDestination = Join-Path $fixtureRoot 'empty/MicrosoftEdgeWebview2Setup.exe'
+    Assert-Rejected {
+        Save-OfficialWebView2Bootstrapper -DestinationPath $emptyDestination
+    } 'empty or unavailable'
+    Assert-True (-not (Test-Path -LiteralPath $emptyDestination)) 'Rejected empty download left a destination file.'
+    Assert-True (@(Get-ChildItem -LiteralPath (Split-Path -Parent $emptyDestination) -Filter '*.download').Count -eq 0) 'Rejected empty download left temporary bytes.'
+    Write-Output 'WebView2 bootstrapper empty-download cleanup case passed.'
+
+    $script:downloadMode = 'network-failure'
+    $failedDestination = Join-Path $fixtureRoot 'network-failure/MicrosoftEdgeWebview2Setup.exe'
+    Assert-Rejected {
+        Save-OfficialWebView2Bootstrapper -DestinationPath $failedDestination
+    } 'Synthetic network failure'
+    Assert-True (-not (Test-Path -LiteralPath $failedDestination)) 'Failed network acquisition left a destination file.'
+    Assert-True (@(Get-ChildItem -LiteralPath (Split-Path -Parent $failedDestination) -Filter '*.download').Count -eq 0) 'Failed network acquisition left temporary bytes.'
+    Write-Output 'WebView2 bootstrapper network-failure cleanup case passed.'
+
+    $installer = [IO.File]::ReadAllText((Join-Path $root 'installer/SoulsTracker.iss'))
+    foreach ($required in @(
+        '#ifndef WebView2Bootstrapper',
+        '#ifndef WebView2BootstrapperSha256',
+        'Source: "{#WebView2Bootstrapper}"',
+        'Flags: dontcopy',
+        "'MicrosoftEdgeWebview2Setup.exe'",
+        "'/silent /install'",
+        'function PrepareToInstall(var NeedsRestart: Boolean): String;',
+        'GetSHA256OfFile',
+        'HKLM32', 'HKLM64', 'HKCU32', 'HKCU64',
+        'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        "'pv'",
+        "(Version = '') or (Version = '0.0.0.0')",
+        'Runtime installation failed',
+        'Runtime is still unavailable'
+    )) {
+        Assert-True ($installer.Contains($required)) "Installer is missing the WebView2 prerequisite contract: $required"
+    }
+    Assert-True ($installer.Contains('PrivilegesRequired=lowest')) 'Installer must preserve lowest-privilege setup.'
+    Assert-True ($installer.Contains('Type: filesandordirs; Name: "{userappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings')) 'Installer must preserve settings deletion behavior.'
+    $uninstallSection = [regex]::Match($installer, '(?s)\[UninstallDelete\](.*?)(\[[A-Za-z]+\]|$)').Groups[1].Value
+    Assert-True (-not $uninstallSection.Contains('WebView2')) 'Uninstall must not remove the shared WebView2 Runtime.'
+    $prepare = [regex]::Match($installer, '(?s)function PrepareToInstall\(var NeedsRestart: Boolean\): String;(.*?)(?=function InitializeUninstall)').Groups[1].Value
+    $initialDetection = $prepare.IndexOf('Detection := DetectWebView2Runtime();')
+    $presentSkip = $prepare.IndexOf('if Detection = WebView2Present then')
+    $extract = $prepare.IndexOf("ExtractTemporaryFile('MicrosoftEdgeWebview2Setup.exe')")
+    $execute = $prepare.IndexOf("Exec(BootstrapperPath, '/silent /install'")
+    $postDetection = $prepare.LastIndexOf('Detection := DetectWebView2Runtime();')
+    Assert-True (0 -le $initialDetection -and $initialDetection -lt $presentSkip -and $presentSkip -lt $extract) 'Present-runtime path must exit before bootstrap extraction or execution.'
+    Assert-True ($extract -lt $execute -and $execute -lt $postDetection) 'Absent-runtime path must extract, execute, then re-detect.'
+    Assert-True ($prepare.Contains('if ExitCode <> 0 then')) 'Absent-runtime installer failure must reject a nonzero bootstrapper exit.'
+    Assert-True ($prepare.Contains('else if Detection <> WebView2Present then')) 'Absent-runtime success must reject a missing postcondition.'
+    Write-Output 'WebView2 installer present, absent-success, and absent-failure source contracts passed.'
+
+    $buildScript = [IO.File]::ReadAllText((Join-Path $root 'scripts/Build-Release.ps1'))
+    foreach ($required in @(
+        'Test-WebView2Installer.ps1',
+        'Get-WebView2Bootstrapper.ps1',
+        'artifacts\staging\webview2',
+        '/DWebView2Bootstrapper=',
+        '/DWebView2BootstrapperSha256=',
+        'WebView2 bootstrapper changed after signature verification',
+        'Remove-Item -LiteralPath $webView2StagingPath -Recurse -Force'
+    )) {
+        Assert-True ($buildScript.Contains($required)) "Release build is missing the WebView2 packaging contract: $required"
+    }
+    Write-Output 'WebView2 release-build integration contract passed.'
+
+    $releaseGuide = [IO.File]::ReadAllText((Join-Path $root 'docs/RELEASE-GETTING-STARTED.md'))
+    Assert-True ($releaseGuide.Contains('installer checks for Microsoft WebView2 Runtime and installs it when needed')) 'Public setup guidance must describe the installer prerequisite behavior.'
+    Write-Output 'WebView2 public setup guidance contract passed.'
+} finally {
+    Remove-Item Function:\Invoke-WebRequest -ErrorAction SilentlyContinue
+    Remove-Item Function:\Get-AuthenticodeSignature -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $fixtureRoot) { Remove-Item -LiteralPath $fixtureRoot -Recurse -Force }
+}

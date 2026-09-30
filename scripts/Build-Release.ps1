@@ -11,6 +11,7 @@ $artifactsRoot = Join-Path $root "artifacts"
 $stagingRoot = Join-Path $root "artifacts\staging"
 $publishPath = Join-Path $stagingRoot "desktop"
 $releasePath = Join-Path $artifactsRoot "desktop"
+$webView2StagingPath = Join-Path $root "artifacts\staging\webview2"
 $overlayPath = Join-Path $root "web_overlay"
 $version = & (Join-Path $root "eng\Get-Version.ps1")
 
@@ -95,6 +96,7 @@ function Promote-VerifiedDesktopArtifact {
 
 & (Join-Path $PSScriptRoot "Verify-Version.ps1")
 & (Join-Path $PSScriptRoot "Verify-ReleaseGuide.ps1")
+& (Join-Path $PSScriptRoot "Test-WebView2Installer.ps1")
 Initialize-CleanStagingDirectory -Path $publishPath -AllowedRoot $stagingRoot
 Invoke-External dotnet @("restore", $solution, "--locked-mode")
 Invoke-External npm @("ci", "--prefix", $overlayPath)
@@ -148,9 +150,27 @@ if (-not $SkipInstaller) {
         throw "Inno Setup's ISCC.exe is required for installer packaging. Use -SkipInstaller only for a publish smoke check."
     }
 
-    Invoke-External $isccPath @(
-        "/DAppVersion=$version",
-        "/DBuildOutput=$releasePath",
-        (Join-Path $root "installer\SoulsTracker.iss")
-    )
+    Initialize-CleanStagingDirectory -Path $webView2StagingPath -AllowedRoot $stagingRoot
+    try {
+        $webView2BootstrapperPath = Join-Path $webView2StagingPath "MicrosoftEdgeWebview2Setup.exe"
+        $webView2Bootstrapper = & (Join-Path $PSScriptRoot "Get-WebView2Bootstrapper.ps1") -DestinationPath $webView2BootstrapperPath
+
+        Invoke-External $isccPath @(
+            "/DAppVersion=$version",
+            "/DBuildOutput=$releasePath",
+            "/DWebView2Bootstrapper=$($webView2Bootstrapper.Path)",
+            "/DWebView2BootstrapperSha256=$($webView2Bootstrapper.Sha256)",
+            (Join-Path $root "installer\SoulsTracker.iss")
+        )
+
+        $packagedSourceHash = (Get-FileHash -LiteralPath $webView2Bootstrapper.Path -Algorithm SHA256).Hash
+        if ($packagedSourceHash -cne $webView2Bootstrapper.Sha256) {
+            throw "The WebView2 bootstrapper changed after signature verification."
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $webView2StagingPath) {
+            Remove-Item -LiteralPath $webView2StagingPath -Recurse -Force
+        }
+    }
 }
