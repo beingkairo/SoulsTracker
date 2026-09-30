@@ -28,6 +28,16 @@ The Windows Desktop runtime package pins dotnet/dotnet revision
 901ca941248413c79832d2fdbd709da0c4386353. Microsoft.Data.Sqlite.Core pins
 f7d90799ce4ef09a0bb257852a57248d2a8fb8dd.
 
+The SoulsTracker installer distributes Microsoft's unmodified WebView2
+Evergreen Bootstrapper. Its current Microsoft Edge WebView2 Runtime terms are
+reproduced in `WEBVIEW2_RUNTIME_LICENSE.txt` and accepted during setup. The
+official HTML markup is removed and its rendered text is normalized to UTF-8
+with LF line endings; the legal wording and order are unchanged.
+
+Source: https://developer.microsoft.com/microsoft-edge/api/eula/webview2
+
+SHA256 (UTF-8, LF): 241ede13d0d26886ab2a998926245a76db6a68237e3229f3d0c918db13da3b5e
+
 ## Complete upstream texts
 
 Text section digests use UTF-8 with LF line endings. The WebView2 license, WPF,
@@ -74,7 +84,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Source: microsoft.web.webview2/1.0.4191.47/NOTICE.txt
 
-SHA256 (LF): 2af716b165689ef8b88869a3f0f4584c52631b1c0f55a9d9902e5027000043ef
+SHA256 (LF): ee9973a1c8ac4f0a7946197ebc458ed5fe3218f8b16707994599ca33be770de7
 
 <!-- BEGIN webview2-notice -->
 NOTICES AND INFORMATION
@@ -109,8 +119,8 @@ are met:
 
  1. Redistributions of source code must retain the above copyright
     notice, this list of conditions and the following disclaimer.
- 2. Redistributions in binary form must reproduce the above
-    copyright notice, this list of conditions and the following disclaimer in the
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
     documentation and/or other materials provided with the distribution.
  3. Neither the name of the copyright holder nor the names of its
     contributors may be used to endorse or promote products derived from
@@ -143,8 +153,8 @@ are met:
 
  1. Redistributions of source code must retain the above copyright
     notice, this list of conditions and the following disclaimer.
- 2. Redistributions in binary form must reproduce the above
-    copyright notice, this list of conditions and the following disclaimer in the
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
     documentation and/or other materials provided with the distribution.
  3. Neither the name of the copyright holder nor the names of its
     contributors may be used to endorse or promote products derived from

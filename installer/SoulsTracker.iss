@@ -27,6 +27,7 @@ DefaultDirName={localappdata}\Programs\SoulsTracker
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+LicenseFile=..\docs\WEBVIEW2_RUNTIME_LICENSE.txt
 OutputDir=Output
 OutputBaseFilename=SoulsTrackerV{#AppVersion}
 Compression=lzma2
@@ -57,6 +58,8 @@ const
   WebView2Absent = 0;
   WebView2Present = 1;
   WebView2Malformed = 2;
+  WebView2PollIntervalMilliseconds = 250;
+  WebView2PollMaximumAttempts = 480;
 
 function IsValidWebView2Version(Value: String): Boolean;
 var
@@ -133,12 +136,40 @@ begin
   InspectWebView2Registration(HKCU32, SawValid, SawMalformed);
   InspectWebView2Registration(HKCU64, SawValid, SawMalformed);
 
-  if SawMalformed then
-    Result := WebView2Malformed
-  else if SawValid then
+  if SawValid then
     Result := WebView2Present
+  else if SawMalformed then
+    Result := WebView2Malformed
   else
     Result := WebView2Absent;
+end;
+
+function WaitForWebView2Runtime(): Integer;
+var
+  Attempt: Integer;
+  ProgressPage: TOutputProgressWizardPage;
+begin
+  Result := WebView2Absent;
+  ProgressPage := CreateOutputProgressPage(
+    'Installing Microsoft WebView2 Runtime',
+    'Waiting for Microsoft WebView2 Runtime registration to complete.');
+  ProgressPage.SetText('Finishing Microsoft WebView2 Runtime installation...', '');
+  ProgressPage.SetProgress(0, WebView2PollMaximumAttempts);
+  ProgressPage.Show;
+  try
+    for Attempt := 1 to WebView2PollMaximumAttempts do
+    begin
+      Result := DetectWebView2Runtime();
+      ProgressPage.SetProgress(Attempt, WebView2PollMaximumAttempts);
+      if Result = WebView2Present then
+        exit;
+      if Attempt < WebView2PollMaximumAttempts then
+        Sleep(WebView2PollIntervalMilliseconds);
+    end;
+  finally
+    ProgressPage.Hide;
+    ProgressPage.Free;
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -177,7 +208,7 @@ begin
     exit;
   end;
 
-  Detection := DetectWebView2Runtime();
+  Detection := WaitForWebView2Runtime();
   if Detection = WebView2Malformed then
     Result := 'Microsoft WebView2 Runtime detection returned invalid registration data after installation. Setup cannot continue.'
   else if Detection <> WebView2Present then

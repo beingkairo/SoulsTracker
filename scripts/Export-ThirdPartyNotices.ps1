@@ -137,7 +137,7 @@ $textHashes = @{
     'sqlitepcl-license' = 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'
     'sqlitepcl-notice' = 'b038376ce12e87dc738874110969591b90620eaac5c73ffa4abef991da48188e'
     'webview2-license' = '2b39e78c5ea2ac66e1351236372b7d676ceca22b432fd9275f10b77f64abc3ef'
-    'webview2-notice' = '2af716b165689ef8b88869a3f0f4584c52631b1c0f55a9d9902e5027000043ef'
+    'webview2-notice' = 'ee9973a1c8ac4f0a7946197ebc458ed5fe3218f8b16707994599ca33be770de7'
 }
 $normalized = $reviewed.Replace("`r`n", "`n")
 foreach ($id in $textHashes.Keys) {
@@ -146,6 +146,11 @@ foreach ($id in $textHashes.Keys) {
     $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sections[0].Groups[1].Value)))
     Assert-Distribution ($hash -eq $textHashes[$id]) 'Required upstream license/notice text has changed.'
 }
+$restoredWebView2Notice = (Read-RequiredText (Resolve-RestoredFile 'microsoft.web.webview2/1.0.4191.47/NOTICE.txt')).Replace("`r`n", "`n")
+$restoredWebView2Notice = (($restoredWebView2Notice -split "`n") | ForEach-Object { $_.TrimEnd() }) -join "`n"
+$restoredWebView2Notice = $restoredWebView2Notice.TrimEnd("`n")
+$embeddedWebView2Notice = [regex]::Match($normalized, '(?s)<!-- BEGIN webview2-notice -->\n(.*?)\n<!-- END webview2-notice -->').Groups[1].Value
+Assert-Distribution ($embeddedWebView2Notice -ceq $restoredWebView2Notice) 'WebView2 notice does not match the restored upstream package after documented normalization.'
 
 # Map every published runtime/native/resource asset. Keep diagnostics and satellite assemblies.
 $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)

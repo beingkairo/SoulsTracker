@@ -28,6 +28,12 @@ function New-DistributionFixture([string]$Fixture, [string]$PublishPath) {
     $cache = Join-Path $Fixture 'cache'
     $assets = @{ libraries = @{}; packageFolders = @{ $cache = @{} }; project = @{ frameworks = @{ 'net10.0-windows' = @{ downloadDependencies = @() } } } }
     $lock = Get-Content -Raw (Join-Path $Fixture 'src/SoulsTracker.Desktop/packages.lock.json') | ConvertFrom-Json -AsHashtable
+    $restoredAssets = Get-Content -Raw (Join-Path $root 'src/SoulsTracker.Desktop/obj/project.assets.json') | ConvertFrom-Json -AsHashtable
+    $restoredWebView2Notice = @($restoredAssets.packageFolders.Keys | ForEach-Object { Join-Path $_ 'microsoft.web.webview2/1.0.4191.47/NOTICE.txt' } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })[0]
+    Assert-Content (-not [string]::IsNullOrWhiteSpace($restoredWebView2Notice)) 'Restored WebView2 notice fixture input is missing.'
+    $fixtureWebView2Notice = Join-Path $cache 'microsoft.web.webview2/1.0.4191.47/NOTICE.txt'
+    $null = New-Item -ItemType Directory -Path (Split-Path $fixtureWebView2Notice) -Force
+    Copy-Item -LiteralPath $restoredWebView2Notice -Destination $fixtureWebView2Notice
     foreach ($name in @('Microsoft.NETCore.App.Runtime.win-x64', 'Microsoft.WindowsDesktop.App.Runtime.win-x64')) {
         $key = "runtimepack.$name/10.0.9"
         $deps.libraries[$key] = @{ type = 'runtimepack' }
@@ -80,7 +86,7 @@ if ($DefineFixturesOnly) { return }
 if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
     $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-release-content-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'drift', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
+        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
             $fixture = Join-Path $fixtureRoot $case
             $payload = Join-Path $fixture 'payload'
             New-DistributionFixture $fixture $payload
@@ -92,6 +98,7 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                 'missing-notices' { Remove-Item (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'Required distribution input is missing' }
                 'missing-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', '<!-- absent -->') | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text is missing' }
                 'changed-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', "<!-- BEGIN sqlitepcl-notice -->`nchanged") | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text has changed' }
+                'changed-upstream-notice' { Add-Content (Join-Path $fixture 'cache/microsoft.web.webview2/1.0.4191.47/NOTICE.txt') 'changed'; $expected = 'does not match the restored upstream package' }
                 'drift' { (Get-Content -Raw (Join-Path $payload 'SoulsTracker.Desktop.deps.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $payload 'SoulsTracker.Desktop.deps.json'); $expected = 'inventory drift' }
                 'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
                 'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack is missing' }

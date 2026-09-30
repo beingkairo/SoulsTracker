@@ -16,6 +16,41 @@ function Assert-Rejected([scriptblock]$Action, [string]$Expected) {
     Assert-True ($null -ne $caught -and $caught.Contains($Expected)) "Expected rejection containing '$Expected'; got '$caught'."
 }
 
+function Get-SyntheticWebView2Detection([AllowNull()] [object[]]$Registrations) {
+    $sawMalformed = $false
+    foreach ($registration in $Registrations) {
+        if ($null -eq $registration -or [string]::IsNullOrWhiteSpace([string]$registration) -or [string]$registration -ceq '0.0.0.0') {
+            continue
+        }
+
+        [version]$version = [version]::new()
+        if ([version]::TryParse([string]$registration, [ref]$version) -and
+            $version.ToString(4) -ceq [string]$registration -and
+            $version -gt [version]'0.0.0.0') {
+            return 'Present'
+        }
+
+        $sawMalformed = $true
+    }
+
+    if ($sawMalformed) { return 'Malformed' }
+    return 'Absent'
+}
+
+function Wait-SyntheticWebView2Registration([string[]]$Detections, [int]$MaximumAttempts) {
+    $attempts = 0
+    $lastDetection = 'Absent'
+    while ($attempts -lt $MaximumAttempts) {
+        $lastDetection = $Detections[[Math]::Min($attempts, $Detections.Count - 1)]
+        $attempts++
+        if ($lastDetection -ceq 'Present') {
+            return [pscustomobject]@{ Detection = $lastDetection; Attempts = $attempts }
+        }
+    }
+
+    return [pscustomobject]@{ Detection = $lastDetection; Attempts = $attempts }
+}
+
 try {
     . $acquisitionScript -DefineFunctionsOnly
 
@@ -110,17 +145,38 @@ try {
     Assert-True ($installer.Contains('Type: filesandordirs; Name: "{userappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings')) 'Installer must preserve settings deletion behavior.'
     $uninstallSection = [regex]::Match($installer, '(?s)\[UninstallDelete\](.*?)(\[[A-Za-z]+\]|$)').Groups[1].Value
     Assert-True (-not $uninstallSection.Contains('WebView2')) 'Uninstall must not remove the shared WebView2 Runtime.'
+    Assert-True ((Get-SyntheticWebView2Detection @('123.0.1.2')) -ceq 'Present') 'A valid registration must detect the Runtime.'
+    Assert-True ((Get-SyntheticWebView2Detection @($null, '', '0.0.0.0')) -ceq 'Absent') 'Only missing or documented absent registrations must detect absence.'
+    Assert-True ((Get-SyntheticWebView2Detection @('invalid')) -ceq 'Malformed') 'Malformed-only registration data must fail closed.'
+    Assert-True ((Get-SyntheticWebView2Detection @('invalid', '123.0.1.2')) -ceq 'Present') 'Any valid registration must take precedence over stale malformed data in another view.'
+    $detect = [regex]::Match($installer, '(?s)function DetectWebView2Runtime\(\): Integer;(.*?)(?=function )').Groups[1].Value
+    Assert-True ($detect.IndexOf('if SawValid then') -lt $detect.IndexOf('else if SawMalformed then')) 'Installer detection must give a valid registration precedence over malformed data in another view.'
+    Write-Output 'WebView2 isolated valid, absent, malformed, and valid-plus-malformed detection cases passed.'
+
+    $immediate = Wait-SyntheticWebView2Registration @('Present') 5
+    Assert-True ($immediate.Detection -ceq 'Present' -and $immediate.Attempts -eq 1) 'Post-bootstrap polling must accept immediate registration.'
+    $delayed = Wait-SyntheticWebView2Registration @('Absent', 'Malformed', 'Present') 5
+    Assert-True ($delayed.Detection -ceq 'Present' -and $delayed.Attempts -eq 3) 'Post-bootstrap polling must accept delayed registration, including a transient malformed read.'
+    $timeout = Wait-SyntheticWebView2Registration @('Absent') 5
+    Assert-True ($timeout.Detection -ceq 'Absent' -and $timeout.Attempts -eq 5) 'Post-bootstrap polling must stop at its bounded timeout.'
+    $malformedTimeout = Wait-SyntheticWebView2Registration @('Malformed') 5
+    Assert-True ($malformedTimeout.Detection -ceq 'Malformed' -and $malformedTimeout.Attempts -eq 5) 'Malformed-only post-bootstrap data must remain distinguishable at timeout.'
+
     $prepare = [regex]::Match($installer, '(?s)function PrepareToInstall\(var NeedsRestart: Boolean\): String;(.*?)(?=function InitializeUninstall)').Groups[1].Value
     $initialDetection = $prepare.IndexOf('Detection := DetectWebView2Runtime();')
     $presentSkip = $prepare.IndexOf('if Detection = WebView2Present then')
     $extract = $prepare.IndexOf("ExtractTemporaryFile('MicrosoftEdgeWebview2Setup.exe')")
     $execute = $prepare.IndexOf("Exec(BootstrapperPath, '/silent /install'")
-    $postDetection = $prepare.LastIndexOf('Detection := DetectWebView2Runtime();')
+    $postDetection = $prepare.LastIndexOf('WaitForWebView2Runtime')
     Assert-True (0 -le $initialDetection -and $initialDetection -lt $presentSkip -and $presentSkip -lt $extract) 'Present-runtime path must exit before bootstrap extraction or execution.'
     Assert-True ($extract -lt $execute -and $execute -lt $postDetection) 'Absent-runtime path must extract, execute, then re-detect.'
-    Assert-True ($prepare.Contains('if ExitCode <> 0 then')) 'Absent-runtime installer failure must reject a nonzero bootstrapper exit.'
-    Assert-True ($prepare.Contains('else if Detection <> WebView2Present then')) 'Absent-runtime success must reject a missing postcondition.'
-    Write-Output 'WebView2 installer present, absent-success, and absent-failure source contracts passed.'
+    Assert-True ($prepare.Contains('Detection := WaitForWebView2Runtime')) 'Successful bootstrap execution must enter bounded postcondition polling.'
+    Assert-True ($installer.Contains('WebView2PollIntervalMilliseconds = 250')) 'Post-bootstrap polling must use a deliberate responsive interval.'
+    Assert-True ($installer.Contains('WebView2PollMaximumAttempts = 480')) 'Post-bootstrap polling must use a deliberate two-minute bound.'
+    Assert-True ($installer.Contains('ProgressPage.SetProgress')) 'Post-bootstrap polling must pump installer UI messages while waiting.'
+    Assert-True ($prepare.Contains('if ExitCode <> 0 then') -and $prepare.IndexOf('if ExitCode <> 0 then') -lt $postDetection) 'A nonzero bootstrapper exit must fail before postcondition polling.'
+    Assert-True ($prepare.Contains('else if Detection <> WebView2Present then')) 'Post-bootstrap timeout must reject a missing postcondition.'
+    Write-Output 'WebView2 installer immediate, delayed, timeout, malformed-timeout, and nonzero-exit contracts passed.'
 
     $buildScript = [IO.File]::ReadAllText((Join-Path $root 'scripts/Build-Release.ps1'))
     foreach ($required in @(
@@ -138,6 +194,15 @@ try {
 
     $releaseGuide = [IO.File]::ReadAllText((Join-Path $root 'docs/RELEASE-GETTING-STARTED.md'))
     Assert-True ($releaseGuide.Contains('installer checks for Microsoft WebView2 Runtime and installs it when needed')) 'Public setup guidance must describe the installer prerequisite behavior.'
+    $runtimeLicensePath = Join-Path $root 'docs/WEBVIEW2_RUNTIME_LICENSE.txt'
+    Assert-True (Test-Path -LiteralPath $runtimeLicensePath -PathType Leaf) 'The official WebView2 Runtime license terms must be retained for installer acceptance.'
+    $runtimeLicense = [IO.File]::ReadAllText($runtimeLicensePath).Replace("`r`n", "`n")
+    Assert-True ($runtimeLicense.Contains('MICROSOFT EDGE WEBVIEW2 RUNTIME') -and $runtimeLicense.Contains('9.    REQUIRED NOTICES TO END USERS.')) 'The retained Runtime terms are incomplete.'
+    $runtimeLicenseHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($runtimeLicense))).ToLowerInvariant()
+    Assert-True ($runtimeLicenseHash -ceq '241ede13d0d26886ab2a998926245a76db6a68237e3229f3d0c918db13da3b5e') 'The retained Runtime terms differ from the reviewed official Microsoft source.'
+    Assert-True ($installer.Contains('LicenseFile=..\docs\WEBVIEW2_RUNTIME_LICENSE.txt')) 'Installer users must accept the retained WebView2 Runtime terms.'
+    $thirdPartyNotices = [IO.File]::ReadAllText((Join-Path $root 'docs/THIRD_PARTY_NOTICES.md'))
+    Assert-True ($thirdPartyNotices.Contains('https://developer.microsoft.com/microsoft-edge/api/eula/webview2')) 'Runtime terms must record the exact official Microsoft source.'
     Write-Output 'WebView2 public setup guidance contract passed.'
 } finally {
     Remove-Item Function:\Invoke-WebRequest -ErrorAction SilentlyContinue

@@ -23,7 +23,7 @@ function New-PackageFixture([string]$Name) {
     foreach ($relative in @(
         "scripts/Build-Release.ps1", "scripts/Get-WebView2Bootstrapper.ps1", "scripts/Test-WebView2Installer.ps1",
         "scripts/Verify-Version.ps1", "scripts/Verify-ReleaseGuide.ps1", "installer/SoulsTracker.iss",
-        "eng/Get-Version.ps1", "eng/Version.props", "README.md", "docs/RELEASE-GETTING-STARTED.md",
+        "eng/Get-Version.ps1", "eng/Version.props", "README.md", "docs/RELEASE-GETTING-STARTED.md", "docs/THIRD_PARTY_NOTICES.md", "docs/WEBVIEW2_RUNTIME_LICENSE.txt",
         "docs/releases/v$version.md", ".github/workflows/release.yml",
         "web_overlay/package.json", "web_overlay/package-lock.json"
     )) {
