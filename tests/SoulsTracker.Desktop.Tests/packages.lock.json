@@ -4,9 +4,9 @@
     "net10.0-windows7.0": {
       "coverlet.collector": {
         "type": "Direct",
-        "requested": "[6.0.4, )",
-        "resolved": "6.0.4",
-        "contentHash": "lkhqpF8Pu2Y7IiN7OntbsTtdbpR1syMsm2F3IgX6ootA4ffRqWL5jF7XipHuZQTdVuWG/gVAAcf8mjk8Tz0xPg=="
+        "requested": "[10.1.0, )",
+        "resolved": "10.1.0",
+        "contentHash": "SlYCIHnBYxINSUpR75SiM5JEmnx11pqT+Ac/C/fUqTTA0dLPl9eYzmFXKKuxmQhL3ZdTQl4PBD3YdAxAauaKLQ=="
       },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
@@ -128,16 +128,16 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[1.2.2, )"
+          "SoulsTracker.Domain": "[1.3.2, )"
         }
       },
       "soulstracker.desktop": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Web.WebView2": "[1.0.3065.39, )",
-          "SoulsTracker.Application": "[1.2.2, )",
-          "SoulsTracker.Infrastructure": "[1.2.2, )",
-          "SoulsTracker.Overlay": "[1.2.2, )"
+          "SoulsTracker.Application": "[1.3.2, )",
+          "SoulsTracker.Infrastructure": "[1.3.2, )",
+          "SoulsTracker.Overlay": "[1.3.2, )"
         }
       },
       "soulstracker.domain": {
@@ -148,14 +148,14 @@
         "dependencies": {
           "Microsoft.Data.Sqlite.Core": "[10.0.10, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
-          "SoulsTracker.Application": "[1.2.2, )",
-          "SoulsTracker.Domain": "[1.2.2, )"
+          "SoulsTracker.Application": "[1.3.2, )",
+          "SoulsTracker.Domain": "[1.3.2, )"
         }
       },
       "soulstracker.overlay": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Application": "[1.2.2, )"
+          "SoulsTracker.Application": "[1.3.2, )"
         }
       },
       "soulstracker.packagedappshutdownbenchmark": {
