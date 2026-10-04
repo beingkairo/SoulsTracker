@@ -46,21 +46,6 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\SoulsTracker.Desktop.exe"
 [Run]
 Filename: "{app}\SoulsTracker.Desktop.exe"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-; The default Desktop state is in Local AppData. Do not remove this directory:
-; it also holds protected hosted credentials and WebView2 preview data.
-Type: files; Name: "{localappdata}\SoulsTracker\tracker.db"; Check: ShouldDeleteLocalSettings
-Type: files; Name: "{localappdata}\SoulsTracker\tracker.db-wal"; Check: ShouldDeleteLocalSettings
-Type: files; Name: "{localappdata}\SoulsTracker\tracker.db-shm"; Check: ShouldDeleteLocalSettings
-Type: files; Name: "{localappdata}\SoulsTracker\tracker.db-journal"; Check: ShouldDeleteLocalSettings
-Type: files; Name: "{localappdata}\SoulsTracker\tracker.db.writer.lock"; Check: ShouldDeleteLocalSettings
-Type: files; Name: "{localappdata}\SoulsTracker\tracker.db.pre-migration-*.bak"; Check: ShouldDeleteLocalSettings
-; The approved legacy import source can otherwise repopulate a fresh database.
-Type: files; Name: "{userappdata}\SoulsTracker\state.json"; Check: ShouldDeleteLocalSettings
-Type: files; Name: "{userappdata}\SoulsTracker\soulstracker-legacy-backup-*.json"; Check: ShouldDeleteLocalSettings
-Type: dirifempty; Name: "{userappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings
-Type: dirifempty; Name: "{localappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings
-
 [Code]
 var
   DeleteLocalSettings: Boolean;
@@ -241,7 +226,32 @@ begin
   Result := True;
 end;
 
-function ShouldDeleteLocalSettings(): Boolean;
+procedure DeleteSoulsTrackerSettings;
+var
+  LocalRoot: String;
+  RoamingRoot: String;
 begin
-  Result := DeleteLocalSettings;
+  LocalRoot := ExpandConstant('{localappdata}\SoulsTracker');
+  RoamingRoot := ExpandConstant('{userappdata}\SoulsTracker');
+  DelTree(LocalRoot + '\tracker.db', False, True, False);
+  DelTree(LocalRoot + '\tracker.db-wal', False, True, False);
+  DelTree(LocalRoot + '\tracker.db-shm', False, True, False);
+  DelTree(LocalRoot + '\tracker.db-journal', False, True, False);
+  DelTree(LocalRoot + '\tracker.db.writer.lock', False, True, False);
+  DelTree(LocalRoot + '\tracker.db.pre-migration-*.bak', False, True, False);
+  DelTree(LocalRoot + '\hosted-pairing.private', False, True, False);
+  DelTree(LocalRoot + '\overlay-setup.private', False, True, False);
+  DelTree(LocalRoot + '\AppearancePreview', True, True, True);
+  DelTree(RoamingRoot + '\state.json', False, True, False);
+  DelTree(RoamingRoot + '\soulstracker-legacy-backup-*.json', False, True, False);
+  RemoveDir(RoamingRoot);
+  RemoveDir(LocalRoot);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  // [UninstallDelete] checks run while Setup records the uninstall log, before
+  // InitializeUninstall can receive the user's choice.
+  if (CurUninstallStep = usPostUninstall) and DeleteLocalSettings then
+    DeleteSoulsTrackerSettings;
 end;
