@@ -47,7 +47,19 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\SoulsTracker.Desktop.exe"
 Filename: "{app}\SoulsTracker.Desktop.exe"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{userappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings
+; The default Desktop state is in Local AppData. Do not remove this directory:
+; it also holds protected hosted credentials and WebView2 preview data.
+Type: files; Name: "{localappdata}\SoulsTracker\tracker.db"; Check: ShouldDeleteLocalSettings
+Type: files; Name: "{localappdata}\SoulsTracker\tracker.db-wal"; Check: ShouldDeleteLocalSettings
+Type: files; Name: "{localappdata}\SoulsTracker\tracker.db-shm"; Check: ShouldDeleteLocalSettings
+Type: files; Name: "{localappdata}\SoulsTracker\tracker.db-journal"; Check: ShouldDeleteLocalSettings
+Type: files; Name: "{localappdata}\SoulsTracker\tracker.db.writer.lock"; Check: ShouldDeleteLocalSettings
+Type: files; Name: "{localappdata}\SoulsTracker\tracker.db.pre-migration-*.bak"; Check: ShouldDeleteLocalSettings
+; The approved legacy import source can otherwise repopulate a fresh database.
+Type: files; Name: "{userappdata}\SoulsTracker\state.json"; Check: ShouldDeleteLocalSettings
+Type: files; Name: "{userappdata}\SoulsTracker\soulstracker-legacy-backup-*.json"; Check: ShouldDeleteLocalSettings
+Type: dirifempty; Name: "{userappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings
+Type: dirifempty; Name: "{localappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings
 
 [Code]
 var

@@ -142,9 +142,11 @@ try {
         Assert-True ($installer.Contains($required)) "Installer is missing the WebView2 prerequisite contract: $required"
     }
     Assert-True ($installer.Contains('PrivilegesRequired=lowest')) 'Installer must preserve lowest-privilege setup.'
-    Assert-True ($installer.Contains('Type: filesandordirs; Name: "{userappdata}\SoulsTracker"; Check: ShouldDeleteLocalSettings')) 'Installer must preserve settings deletion behavior.'
+    Assert-True ($installer.Contains('Type: files; Name: "{localappdata}\SoulsTracker\tracker.db"; Check: ShouldDeleteLocalSettings')) 'Installer must delete the active local tracker state only on request.'
+    Assert-True ($installer.Contains('Type: files; Name: "{userappdata}\SoulsTracker\state.json"; Check: ShouldDeleteLocalSettings')) 'Installer must clear its legacy roaming import source only on request.'
+    Assert-True (-not $installer.Contains('Type: filesandordirs; Name: "{userappdata}\SoulsTracker"')) 'Uninstall must not recursively delete a mixed-content user root.'
     $uninstallSection = [regex]::Match($installer, '(?s)\[UninstallDelete\](.*?)(\[[A-Za-z]+\]|$)').Groups[1].Value
-    Assert-True (-not $uninstallSection.Contains('WebView2')) 'Uninstall must not remove the shared WebView2 Runtime.'
+    Assert-True (-not ($uninstallSection -match '(?m)^Type:.*WebView2')) 'Uninstall must not remove the shared WebView2 Runtime.'
     Assert-True ((Get-SyntheticWebView2Detection @('123.0.1.2')) -ceq 'Present') 'A valid registration must detect the Runtime.'
     Assert-True ((Get-SyntheticWebView2Detection @($null, '', '0.0.0.0')) -ceq 'Absent') 'Only missing or documented absent registrations must detect absence.'
     Assert-True ((Get-SyntheticWebView2Detection @('invalid')) -ceq 'Malformed') 'Malformed-only registration data must fail closed.'
