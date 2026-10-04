@@ -18,6 +18,28 @@ public sealed class InstallerUninstallStateTests : IDisposable
         Assert.Matches(@"(?s)procedure CurUninstallStepChanged\(CurUninstallStep: TUninstallStep\);.*?if \(CurUninstallStep = usPostUninstall\) and DeleteLocalSettings then\s+DeleteSoulsTrackerSettings;", script);
     }
 
+    [Fact]
+    public void DeleteRetriesEmptyLocalRootAfterPostUninstallWithoutRemovingMixedContent()
+    {
+        string script = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "installer", "SoulsTracker.iss"));
+        Match callback = Regex.Match(script, @"(?s)procedure CurUninstallStepChanged\(CurUninstallStep: TUninstallStep\);(?<body>.*?)\bend;");
+        Assert.True(callback.Success);
+        Assert.Matches(@"if \(CurUninstallStep = usDone\) and DeleteLocalSettings then\s+RemoveDir\(ExpandConstant\('\{localappdata\}\\SoulsTracker'\)\);", callback.Groups["body"].Value);
+
+        string local = Path.Combine(fixture, "Local", "SoulsTracker");
+        Directory.CreateDirectory(local);
+        // A first removal attempt can leave an empty directory at usPostUninstall.
+        Assert.True(Directory.Exists(local));
+        Directory.Delete(local); // usDone retries removal, without a recursive delete.
+        Assert.False(Directory.Exists(local));
+
+        Directory.CreateDirectory(local);
+        string unrelated = Path.Combine(local, "unrelated.txt");
+        Write(unrelated);
+        Assert.Throws<IOException>(() => Directory.Delete(local));
+        Assert.True(File.Exists(unrelated));
+    }
+
     [Theory]
     [InlineData(false, false)] // interactive retain
     [InlineData(true, false)]  // interactive delete

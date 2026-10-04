@@ -144,6 +144,7 @@ try {
     Assert-True ($installer.Contains('PrivilegesRequired=lowest')) 'Installer must preserve lowest-privilege setup.'
     Assert-True (-not ($installer -match '(?m)^\[UninstallDelete\]')) 'Choice-dependent deletion cannot be registered during install.'
     Assert-True ($installer.Contains('if (CurUninstallStep = usPostUninstall) and DeleteLocalSettings then')) 'State removal must depend on the uninstall-time choice.'
+    Assert-True ($installer.Contains("if (CurUninstallStep = usDone) and DeleteLocalSettings then`n    RemoveDir(ExpandConstant('{localappdata}\SoulsTracker'));")) 'DELETE must retry removal of the empty Local root at uninstall completion.'
     Assert-True ($installer.Contains("DelTree(LocalRoot + '\tracker.db', False, True, False)")) 'Installer must remove the active local tracker state on request.'
     Assert-True ($installer.Contains("DelTree(RoamingRoot + '\state.json', False, True, False)")) 'Installer must clear the legacy import source on request.'
     Assert-True (-not ($installer -match "DelTree\(RoamingRoot, True, True, True\)")) 'Uninstall must not recursively delete a mixed-content user root.'

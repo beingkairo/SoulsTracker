@@ -254,4 +254,8 @@ begin
   // InitializeUninstall can receive the user's choice.
   if (CurUninstallStep = usPostUninstall) and DeleteLocalSettings then
     DeleteSoulsTrackerSettings;
+  // Retry the empty root after the rest of uninstall has finished. RemoveDir
+  // leaves any directory containing unrelated user files untouched.
+  if (CurUninstallStep = usDone) and DeleteLocalSettings then
+    RemoveDir(ExpandConstant('{localappdata}\SoulsTracker'));
 end;
