@@ -58,6 +58,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     private bool isUpdateNoticeVisible;
     private string updateCheckTone = "Idle";
     private string updatePreferenceStatus = string.Empty;
+    private bool isSavingUpdatePreference;
+    private bool pendingUpdatePreferenceValue;
     private string updatePageActionError = string.Empty;
     private bool hasCheckedForUpdates;
     private string? updateCurrentVersion;
@@ -203,6 +205,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public bool CanOpenAvailableUpdateReleasePage => !updateChecksStopped && AvailableUpdateReleasePage is not null;
 
     public bool CheckForUpdatesOnStartup => state?.CheckForUpdatesOnStartup ?? false;
+    public bool IsSavingUpdatePreference => isSavingUpdatePreference;
+    public bool PendingUpdatePreferenceValue => pendingUpdatePreferenceValue;
+    public bool CanChangeUpdatePreference => state is not null && !IsLoading && (!IsBusy || IsSavingUpdatePreference);
     public string UpdatePreferenceStatus { get => updatePreferenceStatus; private set => SetField(ref updatePreferenceStatus, value); }
     public string UpdatePageActionError { get => updatePageActionError; private set => SetField(ref updatePageActionError, value); }
     public string UpdateCheckTone { get => updateCheckTone; private set => SetField(ref updateCheckTone, value); }
@@ -211,12 +216,23 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
     public async Task SetCheckForUpdatesOnStartupAsync(bool enabled, CancellationToken cancellationToken = default)
     {
-        if (!ControlsEnabled) return;
-        await SubmitAsync(new SetCheckForUpdatesOnStartupCommand(enabled), cancellationToken);
-        UpdatePreferenceStatus = CheckForUpdatesOnStartup == enabled
-            ? string.Empty
-            : "The update setting could not be saved. Your previous choice is still active.";
-        OnPropertyChanged(nameof(CheckForUpdatesOnStartup));
+        if (IsSavingUpdatePreference || !ControlsEnabled) return;
+        pendingUpdatePreferenceValue = enabled;
+        isSavingUpdatePreference = true;
+        OnPropertyChanged(nameof(CanChangeUpdatePreference));
+        try
+        {
+            await SubmitAsync(new SetCheckForUpdatesOnStartupCommand(enabled), cancellationToken);
+            UpdatePreferenceStatus = CheckForUpdatesOnStartup == enabled
+                ? string.Empty
+                : "The update setting could not be saved. Your previous choice is still active.";
+            OnPropertyChanged(nameof(CheckForUpdatesOnStartup));
+        }
+        finally
+        {
+            isSavingUpdatePreference = false;
+            OnPropertyChanged(nameof(CanChangeUpdatePreference));
+        }
     }
 
     /// <summary>Called once after desktop startup; the owned check never delays readers or input.</summary>
@@ -402,6 +418,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             if (SetField(ref isLoading, value))
             {
                 OnPropertyChanged(nameof(ControlsEnabled));
+                OnPropertyChanged(nameof(CanChangeUpdatePreference));
                 OnPropertyChanged(nameof(CanCheckForUpdates));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyTextExportControlAvailability();
@@ -417,6 +434,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             if (SetField(ref isBusy, value))
             {
                 OnPropertyChanged(nameof(ControlsEnabled));
+                OnPropertyChanged(nameof(CanChangeUpdatePreference));
                 OnPropertyChanged(nameof(CanCheckForUpdates));
                 OnPropertyChanged(nameof(PresentationControlsEnabled));
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));

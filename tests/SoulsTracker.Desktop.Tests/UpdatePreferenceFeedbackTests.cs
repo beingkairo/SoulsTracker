@@ -100,6 +100,62 @@ public sealed class UpdatePreferenceFeedbackTests
         finally { await vm.StopUpdateChecksAsync(); window.Close(); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PendingPreferenceSaveRetainsFocusAndIgnoresDuplicateActivation(bool failSave) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new RecordingRepository(false, failSave) { SaveRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var checker = new UpdateSessionTests.ControlledChecker();
+        var launcher = new RecordingLauncher();
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new UpdateSessionTests.Publisher());
+        await using var vm = new DesktopTrackerViewModel(coordinator, manualReleaseUpdateChecker: checker, updateReleasePageLauncher: launcher);
+        await vm.InitializeAsync();
+        var window = new MainWindow { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
+            await Idle();
+            var toggle = (CheckBox)window.FindName("CheckForUpdatesOnStartupCheckBox");
+            Assert.True(toggle.Focus());
+            Assert.True(toggle.IsKeyboardFocused);
+            toggle.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            await HostedDesktopPublisherTests.WaitUntil(() => repository.Saves == 1);
+            await Idle();
+            Assert.True(vm.IsBusy);
+            Assert.True(toggle.IsEnabled);
+            Assert.True(toggle.IsKeyboardFocused);
+            Assert.True(toggle.IsChecked);
+
+            toggle.SetCurrentValue(ToggleButton.IsCheckedProperty, false);
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            await Idle();
+            Assert.Equal(1, repository.Saves);
+            Assert.True(toggle.IsChecked);
+            Assert.True(toggle.IsKeyboardFocused);
+            Assert.Equal(0, checker.Calls);
+            Assert.Equal(0, launcher.Calls);
+
+            repository.SaveRelease.TrySetResult();
+            await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsBusy);
+            await Idle();
+            Assert.Equal(1, repository.Saves);
+            Assert.Equal(!failSave, toggle.IsChecked);
+            Assert.Equal(!failSave, vm.CheckForUpdatesOnStartup);
+            Assert.Equal(!failSave, repository.State.CheckForUpdatesOnStartup);
+            Assert.True(toggle.IsKeyboardFocused);
+            Assert.Equal(failSave ? "The update setting could not be saved. Your previous choice is still active." : string.Empty, vm.UpdatePreferenceStatus);
+        }
+        finally
+        {
+            repository.SaveRelease.TrySetResult();
+            await vm.StopUpdateChecksAsync();
+            window.Close();
+        }
+    });
+
     [Fact]
     public Task StartupPreferenceSaveDoesNotDisableManualUpdateCheck() => HostedConnectionTests.OnDispatcher(async () =>
     {
@@ -132,6 +188,39 @@ public sealed class UpdatePreferenceFeedbackTests
             await Idle();
             Assert.True(check.IsEnabled);
             Assert.True(repository.State.CheckForUpdatesOnStartup);
+        }
+        finally
+        {
+            repository.SaveRelease.TrySetResult();
+            await vm.StopUpdateChecksAsync();
+            window.Close();
+        }
+    });
+
+    [Fact]
+    public Task UnrelatedTrackerSaveDisablesStartupPreference() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new RecordingRepository(false, false) { SaveRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new UpdateSessionTests.Publisher());
+        await using var vm = new DesktopTrackerViewModel(coordinator);
+        await vm.InitializeAsync();
+        var window = new MainWindow { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
+            await Idle();
+            var toggle = (CheckBox)window.FindName("CheckForUpdatesOnStartupCheckBox");
+            Assert.True(toggle.IsEnabled);
+            Task save = vm.IncrementManualDeathsAsync();
+            await HostedDesktopPublisherTests.WaitUntil(() => repository.Saves == 1);
+            await Idle();
+            Assert.True(vm.IsBusy);
+            Assert.False(toggle.IsEnabled);
+            repository.SaveRelease.TrySetResult();
+            await save;
+            await Idle();
+            Assert.True(toggle.IsEnabled);
         }
         finally
         {

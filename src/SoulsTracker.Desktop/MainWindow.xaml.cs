@@ -1069,6 +1069,11 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox checkBox)
         {
+            if (viewModel.IsSavingUpdatePreference)
+            {
+                checkBox.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, viewModel.PendingUpdatePreferenceValue);
+                return;
+            }
             await viewModel.SetCheckForUpdatesOnStartupAsync(checkBox.IsChecked == true);
             if (!string.IsNullOrEmpty(viewModel.UpdatePreferenceStatus))
             {
