@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to SoulsTracker are documented here.
+Historical releases through v1.3.2 are archived here. For current releases, see the [GitHub releases](https://github.com/beingkairo/SoulsTracker/releases).
 
 ## 1.3.2 - 2026-08-21
 

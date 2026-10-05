@@ -16,3 +16,9 @@ Explain the user-facing change, verification performed, and any limitations. Avo
 ## Issues
 
 Use public issues for reproducible bugs and feature requests. Follow [SECURITY.md](SECURITY.md) for security-sensitive reports.
+
+## Release notes
+
+For each release, write `docs/releases/v<version>.md` with the exact headings `## Compatible games` and `## Latest changes`. Use ordinary Markdown list items and concise user-facing wording. Verify compatible games, tracking modes, and edition/version restrictions against the current selectable product and active readers for that release; do not copy an older list. Include only meaningful user-visible changes. Published GitHub release notes are the canonical source if static or site content differs.
+
+The release workflow appends the getting-started guide to the published notes. beingkairo.com should later read the latest published SoulsTracker GitHub release and extract these two sections, rather than maintain a separate edited games list or changelog. Website parsing and integration are separate work. The owner must review the complete release notes and package before every publication.

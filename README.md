@@ -4,9 +4,9 @@ SoulsTracker is a Windows app for streams: total death tracking, optional TXT ou
 
 ## Games
 
-Automatic tracking is available for Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, Bloodborne, Sekiro, Elden Ring, Black Myth: Wukong, and Lies of P.
+Automatic tracking is available for Dark Souls: Remastered, Dark Souls II: Scholar of the First Sin, Dark Souls III, Bloodborne (the validated title in shadPS4 on Windows), Sekiro: Shadows Die Twice, Elden Ring, Black Myth: Wukong, and Lies of P. The first three Dark Souls games and Sekiro require validated Windows executable builds; Elden Ring, Black Myth: Wukong, and Lies of P read selected saves. Lies of P supports Steam saves; Black Myth: Wukong supports Steam and Epic saves. See the [current release notes](docs/releases/v2.0.0.md) for exact build restrictions.
 
-Demon Souls uses a manual counter.
+Demon Souls uses a manual counter. Console Bloodborne is not tracked automatically.
 
 ## Start streaming
 
@@ -15,13 +15,13 @@ Demon Souls uses a manual counter.
 3. Open the **Overlay** tab. SoulsTracker automatically prepares one private Overlay URL the first time you use it.
 4. Use the icon-only **Copy URL** control and add the URL to your streaming software.
 
-This development build connects only to https://overlay.beingkairo.com. No account, login, or operator action is required. Local tracking and TXT output do not require the Overlay or an internet connection.
+The Overlay connects only to https://overlay.beingkairo.com. No account or login is required. Local tracking and TXT output do not require the Overlay or an internet connection.
 
 The Total Deaths overlay works at any size.
 
 After setup, SoulsTracker sends the accepted death display and applied appearance while running. Closing it leaves the last published state online. Automatic readers do not overwrite that state until a current accepted observation arrives. An already open browser retains its last display during a disconnect; a cold offline reload cannot hydrate it.
 
-Existing local overlay URLs need one deliberate replacement. Styles embedded in old URLs are not migrated: reproduce them in Desktop appearance settings before switching. The Overlay URL has no style overrides. Fonts must be installed on the streaming PC; existing title-icon Apply and number-only font-size limitations remain.
+Existing local overlay URLs need one deliberate replacement. Styles embedded in old URLs are not migrated: reproduce them in Desktop appearance settings before switching. The Overlay URL has no style overrides. Fonts must be installed on the streaming PC.
 
 Keep the Overlay URL private. Anyone who has it can view the overlay. If automatic preparation is temporarily unavailable, **Try again** resumes the same protected request instead of creating another identity.
 
