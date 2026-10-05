@@ -440,8 +440,8 @@
 
         <TabControl x:Name="WorkspaceTabs" Grid.Row="1" Background="{StaticResource BackgroundBrush}" BorderThickness="0" AutomationProperties.Name="SoulsTracker workspace tabs">
             <TabItem x:Name="MainWorkspaceTab" Header="Main" AutomationProperties.Name="Main workspace">
-        <Grid Margin="24,18">
-                <ScrollViewer x:Name="MainContentScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Tracker workspace">
+        <Grid>
+                <ScrollViewer x:Name="MainContentScrollViewer" Padding="24,18" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Tracker workspace">
                 <StackPanel>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Game session panel">
                         <StackPanel>
@@ -881,7 +881,7 @@
         </TabControl>
 
         <Border Grid.Row="2" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,10">
-            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://www.beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
+            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
         </Border>
 
         <Canvas x:Name="FloatingFeedbackLayer" Grid.Row="1" Panel.ZIndex="11" IsHitTestVisible="False" ClipToBounds="True">

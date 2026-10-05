@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Windows.Data;
+using System.Windows.Documents;
 using SoulsTracker.Application;
 using SoulsTracker.Domain;
 using SoulsTracker.Infrastructure;
@@ -20,6 +21,34 @@ public sealed class ShellPresentationTests
 {
     private static readonly string[] HotkeyStatuses = ["Global hotkeys are active.", "Hotkey conflict. Choose another binding.", "Choose the other binding or apply the change."];
     private static readonly string[] AppearanceFields = ["Title", "FontFamily", "FontSize", "TextColor", "TextOpacity", "IconColor", "BackgroundEnabled", "BackgroundColor", "BackgroundOpacity", "OutlineEnabled", "OutlineColor", "OutlineWidth", "ShadowEnabled", "ShadowColor", "ShadowOffsetX", "ShadowOffsetY", "ShadowBlur"];
+
+    [Theory]
+    [InlineData(560d)]
+    [InlineData(1060d)]
+    public Task MainPageScrollBoundaryMatchesSettingsAndFooterUsesCanonicalRoot(double width) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var window = new MainWindow { Width = width, Height = 400, ShowActivated = false, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            await Idle();
+            var main = (ScrollViewer)window.FindName("MainContentScrollViewer");
+            var tabs = (TabControl)window.FindName("WorkspaceTabs");
+            var mainContent = (FrameworkElement)main.Content;
+            Assert.Equal(new Thickness(24, 18, 24, 18), main.Padding);
+            Assert.Same(main, mainContent.Parent);
+            double mainRight = main.TranslatePoint(new Point(main.ActualWidth, 0), window).X;
+            Assert.InRange(Math.Abs(mainRight - tabs.TranslatePoint(new Point(tabs.ActualWidth, 0), window).X), 0, 1);
+            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
+            await Idle();
+            var settings = (ScrollViewer)window.FindName("SettingsContentScrollViewer");
+            double settingsRight = settings.TranslatePoint(new Point(settings.ActualWidth, 0), window).X;
+            Assert.InRange(Math.Abs(mainRight - settingsRight), 0, 1);
+            var footer = (Hyperlink)window.FindName("BeingKairoAttributionHyperlink");
+            Assert.Equal(new Uri("https://beingkairo.com/"), footer.NavigateUri);
+        }
+        finally { window.Close(); }
+    });
 
     [Fact]
     public Task ShellAccentAndSelectionUseRedWithoutChangingOverlayDefaults() => HostedConnectionTests.OnDispatcher(async () =>

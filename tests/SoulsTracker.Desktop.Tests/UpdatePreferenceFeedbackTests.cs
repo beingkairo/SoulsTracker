@@ -100,6 +100,47 @@ public sealed class UpdatePreferenceFeedbackTests
         finally { await vm.StopUpdateChecksAsync(); window.Close(); }
     });
 
+    [Fact]
+    public Task StartupPreferenceSaveDoesNotDisableManualUpdateCheck() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new RecordingRepository(false, false) { SaveRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var checker = new UpdateSessionTests.ControlledChecker();
+        checker.Result.SetResult(new(ManualReleaseUpdateStatus.UpToDate, "2.0.0"));
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new UpdateSessionTests.Publisher());
+        await using var vm = new DesktopTrackerViewModel(coordinator, manualReleaseUpdateChecker: checker);
+        await vm.InitializeAsync();
+        var window = new MainWindow { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
+            await Idle();
+            var check = (Button)window.FindName("CheckForUpdatesButton");
+            var toggle = (CheckBox)window.FindName("CheckForUpdatesOnStartupCheckBox");
+            Assert.True(check.IsEnabled);
+            toggle.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            await HostedDesktopPublisherTests.WaitUntil(() => repository.Saves == 1);
+            await Idle();
+            Assert.True(vm.IsBusy);
+            Assert.True(vm.CanCheckForUpdates);
+            Assert.True(check.IsEnabled);
+            await vm.CheckForUpdatesAsync();
+            Assert.Equal(1, checker.Calls);
+            repository.SaveRelease.TrySetResult();
+            await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsBusy);
+            await Idle();
+            Assert.True(check.IsEnabled);
+            Assert.True(repository.State.CheckForUpdatesOnStartup);
+        }
+        finally
+        {
+            repository.SaveRelease.TrySetResult();
+            await vm.StopUpdateChecksAsync();
+            window.Close();
+        }
+    });
+
     private static void AssertFullyVisible(FrameworkElement element, FrameworkElement viewport)
     {
         var bounds = element.TransformToAncestor(viewport).TransformBounds(new Rect(element.RenderSize));
@@ -114,13 +155,14 @@ public sealed class UpdatePreferenceFeedbackTests
     {
         public PersistentTrackerState State { get; private set; } = new(1, GameId.DemonsSouls, OverlayConfiguration.Default, checkForUpdatesOnStartup: committed);
         public int Saves { get; private set; }
+        public TaskCompletionSource? SaveRelease { get; set; }
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(TrackerStateLoadResult.Loaded(State));
-        public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
+        public async Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
         {
             Saves++;
+            if (SaveRelease is not null) await SaveRelease.Task.WaitAsync(cancellationToken);
             if (failSave) throw new System.IO.IOException("Synthetic save failure");
             State = state;
-            return Task.CompletedTask;
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

@@ -197,7 +197,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public string? UpdateLatestVersion { get => updateLatestVersion; private set => SetField(ref updateLatestVersion, value); }
     public string? UpdateCheckStatus { get => updateCheckStatus; private set => SetField(ref updateCheckStatus, value); }
     public Uri? AvailableUpdateReleasePage { get => availableUpdateReleasePage; private set { if (SetField(ref availableUpdateReleasePage, value)) OnPropertyChanged(nameof(CanOpenAvailableUpdateReleasePage)); } }
-    public bool CanCheckForUpdates => ControlsEnabled && !updateChecksStopped;
+    // Manual update checks do not depend on tracker commands, including saving the startup preference.
+    public bool CanCheckForUpdates => state is not null && !IsLoading && !updateChecksStopped;
 
     public bool CanOpenAvailableUpdateReleasePage => !updateChecksStopped && AvailableUpdateReleasePage is not null;
 
