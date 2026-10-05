@@ -63,18 +63,23 @@ public sealed class UpdatePreferenceFeedbackTests
             string capture = $"preference-{width}-{committed}-{failSave}";
             AppearanceGeometryTests.Capture(window, capture + "-before");
 
+            Task saved = ObservePreferenceSaveCompletion(vm);
             toggle.SetCurrentValue(ToggleButton.IsCheckedProperty, !committed);
             toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             await Idle();
             // No test-side scrolling, layout update or BringIntoView after activation.
             AppearanceGeometryTests.Capture(window, capture + "-first-idle");
-            Assert.Equal(initialSaves + 1, repository.Saves);
             Assert.Equal(1, checker.Calls);
             Assert.Equal(0, launcher.Calls);
             Assert.Empty(window.OwnedWindows.Cast<Window>());
             Assert.Equal(current, vm.UpdateCurrentVersion);
             Assert.Equal(latest, vm.UpdateLatestVersion);
             Assert.Equal(result, vm.UpdateCheckStatus);
+            Assert.True(toggle.IsKeyboardFocused);
+            AssertFullyVisible(toggle, viewport);
+            await saved.WaitAsync(TimeSpan.FromSeconds(2));
+            await Idle();
+            Assert.Equal(initialSaves + 1, repository.Saves);
             Assert.True(toggle.IsKeyboardFocused);
             AssertFullyVisible(toggle, viewport);
             bool expected = failSave ? committed : !committed;
@@ -128,6 +133,8 @@ public sealed class UpdatePreferenceFeedbackTests
             Assert.True(toggle.IsEnabled);
             Assert.True(toggle.IsKeyboardFocused);
             Assert.True(toggle.IsChecked);
+            Assert.False(repository.State.CheckForUpdatesOnStartup);
+            Assert.Empty(vm.UpdatePreferenceStatus);
 
             toggle.SetCurrentValue(ToggleButton.IsCheckedProperty, false);
             toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -260,6 +267,19 @@ public sealed class UpdatePreferenceFeedbackTests
     {
         public int Calls { get; private set; }
         public bool TryOpen(Uri releasePage) { Calls++; return true; }
+    }
+
+    internal static Task ObservePreferenceSaveCompletion(DesktopTrackerViewModel vm)
+    {
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(vm.CanChangeUpdatePreference) || vm.IsSavingUpdatePreference) return;
+            vm.PropertyChanged -= OnChanged;
+            completed.TrySetResult();
+        }
+        vm.PropertyChanged += OnChanged;
+        return completed.Task;
     }
 
     private static async Task Idle() => await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
