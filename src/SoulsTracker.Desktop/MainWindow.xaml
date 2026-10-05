@@ -823,7 +823,7 @@
                                     </TextBlock>
                                 </Grid>
                             </StackPanel>
-                            <CheckBox x:Name="CheckForUpdatesOnStartupCheckBox" Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}" IsEnabled="{Binding ControlsEnabled}" Click="CheckForUpdatesOnStartup_Click" AutomationProperties.Name="Check for updates on startup" />
+                            <CheckBox x:Name="CheckForUpdatesOnStartupCheckBox" Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}" IsEnabled="{Binding CanChangeUpdatePreference}" Click="CheckForUpdatesOnStartup_Click" AutomationProperties.Name="Check for updates on startup" />
                             <TextBlock x:Name="UpdatePreferenceStatusTextBlock" Text="{Binding UpdatePreferenceStatus}" AutomationProperties.Name="Startup update setting status" AutomationProperties.LiveSetting="Polite">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">

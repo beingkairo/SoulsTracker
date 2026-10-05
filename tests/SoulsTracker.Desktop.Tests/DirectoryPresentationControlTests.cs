@@ -74,7 +74,7 @@ public sealed class DirectoryPresentationControlTests
     {
         using var fixture = new SaveDirectoryWorkflowTests();
         string directory = Path.Combine(fixture.Root, "synthetic-long-directory-name-for-streaming-account");
-        CreateSave(game, directory);
+        string savePath = CreateSave(game, directory);
         var repository = new MemoryRepository(Game(game));
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
         var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
@@ -95,7 +95,10 @@ public sealed class DirectoryPresentationControlTests
             Assert.NotSame(heading.Parent, choose.Parent);
             Assert.True(choose.Focusable && choose.IsTabStop);
             choose.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await HostedDesktopPublisherTests.WaitUntil(() => DirectoryPath(vm, game) == directory && !vm.IsBusy);
+            await HostedDesktopPublisherTests.WaitUntil(() =>
+                DirectoryPath(vm, game) == directory && ConfiguredDirectory(repository.State, game) == directory
+                && ConfiguredPath(repository.State, game) == savePath
+                && SelectedChoice(vm, game)?.LocalPath == savePath && !vm.IsBusy);
             await Idle();
             TextBlock path = Tree(window).OfType<TextBlock>().Single(x => x.IsVisible && x.Text == directory);
             var grid = Assert.IsType<Grid>(path.Parent);
@@ -127,7 +130,8 @@ public sealed class DirectoryPresentationControlTests
             }
             copyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(directory, copied);
-            Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == SelectedChoice(vm, game)!.Label);
+            string selectedLabel = Assert.IsType<DiscoveredLocalSave>(SelectedChoice(vm, game)).Label;
+            Assert.DoesNotContain(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == selectedLabel);
             if (game == "er")
             {
                 var selector = (ComboBox)window.FindName("EldenRingProfileSlotSelector");
