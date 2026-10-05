@@ -32,11 +32,19 @@ try {
         throw "Current guide is missing the startup-order statement required by this test."
     }
 
-    foreach ($case in @("current", "obsolete")) {
-        if ($case -eq "obsolete") {
-            # Preserve every other byte of the guide, including any UTF-8 BOM.
-            $obsoleteGuide = $guide.Replace($currentStatement, "Open SoulsTracker before OBS")
-            [System.IO.File]::WriteAllBytes($guidePath, [System.Text.Encoding]::UTF8.GetBytes($obsoleteGuide))
+    $readmePath = Join-Path $fixture 'README.md'
+    $releasePath = Join-Path $fixture "docs/releases/v$version.md"
+    $readme = [IO.File]::ReadAllText($readmePath)
+    $release = [IO.File]::ReadAllText($releasePath)
+    foreach ($case in @('current', 'obsolete', 'games-drift', 'release-qualifier', 'notes')) {
+        [IO.File]::WriteAllText($guidePath, $guide)
+        [IO.File]::WriteAllText($readmePath, $readme)
+        [IO.File]::WriteAllText($releasePath, $release)
+        switch ($case) {
+            'obsolete' { [IO.File]::WriteAllText($guidePath, $guide.Replace($currentStatement, 'Open SoulsTracker before OBS')) }
+            'games-drift' { [IO.File]::WriteAllText($readmePath, $readme.Replace("- Demon's Souls", '- Demon Souls')) }
+            'release-qualifier' { [IO.File]::WriteAllText($releasePath, $release.Replace("- Demon's Souls", "- Demon's Souls: manual")) }
+            'notes' { [IO.File]::WriteAllText($releasePath, "$release`n## Notes`n`nRemoved disclosure.`n") }
         }
 
         $stdout = Join-Path $fixture "$case.stdout.txt"
@@ -52,8 +60,13 @@ try {
             if ($process.ExitCode -ne 0 -or -not $output.Contains("Release guide verified.")) {
                 throw "Current hosted guide must pass the actual release-guide verifier."
             }
-        } elseif ($process.ExitCode -eq 0 -or -not $output.Contains("Expected '$currentStatement'")) {
-            throw "Obsolete-only guidance must fail for the missing current startup-order statement."
+        } else {
+            $expected = if ($case -eq 'obsolete') { "Expected '$currentStatement'" }
+                elseif ($case -eq 'notes') { 'removed disclosure or migration commentary' }
+                else { 'must list exactly the nine current compatible game names' }
+            if ($process.ExitCode -eq 0 -or -not $output.Contains($expected)) {
+                throw "$case must fail for the expected reason."
+            }
         }
     }
 
