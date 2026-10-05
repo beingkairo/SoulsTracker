@@ -1,6 +1,6 @@
 ## Getting Started
 
-New to SoulsTracker? The full setup guide is in the [README](https://github.com/beingkairo/SoulsTracker#start-streaming).
+For a quick start, see [Getting started](https://github.com/beingkairo/SoulsTracker#getting-started).
 
 The Windows installer checks for Microsoft WebView2 Runtime and installs it when needed.
 

@@ -249,15 +249,16 @@ try {
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
     Assert-True ($workflow.Contains('path: artifacts/desktop')) 'SBOM must scan the prepared Desktop payload.'
-    foreach ($required in @('ref: ${{ github.sha }}', 'RELEASE_EVENT: ${{ github.event_name }}', 'RELEASE_REF: ${{ github.ref }}', 'RELEASE_COMMIT: ${{ github.sha }}', '-EventName $env:RELEASE_EVENT -EventRef $env:RELEASE_REF -ExpectedCommit $env:RELEASE_COMMIT', 'tag_name: ${{ steps.target.outputs.tag }}', 'RELEASE_TAG: ${{ steps.target.outputs.tag }}', 'releases/tags/$env:RELEASE_TAG', 'run: ./scripts/Build-Release.ps1')) {
+    foreach ($required in @('ref: ${{ github.sha }}', 'RELEASE_EVENT: ${{ github.event_name }}', 'RELEASE_REF: ${{ github.ref }}', 'RELEASE_COMMIT: ${{ github.sha }}', '-EventName $env:RELEASE_EVENT -EventRef $env:RELEASE_REF -ExpectedCommit $env:RELEASE_COMMIT', 'tag_name: ${{ steps.target.outputs.tag }}', 'generate_release_notes: false', 'body_path: ${{ steps.version.outputs.release_notes }}', 'run: ./scripts/Build-Release.ps1')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }
     $last = -1
-    foreach ($step in @('actions/checkout@', 'id: target', 'actions/setup-dotnet@', 'Install Inno Setup', 'run: ./scripts/Build-Release.ps1', 'Create portable archive', 'Attest release artifacts', 'Publish GitHub release', 'Append setup guide')) {
+    foreach ($step in @('actions/checkout@', 'id: target', 'actions/setup-dotnet@', 'Install Inno Setup', 'run: ./scripts/Build-Release.ps1', 'Create portable archive', 'Attest release artifacts', 'Publish GitHub release')) {
         $index = $workflow.IndexOf($step)
         Assert-True ($index -gt $last) "Workflow ordering invalid at $step."
         $last = $index
     }
+    Assert-True ($workflow -notmatch 'Append setup guide|generate_release_notes: true|gh api --method PATCH') 'Published release body must not gain appended or generated prose.'
     Assert-True ($workflow -notmatch 'SkipTests|SkipInstaller|continue-on-error|always\(\)|GITHUB_REF_NAME') 'Workflow contains a qualification bypass or unvalidated target.'
     Assert-True ([regex]::Matches($workflow, 'run: ./scripts/Build-Release.ps1').Count -eq 1) 'Exactly one qualification path is required.'
     Write-Output 'Release tooling characterization passed. Synthetic payloads are not distribution evidence.'

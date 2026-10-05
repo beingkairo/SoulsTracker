@@ -34,17 +34,23 @@ try {
 
     $readmePath = Join-Path $fixture 'README.md'
     $releasePath = Join-Path $fixture "docs/releases/v$version.md"
+    $workflowPath = Join-Path $fixture '.github/workflows/release.yml'
     $readme = [IO.File]::ReadAllText($readmePath)
     $release = [IO.File]::ReadAllText($releasePath)
-    foreach ($case in @('current', 'obsolete', 'games-drift', 'release-qualifier', 'notes')) {
+    $workflow = [IO.File]::ReadAllText($workflowPath)
+    foreach ($case in @('current', 'obsolete', 'games-drift', 'release-qualifier', 'notes', 'extra-prose', 'generated-notes', 'appended-guide')) {
         [IO.File]::WriteAllText($guidePath, $guide)
         [IO.File]::WriteAllText($readmePath, $readme)
         [IO.File]::WriteAllText($releasePath, $release)
+        [IO.File]::WriteAllText($workflowPath, $workflow)
         switch ($case) {
             'obsolete' { [IO.File]::WriteAllText($guidePath, $guide.Replace($currentStatement, 'Open SoulsTracker before OBS')) }
             'games-drift' { [IO.File]::WriteAllText($readmePath, $readme.Replace("- Demon's Souls", '- Demon Souls')) }
             'release-qualifier' { [IO.File]::WriteAllText($releasePath, $release.Replace("- Demon's Souls", "- Demon's Souls: manual")) }
             'notes' { [IO.File]::WriteAllText($releasePath, "$release`n## Notes`n`nRemoved disclosure.`n") }
+            'extra-prose' { [IO.File]::WriteAllText($releasePath, "$release`nExtra release prose.`n") }
+            'generated-notes' { [IO.File]::WriteAllText($workflowPath, $workflow.Replace('generate_release_notes: false', 'generate_release_notes: true')) }
+            'appended-guide' { [IO.File]::WriteAllText($workflowPath, "$workflow`n      - name: Append setup guide to release notes`n") }
         }
 
         $stdout = Join-Path $fixture "$case.stdout.txt"
@@ -63,6 +69,8 @@ try {
         } else {
             $expected = if ($case -eq 'obsolete') { "Expected '$currentStatement'" }
                 elseif ($case -eq 'notes') { 'removed disclosure or migration commentary' }
+                elseif ($case -eq 'extra-prose') { 'exactly the approved latest changes' }
+                elseif ($case -in @('generated-notes', 'appended-guide')) { 'publish only the static release notes' }
                 else { 'must list exactly the nine current compatible game names' }
             if ($process.ExitCode -eq 0 -or -not $output.Contains($expected)) {
                 throw "$case must fail for the expected reason."

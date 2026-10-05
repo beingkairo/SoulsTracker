@@ -1,6 +1,8 @@
 # SoulsTracker
 
-SoulsTracker is a Windows total-death counter for games and streams. [Download the latest release](https://github.com/beingkairo/SoulsTracker/releases/latest).
+A simple death counter for supported games.
+
+[Download the latest release](https://github.com/beingkairo/SoulsTracker/releases/latest).
 
 ## Compatible games
 
@@ -16,11 +18,17 @@ SoulsTracker is a Windows total-death counter for games and streams. [Download t
 
 ## Features
 
-- Track total deaths, with a manual counter for Demon's Souls.
-- Display the count in a hosted Death Counter Overlay for streaming.
-- Customize the overlay appearance and preview changes in the app.
-- Export the count to a TXT file for text sources.
+- Track total deaths across supported games
+- Hosted Death Counter Overlay
+- Overlay customization and preview
+- TXT export
+- Global hotkeys
 
-## Start streaming
+## Getting started
 
-Install SoulsTracker, select a game on the Main tab and choose a save or character if prompted. Open the Overlay tab to prepare and copy your URL for your streaming software. See the [getting-started guide](docs/RELEASE-GETTING-STARTED.md) for more setup details.
+1. Install and open SoulsTracker.
+2. Select your game and choose a save or character if prompted.
+3. Start playing.
+4. If you're streaming, copy your URL from the Overlay tab.
+
+See the [getting-started guide](docs/RELEASE-GETTING-STARTED.md) for additional setup.
