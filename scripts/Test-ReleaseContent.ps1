@@ -86,7 +86,7 @@ if ($DefineFixturesOnly) { return }
 if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
     $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-release-content-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'unsafe-key', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
+        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
             $fixture = Join-Path $fixtureRoot $case
             $payload = Join-Path $fixture 'payload'
             New-DistributionFixture $fixture $payload
@@ -100,7 +100,7 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                 'missing-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', '<!-- absent -->') | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text is missing' }
                 'changed-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', "<!-- BEGIN sqlitepcl-notice -->`nchanged") | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text has changed' }
                 'changed-upstream-notice' { Add-Content (Join-Path $fixture 'cache/microsoft.web.webview2/1.0.4191.47/NOTICE.txt') 'changed'; $expected = 'does not match the restored upstream package' }
-                { $_ -in @('drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'unsafe-key') } {
+                { $_ -in @('drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key') } {
                     $depsPath = Join-Path $payload 'SoulsTracker.Desktop.deps.json'
                     $fixtureDeps = Get-Content -Raw $depsPath | ConvertFrom-Json -AsHashtable
                     $fixtureTarget = $fixtureDeps.targets['.NETCoreApp,Version=v10.0/win-x64']
@@ -121,6 +121,38 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                             $projectKey = "SoulsTracker.Overlay/$version"
                             $fixtureDeps.libraries.Remove($projectKey); $fixtureTarget.Remove($projectKey)
                             $diagnostics = @('projects', "missing [$projectKey]")
+                        }
+                        'product-extra' {
+                            $key = 'Other.Product/1.0.0'
+                            $fixtureDeps.libraries[$key] = @{ type = 'project' }; $fixtureTarget[$key] = @{}
+                            $diagnostics = @('products', "unexpected [$key]", 'missing []')
+                        }
+                        'product-version' {
+                            $version = & (Join-Path $root 'eng/Get-Version.ps1')
+                            $key = 'SoulsTracker.Overlay/99.0.0'
+                            $fixtureDeps.libraries[$key] = @{ type = 'project' }; $fixtureTarget[$key] = @{}
+                            $fixtureDeps.libraries.Remove("SoulsTracker.Overlay/$version"); $fixtureTarget.Remove("SoulsTracker.Overlay/$version")
+                            $diagnostics = @('product version mismatch', "unexpected [$key]", "missing [SoulsTracker.Overlay/$version]")
+                        }
+                        'product-unsafe' {
+                            $key = 'C:\Users\Synthetic\private/1.0.0'
+                            $fixtureDeps.libraries[$key] = @{ type = 'project' }; $fixtureTarget[$key] = @{}
+                            $diagnostics = @('products', 'unexpected [[invalid inventory key]]')
+                        }
+                        'reference-extra' {
+                            $key = 'Other.Reference/1.0.0'
+                            $fixtureDeps.libraries[$key] = @{ type = 'reference' }; $fixtureTarget[$key] = @{}
+                            $diagnostics = @('WebView2 references', "unexpected [$key]", 'missing []')
+                        }
+                        'reference-version' {
+                            $key = 'Microsoft.Web.WebView2.Core/99.0.0'
+                            $fixtureDeps.libraries[$key] = @{ type = 'reference' }; $fixtureTarget[$key] = @{}
+                            $diagnostics = @('WebView2 reference version mismatch', "unexpected [$key]", 'missing [Microsoft.Web.WebView2.Core/1.0.4191.47]')
+                        }
+                        'reference-unsafe' {
+                            $key = 'C:\Users\Synthetic\private/1.0.0'
+                            $fixtureDeps.libraries[$key] = @{ type = 'reference' }; $fixtureTarget[$key] = @{}
+                            $diagnostics = @('WebView2 references', 'unexpected [[invalid inventory key]]')
                         }
                         'unsafe-key' {
                             $fixtureDeps.libraries['C:\Users\Synthetic\private/1.0.0'] = @{ type = 'package' }
@@ -196,7 +228,7 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                 foreach ($record in $diagnostics) {
                     Assert-Content ($failure.Contains($record)) "Content case $case omitted inventory diagnostic $record."
                 }
-                if ($case -eq 'unsafe-key') { Assert-Content (-not $failure.Contains('C:\Users\Synthetic')) 'Inventory diagnostics exposed a local path.' }
+                if ($case -in @('unsafe-key', 'product-unsafe', 'reference-unsafe')) { Assert-Content (-not $failure.Contains('C:\Users\Synthetic')) 'Inventory diagnostics exposed a local path.' }
                 Assert-Content (-not (Test-Path (Join-Path $payload 'LICENSE'))) 'Rejected content was staged with a product license.'
             } else {
                 Assert-Content ($null -eq $failure) "Valid synthetic payload failed: $failure"

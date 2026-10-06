@@ -110,12 +110,16 @@ foreach ($key in $deps.libraries.Keys) {
     $name, $resolved = $key -split '/', 2
     $type = $deps.libraries[$key].type
     if ($type -eq 'project') {
-        Assert-Distribution ($name -cin $products -and $resolved -ceq $version) 'Unsupported product inventory drift.'
+        $expectedProject = if ($name -cin $products) { @("$name/$version") } else { @() }
+        $category = if ($expectedProject.Count -gt 0) { 'product version mismatch' } else { 'products' }
+        Assert-InventoryKeys @($key) $expectedProject $category
         $projectCount++
         continue
     }
     if ($type -eq 'reference') {
-        Assert-Distribution ($webView2References.ContainsKey($name) -and $resolved -ceq $expected['Microsoft.Web.WebView2']) 'Unsupported WebView2 reference inventory drift.'
+        $expectedReference = if ($webView2References.ContainsKey($name)) { @("$name/$($expected['Microsoft.Web.WebView2'])") } else { @() }
+        $category = if ($expectedReference.Count -gt 0) { 'WebView2 reference version mismatch' } else { 'WebView2 references' }
+        Assert-InventoryKeys @($key) $expectedReference $category
         continue
     }
     if ($type -eq 'runtimepack') { $name = $name -creplace '^runtimepack\.', '' }
