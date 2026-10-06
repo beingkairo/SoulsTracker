@@ -165,7 +165,7 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                 }
                 'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
                 'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack differs from the Desktop project pin' }
-                'project-runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>', '<RuntimeFrameworkVersion>10.0.11</RuntimeFrameworkVersion>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'version mismatch'; $diagnostics = @('runtimepack.Microsoft.NETCore.App.Runtime.win-x64/10.0.9', 'Microsoft.NETCore.App.Runtime.win-x64/10.0.11') }
+                'project-runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>', '<RuntimeFrameworkVersion>10.0.11</RuntimeFrameworkVersion>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'version mismatch' }
                 'floating-runtime' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>', '<TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'must pin one exact runtime version' }
                 'missing-runtime' { Remove-Item (Join-Path $payload 'SourceGear.sqlite3.txt'); $expected = 'required runtime/native/resource asset is missing' }
                 'missing-satellite' { Remove-Item (Join-Path $payload 'fr/Example.resources.dll'); $expected = 'required runtime/native/resource asset is missing' }
@@ -229,6 +229,10 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                 Assert-Content ($null -ne $failure -and $failure.Contains($expected)) "Content case $case did not reject with the expected reason."
                 foreach ($record in $diagnostics) {
                     Assert-Content ($failure.Contains($record)) "Content case $case omitted inventory diagnostic $record."
+                }
+                if ($case -eq 'project-runtime-drift') {
+                    # Hashtable traversal may encounter either runtime pack first; require a matching actual/expected pair.
+                    Assert-Content ($failure -match 'runtimepack\.Microsoft\.(NETCore|WindowsDesktop)\.App\.Runtime\.win-x64/10\.0\.9; expected Microsoft\.\1\.App\.Runtime\.win-x64/10\.0\.11') 'Content case project-runtime-drift omitted the matching runtime-pack versions.'
                 }
                 if ($case -in @('unsafe-key', 'product-unsafe', 'reference-unsafe')) { Assert-Content (-not $failure.Contains('C:\Users\Synthetic')) 'Inventory diagnostics exposed a local path.' }
                 Assert-Content (-not (Test-Path (Join-Path $payload 'LICENSE'))) 'Rejected content was staged with a product license.'
