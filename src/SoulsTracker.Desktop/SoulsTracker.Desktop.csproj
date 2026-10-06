@@ -30,6 +30,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
+    <!-- Release notices and inventory are reviewed for this exact self-contained runtime. -->
+    <RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>
+    <TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>
     <ApplicationIcon>../../assets/branding/souls-tracker-skull-compact.ico</ApplicationIcon>
   </PropertyGroup>
 

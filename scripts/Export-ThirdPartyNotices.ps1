@@ -33,6 +33,14 @@ function Read-RequiredText([string]$Path) {
     return $text
 }
 
+# The self-contained Desktop project's exact runtime pin is the distribution source of truth.
+[xml]$desktopProject = Read-RequiredText (Join-Path $root 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')
+$runtimePins = @($desktopProject.Project.PropertyGroup.RuntimeFrameworkVersion | Where-Object { $_ })
+$patchPolicies = @($desktopProject.Project.PropertyGroup.TargetLatestRuntimePatch | Where-Object { $_ })
+Assert-Distribution ($runtimePins.Count -eq 1 -and $runtimePins[0] -match '^10\.0\.[0-9]+$' -and
+    $patchPolicies.Count -eq 1 -and $patchPolicies[0] -ceq 'false') 'Desktop must pin one exact runtime version and disable latest-patch resolution.'
+$desktopRuntimeVersion = [string]$runtimePins[0]
+
 function Resolve-RestoredFile([string]$Relative) {
     Assert-Distribution ($Relative -notmatch '(^|/)\.\.(/|$)|^[\\/]|:') 'Invalid restored asset path.'
     foreach ($folder in $assets.packageFolders.Keys) {
@@ -47,7 +55,7 @@ function Test-ApphostTemplatePaths([byte[]]$Bytes, [object[]]$PathMatches) {
     # the managed entry-point name. Only unchanged template sections can explain
     # upstream paths. A new path in resources, padding or appended bytes fails.
     $dotnet = Get-Command dotnet -CommandType Application | Select-Object -First 1
-    $templatePath = Join-Path (Split-Path $dotnet.Source) 'packs/Microsoft.NETCore.App.Host.win-x64/10.0.9/runtimes/win-x64/native/apphost.exe'
+    $templatePath = Join-Path (Split-Path $dotnet.Source) "packs/Microsoft.NETCore.App.Host.win-x64/$desktopRuntimeVersion/runtimes/win-x64/native/apphost.exe"
     if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { return $false }
     $templateBytes = [IO.File]::ReadAllBytes($templatePath)
     $stream = [IO.MemoryStream]::new($Bytes, $false)
@@ -84,8 +92,8 @@ $reviewed = Read-RequiredText (Join-Path $root 'docs/THIRD_PARTY_NOTICES.md')
 $attribution = Read-RequiredText (Join-Path $root 'THIRD_PARTY_NOTICES.md')
 $null = Read-RequiredText (Join-Path $root 'LICENSE')
 $expected = @{
-    'Microsoft.NETCore.App.Runtime.win-x64' = '10.0.9'
-    'Microsoft.WindowsDesktop.App.Runtime.win-x64' = '10.0.9'
+    'Microsoft.NETCore.App.Runtime.win-x64' = $desktopRuntimeVersion
+    'Microsoft.WindowsDesktop.App.Runtime.win-x64' = $desktopRuntimeVersion
     'Microsoft.Web.WebView2' = '1.0.4191.47'
     'Microsoft.Data.Sqlite.Core' = '10.0.10'
     'SourceGear.sqlite3' = '3.50.4.5'
@@ -143,7 +151,7 @@ foreach ($key in $deps.libraries.Keys) {
         }
     } else {
         $downloads = @($assets.project.frameworks.Values | ForEach-Object { $_.downloadDependencies } | Where-Object { $_.name -ceq $name -and $_.version -ceq "[$resolved, $resolved]" })
-        Assert-Distribution ($downloads.Count -gt 0) 'Distribution runtime pack is missing from restored inputs.'
+        Assert-Distribution ($downloads.Count -gt 0) 'Distribution runtime pack differs from the Desktop project pin or is missing from restored inputs.'
     }
 }
 Assert-InventoryKeys @($seen.Keys | ForEach-Object { "$_/$($seen[$_])" }) @($expected.Keys | ForEach-Object { "$_/$($expected[$_])" }) 'dependencies'
@@ -222,7 +230,7 @@ if (@($deps.libraries.Keys | Where-Object { $deps.libraries[$_].type -eq 'refere
     }
 }
 # Windows Desktop satellite files are described by the restored pack, not Desktop deps.json.
-$desktopPack = 'microsoft.windowsdesktop.app.runtime.win-x64/10.0.9/data/RuntimeList.xml'
+$desktopPack = "microsoft.windowsdesktop.app.runtime.win-x64/$desktopRuntimeVersion/data/RuntimeList.xml"
 $lists = @($assets.packageFolders.Keys | ForEach-Object { Join-Path $_ $desktopPack } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
 Assert-Distribution ($lists.Count -gt 0) 'Restored Windows Desktop runtime inventory is missing.'
 [xml]$runtimeList = Read-RequiredText $lists[0]
@@ -230,7 +238,7 @@ foreach ($file in $runtimeList.FileList.File) {
     if ($file.Type -eq 'Resources') {
         $relative = "$($file.Culture)/$(($file.Path -split '/')[-1])"
         $null = $allowed.Add($relative)
-        $upstream[$relative] = "microsoft.windowsdesktop.app.runtime.win-x64/10.0.9/$($file.Path)"
+        $upstream[$relative] = "microsoft.windowsdesktop.app.runtime.win-x64/$desktopRuntimeVersion/$($file.Path)"
     }
 }
 foreach ($relative in $allowed) {

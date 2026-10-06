@@ -16,7 +16,7 @@ function Assert-Content([bool]$Condition, [string]$Message) {
 function New-DistributionFixture([string]$Fixture, [string]$PublishPath) {
     $root = $distributionFixtureSource
     # Deliberately small synthetic assets; no generated binary is executed.
-    foreach ($relative in @('scripts/Export-ThirdPartyNotices.ps1', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/THIRD_PARTY_NOTICES.md', 'eng/Get-Version.ps1', 'eng/Version.props', 'src/SoulsTracker.Desktop/packages.lock.json')) {
+    foreach ($relative in @('scripts/Export-ThirdPartyNotices.ps1', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/THIRD_PARTY_NOTICES.md', 'eng/Get-Version.ps1', 'eng/Version.props', 'src/SoulsTracker.Desktop/packages.lock.json', 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')) {
         $destination = Join-Path $Fixture $relative
         $null = New-Item -ItemType Directory -Path (Split-Path $destination) -Force
         Copy-Item -LiteralPath (Join-Path $root $relative) -Destination $destination
@@ -86,7 +86,7 @@ if ($DefineFixturesOnly) { return }
 if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
     $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-release-content-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
+        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'project-runtime-drift', 'floating-runtime', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
             $fixture = Join-Path $fixtureRoot $case
             $payload = Join-Path $fixture 'payload'
             New-DistributionFixture $fixture $payload
@@ -164,7 +164,9 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                     $expected = 'inventory drift'
                 }
                 'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
-                'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack is missing' }
+                'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack differs from the Desktop project pin' }
+                'project-runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>', '<RuntimeFrameworkVersion>10.0.11</RuntimeFrameworkVersion>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'version mismatch'; $diagnostics = @('runtimepack.Microsoft.NETCore.App.Runtime.win-x64/10.0.9', 'Microsoft.NETCore.App.Runtime.win-x64/10.0.11') }
+                'floating-runtime' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>', '<TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'must pin one exact runtime version' }
                 'missing-runtime' { Remove-Item (Join-Path $payload 'SourceGear.sqlite3.txt'); $expected = 'required runtime/native/resource asset is missing' }
                 'missing-satellite' { Remove-Item (Join-Path $payload 'fr/Example.resources.dll'); $expected = 'required runtime/native/resource asset is missing' }
                 'symbol' { Set-Content (Join-Path $payload 'synthetic.pdb') 'synthetic symbol'; $expected = 'prohibited file' }
