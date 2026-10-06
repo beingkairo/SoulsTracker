@@ -63,10 +63,24 @@ public sealed class AppearanceFocusReturnTests
                 var toggle = (CheckBox)window.FindName("CheckForUpdatesOnStartupCheckBox");
                 Assert.True(toggle.IsKeyboardFocused);
                 repository.FailSave = true;
+                repository.SaveRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                Task saved = UpdatePreferenceFeedbackTests.ObservePreferenceSaveCompletion(vm);
                 toggle.SetCurrentValue(CheckBox.IsCheckedProperty, true);
                 toggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));
+                try
+                {
+                    await repository.SaveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                    await Idle();
+                    Assert.True(toggle.IsChecked);
+                    Assert.False(repository.State.CheckForUpdatesOnStartup);
+                    Assert.True(toggle.IsKeyboardFocused);
+                }
+                finally { repository.SaveRelease.TrySetResult(); }
+                await saved.WaitAsync(TimeSpan.FromSeconds(2));
                 await Idle();
                 Assert.False(toggle.IsChecked);
+                Assert.False(repository.State.CheckForUpdatesOnStartup);
+                Assert.True(toggle.IsKeyboardFocused);
                 Assert.Contains("could not be saved", vm.UpdatePreferenceStatus, StringComparison.Ordinal);
                 Record("failed-save-first-idle");
             }

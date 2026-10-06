@@ -452,12 +452,15 @@ public sealed class UpdateSessionTests
     {
         public PersistentTrackerState State { get; set; } = PersistentTrackerState.Default;
         public bool FailSave { get; set; }
+        public TaskCompletionSource? SaveRelease { get; set; }
+        public TaskCompletionSource SaveStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(TrackerStateLoadResult.Loaded(State));
-        public Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
+        public async Task SaveAsync(PersistentTrackerState state, CancellationToken cancellationToken = default)
         {
+            SaveStarted.TrySetResult();
+            if (SaveRelease is not null) await SaveRelease.Task.WaitAsync(cancellationToken);
             if (FailSave) throw new IOException("Synthetic save failure");
             State = state;
-            return Task.CompletedTask;
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
