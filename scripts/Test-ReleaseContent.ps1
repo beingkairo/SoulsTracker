@@ -86,20 +86,51 @@ if ($DefineFixturesOnly) { return }
 if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
     $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-release-content-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
+        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'unsafe-key', 'lock-drift', 'runtime-drift', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
             $fixture = Join-Path $fixtureRoot $case
             $payload = Join-Path $fixture 'payload'
             New-DistributionFixture $fixture $payload
             Set-Content (Join-Path $payload 'SoulsTracker.Desktop.exe') 'synthetic executable; never launched'
             $export = Join-Path $fixture 'scripts/Export-ThirdPartyNotices.ps1'
             $expected = ''
+            $diagnostics = @()
             switch ($case) {
                 'missing-license' { Remove-Item (Join-Path $fixture 'LICENSE'); $expected = 'Required distribution input is missing' }
                 'missing-notices' { Remove-Item (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'Required distribution input is missing' }
                 'missing-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', '<!-- absent -->') | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text is missing' }
                 'changed-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', "<!-- BEGIN sqlitepcl-notice -->`nchanged") | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text has changed' }
                 'changed-upstream-notice' { Add-Content (Join-Path $fixture 'cache/microsoft.web.webview2/1.0.4191.47/NOTICE.txt') 'changed'; $expected = 'does not match the restored upstream package' }
-                'drift' { (Get-Content -Raw (Join-Path $payload 'SoulsTracker.Desktop.deps.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $payload 'SoulsTracker.Desktop.deps.json'); $expected = 'inventory drift' }
+                { $_ -in @('drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'unsafe-key') } {
+                    $depsPath = Join-Path $payload 'SoulsTracker.Desktop.deps.json'
+                    $fixtureDeps = Get-Content -Raw $depsPath | ConvertFrom-Json -AsHashtable
+                    $fixtureTarget = $fixtureDeps.targets['.NETCoreApp,Version=v10.0/win-x64']
+                    switch ($case) {
+                        'drift' {
+                            $key = 'Microsoft.Data.Sqlite.Core/10.0.10'
+                            $fixtureDeps.libraries['Microsoft.Data.Sqlite.Core/99.0.0'] = $fixtureDeps.libraries[$key]
+                            $fixtureTarget['Microsoft.Data.Sqlite.Core/99.0.0'] = $fixtureTarget[$key]
+                            $fixtureDeps.libraries.Remove($key); $fixtureTarget.Remove($key)
+                            $diagnostics = @('version mismatch', 'Microsoft.Data.Sqlite.Core/99.0.0', 'Microsoft.Data.Sqlite.Core/10.0.10')
+                        }
+                        'target-extra' { $fixtureTarget['Extra.Package/1.0.0'] = @{}; $diagnostics = @('target/libraries', 'unexpected [Extra.Package/1.0.0]', 'missing []') }
+                        'target-missing' { $fixtureTarget.Remove('SourceGear.sqlite3/3.50.4.5'); $diagnostics = @('target/libraries', 'missing [SourceGear.sqlite3/3.50.4.5]') }
+                        'dependency-extra' { $fixtureDeps.libraries['Extra.Package/1.0.0'] = @{ type = 'package' }; $fixtureTarget['Extra.Package/1.0.0'] = @{}; $diagnostics = @('unexpected dependency', 'Extra.Package/1.0.0') }
+                        'dependency-missing' { $fixtureDeps.libraries.Remove('SourceGear.sqlite3/3.50.4.5'); $fixtureTarget.Remove('SourceGear.sqlite3/3.50.4.5'); $diagnostics = @('dependencies', 'missing [SourceGear.sqlite3/3.50.4.5]') }
+                        'project-missing' {
+                            $version = & (Join-Path $root 'eng/Get-Version.ps1')
+                            $projectKey = "SoulsTracker.Overlay/$version"
+                            $fixtureDeps.libraries.Remove($projectKey); $fixtureTarget.Remove($projectKey)
+                            $diagnostics = @('projects', "missing [$projectKey]")
+                        }
+                        'unsafe-key' {
+                            $fixtureDeps.libraries['C:\Users\Synthetic\private/1.0.0'] = @{ type = 'package' }
+                            $fixtureTarget['C:\Users\Synthetic\private/1.0.0'] = @{}
+                            $diagnostics = @('unexpected dependency', '[invalid inventory key]')
+                        }
+                    }
+                    $fixtureDeps | ConvertTo-Json -Depth 30 | Set-Content $depsPath
+                    $expected = 'inventory drift'
+                }
                 'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
                 'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack is missing' }
                 'missing-runtime' { Remove-Item (Join-Path $payload 'SourceGear.sqlite3.txt'); $expected = 'required runtime/native/resource asset is missing' }
@@ -162,6 +193,10 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
             try { & $export -PayloadPath $payload | Out-Null } catch { $failure = $_.Exception.Message }
             if ($expected) {
                 Assert-Content ($null -ne $failure -and $failure.Contains($expected)) "Content case $case did not reject with the expected reason."
+                foreach ($record in $diagnostics) {
+                    Assert-Content ($failure.Contains($record)) "Content case $case omitted inventory diagnostic $record."
+                }
+                if ($case -eq 'unsafe-key') { Assert-Content (-not $failure.Contains('C:\Users\Synthetic')) 'Inventory diagnostics exposed a local path.' }
                 Assert-Content (-not (Test-Path (Join-Path $payload 'LICENSE'))) 'Rejected content was staged with a product license.'
             } else {
                 Assert-Content ($null -eq $failure) "Valid synthetic payload failed: $failure"

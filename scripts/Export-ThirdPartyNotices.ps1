@@ -12,6 +12,20 @@ function Assert-Distribution([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+function Format-InventoryKey([string]$Key) {
+    # deps.json is a build input, but a malformed key must not print a local path.
+    if ($Key -cmatch '^[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+$') { return $Key }
+    return '[invalid inventory key]'
+}
+
+function Assert-InventoryKeys([object[]]$Actual, [object[]]$Expected, [string]$Category) {
+    $unexpected = @($Actual | Where-Object { $_ -cnotin $Expected } | Sort-Object -Unique | ForEach-Object { Format-InventoryKey $_ })
+    $missing = @($Expected | Where-Object { $_ -cnotin $Actual } | Sort-Object -Unique | ForEach-Object { Format-InventoryKey $_ })
+    if ($unexpected.Count -or $missing.Count) {
+        throw "Unsupported distribution inventory drift ($Category): unexpected [$($unexpected -join ', ')]; missing [$($missing -join ', ')]."
+    }
+}
+
 function Read-RequiredText([string]$Path) {
     Assert-Distribution (Test-Path -LiteralPath $Path -PathType Leaf) 'Required distribution input is missing.'
     $text = [IO.File]::ReadAllText($Path)
@@ -91,9 +105,8 @@ $seen = @{}
 $projectCount = 0
 Assert-Distribution ($deps.runtimeTarget.name -ceq '.NETCoreApp,Version=v10.0/win-x64') 'Unsupported Desktop runtime target.'
 $target = $deps.targets[$deps.runtimeTarget.name]
-Assert-Distribution ($null -ne $target -and $target.Count -eq $deps.libraries.Count) 'Unsupported distribution inventory drift.'
+Assert-InventoryKeys @($target.Keys) @($deps.libraries.Keys) 'target/libraries'
 foreach ($key in $deps.libraries.Keys) {
-    Assert-Distribution ($target.Contains($key)) 'Unsupported distribution inventory drift.'
     $name, $resolved = $key -split '/', 2
     $type = $deps.libraries[$key].type
     if ($type -eq 'project') {
@@ -106,7 +119,15 @@ foreach ($key in $deps.libraries.Keys) {
         continue
     }
     if ($type -eq 'runtimepack') { $name = $name -creplace '^runtimepack\.', '' }
-    Assert-Distribution ($type -in @('package', 'runtimepack') -and $expected.ContainsKey($name) -and $resolved -ceq $expected[$name] -and -not $seen.ContainsKey($name)) 'Unsupported distribution inventory drift.'
+    if ($type -notin @('package', 'runtimepack') -or -not $expected.ContainsKey($name)) {
+        throw "Unsupported distribution inventory drift (unexpected dependency): unexpected [$(Format-InventoryKey $key)]; missing []."
+    }
+    if ($resolved -cne $expected[$name]) {
+        throw "Unsupported distribution inventory drift (version mismatch): $(Format-InventoryKey $key); expected $(Format-InventoryKey "$name/$($expected[$name])")."
+    }
+    if ($seen.ContainsKey($name)) {
+        throw "Unsupported distribution inventory drift (duplicate dependency): $(Format-InventoryKey $key)."
+    }
     $seen[$name] = $resolved
     Assert-Distribution ($reviewed.Contains("| $name | $resolved |")) 'Reviewed distribution inventory is missing or stale.'
     if ($type -eq 'package') {
@@ -121,7 +142,12 @@ foreach ($key in $deps.libraries.Keys) {
         Assert-Distribution ($downloads.Count -gt 0) 'Distribution runtime pack is missing from restored inputs.'
     }
 }
-Assert-Distribution ($seen.Count -eq $expected.Count -and $projectCount -eq $products.Count) 'Unsupported distribution inventory drift.'
+Assert-InventoryKeys @($seen.Keys | ForEach-Object { "$_/$($seen[$_])" }) @($expected.Keys | ForEach-Object { "$_/$($expected[$_])" }) 'dependencies'
+if ($projectCount -ne $products.Count) {
+    $actualProjects = @($deps.libraries.Keys | Where-Object { $deps.libraries[$_].type -eq 'project' })
+    $expectedProjects = @($products | ForEach-Object { "$_/$version" })
+    Assert-InventoryKeys $actualProjects $expectedProjects 'projects'
+}
 $inventoryRows = [regex]::Matches($reviewed, '(?m)^\| ([^|]+) \| ([0-9][^|]*) \|')
 Assert-Distribution ($inventoryRows.Count -eq $expected.Count) 'Reviewed distribution inventory contains unsupported entries.'
 
