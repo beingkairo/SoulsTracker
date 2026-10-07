@@ -84,6 +84,10 @@ public sealed class HostedToggleInteractionTests
                 { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
                 check.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
                 { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                // Routed pointer events leave WPF's capture behind when the OS
+                // button was never pressed. Release it before the Space path.
+                if (Mouse.Captured == check) Mouse.Capture(null);
+                Assert.Null(Mouse.Captured);
                 Hover(null);
                 // Synthetic routed pointer events cannot change the OS button state;
                 // dispatch WPF's click event for the pointer-release activation.
