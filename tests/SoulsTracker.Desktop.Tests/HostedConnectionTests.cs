@@ -58,13 +58,13 @@ public sealed class HostedConnectionTests
                 Assert.Equal(explanation, AutomationProperties.GetHelpText((Button)window.FindName("OverlayHelpButton")));
                 Assert.DoesNotContain(explanation, text);
                 Assert.DoesNotContain(text, value => value.Contains("browser source", StringComparison.OrdinalIgnoreCase));
-                Assert.DoesNotContain(text, value => value.Contains("publication", StringComparison.OrdinalIgnoreCase));
+                Assert.Contains(text, value => value.Contains("Control hosted publication in Settings", StringComparison.Ordinal));
                 Assert.Null(window.FindName("SetUpHostedOverlayButton"));
                 Assert.Null(window.FindName("HostedConsentCheckBox"));
                 Assert.Null(window.FindName("HostedHostTextBlock"));
                 var panel = Tree(window).OfType<Border>().Single(x => AutomationProperties.GetName(x) == "Overlay connection panel");
                 var panelContent = Assert.IsType<StackPanel>(panel.Child);
-                Assert.Equal(2, panelContent.Children.OfType<FrameworkElement>().Count(x => x.IsVisible));
+                Assert.Equal(3, panelContent.Children.OfType<FrameworkElement>().Count(x => x.IsVisible));
                 var url = Tree(window).OfType<TextBox>().Single(x => AutomationProperties.GetName(x) == "Overlay URL");
                 Assert.True(url.IsReadOnly && url.Focusable);
                 Assert.Equal(Configuration().BuildReadUrl(), url.Text);

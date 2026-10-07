@@ -84,14 +84,27 @@ public partial class App : System.Windows.Application, IDisposable
     {
         DesktopDataRootSelection stateSelection = dataRootSelection ?? throw new InvalidOperationException("The desktop data root was not initialized.");
         var protector = new CurrentUserDpapiSecretProtector();
+        var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
+        var preference = new HostedOverlayPreferenceStore(stateSelection.RootPath);
+        var pairing = new HostedPublisherConfigurationStore(Path.Combine(stateSelection.RootPath, "hosted-pairing.private"),
+            protector, HostedProductionOrigins.Approved);
+        bool hostedEnabled;
+        try
+        {
+            hostedEnabled = await preference.ResolveAsync(async ct =>
+            {
+                try { return await pairing.LoadAsync(ct) is not null; }
+                catch { return false; }
+            }, startupCancellation.Token);
+        }
+        catch { hostedEnabled = false; /* Local tracking must not depend on preference storage. */ }
         hostedConnection = new HostedOverlayConnection(Dispatcher,
-            new HostedPublisherConfigurationStore(Path.Combine(stateSelection.RootPath, "hosted-pairing.private"),
-                protector, HostedProductionOrigins.Approved),
+            pairing,
             pendingStore: new HostedProvisioningStateStore(Path.Combine(stateSelection.RootPath, "overlay-setup.private"),
                 protector, HostedProductionOrigins.Approved),
-            provisioningClient: new HostedOverlayProvisioningClient(HostedProductionOrigins.Approved.Single()));
+            preferenceStore: preference, initiallyEnabled: hostedEnabled,
+            createProvisioningClient: () => new HostedOverlayProvisioningClient(HostedProductionOrigins.Approved.Single()));
         textExportPublisher = new TextExportStatePublisher();
-        var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
         coordinator = new SerializedTrackerCoordinator(repository,
             new DesktopStateChangePublisher(Dispatcher, runtimePublication,
                 new CompositeTrackerStateChangePublisher(hostedConnection, textExportPublisher)),

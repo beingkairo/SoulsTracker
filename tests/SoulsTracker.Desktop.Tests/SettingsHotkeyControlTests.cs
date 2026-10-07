@@ -277,8 +277,9 @@ public sealed class SettingsHotkeyControlTests
                 Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, ((TextBox)window.FindName("DecrementHotkeyTextBox")).IsEnabled);
                 Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, ((Button)window.FindName("ApplyHotkeysButton")).IsEnabled);
                 var panels = ((StackPanel)window.FindName("SettingsContentStack")).Children.OfType<Border>().ToArray();
-                Assert.Equal("Update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
-                Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
+                Assert.Equal("Hosted Overlay settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
+                Assert.Equal("Update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
+                Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[2]));
                 RecordSettings(window, choice.GameId.Value);
                 help.BringIntoView(); await Idle();
                 var heading = Assert.IsType<HeaderedContentControl>(help.Parent);
@@ -310,7 +311,7 @@ public sealed class SettingsHotkeyControlTests
             Assert.False(tooltip.IsOpen);
             var content = (ScrollViewer)window.FindName("SettingsContentScrollViewer");
             Assert.True(content.Focus()); await Idle();
-            for (int i = 0; i < 8 && !help.IsKeyboardFocused; i++)
+            for (int i = 0; i < 12 && !help.IsKeyboardFocused; i++)
             {
                 Assert.IsAssignableFrom<UIElement>(Keyboard.FocusedElement).MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
                 await Idle();

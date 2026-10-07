@@ -271,6 +271,31 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
         }
     }
 
+    /// <summary>Stop immediately without the normal shutdown flush when hosted output is disabled.</summary>
+    public ValueTask CancelAsync()
+    {
+        lock (gate)
+        {
+            if (disposal is null)
+            {
+                closing = true;
+                stop.Cancel();
+                disposal = CancelWorkerAsync();
+            }
+            return new(disposal);
+        }
+    }
+
+    private async Task CancelWorkerAsync()
+    {
+        await worker.ConfigureAwait(false);
+        client.Dispose();
+        stop.Dispose();
+        wake.Dispose();
+        lock (gate) status = HostedPublisherStatus.Stopped;
+        NotifyStatus();
+    }
+
     private async Task FinishAsync()
     {
         using var flush = new CancellationTokenSource();

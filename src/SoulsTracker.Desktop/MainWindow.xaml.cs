@@ -1050,6 +1050,15 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.RetryAsync();
     }
+    private async void HostedOverlayEnabled_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection } &&
+            sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            await connection.SetEnabledAsync(checkBox.IsChecked == true);
+            checkBox.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, connection.IsEnabled);
+        }
+    }
 
     private static void CopyOverlayUrl(System.Windows.Controls.Button? button, string? value)
     {

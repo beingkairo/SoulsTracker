@@ -29,6 +29,6 @@ A simple death counter for supported games.
 1. Install and open SoulsTracker.
 2. Select your game and choose a save or character if prompted.
 3. Start playing.
-4. If you're streaming, copy your URL from the Overlay tab.
+4. If you're streaming, enable Hosted Overlay in Settings, then copy your URL from the Overlay tab. New installations start with hosted publication off.
 
 See the [getting-started guide](docs/RELEASE-GETTING-STARTED.md) for additional setup.
