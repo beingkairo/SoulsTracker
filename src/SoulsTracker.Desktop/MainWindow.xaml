@@ -787,7 +787,7 @@
                             <TextBlock Text="HOSTED OVERLAY" FontWeight="Bold" />
                             <CheckBox x:Name="HostedOverlayEnabledCheckBox" Margin="0,8,0,0" Content="Enable Hosted Overlay" IsChecked="{Binding HostedOverlay.IsEnabled, Mode=OneWay}" IsEnabled="{Binding HostedOverlay.CanChangeEnabled, FallbackValue=False}" Click="HostedOverlayEnabled_Click" AutomationProperties.Name="Enable Hosted Overlay" AutomationProperties.HelpText="When on, SoulsTracker connects to the hosted service and sends your accepted death total, title and appearance. Game and save paths stay local." />
                             <TextBlock Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap" Text="Off stops new hosted requests and keeps your pairing. It does not delete previously published content or revoke a shared URL. Local tracking, TXT export and Preview still work." />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" Text="{Binding HostedOverlay.StatusText}" TextWrapping="Wrap" AutomationProperties.Name="Hosted Overlay status" AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock x:Name="HostedOverlayStatusTextBlock" Style="{StaticResource MutedText}" Margin="0,6,0,0" Text="{Binding HostedOverlay.StatusText}" TextWrapping="Wrap" AutomationProperties.Name="Hosted Overlay status" AutomationProperties.LiveSetting="Polite" />
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Update check settings">

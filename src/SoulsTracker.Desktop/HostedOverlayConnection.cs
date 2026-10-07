@@ -195,7 +195,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
 
     private async Task RecoverOrProvisionAsync(bool allowNewRequest)
     {
-        canRetry = false; statusText = string.Empty; Changed();
+        canRetry = false; statusText = "Preparing overlay URL..."; Changed();
         if (pending is { IsPreReleaseVersion1: true } old)
         {
             if (old.Phase == HostedProvisioningPhase.Acknowledged) { await PromoteAsync(old); return; }
@@ -254,6 +254,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         catch (OperationCanceledException) when (closing || setupStopped) { throw; }
         catch { }
         canRetry = false;
+        statusText = string.Empty;
         if (sender is not null) Sender_StatusChanged(sender, EventArgs.Empty);
     }
 
