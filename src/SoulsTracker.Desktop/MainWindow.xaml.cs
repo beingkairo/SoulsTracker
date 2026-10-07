@@ -246,7 +246,7 @@ public partial class MainWindow : Window
         try
         {
             bool docked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
-            if (docked) NormalPreviewSlot.Height = 180 + LocalAppearancePreview.RowDefinitions[1].ActualHeight;
+            if (docked) NormalPreviewSlot.Height = 180;
             // Compare in normal-page coordinates, excluding the offset used to
             // anchor the content when the compact card insets the presenter.
             double bottom = NormalPreviewSection.TranslatePoint(new System.Windows.Point(0, NormalPreviewSection.ActualHeight), content).Y;
@@ -256,7 +256,7 @@ public partial class MainWindow : Window
             DockedPreviewCard.Margin = new Thickness(24, 0, 24 + Math.Max(0, barWidth), 0);
             if (docked)
             {
-                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? 72 : 96);
                 scroll.UpdateLayout();
                 SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54));
             }
@@ -270,7 +270,7 @@ public partial class MainWindow : Window
             {
                 NormalPreviewSlot.Height = LocalAppearancePreview.ActualHeight;
                 NormalPreviewSlot.Children.Remove(LocalAppearancePreview);
-                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? 72 : 96);
                 DockedPreviewSlot.Children.Add(LocalAppearancePreview);
                 DockedPreviewCard.Visibility = Visibility.Visible;
                 scroll.UpdateLayout();

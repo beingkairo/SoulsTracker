@@ -22,7 +22,6 @@ public sealed class AppearancePreview : Grid, IDisposable
     private WebView2? browser;
     private Task? startTask;
     private readonly TextBlock unavailable = new() { Text = "Local preview is loading.", TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock caption = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap };
     public AppearancePreviewModel? Model { get; private set; }
     public bool IsDisposed { get; private set; }
     public bool IsReady { get; private set; }
@@ -32,8 +31,6 @@ public sealed class AppearancePreview : Grid, IDisposable
     public AppearancePreview()
     {
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(180) });
-        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        SetRow(caption, 1); Children.Add(caption);
         Children.Add(unavailable);
         DataContextChanged += (_, _) => BindSource();
     }
@@ -158,8 +155,6 @@ public sealed class AppearancePreview : Grid, IDisposable
     {
         if (source is null || Model is null) return;
         Model.Update(source.DraftTitleIconModeChoice.Value, source.TotalDeathsText);
-        caption.Text = Model.IsRepresentative ? "Local preview uses a sample count of 123." : string.Empty;
-        caption.Visibility = Model.IsRepresentative ? Visibility.Visible : Visibility.Collapsed;
         SendDraft();
     }
     // HwndHost is not clipped by WPF's ScrollViewer. Limit this preview's own

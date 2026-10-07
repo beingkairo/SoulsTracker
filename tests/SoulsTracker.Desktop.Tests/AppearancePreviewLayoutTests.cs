@@ -21,7 +21,7 @@ public sealed class AppearancePreviewLayoutTests
     private static readonly bool[] PreviewModes = [false, true];
 
     [Fact]
-    public Task CompactSampleCaptionLeavesAnEditableViewport() => HostedConnectionTests.OnDispatcher(async () =>
+    public Task CompactSamplePreviewLeavesAnEditableViewportWithoutDisclosure() => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.Ds3);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
@@ -35,7 +35,7 @@ public sealed class AppearancePreviewLayoutTests
             Assert.Equal("123", preview.Model.Value);
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
             scroll.ScrollToEnd(); await Idle();
-            Assert.Contains(Tree(preview).OfType<TextBlock>(), x => x.Text == "Local preview uses a sample count of 123." && x.IsVisible);
+            Assert.DoesNotContain(Tree(preview).OfType<TextBlock>(), x => x.Text.Contains("sample count", StringComparison.OrdinalIgnoreCase));
             Assert.True(Tree(scroll).OfType<ScrollContentPresenter>().First().ActualHeight >= 32);
             var dock = preview.Parent;
             vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new(GameId.Ds3, 0, DateTimeOffset.UtcNow, EffectiveDeathTotalResult.SourceIdentityFor(repository.State))));
@@ -44,10 +44,12 @@ public sealed class AppearancePreviewLayoutTests
             Assert.Equal("0", preview.Model.Value);
             Assert.Same(dock, preview.Parent);
             var slot = (FrameworkElement)window.FindName("NormalPreviewSlot");
-            Assert.Equal(180 + preview.RowDefinitions[1].ActualHeight, slot.ActualHeight, 1);
+            Assert.Equal(180, slot.ActualHeight, 1);
             vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForActiveCharacter(GameId.Ds3)); await Idle();
             Assert.True(preview.Model.IsRepresentative);
-            Assert.Equal(180 + preview.RowDefinitions[1].ActualHeight, slot.ActualHeight, 1);
+            Assert.Equal("123", preview.Model.Value);
+            Assert.Equal(180, slot.ActualHeight, 1);
+            Assert.DoesNotContain(Tree(preview).OfType<TextBlock>(), x => x.Text.Contains("sample count", StringComparison.OrdinalIgnoreCase));
             Assert.Empty(repository.Saves);
         }
         finally { window.Close(); }

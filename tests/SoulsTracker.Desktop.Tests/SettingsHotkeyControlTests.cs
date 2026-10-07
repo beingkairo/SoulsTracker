@@ -277,9 +277,9 @@ public sealed class SettingsHotkeyControlTests
                 Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, ((TextBox)window.FindName("DecrementHotkeyTextBox")).IsEnabled);
                 Assert.Equal(vm.IsGlobalHotkeyConfigurationAvailable, ((Button)window.FindName("ApplyHotkeysButton")).IsEnabled);
                 var panels = ((StackPanel)window.FindName("SettingsContentStack")).Children.OfType<Border>().ToArray();
-                Assert.Equal("Hosted Overlay settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
-                Assert.Equal("Update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
-                Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[2]));
+                Assert.Equal("Update check settings", System.Windows.Automation.AutomationProperties.GetName(panels[0]));
+                Assert.Equal("Global hotkeys settings", System.Windows.Automation.AutomationProperties.GetName(panels[1]));
+                Assert.DoesNotContain(DirectoryPresentationControlTests.Tree(settings).OfType<CheckBox>(), x => x.Name == "HostedOverlayEnabledCheckBox");
                 RecordSettings(window, choice.GameId.Value);
                 help.BringIntoView(); await Idle();
                 var heading = Assert.IsType<HeaderedContentControl>(help.Parent);

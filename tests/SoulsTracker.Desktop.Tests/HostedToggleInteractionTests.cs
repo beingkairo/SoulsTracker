@@ -17,7 +17,7 @@ using static SoulsTracker.Desktop.Tests.SaveDirectoryWorkflowTests;
 
 namespace SoulsTracker.Desktop.Tests;
 
-// The real Settings XAML and click handler are composed with local-only transport.
+// The real Overlay XAML and click handler are composed with local-only transport.
 // No Desktop App startup, system cursor, production HTTP handler, or user data root is involved.
 [Collection("Shell presentation")]
 public sealed class HostedToggleInteractionTests
@@ -62,18 +62,16 @@ public sealed class HostedToggleInteractionTests
             try
             {
                 window.Show();
-                ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true;
+                ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true;
                 await Idle();
                 var check = (CheckBox)window.FindName("HostedOverlayEnabledCheckBox");
-                var status = (TextBlock)window.FindName("HostedOverlayStatusTextBlock");
-                Assert.Equal("Enable Hosted Overlay", new System.Windows.Automation.Peers.CheckBoxAutomationPeer(check).GetName());
-                var explanation = (TextBlock)((StackPanel)check.Parent).Children[2];
-                Assert.Equal("Off stops new hosted requests and keeps your pairing. It does not delete previously published content or revoke a shared URL. Local tracking, TXT export and Preview still work.", explanation.Text);
-                Assert.Equal(TextWrapping.Wrap, explanation.TextWrapping);
-                Assert.True(explanation.ActualHeight > 0);
-                AssertContained(explanation, window);
+                Assert.Equal("Enable hosted Overlay", new System.Windows.Automation.Peers.CheckBoxAutomationPeer(check).GetName());
+                Assert.Equal("Enable hosted Overlay", check.Content);
+                Assert.Null(window.FindName("HostedOverlayStatusTextBlock"));
+                Assert.False(((StackPanel)window.FindName("SettingsContentStack")).IsAncestorOf(check));
+                Assert.True(((ScrollViewer)window.FindName("OverlayConfigurationScrollViewer")).IsAncestorOf(check));
                 Assert.False(check.IsChecked);
-                Assert.Contains("off", status.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("off", connection.StatusText, StringComparison.OrdinalIgnoreCase);
                 Assert.Equal(0, clients); Assert.Equal(0, senders); Assert.Equal(0, requests);
                 AssertContained(check, window);
                 SetInputModality(Keyboard.PrimaryDevice);
@@ -92,26 +90,24 @@ public sealed class HostedToggleInteractionTests
                 check.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, true);
                 check.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 await WaitUntil(() => connection.IsEnabled);
-                await WaitUntil(() => status.Text.Contains("offline", StringComparison.OrdinalIgnoreCase) ||
-                    status.Text.Contains("could not connect", StringComparison.OrdinalIgnoreCase));
+                await WaitUntil(() => connection.StatusText.Contains("offline", StringComparison.OrdinalIgnoreCase) ||
+                    connection.StatusText.Contains("could not connect", StringComparison.OrdinalIgnoreCase));
                 Assert.True(check.IsChecked); AssertFocus(check);
                 Assert.True(await preference.ResolveAsync(_ => Task.FromResult(false)));
                 Assert.Equal(1, senders); Assert.Equal(1, clients);
                 Assert.True(requests > 0);
-                AssertContained(status, window);
 
                 SetInputModality(Keyboard.PrimaryDevice);
                 SendSpace(check, window); await WaitUntil(() => !connection.IsEnabled);
                 await WaitUntil(() => connection.CanChangeEnabled);
                 await Idle();
                 Assert.False(check.IsChecked); AssertFocus(check);
-                Assert.Contains("off", status.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("off", connection.StatusText, StringComparison.OrdinalIgnoreCase);
                 Assert.False(await preference.ResolveAsync(_ => Task.FromResult(true)));
                 int stoppedRequests = requests;
                 await connection.EnsureProvisionedAsync(); await connection.RetryAsync(); await Idle();
                 Assert.Equal(stoppedRequests, requests);
                 Assert.Equal(1, senders); Assert.Equal(1, clients);
-                AssertContained(status, window);
             }
             finally { Hover(null); window.Close(); }
         }
@@ -119,7 +115,7 @@ public sealed class HostedToggleInteractionTests
     });
 
     [Fact]
-    public Task PendingErrorAndDisableRemainLocalWithRealSettingsClick() => OnDispatcher(async () =>
+    public Task PendingErrorAndDisableRemainLocalWithRealOverlayClick() => OnDispatcher(async () =>
     {
         string root = Root();
         try
@@ -150,9 +146,8 @@ public sealed class HostedToggleInteractionTests
                 var window = new MainWindow { DataContext = vm, Width = 560, Height = 400, ShowInTaskbar = false };
                 try
                 {
-                    window.Show(); ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
+                    window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
                     var check = (CheckBox)window.FindName("HostedOverlayEnabledCheckBox");
-                    var status = (TextBlock)window.FindName("HostedOverlayStatusTextBlock");
                     Assert.Equal(0, clients); Assert.Equal(0, requests);
                     SetInputModality(Keyboard.PrimaryDevice);
                     Assert.True(check.Focus());
@@ -160,18 +155,14 @@ public sealed class HostedToggleInteractionTests
                     await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); await Idle();
                     Assert.True(check.IsChecked);
                     Assert.True(connection.IsPreparing);
-                    Assert.Contains("Preparing", status.Text);
-                    ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+                    Assert.Contains("Preparing", connection.StatusText);
                     Assert.Contains("Preparing", FindUrl(window).Text);
-                    ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
                     SetInputModality(Keyboard.PrimaryDevice); Assert.True(check.Focus()); await Idle();
                     Assert.True(await preference.ResolveAsync(_ => Task.FromResult(false)));
                     AssertFocus(check);
                     release.SetResult();
                     await WaitUntil(() => connection.CanRetry); await Idle();
-                    Assert.Contains("could not be prepared", status.Text, StringComparison.Ordinal);
-                    Assert.True(status.IsVisible);
-                    AssertContained(status, window);
+                    Assert.Contains("could not be prepared", connection.StatusText, StringComparison.Ordinal);
                     Assert.Equal(3, requests); Assert.Equal(0, senders); Assert.Equal(1, clients);
                     Assert.True(check.IsEnabled);
                     AssertFocus(check);
@@ -179,7 +170,7 @@ public sealed class HostedToggleInteractionTests
                     await WaitUntil(() => !connection.IsEnabled);
                     await Idle();
                     Assert.False(check.IsChecked); AssertFocus(check);
-                    Assert.Contains("off", status.Text, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("off", connection.StatusText, StringComparison.OrdinalIgnoreCase);
                     Assert.False(await preference.ResolveAsync(_ => Task.FromResult(true)));
                     await connection.RetryAsync(); await Idle(); Assert.Equal(3, requests);
                 }
@@ -223,7 +214,7 @@ public sealed class HostedToggleInteractionTests
     private static void AssertContained(FrameworkElement element, Window window)
     {
         element.BringIntoView(); window.UpdateLayout();
-        var scroll = (ScrollViewer)window.FindName("SettingsContentScrollViewer");
+        var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
         var viewport = (FrameworkElement)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
         var bounds = element.TransformToVisual(viewport).TransformBounds(new Rect(element.RenderSize));
         Assert.True(new Rect(viewport.RenderSize).Contains(bounds), $"{element.Name}: {bounds} / {viewport.RenderSize}");

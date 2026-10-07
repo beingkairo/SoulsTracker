@@ -682,20 +682,13 @@
                     <StackPanel>
                         <Border Style="{StaticResource Panel}" AutomationProperties.Name="Overlay connection panel">
                             <StackPanel>
-                                <HeaderedContentControl x:Name="OverlaySectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="OVERLAY URL">
-                                    <Button x:Name="OverlayHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Overlay help" AutomationProperties.HelpText="Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to.">
-                                        <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
-                                    </Button>
-                                </HeaderedContentControl>
+                                <HeaderedContentControl x:Name="OverlaySectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="OVERLAY URL" />
+                                <CheckBox x:Name="HostedOverlayEnabledCheckBox" Margin="0,8,0,8" Content="Enable hosted Overlay" IsChecked="{Binding HostedOverlay.IsEnabled, Mode=OneWay}" IsEnabled="{Binding HostedOverlay.CanChangeEnabled, FallbackValue=False}" Click="HostedOverlayEnabled_Click" AutomationProperties.Name="Enable hosted Overlay" />
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBox Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" IsReadOnly="True" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
                                     <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
                                 </Grid>
-                                <TextBlock Margin="0,8,0,0" Text="{Binding HostedOverlay.StatusText}" AutomationProperties.LiveSetting="Polite">
-                                    <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
-                                </TextBlock>
-                                <TextBlock Style="{StaticResource MutedText}" Margin="0,6,0,0" Text="Control hosted publication in Settings. Preview and local TXT export work while it is off." TextWrapping="Wrap" />
                                 <Button Margin="0,8,0,0" HorizontalAlignment="Left" Content="Try again" IsEnabled="{Binding HostedOverlay.CanRetry}" Visibility="{Binding HostedOverlay.CanRetry, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" Click="RetryHostedOverlay_Click" AutomationProperties.Name="Try preparing overlay URL again" />
                             </StackPanel>
                         </Border>
@@ -782,14 +775,6 @@
             <TabItem x:Name="SettingsWorkspaceTab" Header="Settings" AutomationProperties.Name="Settings workspace">
                 <ScrollViewer x:Name="SettingsContentScrollViewer" Focusable="True" IsTabStop="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,24,24,16" AutomationProperties.Name="Settings workspace content">
                 <StackPanel x:Name="SettingsContentStack">
-                    <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Hosted Overlay settings">
-                        <StackPanel>
-                            <TextBlock Text="HOSTED OVERLAY" FontWeight="Bold" />
-                            <CheckBox x:Name="HostedOverlayEnabledCheckBox" Margin="0,8,0,0" Content="Enable Hosted Overlay" IsChecked="{Binding HostedOverlay.IsEnabled, Mode=OneWay}" IsEnabled="{Binding HostedOverlay.CanChangeEnabled, FallbackValue=False}" Click="HostedOverlayEnabled_Click" AutomationProperties.Name="Enable Hosted Overlay" AutomationProperties.HelpText="When on, SoulsTracker connects to the hosted service and sends your accepted death total, title and appearance. Game and save paths stay local." />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap" Text="Off stops new hosted requests and keeps your pairing. It does not delete previously published content or revoke a shared URL. Local tracking, TXT export and Preview still work." />
-                            <TextBlock x:Name="HostedOverlayStatusTextBlock" Style="{StaticResource MutedText}" Margin="0,6,0,0" Text="{Binding HostedOverlay.StatusText}" TextWrapping="Wrap" AutomationProperties.Name="Hosted Overlay status" AutomationProperties.LiveSetting="Polite" />
-                        </StackPanel>
-                    </Border>
                     <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Update check settings">
                         <StackPanel>
                             <HeaderedContentControl x:Name="UpdatesSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="UPDATES">
