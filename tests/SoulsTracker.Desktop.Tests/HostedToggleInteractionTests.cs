@@ -204,26 +204,31 @@ public sealed class HostedToggleInteractionTests
     {
         Assert.Same(check, Keyboard.FocusedElement);
         bool wasChecked = check.IsChecked == true;
+        // ButtonBase suppresses a Space release click while the real OS left
+        // button is held. Exercise its Space press activation for synthetic
+        // input, independently of the test runner's pointer state.
+        Assert.Equal(System.Windows.Controls.ClickMode.Release, check.ClickMode);
+        check.ClickMode = System.Windows.Controls.ClickMode.Press;
         var keyboard = new PressedKeyboard(); keyboard.Focus(check);
-        var down = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
-        { RoutedEvent = Keyboard.KeyDownEvent };
-        check.RaiseEvent(down);
-        var up = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
-        { RoutedEvent = Keyboard.KeyUpEvent };
-        check.RaiseEvent(up);
-        Assert.True(down.Handled && up.Handled);
-        if (check.IsChecked == wasChecked)
+        try
         {
-            // WPF suppresses a Space release click while the real OS mouse button
-            // is down. The retained capture identifies that path even if the OS
-            // button is released immediately after the routed KeyUp.
-            Assert.Same(check, Mouse.Captured);
-            Mouse.Capture(null);
-            Assert.Null(Mouse.Captured);
-            check.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, !wasChecked);
-            check.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            var down = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
+            { RoutedEvent = Keyboard.KeyDownEvent };
+            check.RaiseEvent(down);
+            Assert.True(down.Handled);
+            Assert.Equal(!wasChecked, check.IsChecked == true);
+            var up = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
+            { RoutedEvent = Keyboard.KeyUpEvent };
+            check.RaiseEvent(up);
+            Assert.True(up.Handled);
+            Assert.Equal(!wasChecked, check.IsChecked == true);
         }
-        Assert.Equal(!wasChecked, check.IsChecked == true);
+        finally
+        {
+            check.ClickMode = System.Windows.Controls.ClickMode.Release;
+            if (Mouse.Captured == check) Mouse.Capture(null);
+        }
+        Assert.Null(Mouse.Captured);
     }
     private static void AssertFocus(CheckBox check)
     {
