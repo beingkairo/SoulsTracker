@@ -102,7 +102,7 @@ public sealed class HostedToggleInteractionTests
                 Assert.True(requests > 0);
 
                 SetInputModality(Keyboard.PrimaryDevice);
-                SendSpace(check, window); await WaitUntil(() => !connection.IsEnabled);
+                await SendSpace(check, window); await WaitUntil(() => !connection.IsEnabled);
                 await WaitUntil(() => connection.CanChangeEnabled);
                 await Idle();
                 Assert.False(check.IsChecked); AssertFocus(check);
@@ -155,7 +155,7 @@ public sealed class HostedToggleInteractionTests
                     Assert.Equal(0, clients); Assert.Equal(0, requests);
                     SetInputModality(Keyboard.PrimaryDevice);
                     Assert.True(check.Focus());
-                    SendSpace(check, window);
+                    await SendSpace(check, window);
                     await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); await Idle();
                     Assert.True(check.IsChecked);
                     Assert.True(connection.IsPreparing);
@@ -170,7 +170,7 @@ public sealed class HostedToggleInteractionTests
                     Assert.Equal(3, requests); Assert.Equal(0, senders); Assert.Equal(1, clients);
                     Assert.True(check.IsEnabled);
                     AssertFocus(check);
-                    SendSpace(check, window);
+                    await SendSpace(check, window);
                     await WaitUntil(() => !connection.IsEnabled);
                     await Idle();
                     Assert.False(check.IsChecked); AssertFocus(check);
@@ -200,35 +200,42 @@ public sealed class HostedToggleInteractionTests
         .Invoke(Mouse.PrimaryDevice, [element, Environment.TickCount]);
     private static void SetInputModality(InputDevice device) =>
         typeof(InputManager).GetProperty(nameof(InputManager.MostRecentInputDevice))!.SetValue(InputManager.Current, device);
-    private static void SendSpace(CheckBox check, Window window)
+    private static async Task SendSpace(CheckBox check, Window window)
     {
         Assert.Same(check, Keyboard.FocusedElement);
         bool wasChecked = check.IsChecked == true;
-        // ButtonBase suppresses a Space release click while the real OS left
-        // button is held. Exercise its Space press activation for synthetic
-        // input, independently of the test runner's pointer state.
+        // ButtonBase only activates Space on release when the real left mouse
+        // button is up. If the runner holds it during a synthetic key release,
+        // WPF retains capture without clicking; clear capture and try the real
+        // Release-mode key path again once that button is up.
         Assert.Equal(System.Windows.Controls.ClickMode.Release, check.ClickMode);
-        check.ClickMode = System.Windows.Controls.ClickMode.Press;
         var keyboard = new PressedKeyboard(); keyboard.Focus(check);
-        try
+        for (int attempt = 0; attempt < 500; attempt++)
         {
-            var down = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
-            { RoutedEvent = Keyboard.KeyDownEvent };
-            check.RaiseEvent(down);
-            Assert.True(down.Handled);
-            Assert.Equal(!wasChecked, check.IsChecked == true);
-            var up = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
-            { RoutedEvent = Keyboard.KeyUpEvent };
-            check.RaiseEvent(up);
-            Assert.True(up.Handled);
-            Assert.Equal(!wasChecked, check.IsChecked == true);
+            await WaitUntil(() => Mouse.LeftButton == MouseButtonState.Released);
+            try
+            {
+                var down = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
+                { RoutedEvent = Keyboard.KeyDownEvent };
+                check.RaiseEvent(down);
+                Assert.True(down.Handled);
+                Assert.Equal(wasChecked, check.IsChecked == true);
+                Assert.True(check.IsPressed);
+                var up = new KeyEventArgs(keyboard, PresentationSource.FromVisual(window), Environment.TickCount, Key.Space)
+                { RoutedEvent = Keyboard.KeyUpEvent };
+                check.RaiseEvent(up);
+                Assert.True(up.Handled);
+                if (check.IsChecked != !wasChecked)
+                    Assert.Same(check, Mouse.Captured);
+            }
+            finally
+            {
+                if (Mouse.Captured == check) Mouse.Capture(null);
+            }
+            Assert.Null(Mouse.Captured);
+            if (check.IsChecked == !wasChecked) return;
         }
-        finally
-        {
-            check.ClickMode = System.Windows.Controls.ClickMode.Release;
-            if (Mouse.Captured == check) Mouse.Capture(null);
-        }
-        Assert.Null(Mouse.Captured);
+        Assert.Fail("Space did not activate the Release-mode checkbox while the mouse was released.");
     }
     private static void AssertFocus(CheckBox check)
     {
