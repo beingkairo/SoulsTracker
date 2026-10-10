@@ -111,7 +111,7 @@ public sealed class AppearancePreviewLayoutTests
             var expected = settings.TransformToAncestor(window).TransformBounds(new Rect(settings.RenderSize));
             ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
             var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
-            var bar = (ScrollBar)scroll.Template.FindName("PART_VerticalScrollBar", scroll);
+            var bar = (ScrollBar)scroll.Template.FindName("OverlayVerticalScrollBar", scroll);
             var normal = bar.TransformToAncestor(window).TransformBounds(new Rect(bar.RenderSize));
             Assert.Equal(expected, normal);
             var fields = (FrameworkElement)window.FindName("AppearanceFields");
@@ -134,6 +134,79 @@ public sealed class AppearancePreviewLayoutTests
             AppearanceGeometryTests.Capture(window, $"compact-card-{width}-{height}");
             Record($"compact-card-{width}-{height}", new { normal = normal.ToString(System.Globalization.CultureInfo.InvariantCulture), expected = expected.ToString(System.Globalization.CultureInfo.InvariantCulture), card = bounds.ToString(System.Globalization.CultureInfo.InvariantCulture), fields.ActualWidth });
             Assert.Empty(repository.Saves);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(560, 400)]
+    [InlineData(560, 760)]
+    [InlineData(1060, 760)]
+    public Task DockTransitionKeepsExtentAndPagePositionStable(int width, int height) => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        var repository = new MemoryRepository(GameId.DemonsSouls);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var vm = CreateViewModel(coordinator); await vm.InitializeAsync();
+        var window = new MainWindow { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); ((TabItem)window.FindName("OverlayWorkspaceTab")).IsSelected = true; await Idle();
+            var scroll = (ScrollViewer)window.FindName("OverlayConfigurationScrollViewer");
+            var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+            var section = (FrameworkElement)window.FindName("NormalPreviewSection");
+            var slot = (FrameworkElement)window.FindName("NormalPreviewSlot");
+            var preview = (AppearancePreview)window.FindName("LocalAppearancePreview");
+            var fields = (FrameworkElement)window.FindName("AppearanceFields");
+            var changes = new List<string>();
+            scroll.ScrollChanged += (_, e) => changes.Add($"offset={e.VerticalOffset:F2} extent={e.ExtentHeight:F2} viewport={e.ViewportHeight:F2} change={e.ExtentHeightChange:F2}");
+            double threshold = section.TranslatePoint(new Point(0, section.ActualHeight), (FrameworkElement)scroll.Content).Y;
+            scroll.ScrollToVerticalOffset(threshold - 1); await Idle();
+            var bar = (ScrollBar)scroll.Template.FindName("OverlayVerticalScrollBar", scroll);
+            var thumbChanges = new List<double>();
+            bar.ValueChanged += (_, _) => thumbChanges.Add(bar.Value);
+            double extent = scroll.ExtentHeight, viewport = scroll.ViewportHeight;
+            double thumbValue = bar.Value, thumbViewport = bar.ViewportSize, thumbMaximum = bar.Maximum;
+            double position = fields.TranslatePoint(new Point(), window).Y;
+            double before = scroll.VerticalOffset;
+            scroll.ScrollToVerticalOffset(threshold + 1); await Idle();
+            string diagnostics = $"size={width}x{height} threshold={threshold:F2} before={before:F2} after={scroll.VerticalOffset:F2} extent={extent:F2}->{scroll.ExtentHeight:F2} viewport={viewport:F2}->{scroll.ViewportHeight:F2} slot={slot.ActualHeight:F2} preview={preview.ActualHeight:F2} presenterTop={presenter.Margin.Top:F2}; " + string.Join("; ", changes);
+            Record($"dock-transition-{width}-{height}", diagnostics);
+            Assert.True(ReferenceEquals(preview.Parent, window.FindName("DockedPreviewSlot")), diagnostics);
+            Assert.True(Math.Abs(extent - scroll.ExtentHeight) < 1, diagnostics);
+            Assert.Equal(thumbViewport, bar.ViewportSize, 1);
+            Assert.Equal(thumbMaximum, bar.Maximum, 1);
+            Assert.Equal(thumbValue + 2, bar.Value, 1);
+            Assert.All(thumbChanges, value => Assert.InRange(value, thumbValue - 1, thumbValue + 3));
+            Assert.Equal(position - 2, fields.TranslatePoint(new Point(), window).Y, 1);
+            var thumb = Tree(bar).OfType<Thumb>().Single();
+            double beforeDrag = bar.Value;
+            thumb.RaiseEvent(new DragDeltaEventArgs(0, 3) { RoutedEvent = Thumb.DragDeltaEvent }); await Idle();
+            Assert.True(bar.Value > beforeDrag, "A thumb drag must advance the page without snapping back.");
+            // Thumb movement remains in page coordinates even though the
+            // editable presenter acquires an inset while the preview is pinned.
+            foreach (double target in new[] { threshold + 20, threshold + 1, threshold - 1, threshold + 1, threshold - 1 })
+            {
+                var drag = new ScrollEventArgs(ScrollEventType.ThumbTrack, target) { RoutedEvent = ScrollBar.ScrollEvent };
+                bar.RaiseEvent(drag); await Idle();
+                Assert.Equal(target, bar.Value, 1);
+                Assert.Equal(target > threshold, ReferenceEquals(preview.Parent, window.FindName("DockedPreviewSlot")));
+                Assert.Equal(thumbViewport, bar.ViewportSize, 1);
+                Assert.Equal(thumbMaximum, bar.Maximum, 1);
+            }
+            bar.RaiseEvent(new ScrollEventArgs(ScrollEventType.ThumbTrack, thumbMaximum) { RoutedEvent = ScrollBar.ScrollEvent }); await Idle();
+            Assert.Same(window.FindName("DockedPreviewSlot"), preview.Parent);
+            Assert.Equal(thumbMaximum, bar.Value, 1);
+            scroll.ScrollToHome(); await Idle();
+            Assert.Same(slot, preview.Parent);
+            Assert.Equal(0, bar.Value, 1);
+            Assert.Equal(thumbViewport, bar.ViewportSize, 1);
+            bar.Focus();
+            double pageSize = bar.LargeChange;
+            var pageDown = new KeyEventArgs(Keyboard.PrimaryDevice, (HwndSource)PresentationSource.FromVisual(window)!, 0, Key.PageDown)
+            { RoutedEvent = Keyboard.KeyDownEvent };
+            bar.RaiseEvent(pageDown); await Idle();
+            Assert.Equal(Math.Min(pageSize, bar.Maximum), bar.Value, 1);
+            Assert.Equal(scroll.VerticalOffset - presenter.Margin.Top + scroll.Padding.Top, bar.Value, 1);
         }
         finally { window.Close(); }
     });

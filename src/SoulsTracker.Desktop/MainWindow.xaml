@@ -675,7 +675,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Margin="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}"/>
-                                <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Orientation="Vertical" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}" Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                                <ScrollBar x:Name="OverlayVerticalScrollBar" Grid.Column="1" Orientation="Vertical" SmallChange="16" Scroll="OverlayVerticalScrollBar_Scroll" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" AutomationProperties.Name="Overlay configuration vertical scrollbar"/>
                             </Grid>
                         </ControlTemplate>
                     </ScrollViewer.Template>
