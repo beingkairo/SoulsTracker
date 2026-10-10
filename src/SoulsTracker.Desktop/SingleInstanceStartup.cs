@@ -4,7 +4,8 @@ using System.Threading;
 namespace SoulsTracker.Desktop;
 
 /// <summary>Owns the desktop lifecycle lease that prevents concurrent SoulsTracker processes.</summary>
-internal sealed class DesktopStartupController(IDesktopSingleInstanceLeaseFactory leaseFactory) : IDisposable
+internal sealed class DesktopStartupController(IDesktopSingleInstanceLeaseFactory leaseFactory,
+    Func<Task<bool>>? activateExisting = null) : IDisposable
 {
     private readonly IDesktopSingleInstanceLeaseFactory leaseFactory = leaseFactory ?? throw new ArgumentNullException(nameof(leaseFactory));
     private IDesktopSingleInstanceLease? lease;
@@ -31,7 +32,8 @@ internal sealed class DesktopStartupController(IDesktopSingleInstanceLeaseFactor
                 await composeAndStartAsync();
                 return DesktopStartupDecision.Started;
             case DesktopSingleInstanceLeaseStatus.AlreadyRunning:
-                return DesktopStartupDecision.AlreadyRunning;
+                return activateExisting is not null && await activateExisting()
+                    ? DesktopStartupDecision.ActivatedExisting : DesktopStartupDecision.AlreadyRunning;
             default:
                 return DesktopStartupDecision.ProtectionUnavailable;
         }
@@ -56,11 +58,13 @@ internal enum DesktopStartupStatus
     Started,
     AlreadyRunning,
     ProtectionUnavailable,
+    ActivatedExisting,
 }
 
 internal sealed record DesktopStartupDecision(DesktopStartupStatus Status, string? UserMessage)
 {
     public static DesktopStartupDecision Started { get; } = new(DesktopStartupStatus.Started, null);
+    public static DesktopStartupDecision ActivatedExisting { get; } = new(DesktopStartupStatus.ActivatedExisting, null);
 
     public static DesktopStartupDecision AlreadyRunning { get; } = new(
         DesktopStartupStatus.AlreadyRunning,

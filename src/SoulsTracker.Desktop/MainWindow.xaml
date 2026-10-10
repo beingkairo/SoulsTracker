@@ -875,7 +875,7 @@
         </TabControl>
 
         <Border Grid.Row="2" Background="#1B1F26" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,10">
-            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}">More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
+            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource MutedText}"><Hyperlink Click="ExitApplication_Click" AutomationProperties.Name="Exit SoulsTracker">Exit</Hyperlink>  |  More at <Hyperlink x:Name="BeingKairoAttributionHyperlink" NavigateUri="https://beingkairo.com/" RequestNavigate="BeingKairoAttributionHyperlink_RequestNavigate" AutomationProperties.Name="Visit beingkairo.com (opens in default browser)" ToolTip="Open beingkairo.com in your default browser">beingkairo.com</Hyperlink></TextBlock>
         </Border>
 
         <Canvas x:Name="FloatingFeedbackLayer" Grid.Row="1" Panel.ZIndex="11" IsHitTestVisible="False" ClipToBounds="True">

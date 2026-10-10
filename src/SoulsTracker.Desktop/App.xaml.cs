@@ -19,6 +19,10 @@ public partial class App : System.Windows.Application, IDisposable
     private DesktopGlobalHotkeyService? globalHotkeys;
     private bool mainWindowCloseRequested;
     private bool finalShutdownRequested;
+    private DesktopActivationPipe? activationPipe;
+    private DesktopTrayLifecycle? trayLifecycle;
+    private WindowsTrayIcon? trayIcon;
+    private bool pendingRestore;
     private TextExportStatePublisher? textExportPublisher;
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private EldenRingSaveDeathReader? eldenRingSaveReader;
@@ -35,7 +39,8 @@ public partial class App : System.Windows.Application, IDisposable
 
     public App()
     {
-        singleInstanceStartup = new DesktopStartupController(new WindowsSingleInstanceLeaseFactory());
+        singleInstanceStartup = new DesktopStartupController(new WindowsSingleInstanceLeaseFactory(),
+            () => DesktopActivationPipe.RequestRestoreAsync(DesktopActivationPipe.ProductionName, TimeSpan.FromSeconds(2)));
         shutdownCoordinator = new DesktopShutdownCoordinator(
             stopInputsAsync: DisposeGlobalHotkeysAsync,
             drainProducersAsync: DisposeCoordinatorAsync,
@@ -58,6 +63,11 @@ public partial class App : System.Windows.Application, IDisposable
             {
                 return;
             }
+            if (decision.Status == DesktopStartupStatus.ActivatedExisting)
+            {
+                Shutdown();
+                return;
+            }
 
             System.Windows.MessageBox.Show(decision.UserMessage!, "SoulsTracker", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
@@ -78,7 +88,26 @@ public partial class App : System.Windows.Application, IDisposable
         }
     }
 
-    private Task StartTrackerAsync() => startupTask = StartTrackerCoreAsync();
+    private Task StartTrackerAsync()
+    {
+        try
+        {
+            activationPipe = new DesktopActivationPipe(DesktopActivationPipe.ProductionName,
+                () => _ = Dispatcher.BeginInvoke(() =>
+                {
+                    pendingRestore = true;
+                    RestoreMainWindow();
+                }));
+            activationPipe.Start();
+        }
+        catch
+        {
+            activationPipe?.Dispose();
+            activationPipe = null;
+            // The mutex still prevents duplicate trackers. The window remains usable.
+        }
+        return startupTask = StartTrackerCoreAsync();
+    }
 
     private async Task StartTrackerCoreAsync()
     {
@@ -129,6 +158,29 @@ public partial class App : System.Windows.Application, IDisposable
         window.Closing += MainWindow_Closing;
         MainWindow = window;
         window.Show();
+        if (pendingRestore) RestoreMainWindow();
+        trayLifecycle = new DesktopTrayLifecycle(() => { window.RememberTrayFocus(); window.Hide(); }, RestoreMainWindow,
+            () => _ = ExitApplicationAsync(), message =>
+            {
+                window.SetTrayStatus(message);
+                if (!window.IsVisible)
+                {
+                    try { trayIcon?.ShowGuidance(message); }
+                    catch { TrayFailed(window); }
+                }
+            });
+        window.ExitRequested += trayLifecycle.Exit;
+        window.StateChanged += (_, _) =>
+        {
+            if (window.WindowState == WindowState.Minimized) trayLifecycle.Minimized();
+        };
+        try
+        {
+            trayIcon = new WindowsTrayIcon(window, trayLifecycle.Restore, trayLifecycle.Exit,
+                () => { trayLifecycle.TrayAvailable = true; window.SetTrayStatus("Minimize or Close keeps SoulsTracker running in the notification area."); },
+                () => TrayFailed(window));
+        }
+        catch { TrayFailed(window); }
         await viewModel.InitializeAsync(startupCancellation.Token);
         if (!mainWindowCloseRequested && viewModel.CurrentState is { } initializedState)
         {
@@ -199,6 +251,11 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if (trayLifecycle is { Exiting: false } lifecycle && !mainWindowCloseRequested)
+        {
+            lifecycle.Closing(e);
+            return;
+        }
         if (mainWindowCloseRequested)
         {
             e.Cancel = !finalShutdownRequested;
@@ -206,9 +263,32 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         e.Cancel = true;
+        await ExitApplicationAsync();
+    }
+
+    private async Task ExitApplicationAsync()
+    {
+        if (mainWindowCloseRequested) return;
         mainWindowCloseRequested = true;
         try { await shutdownCoordinator.RequestApplicationShutdownAsync(FinalShutdown); }
         catch { /* Components have been awaited; final shutdown already ran. */ }
+    }
+
+    private void RestoreMainWindow()
+    {
+        if (mainWindowCloseRequested || MainWindow is not MainWindow window) return;
+        pendingRestore = false;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        if (!window.IsVisible) window.Show();
+        window.Activate();
+        window.RestoreTrayFocus();
+    }
+
+    private void TrayFailed(MainWindow window)
+    {
+        if (trayLifecycle is not null) trayLifecycle.TrayAvailable = false;
+        window.SetTrayStatus("Notification area unavailable. SoulsTracker will stay open; use Exit to quit.");
+        RestoreMainWindow();
     }
 
     private void FinalShutdown()
@@ -280,6 +360,10 @@ public partial class App : System.Windows.Application, IDisposable
     private async ValueTask DisposeGlobalHotkeysAsync()
     {
         startupCancellation.Cancel();
+        activationPipe?.Dispose();
+        activationPipe = null;
+        trayIcon?.Dispose();
+        trayIcon = null;
         if (MainWindow is not null) MainWindow.IsEnabled = false;
         hostedConnection?.StopSetup();
         try

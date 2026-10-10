@@ -53,6 +53,29 @@ public partial class MainWindow : Window
     private DispatcherOperation? updateNoticePresentation;
     private StartupUpdateDialog? updateDialog;
     private bool updateDialogShown;
+    internal event Action? ExitRequested;
+    private FrameworkElement? trayFocus;
+
+    internal void RememberTrayFocus() => trayFocus = Keyboard.FocusedElement as FrameworkElement;
+
+    internal void RestoreTrayFocus()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsVisible || !IsActive) return;
+            if (trayFocus is not { IsVisible: true, IsEnabled: true, Focusable: true } target || !target.Focus())
+                WorkspaceTabs.Focus();
+        }, DispatcherPriority.Input);
+    }
+
+    internal void SetTrayStatus(string message)
+    {
+        HeaderSubtitleTextBlock.Text = message;
+        System.Windows.Automation.AutomationProperties.SetLiveSetting(HeaderSubtitleTextBlock,
+            System.Windows.Automation.AutomationLiveSetting.Polite);
+    }
+
+    private void ExitApplication_Click(object sender, RoutedEventArgs e) => ExitRequested?.Invoke();
 
     protected override void OnContentRendered(EventArgs e)
     {
