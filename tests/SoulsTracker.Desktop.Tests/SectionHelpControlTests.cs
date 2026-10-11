@@ -157,7 +157,7 @@ public sealed class SectionHelpControlTests
             {
                 ("Main", new[] { ("GameSession", "GAME SESSION"), ("TotalDeaths", "TOTAL DEATHS") }),
                 ("Overlay", new[] { ("Overlay", "OVERLAY URL"), ("Preview", "PREVIEW"), ("Appearance", "APPEARANCE") }),
-                ("Settings", new[] { ("Updates", "MAIN"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "STREAMING TEXT EXPORT") })
+                ("Settings", new[] { ("Updates", "OPTIONS"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "TEXT EXPORT") })
             })
             {
                 ((TabItem)window.FindName(workspace + "WorkspaceTab")).IsSelected = true; await Idle();

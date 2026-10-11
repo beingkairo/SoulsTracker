@@ -1446,11 +1446,15 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         DraftTitleIconModeChoice = TitleIconModes.Single(choice => choice.Value == state.OverlayConfiguration.TotalDeaths.TitleIconMode);
 
         GameId? selectedId = state.SelectedGameId;
-        SelectedGame = GameChoices.Single(choice => choice.GameId == selectedId);
+        GameChoice selectedChoice = GameChoices.Single(choice => choice.GameId == selectedId);
+        if (!ReferenceEquals(SelectedGame, selectedChoice))
+        {
+            SelectedGame = selectedChoice;
+            OnPropertyChanged(nameof(SelectedGame));
+            OnPropertyChanged(nameof(GameSelectionAutomationName));
+        }
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == state.EldenRingSave.SlotIndex);
 
-        OnPropertyChanged(nameof(SelectedGame));
-        OnPropertyChanged(nameof(GameSelectionAutomationName));
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
 
 

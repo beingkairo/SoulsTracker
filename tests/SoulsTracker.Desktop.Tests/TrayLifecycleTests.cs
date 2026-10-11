@@ -139,7 +139,8 @@ public sealed class TrayLifecycleTests
             Assert.False(close.IsChecked);
             Assert.Same(updates.Parent, close.Parent);
             Assert.Equal(((StackPanel)updates.Parent).Children.IndexOf(updates) + 1, ((StackPanel)close.Parent).Children.IndexOf(close));
-            Assert.Equal("MAIN", ((HeaderedContentControl)window.FindName("UpdatesSectionHeader")).Header);
+            Assert.Equal("OPTIONS", ((HeaderedContentControl)window.FindName("UpdatesSectionHeader")).Header);
+            Assert.Equal("TEXT EXPORT", ((HeaderedContentControl)window.FindName("StreamingTextExportSectionHeader")).Header);
             Assert.Null(window.FindName("UpdatesHelpButton"));
             Assert.Equal("Check for updates on startup", updates.Content);
             Assert.Equal("Just a simple death tracker.", ((TextBlock)window.FindName("HeaderSubtitleTextBlock")).Text);

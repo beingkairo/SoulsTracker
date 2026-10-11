@@ -71,6 +71,14 @@ public sealed class HostedToggleInteractionTests
                 Assert.False(((StackPanel)window.FindName("SettingsContentStack")).IsAncestorOf(check));
                 Assert.True(((ScrollViewer)window.FindName("OverlayConfigurationScrollViewer")).IsAncestorOf(check));
                 Assert.False(check.IsChecked);
+                var url = FindUrl(window);
+                var copy = (Button)window.FindName("CopyTotalDeathsOverlayUrlButton");
+                Assert.Empty(url.Text);
+                Assert.False(url.IsEnabled);
+                Assert.False(copy.IsEnabled);
+                url.SelectAll();
+                Assert.Empty(url.SelectedText);
+                Assert.False(url.Focus());
                 Assert.Contains("off", connection.StatusText, StringComparison.OrdinalIgnoreCase);
                 Assert.Equal(0, clients); Assert.Equal(0, senders); Assert.Equal(0, requests);
                 AssertContained(check, window);
@@ -97,6 +105,9 @@ public sealed class HostedToggleInteractionTests
                 await WaitUntil(() => connection.StatusText.Contains("offline", StringComparison.OrdinalIgnoreCase) ||
                     connection.StatusText.Contains("could not connect", StringComparison.OrdinalIgnoreCase));
                 Assert.True(check.IsChecked); AssertFocus(check);
+                Assert.True(url.IsEnabled);
+                Assert.Equal(Configuration().BuildReadUrl(), url.Text);
+                Assert.True(copy.IsEnabled);
                 Assert.True(await preference.ResolveAsync(_ => Task.FromResult(false)));
                 Assert.Equal(1, senders); Assert.Equal(1, clients);
                 Assert.True(requests > 0);
@@ -106,6 +117,13 @@ public sealed class HostedToggleInteractionTests
                 await WaitUntil(() => connection.CanChangeEnabled);
                 await Idle();
                 Assert.False(check.IsChecked); AssertFocus(check);
+                Assert.Empty(url.Text);
+                Assert.False(url.IsEnabled);
+                Assert.False(copy.IsEnabled);
+                url.SelectAll();
+                Assert.Empty(url.SelectedText);
+                Assert.False(url.Focus());
+                Assert.Equal(Configuration().BuildReadUrl(), (await pairing.LoadAsync())!.BuildReadUrl());
                 Assert.Contains("off", connection.StatusText, StringComparison.OrdinalIgnoreCase);
                 Assert.False(await preference.ResolveAsync(_ => Task.FromResult(true)));
                 int stoppedRequests = requests;

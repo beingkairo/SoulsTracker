@@ -630,7 +630,12 @@ public partial class MainWindow : Window
 
     private async void DecrementDeaths_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.DecrementManualDeathsAsync();
+        if (DataContext is not DesktopTrackerViewModel viewModel) return;
+        bool hadFocus = ReferenceEquals(Keyboard.FocusedElement, sender);
+        await viewModel.DecrementManualDeathsAsync();
+        if (hadFocus && !viewModel.CanDecrementManualDeaths && viewModel.IsManualGameSelected &&
+            ReferenceEquals(DataContext, viewModel))
+            Keyboard.Focus(IncrementManualDeathsButton);
     }
 
     private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)

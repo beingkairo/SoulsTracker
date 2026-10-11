@@ -48,10 +48,10 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    public string UrlText => configuration?.BuildReadUrl() ?? (busy ? "Preparing overlay URL..." : string.Empty);
+    public string UrlText => !enabled ? string.Empty : configuration?.BuildReadUrl() ?? (busy ? "Preparing overlay URL..." : string.Empty);
     public string StatusText => statusText;
     public string CopyFeedbackText => copyFeedbackText;
-    public bool CanCopy => adapter is not null && !closing && !setupStopped && !busy && configuration is not null;
+    public bool CanCopy => enabled && adapter is not null && !closing && !setupStopped && !busy && configuration is not null;
     public bool CanRetry => enabled && canRetry && adapter is not null && !closing && !setupStopped && !busy && configuration is null;
     public bool IsPreparing => busy && configuration is null;
     public bool IsEnabled => enabled;

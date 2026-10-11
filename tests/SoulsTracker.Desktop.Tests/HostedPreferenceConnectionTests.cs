@@ -36,7 +36,8 @@ public sealed class HostedPreferenceConnectionTests
             Assert.False(connection.IsEnabled);
             Assert.Equal(0, senders);
             Assert.Equal(0, clients);
-            Assert.Equal(ApprovedConfiguration().BuildReadUrl(), connection.UrlText);
+            Assert.Empty(connection.UrlText);
+            Assert.False(connection.CanCopy);
             Assert.NotNull(await pending.LoadPendingAsync());
             Assert.NotNull(await store.LoadAsync());
         }
@@ -60,8 +61,12 @@ public sealed class HostedPreferenceConnectionTests
                 await preference.SaveAsync(true);
                 await first.InitializeAsync(PersistentTrackerState.Default);
                 Assert.Equal(1, senders);
+                Assert.Equal(ApprovedConfiguration().BuildReadUrl(), first.UrlText);
                 await first.SetEnabledAsync(false);
                 Assert.False(first.IsEnabled);
+                Assert.Empty(first.UrlText);
+                Assert.False(first.CanCopy);
+                Assert.False(first.CopyReadUrl(_ => Assert.Fail("Disabled URL copied")));
                 Assert.False(await preference.ResolveAsync(_ => Task.FromResult(true)));
                 await first.EnsureProvisionedAsync();
                 Assert.Equal(1, senders);
@@ -71,9 +76,13 @@ public sealed class HostedPreferenceConnectionTests
                 preferenceStore: preference, initiallyEnabled: false);
             await second.InitializeAsync(PersistentTrackerState.Default);
             Assert.Equal(1, senders);
+            Assert.Empty(second.UrlText);
+            Assert.False(second.CanCopy);
             await second.SetEnabledAsync(true);
             Assert.True(second.IsEnabled);
             Assert.Equal(2, senders);
+            Assert.Equal(ApprovedConfiguration().BuildReadUrl(), second.UrlText);
+            Assert.True(second.CanCopy);
             Assert.Equal(ApprovedConfiguration().BuildReadUrl(), (await store.LoadAsync())!.BuildReadUrl());
             Assert.True(await preference.ResolveAsync(_ => Task.FromResult(false)));
         }

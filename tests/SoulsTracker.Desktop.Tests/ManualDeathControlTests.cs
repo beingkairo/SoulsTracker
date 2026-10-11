@@ -15,6 +15,60 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class ManualDeathControlTests
 {
     [Fact]
+    public Task CounterOnlyCommitsKeepGameSelectionItemsScrollAndButtonFocus() => RunOnDispatcherAsync(async () =>
+    {
+        using var save = new TemporarySave();
+        await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(save.Path), new NullPublisher());
+        var tracker = new DesktopTrackerViewModel(coordinator);
+        var window = new MainWindow { DataContext = tracker, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            await tracker.InitializeAsync();
+            await FlushBindingsAsync();
+            var selector = (ComboBox)window.FindName("GameSelector");
+            var scroll = (ScrollViewer)window.FindName("MainContentScrollViewer");
+            var increment = FindButton(window, "Increase manual deaths");
+            var decrement = FindButton(window, "Decrease manual deaths");
+            var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
+            GameChoice? selected = tracker.SelectedGame;
+            object items = selector.ItemsSource;
+            int selectionEvents = 0, selectionNotifications = 0, automationNotifications = 0;
+            selector.SelectionChanged += (_, _) => selectionEvents++;
+            tracker.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(tracker.SelectedGame)) selectionNotifications++;
+                if (e.PropertyName == nameof(tracker.GameSelectionAutomationName)) automationNotifications++;
+            };
+            scroll.ScrollToBottom();
+            await FlushBindingsAsync();
+            double offset = scroll.VerticalOffset;
+            Assert.True(increment.Focus());
+            await tracker.IncrementManualDeathsAsync();
+            await FlushBindingsAsync();
+            Assert.Equal("1", total.Text);
+            Assert.Same(increment, System.Windows.Input.Keyboard.FocusedElement);
+            Assert.Same(selected, selector.SelectedItem);
+            Assert.Same(items, selector.ItemsSource);
+            Assert.Equal(offset, scroll.VerticalOffset);
+            Assert.True(decrement.Focus());
+            Invoke(decrement);
+            await WaitUntilAsync(() => total.Text == "0" && tracker.ControlsEnabled);
+            await FlushBindingsAsync();
+            Assert.Equal("0", total.Text);
+            Assert.Same(increment, System.Windows.Input.Keyboard.FocusedElement);
+            Assert.Same(selected, tracker.SelectedGame);
+            Assert.Same(selected, selector.SelectedItem);
+            Assert.Same(items, selector.ItemsSource);
+            Assert.Equal(offset, scroll.VerticalOffset);
+            Assert.Equal(0, selectionEvents);
+            Assert.Equal(0, selectionNotifications);
+            Assert.Equal(0, automationNotifications);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public Task ManualButtonsWorkOnlyForDemonsSoulsAndRestoreAfterGameSwitches() => RunOnDispatcherAsync(async () =>
     {
         using var save = new TemporarySave();

@@ -625,7 +625,7 @@
                             </TextBlock>
                             <StackPanel Margin="0,12,0,0" Orientation="Horizontal" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <Button Width="78" Click="DecrementDeaths_Click" IsEnabled="{Binding CanDecrementManualDeaths}" Content="−1" AutomationProperties.Name="Decrease manual deaths" />
-                                <Button Width="78" Margin="8,0,0,0" Click="IncrementDeaths_Click" IsEnabled="{Binding ControlsEnabled}" Content="+1" AutomationProperties.Name="Increase manual deaths" />
+                                <Button x:Name="IncrementManualDeathsButton" Width="78" Margin="8,0,0,0" Click="IncrementDeaths_Click" IsEnabled="{Binding ControlsEnabled}" Content="+1" AutomationProperties.Name="Increase manual deaths" />
                             </StackPanel>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingMissedDeathAdjustmentAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring missed deaths adjustment">
                                 <StackPanel Orientation="Horizontal">
@@ -686,7 +686,7 @@
                                 <CheckBox x:Name="HostedOverlayEnabledCheckBox" Margin="0,8,0,8" Content="Enable hosted Overlay" IsChecked="{Binding HostedOverlay.IsEnabled, Mode=OneWay}" IsEnabled="{Binding HostedOverlay.CanChangeEnabled, FallbackValue=False}" Click="HostedOverlayEnabled_Click" AutomationProperties.Name="Enable hosted Overlay" />
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBox Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" IsReadOnly="True" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
+                                    <TextBox Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" IsReadOnly="True" IsEnabled="{Binding HostedOverlay.IsEnabled, Mode=OneWay, FallbackValue=False}" Focusable="True" Style="{StaticResource OverlayUrlTextBox}" KeyboardNavigation.TabNavigation="None" TextWrapping="NoWrap" Text="{Binding HostedOverlay.UrlText, Mode=OneWay}" AutomationProperties.Name="Overlay URL" />
                                     <Button x:Name="CopyTotalDeathsOverlayUrlButton" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource DirectoryCopyButton}" IsEnabled="{Binding HostedOverlay.CanCopy, FallbackValue=False}" Click="CopyTotalDeathsOverlayUrl_Click" ToolTip="Copy URL" AutomationProperties.Name="Copy URL" />
                                 </Grid>
                                 <Button Margin="0,8,0,0" HorizontalAlignment="Left" Content="Try again" IsEnabled="{Binding HostedOverlay.CanRetry}" Visibility="{Binding HostedOverlay.CanRetry, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" Click="RetryHostedOverlay_Click" AutomationProperties.Name="Try preparing overlay URL again" />
@@ -777,7 +777,7 @@
                 <StackPanel x:Name="SettingsContentStack">
                     <Border Style="{StaticResource Panel}" Margin="0,0,0,14" AutomationProperties.Name="Update check settings">
                         <StackPanel>
-                            <HeaderedContentControl x:Name="UpdatesSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="MAIN" />
+                            <HeaderedContentControl x:Name="UpdatesSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="OPTIONS" />
                             <WrapPanel>
                                 <Button x:Name="CheckForUpdatesButton" Content="Check for updates" Click="CheckForUpdates_Click" IsEnabled="{Binding CanCheckForUpdates}" AutomationProperties.Name="Check for updates" />
 
@@ -859,7 +859,7 @@
 
                     <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Streaming text export settings">
                         <StackPanel>
-                            <HeaderedContentControl x:Name="StreamingTextExportSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="STREAMING TEXT EXPORT">
+                            <HeaderedContentControl x:Name="StreamingTextExportSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="TEXT EXPORT">
                                 <Button x:Name="StreamingTextExportHelpButton" Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Streaming text export help" AutomationProperties.HelpText="Write local TXT files for text sources in your streaming software.">
                                     <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
                                 </Button>
