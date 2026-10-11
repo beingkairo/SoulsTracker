@@ -133,6 +133,113 @@ public sealed class ManualDeathControlTests
     });
 
     [Fact]
+    public Task EldenRingMissedDeathCommitsKeepMainControlsStable() => RunOnDispatcherAsync(async () =>
+    {
+        using var save = new TemporarySave();
+        var repository = new MemoryRepository(save.Path, GameId.EldenRing);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var tracker = new DesktopTrackerViewModel(coordinator, new ProfileReader(),
+            eldenRingSaveDiscovery: new SaveDiscovery(save.Path));
+        var window = new MainWindow { DataContext = tracker, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            await tracker.InitializeAsync();
+            tracker.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new RuntimeGameObservation(
+                GameId.EldenRing, new GameLifetimeDeathTotal(12), DateTimeOffset.UtcNow,
+                EffectiveDeathTotalResult.SourceIdentityFor(repository.State))));
+            await FlushBindingsAsync();
+            var game = (ComboBox)window.FindName("GameSelector");
+            var character = (ComboBox)window.FindName("EldenRingProfileSlotSelector");
+            var scroll = (ScrollViewer)window.FindName("MainContentScrollViewer");
+            var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
+            Button change = FindButton(window, "Change Elden Ring save directory");
+            Button refresh = FindButton(window, "Refresh Elden Ring saves");
+            Button increment = FindButton(window, "Add Elden Ring missed death");
+            Button decrement = FindButton(window, "Remove Elden Ring missed death");
+            Assert.True(game.IsVisible && change.IsVisible && refresh.IsVisible && character.IsVisible);
+            Assert.True(game.IsEnabled && change.IsEnabled && refresh.IsEnabled && character.IsEnabled);
+            Assert.NotNull(character.SelectedItem);
+
+            GameChoice? selectedGame = tracker.SelectedGame;
+            EldenRingProfileSlotChoice? selectedCharacter = tracker.SelectedEldenRingProfileSlot;
+            string? directory = tracker.EldenRingDirectoryPath;
+            object gameItems = game.ItemsSource;
+            object characterItems = character.ItemsSource;
+            object saveItems = tracker.EldenRingSaveChoices;
+            object gameContext = game.DataContext;
+            object characterContext = character.DataContext;
+            var unrelated = new HashSet<string>(StringComparer.Ordinal)
+            {
+                nameof(tracker.IsBusy), nameof(tracker.ControlsEnabled), nameof(tracker.SelectedGame),
+                nameof(tracker.GameChoices), nameof(tracker.GameSelectionAutomationName),
+                nameof(tracker.SelectedEldenRingProfileSlot), nameof(tracker.EldenRingProfileSlots),
+                nameof(tracker.SelectedEldenRingSaveChoice), nameof(tracker.EldenRingSaveChoices),
+                nameof(tracker.EldenRingDirectoryPath), nameof(tracker.EldenRingDirectoryHeading),
+                nameof(tracker.EldenRingDirectoryStatus), nameof(tracker.EldenRingDirectoryActionFeedback),
+                nameof(tracker.EldenRingSaveSourceState), nameof(tracker.IsEldenRingChangeMode),
+                nameof(tracker.IsEldenRingSelected), nameof(tracker.IsEldenRingChangeVisible),
+                nameof(tracker.CanSelectEldenRingProfile), nameof(tracker.IsEldenRingSaveSelectorEnabled),
+                nameof(tracker.RuntimeReaderStatusText), nameof(tracker.EldenRingCharacterStatus),
+                nameof(tracker.IsEldenRingMissedDeathAdjustmentAvailable)
+            };
+            var notifications = new List<string>();
+            var changes = new List<string>();
+            tracker.PropertyChanged += (_, e) =>
+            {
+                if (string.IsNullOrEmpty(e.PropertyName) || unrelated.Contains(e.PropertyName))
+                    notifications.Add(e.PropertyName ?? "<null>");
+            };
+            tracker.GameChoices.CollectionChanged += (_, _) => changes.Add("game collection");
+            tracker.EldenRingProfileSlots.CollectionChanged += (_, _) => changes.Add("character collection");
+            tracker.EldenRingSaveChoices.CollectionChanged += (_, _) => changes.Add("save collection");
+            foreach (FrameworkElement control in new FrameworkElement[] { game, change, refresh, character })
+            {
+                control.Loaded += (_, _) => changes.Add("loaded");
+                control.Unloaded += (_, _) => changes.Add("unloaded");
+                control.IsVisibleChanged += (_, _) => changes.Add("visible");
+                control.IsEnabledChanged += (_, _) => changes.Add("enabled");
+                control.DataContextChanged += (_, _) => changes.Add("context");
+            }
+            game.SelectionChanged += (_, _) => changes.Add("game selection");
+            character.SelectionChanged += (_, _) => changes.Add("character selection");
+            scroll.ScrollToBottom();
+            await FlushBindingsAsync();
+            double offset = scroll.VerticalOffset;
+            Point[] positions = [game.TranslatePoint(new Point(), window), change.TranslatePoint(new Point(), window),
+                refresh.TranslatePoint(new Point(), window), character.TranslatePoint(new Point(), window)];
+
+            foreach ((Button button, string expected) in new[] { (increment, "13"), (increment, "14"),
+                (decrement, "13"), (decrement, "12") })
+            {
+                Invoke(button);
+                await WaitUntilAsync(() => total.Text == expected);
+                Assert.Equal(expected, total.Text);
+                Assert.Same(selectedGame, tracker.SelectedGame);
+                Assert.Same(selectedGame, game.SelectedItem);
+                Assert.Same(selectedCharacter, tracker.SelectedEldenRingProfileSlot);
+                Assert.Same(selectedCharacter, character.SelectedItem);
+                Assert.Same(gameItems, game.ItemsSource);
+                Assert.Same(characterItems, character.ItemsSource);
+                Assert.Same(saveItems, tracker.EldenRingSaveChoices);
+                Assert.Same(gameContext, game.DataContext);
+                Assert.Same(characterContext, character.DataContext);
+                Assert.Equal(directory, tracker.EldenRingDirectoryPath);
+                Assert.True(game.IsLoaded && change.IsLoaded && refresh.IsLoaded && character.IsLoaded);
+                Assert.True(game.IsEnabled && change.IsEnabled && refresh.IsEnabled && character.IsEnabled);
+                Assert.True(game.IsVisible && change.IsVisible && refresh.IsVisible && character.IsVisible);
+                Assert.Equal(offset, scroll.VerticalOffset);
+                Assert.Equal(positions, new[] { game.TranslatePoint(new Point(), window), change.TranslatePoint(new Point(), window),
+                    refresh.TranslatePoint(new Point(), window), character.TranslatePoint(new Point(), window) });
+            }
+            Assert.Empty(notifications);
+            Assert.Empty(changes);
+            Assert.Equal(0, repository.State.EldenRingMissedDeathAdjustments.Get(repository.State.EldenRingSave));
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public Task ManualButtonsWorkOnlyForDemonsSoulsAndRestoreAfterGameSwitches() => RunOnDispatcherAsync(async () =>
     {
         using var save = new TemporarySave();
@@ -315,10 +422,10 @@ public sealed class ManualDeathControlTests
             ValueTask.FromResult<IReadOnlyList<EldenRingCharacterSlotMetadata>>([new(1, false, "Test character", 1)]);
     }
 
-    private sealed class MemoryRepository(string savePath) : ITrackerStateRepository
+    private sealed class MemoryRepository(string savePath, GameId? selectedGame = null) : ITrackerStateRepository
     {
         public PersistentTrackerState State { get; private set; } = new(
-            PersistentTrackerState.CurrentSchemaVersion, GameId.DemonsSouls, OverlayConfiguration.Default,
+            PersistentTrackerState.CurrentSchemaVersion, selectedGame ?? GameId.DemonsSouls, OverlayConfiguration.Default,
             eldenRingNoticeAcknowledged: true,
             eldenRingSave: new EldenRingSaveConfiguration(savePath, 1));
         public Task<TrackerStateLoadResult> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(TrackerStateLoadResult.Loaded(State));

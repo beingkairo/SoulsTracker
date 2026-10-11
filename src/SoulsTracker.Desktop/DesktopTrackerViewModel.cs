@@ -1309,12 +1309,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public Task IncrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanAdjustEldenRingMissedDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: true), cancellationToken);
+            : SubmitEldenRingMissedDeathsAsync(new AdjustEldenRingMissedDeathsCommand(Increment: true), cancellationToken);
 
     public Task DecrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanDecrementEldenRingMissedDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: false), cancellationToken);
+            : SubmitEldenRingMissedDeathsAsync(new AdjustEldenRingMissedDeathsCommand(Increment: false), cancellationToken);
 
 
     public Task SetTotalDeathsOverlayEnabledAsync(bool isEnabled, CancellationToken cancellationToken = default) =>
@@ -1359,13 +1359,24 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         }
     }
 
+    private Task SubmitEldenRingMissedDeathsAsync(AdjustEldenRingMissedDeathsCommand command, CancellationToken cancellationToken) =>
+        SubmitCounterAsync(command, () => EldenRingMissedDeaths,
+            nameof(EldenRingMissedDeaths), () => CanDecrementEldenRingMissedDeaths,
+            nameof(CanDecrementEldenRingMissedDeaths), cancellationToken);
+
     private Task SubmitOverlayPresentationAsync(
         bool totalDeathsEnabled,
         bool showGameName,
         CancellationToken cancellationToken) =>
         SubmitAsync(new UpdateOverlayPresentationCommand(totalDeathsEnabled, showGameName), cancellationToken);
 
-    private async Task SubmitManualCounterAsync(ITrackerCommand command, CancellationToken cancellationToken)
+    private Task SubmitManualCounterAsync(ITrackerCommand command, CancellationToken cancellationToken) =>
+        SubmitCounterAsync(command, () => ManualDeaths,
+            nameof(ManualDeaths), () => CanDecrementManualDeaths, nameof(CanDecrementManualDeaths), cancellationToken);
+
+    private async Task SubmitCounterAsync(ITrackerCommand command,
+        Func<long> getCount, string countProperty, Func<bool> canDecrement, string canDecrementProperty,
+        CancellationToken cancellationToken)
     {
         ErrorMessage = null;
         try
@@ -1373,12 +1384,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             TrackerCommandExecutionResult result = await coordinator.SubmitAsync(command, cancellationToken);
             if (result.CommittedState is not null)
             {
-                long previousDeaths = ManualDeaths;
-                bool previousCanDecrement = CanDecrementManualDeaths;
+                long previousDeaths = getCount();
+                bool previousCanDecrement = canDecrement();
                 state = result.CommittedState;
                 UpdateTotalDeathsText();
-                if (ManualDeaths != previousDeaths) OnPropertyChanged(nameof(ManualDeaths));
-                if (CanDecrementManualDeaths != previousCanDecrement) OnPropertyChanged(nameof(CanDecrementManualDeaths));
+                if (getCount() != previousDeaths) OnPropertyChanged(countProperty);
+                if (canDecrement() != previousCanDecrement) OnPropertyChanged(canDecrementProperty);
             }
             if (result.Status is TrackerCommandExecutionStatus.SaveFailed or TrackerCommandExecutionStatus.NotInitialized)
                 ErrorMessage = "SoulsTracker could not save the requested tracker change. The displayed state was not changed.";
