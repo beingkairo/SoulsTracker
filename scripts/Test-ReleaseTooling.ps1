@@ -97,7 +97,7 @@ function Invoke-PackageCase([string]$Name, [string]$Failure = '', [string]$Inval
     catch { $errorMessage = "$($_.Exception.Message)`n$($_.ScriptStackTrace)" }
     if ($Failure -or $InvalidInput) {
         $expected = if ($InvalidInput -eq 'version') { 'internal private package' }
-        elseif ($InvalidInput -eq 'guide') { 'either startup order is supported' }
+        elseif ($InvalidInput -eq 'guide') { 'https://github.com/beingkairo/SoulsTracker#getting-started' }
         elseif ($Failure -eq 'missing-executable') { 'SoulsTracker.Desktop.exe is missing' }
         elseif ($Failure -eq 'content-notices') { 'Required distribution input is missing' }
         elseif ($Failure -eq 'content-drift') { 'inventory drift' }
