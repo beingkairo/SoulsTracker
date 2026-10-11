@@ -22,7 +22,6 @@ public sealed class SectionHelpControlTests
         {
             yield return [width, height, "Preview", "Overlay", "Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes."];
             yield return [width, height, "Appearance", "Overlay", "The overlay uses these settings. Click Apply to live overlay to show your changes."];
-            yield return [width, height, "Updates", "Settings", "Checks GitHub for the latest updates."];
             yield return [width, height, "StreamingTextExport", "Settings", "Write local TXT files for text sources in your streaming software."];
         }
     }
@@ -158,7 +157,7 @@ public sealed class SectionHelpControlTests
             {
                 ("Main", new[] { ("GameSession", "GAME SESSION"), ("TotalDeaths", "TOTAL DEATHS") }),
                 ("Overlay", new[] { ("Overlay", "OVERLAY URL"), ("Preview", "PREVIEW"), ("Appearance", "APPEARANCE") }),
-                ("Settings", new[] { ("Updates", "UPDATES"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "STREAMING TEXT EXPORT") })
+                ("Settings", new[] { ("Updates", "MAIN"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "STREAMING TEXT EXPORT") })
             })
             {
                 ((TabItem)window.FindName(workspace + "WorkspaceTab")).IsSelected = true; await Idle();

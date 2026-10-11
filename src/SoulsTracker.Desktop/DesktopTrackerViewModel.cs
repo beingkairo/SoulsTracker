@@ -60,6 +60,10 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     private string updatePreferenceStatus = string.Empty;
     private bool isSavingUpdatePreference;
     private bool pendingUpdatePreferenceValue;
+    private Func<bool, Task>? saveTrayClosePreference;
+    private bool minimizeToTrayOnClose;
+    private bool isSavingTrayClosePreference;
+    private string trayClosePreferenceStatus = string.Empty;
     private string updatePageActionError = string.Empty;
     private bool hasCheckedForUpdates;
     private string? updateCurrentVersion;
@@ -205,6 +209,40 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public bool CanOpenAvailableUpdateReleasePage => !updateChecksStopped && AvailableUpdateReleasePage is not null;
 
     public bool CheckForUpdatesOnStartup => state?.CheckForUpdatesOnStartup ?? false;
+    public bool MinimizeToTrayOnClose { get => minimizeToTrayOnClose; private set => SetField(ref minimizeToTrayOnClose, value); }
+    public bool IsSavingTrayClosePreference => isSavingTrayClosePreference;
+    public bool CanChangeTrayClosePreference => saveTrayClosePreference is not null && !isSavingTrayClosePreference;
+    public string TrayClosePreferenceStatus { get => trayClosePreferenceStatus; private set => SetField(ref trayClosePreferenceStatus, value); }
+
+    internal void ConfigureTrayClosePreference(bool enabled, Func<bool, Task> save)
+    {
+        saveTrayClosePreference = save ?? throw new ArgumentNullException(nameof(save));
+        MinimizeToTrayOnClose = enabled;
+        OnPropertyChanged(nameof(CanChangeTrayClosePreference));
+    }
+
+    public async Task SetMinimizeToTrayOnCloseAsync(bool enabled)
+    {
+        if (!CanChangeTrayClosePreference) return;
+        isSavingTrayClosePreference = true;
+        OnPropertyChanged(nameof(CanChangeTrayClosePreference));
+        try
+        {
+            await saveTrayClosePreference!(enabled);
+            MinimizeToTrayOnClose = enabled;
+            TrayClosePreferenceStatus = string.Empty;
+        }
+        catch
+        {
+            TrayClosePreferenceStatus = "The close setting could not be saved. Your previous choice is still active.";
+            OnPropertyChanged(nameof(MinimizeToTrayOnClose));
+        }
+        finally
+        {
+            isSavingTrayClosePreference = false;
+            OnPropertyChanged(nameof(CanChangeTrayClosePreference));
+        }
+    }
     public bool IsSavingUpdatePreference => isSavingUpdatePreference;
     public bool PendingUpdatePreferenceValue => pendingUpdatePreferenceValue;
     public bool CanChangeUpdatePreference => state is not null && !IsLoading && (!IsBusy || IsSavingUpdatePreference);

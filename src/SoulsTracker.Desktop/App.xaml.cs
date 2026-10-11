@@ -141,6 +141,13 @@ public partial class App : System.Windows.Application, IDisposable
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
         trackerViewModel = viewModel;
+        var trayPreference = new TrayClosePreferenceStore(stateSelection.RootPath);
+        try
+        {
+            bool minimizeOnClose = await trayPreference.ResolveAsync(startupCancellation.Token);
+            viewModel.ConfigureTrayClosePreference(minimizeOnClose, enabled => trayPreference.SaveAsync(enabled));
+        }
+        catch { /* Fail closed to normal shutdown if preference storage is unavailable. */ }
         viewModel.ConfigureHostedOverlay(hostedConnection);
 
         textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() =>
@@ -162,14 +169,12 @@ public partial class App : System.Windows.Application, IDisposable
         trayLifecycle = new DesktopTrayLifecycle(() => { window.RememberTrayFocus(); window.Hide(); }, RestoreMainWindow,
             () => _ = ExitApplicationAsync(), message =>
             {
-                window.SetTrayStatus(message);
                 if (!window.IsVisible)
                 {
                     try { trayIcon?.ShowGuidance(message); }
                     catch { TrayFailed(window); }
                 }
-            });
-        window.ExitRequested += trayLifecycle.Exit;
+            }, () => viewModel.MinimizeToTrayOnClose);
         window.StateChanged += (_, _) =>
         {
             if (window.WindowState == WindowState.Minimized) trayLifecycle.Minimized();
@@ -177,7 +182,7 @@ public partial class App : System.Windows.Application, IDisposable
         try
         {
             trayIcon = new WindowsTrayIcon(window, trayLifecycle.Restore, trayLifecycle.Exit,
-                () => { trayLifecycle.TrayAvailable = true; window.SetTrayStatus("Minimize or Close keeps SoulsTracker running in the notification area."); },
+                () => trayLifecycle.TrayAvailable = true,
                 () => TrayFailed(window));
         }
         catch { TrayFailed(window); }
@@ -287,7 +292,6 @@ public partial class App : System.Windows.Application, IDisposable
     private void TrayFailed(MainWindow window)
     {
         if (trayLifecycle is not null) trayLifecycle.TrayAvailable = false;
-        window.SetTrayStatus("Notification area unavailable. SoulsTracker will stay open; use Exit to quit.");
         RestoreMainWindow();
     }
 

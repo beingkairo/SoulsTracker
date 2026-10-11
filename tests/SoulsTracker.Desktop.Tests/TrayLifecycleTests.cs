@@ -1,8 +1,12 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows.Automation;
 using System.Windows.Documents;
 using System.Windows.Controls;
 using SoulsTracker.Desktop;
+using SoulsTracker.Application;
+using SoulsTracker.Domain;
+using static SoulsTracker.Desktop.Tests.SaveDirectoryWorkflowTests;
 
 namespace SoulsTracker.Desktop.Tests;
 
@@ -14,7 +18,7 @@ public sealed class TrayLifecycleTests
         int hidden = 0, restored = 0, exited = 0;
         var messages = new List<string>();
         int tracking = 0;
-        var lifecycle = new DesktopTrayLifecycle(() => hidden++, () => restored++, () => exited++, messages.Add)
+        var lifecycle = new DesktopTrayLifecycle(() => hidden++, () => restored++, () => exited++, messages.Add, () => true)
         { TrayAvailable = true };
         lifecycle.Minimized();
         tracking++;
@@ -37,7 +41,7 @@ public sealed class TrayLifecycleTests
     {
         int hidden = 0, restored = 0, exited = 0;
         var messages = new List<string>();
-        var lifecycle = new DesktopTrayLifecycle(() => hidden++, () => restored++, () => exited++, messages.Add);
+        var lifecycle = new DesktopTrayLifecycle(() => hidden++, () => restored++, () => exited++, messages.Add, () => true);
         lifecycle.Minimized();
         var closing = new CancelEventArgs();
         lifecycle.Closing(closing);
@@ -51,6 +55,41 @@ public sealed class TrayLifecycleTests
         Assert.Equal(1, exited);
         Assert.Equal(2, restored);
     }
+
+    [Fact]
+    public void UncheckedCloseRequestsOrderedExitWithoutHidingEvenWhenTrayIsUnavailable()
+    {
+        int hidden = 0, restored = 0, exited = 0;
+        bool enabled = false;
+        var lifecycle = new DesktopTrayLifecycle(() => hidden++, () => restored++, () => exited++, _ => { }, () => enabled);
+        var closing = new CancelEventArgs();
+        lifecycle.Closing(closing);
+        Assert.True(closing.Cancel);
+        Assert.Equal(0, hidden);
+        Assert.Equal(0, restored);
+        Assert.Equal(1, exited);
+        enabled = true;
+        lifecycle.Closing(new CancelEventArgs());
+        Assert.Equal(1, exited);
+    }
+
+    [Fact]
+    public Task PreferenceOnlyChangesAfterSuccessfulSaveAndCanBeTurnedOffAgain() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        await using var coordinator = new SerializedTrackerCoordinator(new MemoryRepository(GameId.DemonsSouls), new NullPublisher());
+        var vm = new DesktopTrackerViewModel(coordinator);
+        Assert.False(vm.MinimizeToTrayOnClose);
+        vm.ConfigureTrayClosePreference(false, enabled => enabled ? Task.CompletedTask : Task.FromException(new IOException("Save failed")));
+        await vm.SetMinimizeToTrayOnCloseAsync(true);
+        Assert.True(vm.MinimizeToTrayOnClose);
+        await vm.SetMinimizeToTrayOnCloseAsync(false);
+        Assert.True(vm.MinimizeToTrayOnClose);
+        Assert.NotEmpty(vm.TrayClosePreferenceStatus);
+        vm.ConfigureTrayClosePreference(true, _ => Task.CompletedTask);
+        await vm.SetMinimizeToTrayOnCloseAsync(false);
+        Assert.False(vm.MinimizeToTrayOnClose);
+        Assert.Empty(vm.TrayClosePreferenceStatus);
+    });
 
     [Fact]
     public async Task DuplicateLaunchSignalsOwnerWithoutComposingAndTimeoutFailsClosed()
@@ -84,19 +123,26 @@ public sealed class TrayLifecycleTests
     }
 
     [Fact]
-    public Task InWindowExitIsKeyboardReachableAndNamed() => HostedConnectionTests.OnDispatcher(() =>
+    public Task SettingsExposeAccessibleClosePreferenceAndNoWindowExit() => HostedConnectionTests.OnDispatcher(() =>
     {
         var window = new MainWindow { ShowActivated = false, ShowInTaskbar = false };
         try
         {
             window.Show();
             var footer = (Hyperlink)window.FindName("BeingKairoAttributionHyperlink");
-            var exit = ((TextBlock)footer.Parent).Inlines.OfType<Hyperlink>().First();
-            Assert.Equal("Exit SoulsTracker", AutomationProperties.GetName(exit));
-            int requests = 0;
-            window.ExitRequested += () => requests++;
-            exit.RaiseEvent(new System.Windows.RoutedEventArgs(Hyperlink.ClickEvent));
-            Assert.Equal(1, requests);
+            Assert.Single(((TextBlock)footer.Parent).Inlines.OfType<Hyperlink>());
+            var close = (CheckBox)window.FindName("MinimizeToTrayOnCloseCheckBox");
+            var updates = (CheckBox)window.FindName("CheckForUpdatesOnStartupCheckBox");
+            Assert.Equal("Minimize to tray on close", AutomationProperties.GetName(close));
+            Assert.Equal("Minimize to tray on close", close.Content);
+            Assert.True(close.Focusable);
+            Assert.False(close.IsChecked);
+            Assert.Same(updates.Parent, close.Parent);
+            Assert.Equal(((StackPanel)updates.Parent).Children.IndexOf(updates) + 1, ((StackPanel)close.Parent).Children.IndexOf(close));
+            Assert.Equal("MAIN", ((HeaderedContentControl)window.FindName("UpdatesSectionHeader")).Header);
+            Assert.Null(window.FindName("UpdatesHelpButton"));
+            Assert.Equal("Check for updates on startup", updates.Content);
+            Assert.Equal("Just a simple death tracker.", ((TextBlock)window.FindName("HeaderSubtitleTextBlock")).Text);
         }
         finally { window.Close(); }
         return Task.CompletedTask;

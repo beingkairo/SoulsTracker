@@ -9,7 +9,7 @@ using Forms = System.Windows.Forms;
 namespace SoulsTracker.Desktop;
 
 /// <summary>Separates presentation-only hiding from explicit application shutdown.</summary>
-internal sealed class DesktopTrayLifecycle(Action hide, Action restore, Action exit, Action<string> guidance)
+internal sealed class DesktopTrayLifecycle(Action hide, Action restore, Action exit, Action<string> guidance, Func<bool>? minimizeOnClose = null)
 {
     private bool guided;
     private bool exiting;
@@ -26,10 +26,15 @@ internal sealed class DesktopTrayLifecycle(Action hide, Action restore, Action e
     {
         if (exiting) return;
         e.Cancel = true;
+        if (minimizeOnClose?.Invoke() != true)
+        {
+            Exit();
+            return;
+        }
         if (!TrayAvailable)
         {
             restore();
-            guidance("The notification area is unavailable. SoulsTracker will stay open; use Exit in the window to quit.");
+            guidance("The notification area is unavailable. SoulsTracker will stay open; turn off Minimize to tray on close in Settings to quit.");
             return;
         }
         hide();

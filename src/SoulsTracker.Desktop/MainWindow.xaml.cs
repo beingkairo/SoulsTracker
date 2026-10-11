@@ -53,7 +53,6 @@ public partial class MainWindow : Window
     private DispatcherOperation? updateNoticePresentation;
     private StartupUpdateDialog? updateDialog;
     private bool updateDialogShown;
-    internal event Action? ExitRequested;
     private FrameworkElement? trayFocus;
 
     internal void RememberTrayFocus() => trayFocus = Keyboard.FocusedElement as FrameworkElement;
@@ -67,15 +66,6 @@ public partial class MainWindow : Window
                 WorkspaceTabs.Focus();
         }, DispatcherPriority.Input);
     }
-
-    internal void SetTrayStatus(string message)
-    {
-        HeaderSubtitleTextBlock.Text = message;
-        System.Windows.Automation.AutomationProperties.SetLiveSetting(HeaderSubtitleTextBlock,
-            System.Windows.Automation.AutomationLiveSetting.Polite);
-    }
-
-    private void ExitApplication_Click(object sender, RoutedEventArgs e) => ExitRequested?.Invoke();
 
     protected override void OnContentRendered(EventArgs e)
     {
@@ -1152,6 +1142,19 @@ public partial class MainWindow : Window
                     }
                 }, DispatcherPriority.Loaded);
             }
+        }
+    }
+
+    private async void MinimizeToTrayOnClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            if (viewModel.IsSavingTrayClosePreference)
+            {
+                checkBox.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, viewModel.MinimizeToTrayOnClose);
+                return;
+            }
+            await viewModel.SetMinimizeToTrayOnCloseAsync(checkBox.IsChecked == true);
         }
     }
 
