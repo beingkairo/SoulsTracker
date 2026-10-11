@@ -15,6 +15,70 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class ManualDeathControlTests
 {
     [Fact]
+    public Task CounterCommitsDoNotRefreshUnrelatedMainControls() => RunOnDispatcherAsync(async () =>
+    {
+        using var save = new TemporarySave();
+        var repository = new MemoryRepository(save.Path);
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        var tracker = new DesktopTrackerViewModel(coordinator);
+        var window = new MainWindow { DataContext = tracker, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            await tracker.InitializeAsync();
+            await FlushBindingsAsync();
+            var gameSelector = (ComboBox)window.FindName("GameSelector");
+            var characterSelector = (ComboBox)window.FindName("EldenRingProfileSlotSelector");
+            var increment = FindButton(window, "Increase manual deaths");
+            var decrement = FindButton(window, "Decrease manual deaths");
+            var unrelated = new HashSet<string>(StringComparer.Ordinal)
+            {
+                nameof(tracker.ControlsEnabled), nameof(tracker.IsBusy), nameof(tracker.SelectedGame),
+                nameof(tracker.GameChoices), nameof(tracker.SelectedEldenRingProfileSlot),
+                nameof(tracker.EldenRingProfileSlots), nameof(tracker.SelectedEldenRingSaveChoice),
+                nameof(tracker.EldenRingSaveChoices), nameof(tracker.SelectedBlackMythWukongSaveChoice),
+                nameof(tracker.BlackMythWukongSaveChoices), nameof(tracker.SelectedLiesOfPSaveChoice),
+                nameof(tracker.LiesOfPSaveChoices), nameof(tracker.EldenRingDirectoryPath),
+                nameof(tracker.BlackMythWukongDirectoryPath), nameof(tracker.LiesOfPDirectoryPath),
+                nameof(tracker.CanSelectEldenRingProfile), nameof(tracker.IsEldenRingSaveSelectorEnabled),
+                nameof(tracker.IsWukongSaveSelectorEnabled), nameof(tracker.IsLiesOfPSaveSelectorEnabled),
+                nameof(tracker.RuntimeReaderStatusText), nameof(tracker.CanChangeUpdatePreference),
+                nameof(tracker.CheckForUpdatesOnStartup), nameof(tracker.PresentationControlsEnabled)
+            };
+            var unexpected = new List<string>();
+            var countNotifications = new List<long>();
+            var decrementNotifications = new List<bool>();
+            var gameEnabledChanges = new List<bool>();
+            var characterEnabledChanges = new List<bool>();
+            tracker.PropertyChanged += (_, e) =>
+            {
+                if (string.IsNullOrEmpty(e.PropertyName) || unrelated.Contains(e.PropertyName))
+                    unexpected.Add(e.PropertyName ?? "<null>");
+                if (e.PropertyName == nameof(tracker.ManualDeaths)) countNotifications.Add(tracker.ManualDeaths);
+                if (e.PropertyName == nameof(tracker.CanDecrementManualDeaths))
+                    decrementNotifications.Add(tracker.CanDecrementManualDeaths);
+            };
+            gameSelector.IsEnabledChanged += (_, _) => gameEnabledChanges.Add(gameSelector.IsEnabled);
+            characterSelector.IsEnabledChanged += (_, _) => characterEnabledChanges.Add(characterSelector.IsEnabled);
+
+            Invoke(increment);
+            await WaitUntilAsync(() => tracker.ManualDeaths == 1 && decrement.IsEnabled);
+            Invoke(decrement);
+            await WaitUntilAsync(() => tracker.ManualDeaths == 0 && !decrement.IsEnabled);
+            await FlushBindingsAsync();
+
+            Assert.Equal(0, tracker.ManualDeaths);
+            Assert.Equal(0, repository.State.ManualDemonsSoulsDeathCounter.Value);
+            Assert.Collection(countNotifications, count => Assert.Equal(1, count), count => Assert.Equal(0, count));
+            Assert.Collection(decrementNotifications, canDecrement => Assert.True(canDecrement), canDecrement => Assert.False(canDecrement));
+            Assert.True(unexpected.Count == 0, string.Join(", ", unexpected));
+            Assert.Empty(gameEnabledChanges);
+            Assert.Empty(characterEnabledChanges);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public Task CounterOnlyCommitsKeepGameSelectionItemsScrollAndButtonFocus() => RunOnDispatcherAsync(async () =>
     {
         using var save = new TemporarySave();

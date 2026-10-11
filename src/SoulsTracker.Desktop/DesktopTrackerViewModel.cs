@@ -1283,12 +1283,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public Task IncrementManualDeathsAsync(CancellationToken cancellationToken = default) =>
         !IsManualGameSelected || !ControlsEnabled
             ? Task.CompletedTask
-            : SubmitAsync(new IncrementManualDeathsCommand(), cancellationToken);
+            : SubmitManualCounterAsync(new IncrementManualDeathsCommand(), cancellationToken);
 
     public Task DecrementManualDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanDecrementManualDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new DecrementManualDeathsCommand(), cancellationToken);
+            : SubmitManualCounterAsync(new DecrementManualDeathsCommand(), cancellationToken);
 
     /// <summary>Routes the shared global increment binding to the active supported counter.</summary>
     public Task IncrementGlobalTrackedDeathsAsync(CancellationToken cancellationToken = default) =>
@@ -1364,6 +1364,32 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         bool showGameName,
         CancellationToken cancellationToken) =>
         SubmitAsync(new UpdateOverlayPresentationCommand(totalDeathsEnabled, showGameName), cancellationToken);
+
+    private async Task SubmitManualCounterAsync(ITrackerCommand command, CancellationToken cancellationToken)
+    {
+        ErrorMessage = null;
+        try
+        {
+            TrackerCommandExecutionResult result = await coordinator.SubmitAsync(command, cancellationToken);
+            if (result.CommittedState is not null)
+            {
+                long previousDeaths = ManualDeaths;
+                bool previousCanDecrement = CanDecrementManualDeaths;
+                state = result.CommittedState;
+                UpdateTotalDeathsText();
+                if (ManualDeaths != previousDeaths) OnPropertyChanged(nameof(ManualDeaths));
+                if (CanDecrementManualDeaths != previousCanDecrement) OnPropertyChanged(nameof(CanDecrementManualDeaths));
+            }
+            if (result.Status is TrackerCommandExecutionStatus.SaveFailed or TrackerCommandExecutionStatus.NotInitialized)
+                ErrorMessage = "SoulsTracker could not save the requested tracker change. The displayed state was not changed.";
+            else if (result.Status == TrackerCommandExecutionStatus.DeliveryFailed)
+                ErrorMessage = "The tracker change was saved, but a local update could not be delivered.";
+        }
+        catch
+        {
+            ErrorMessage = "SoulsTracker could not apply the requested tracker change. Try again.";
+        }
+    }
 
     private async Task SubmitAsync(ITrackerCommand command, CancellationToken cancellationToken)
     {

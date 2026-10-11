@@ -205,7 +205,7 @@ public sealed class UpdatePreferenceFeedbackTests
     });
 
     [Fact]
-    public Task UnrelatedTrackerSaveDisablesStartupPreference() => HostedConnectionTests.OnDispatcher(async () =>
+    public Task ManualCounterSaveLeavesStartupPreferenceAvailable() => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new RecordingRepository(false, false) { SaveRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new UpdateSessionTests.Publisher());
@@ -222,8 +222,8 @@ public sealed class UpdatePreferenceFeedbackTests
             Task save = vm.IncrementManualDeathsAsync();
             await HostedDesktopPublisherTests.WaitUntil(() => repository.Saves == 1);
             await Idle();
-            Assert.True(vm.IsBusy);
-            Assert.False(toggle.IsEnabled);
+            Assert.False(vm.IsBusy);
+            Assert.True(toggle.IsEnabled);
             repository.SaveRelease.TrySetResult();
             await save;
             await Idle();
