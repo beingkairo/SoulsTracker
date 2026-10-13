@@ -68,7 +68,7 @@ public sealed class HostedPublisherProtocolTests
     }
 
     [Fact]
-    public async Task StartupMatchingDigestsSuppressAllStateWrites()
+    public async Task StartupMatchingDigestsConfirmsCurrentDeathWithoutChangingRevisions()
     {
         var offer = Offer("4");
         var server = new Server { DeathDigest = HostedPublisherProtocol.Digest(offer.Death), AppearanceDigest = HostedPublisherProtocol.Digest(offer.Appearance) };
@@ -76,7 +76,10 @@ public sealed class HostedPublisherProtocolTests
         sender.Offer(offer);
         await WaitUntil(() => sender.Status == HostedPublisherStatus.Ready);
         await sender.DisposeAsync();
-        Assert.Equal(["GET", "POST"], server.Methods);
+        Assert.Equal(["GET", "POST", "PUT"], server.Methods);
+        using var body = JsonDocument.Parse(server.Bodies[^1]);
+        Assert.True(body.RootElement.TryGetProperty("death", out _));
+        Assert.False(body.RootElement.TryGetProperty("appearance", out _));
     }
 
     [Fact]

@@ -1,8 +1,8 @@
 import type { HostedAppearance, HostedDeath } from "./hosted-contracts.js";
 
 // The retained compact renderer layout, with wire-validated appearance only.
-export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string): Promise<void> {
-  if (!appearance.enabled) { target.replaceChildren(); return Promise.resolve(); }
+export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string, status: "live" | "open" | "update" | "waiting" = "live"): Promise<void> {
+  if (status === "live" && !appearance.enabled) { target.replaceChildren(); return Promise.resolve(); }
   const panel = document.createElement("section");
   panel.className = "souls-tracker-overlay-panel";
   panel.dataset.testid = "total-deaths-overlay";
@@ -21,6 +21,16 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
     effects.push(`${x}px ${y}px 0 ${appearance.outlineColor}`);
   if (appearance.shadowEnabled) effects.push(`${appearance.shadowOffsetX}px ${appearance.shadowOffsetY}px ${appearance.shadowBlur}px ${appearance.shadowColor}`);
   panel.style.textShadow = effects.join(", ");
+  if (status !== "live") {
+    const message = document.createElement("p");
+    message.className = "overlay-total-deaths";
+    message.setAttribute("role", "status");
+    message.textContent = status === "open" ? "Please open SoulsTracker." : status === "update" ? "Please update SoulsTracker." : "";
+    panel.append(message);
+    target.className = "souls-tracker-total-deaths-canvas";
+    target.replaceChildren(panel);
+    return Promise.resolve();
+  }
   const value = death?.value ?? "0";
   const hasHeading = appearance.title.trim().length > 0 || appearance.titleIconMode === "skullOnly";
   if (hasHeading) {

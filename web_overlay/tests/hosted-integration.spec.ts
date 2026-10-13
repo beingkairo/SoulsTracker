@@ -13,7 +13,7 @@ async function provision(request: any): Promise<Credentials> {
 }
 async function acquire(request: any, target: Credentials): Promise<void> {
   const acquired = await request.post(`${origin}/api/v1/overlays/${target.id}/session`, {
-    headers: { Authorization: `Bearer ${target.write}` }, data: { v: 1, expectedEpoch: "0", sessionRequestId: "3".repeat(32) }
+    headers: { Authorization: `Bearer ${target.write}` }, data: { v: 1, protocolVersion: 2, expectedEpoch: "0", sessionRequestId: "3".repeat(32) }
   });
   expect(acquired.status()).toBe(200);
 }
@@ -22,6 +22,20 @@ test.beforeEach(async ({ request }) => {
   await acquire(request, credentials);
 });
 const address = () => `${origin}/soulstracker/#id=${credentials.id}&read=${credentials.read}`;
+test("authenticated legacy contact shows update until the compatible publisher resumes on the same URL", async ({ page, request }) => {
+  const url = address();
+  const legacy = await request.post(`${origin}/api/v1/overlays/${credentials.id}/session`, {
+    headers: { Authorization: `Bearer ${credentials.write}` },
+    data: { v: 1, expectedEpoch: "1", sessionRequestId: "4".repeat(32) }
+  });
+  expect(legacy.status()).toBe(409);
+  expect(await legacy.json()).toEqual({ error: "client_update_required" });
+  await page.goto(url);
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Please update SoulsTracker.");
+  await publish(request, { death: { value: "8", availability: "available" } });
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 8");
+  expect(page.url()).toBe(url);
+});
 test("hosted viewport centers complete painted content at intrinsic scale", async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 640, height: 360 });
   await publish(request, { death: { value: "42", availability: "available" }, appearance: { ...style, padding: 12, backgroundOpacity: 100 } });
@@ -185,7 +199,7 @@ for (const variant of [
 }
 async function publish(request: any, channels: object) {
   const response = await request.put(`${origin}/api/v1/overlays/${credentials.id}/state`, {
-    headers: { Authorization: `Bearer ${credentials.write}` }, data: { v: 1, epoch: "1", sessionRequestId: "3".repeat(32), sequence: String(++sequence), ...channels }
+    headers: { Authorization: `Bearer ${credentials.write}` }, data: { v: 1, protocolVersion: 2, epoch: "1", sessionRequestId: "3".repeat(32), sequence: String(++sequence), ...channels }
   });
   expect(response.status()).toBe(200);
 }
@@ -198,11 +212,11 @@ for (const value of ["7", "42", "0"]) {
   });
 }
 
-test("real Worker hydrates missing death as zero then pushes exact totals and reloads without Desktop", async ({ page, request }) => {
+test("real Worker shows inactive until confirmed death then reloads the same URL", async ({ page, request }) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
   await page.goto(address());
-  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 0");
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Please open SoulsTracker.");
   await publish(request, { death: { value: "9223372036854775807", availability: "available" } });
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 9223372036854775807");
   await page.reload();
@@ -273,7 +287,7 @@ test("isolated harness identities finish publish after another live session clos
 
   const completed = await request.put(`${origin}/api/v1/overlays/${next.id}/state`, {
     headers: { Authorization: `Bearer ${next.write}` }, timeout: 10000,
-    data: { v: 1, epoch: "1", sessionRequestId: "3".repeat(32), sequence: "1",
+    data: { v: 1, protocolVersion: 2, epoch: "1", sessionRequestId: "3".repeat(32), sequence: "1",
       appearance: { ...style, title: "Isolated", fontSize: 24 } }
   });
   expect(completed.status()).toBe(200);
@@ -420,7 +434,7 @@ test("credential-free shell and hashed assets have cache and same-origin securit
     }
   }
   expect(seen.size).toBe(6);
-  const publisher = await request.get(`${origin}/api/v1/overlays/${credentials.id}/publisher`, { headers: { Authorization: `Bearer ${credentials.write}` } });
+  const publisher = await request.get(`${origin}/api/v1/overlays/${credentials.id}/publisher`, { headers: { Authorization: `Bearer ${credentials.write}`, "X-SoulsTracker-Protocol": "2" } });
   expect(publisher.headers()["cache-control"]).toBe("no-store");
   expect(publisher.headers()["access-control-allow-origin"]).toBeUndefined();
   expect(publisher.headers()["set-cookie"]).toBeUndefined();

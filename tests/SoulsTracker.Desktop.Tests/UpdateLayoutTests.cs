@@ -165,7 +165,7 @@ public sealed class UpdateLayoutTests
             Assert.True(view.Focus());
             ((IInvokeProvider)new ButtonAutomationPeer(view).GetPattern(PatternInterface.Invoke)).Invoke();
             await Idle();
-            Assert.Equal(new Uri("https://beingkairo.com/tools/souls-tracker/"), launcher.Opened);
+            Assert.Equal(new Uri("https://beingkairo.com/tools/soulstracker/"), launcher.Opened);
             Assert.Equal("New version out!", vm.UpdateCheckStatus);
             Assert.Empty(window.OwnedWindows.Cast<Window>());
             AppearanceGeometryTests.Capture(window, $"updates-{width}-{height}-newer");

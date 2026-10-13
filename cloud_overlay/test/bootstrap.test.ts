@@ -28,15 +28,21 @@ it("never adopts orphaned channels as a new identity", async () => {
   expect(result.status).toBe(403);
   expect(result.rows).toEqual([{ key: "death", value: "null" }]);
 });
-async function request(config: unknown = bootstrap, token = write) {
+async function request(config: unknown = bootstrap, token = write, protocolVersion: string | null = "2") {
   return runInDurableObject(env.OVERLAYS.getByName(id), async (_, state) => {
     const instance = new OverlayState(state, { ...env, ...{ BOOTSTRAP: config } });
     const result = await instance.fetch(new Request(`https://overlay.test/api/v1/overlays/${id}/publisher`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}`, ...(protocolVersion === null ? {} : { "X-SoulsTracker-Protocol": protocolVersion }) }
     }));
     return { status: result.status, body: await result.json(), rows: state.storage.sql.exec("SELECT key,value FROM records ORDER BY key").toArray() };
   });
 }
+it("does not initialize an unused legacy identity for a rejected legacy GET", async () => {
+  const legacy = await request(bootstrap, write, null);
+  expect(legacy.status).toBe(409);
+  expect(legacy.rows).toEqual([]);
+  expect((await request()).status).toBe(200);
+});
 it("initializes only the exact write-authorized identity with empty channels", async () => {
   const result = await request();
   expect(result.status).toBe(200);
@@ -88,7 +94,8 @@ it("preserves rotations sessions and channels across replay restart and bootstra
     const send = async (action: string, body: unknown, token: string) => {
       const result = await instance.fetch(new Request(`https://overlay.test/api/v1/overlays/${id}/${action}`, {
         method: action === "state" ? "PUT" : "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body)
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ protocolVersion: 2, ...body as object })
       }));
       expect(result.status).toBe(200); await result.text();
     };

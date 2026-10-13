@@ -1,4 +1,4 @@
-import { parseHostedOverlay, type HostedAppearance, type HostedDeath } from "./hosted-contracts.js";
+import { parseHostedV2, type HostedAppearance, type HostedDeath, type HostedPresence } from "./hosted-contracts.js";
 
 export interface HostedLocation { id: string; read: string; origin: string }
 export function parseHostedLocation(address: string): HostedLocation | null {
@@ -32,6 +32,10 @@ const browserRuntime: Runtime = {
 export class HostedClient {
   private socket?: Socket;
   private timer?: number;
+  private expiryTimer?: number;
+  private presence?: HostedPresence;
+  private presenceReceivedAt = 0;
+  private lastStatus?: "live" | "open" | "update" | "waiting";
   private generation = 0;
   private running = false;
   private revoked = false;
@@ -40,7 +44,7 @@ export class HostedClient {
   private appearance?: HostedAppearance;
 
   constructor(private readonly location: HostedLocation,
-    private readonly render: (death: HostedDeath | null, appearance: HostedAppearance) => void,
+    private readonly render: (death: HostedDeath | null, appearance: HostedAppearance, status: "live" | "open" | "update" | "waiting") => void,
     private readonly runtime: Runtime = browserRuntime) {}
 
   start(): void {
@@ -52,12 +56,27 @@ export class HostedClient {
     this.running = false;
     this.generation++;
     this.cancelTimer();
+    if (this.expiryTimer !== undefined) this.runtime.clearTimeout(this.expiryTimer);
     this.socket?.close();
     this.socket = undefined;
   }
   private cancelTimer(): void {
     if (this.timer !== undefined) this.runtime.clearTimeout(this.timer);
     this.timer = undefined;
+  }
+  private display(force = false): void {
+    if (!this.appearance) return;
+    const p = this.presence;
+    const elapsed = Math.max(0, this.runtime.now() - this.presenceReceivedAt);
+    const now = (p?.serverTime ?? 0) + elapsed;
+    const active = p?.leaseExpiresAt !== null && p?.leaseExpiresAt !== undefined && p.leaseExpiresAt > now;
+    const legacy = p?.legacyContactExpiresAt !== null && p?.legacyContactExpiresAt !== undefined && p.legacyContactExpiresAt > now;
+    const status = !p ? "waiting" : active ? p.confirmed ? "live" : "waiting" : legacy ? "update" : "open";
+    if (force || this.lastStatus !== status) this.render(this.death, this.appearance, status);
+    this.lastStatus = status;
+    if (this.expiryTimer !== undefined) this.runtime.clearTimeout(this.expiryTimer);
+    const deadlines = [p?.leaseExpiresAt, p?.legacyContactExpiresAt].filter((value): value is number => value !== null && value !== undefined && value > now);
+    if (deadlines.length) this.expiryTimer = this.runtime.setTimeout(() => { this.expiryTimer = undefined; this.display(); }, Math.max(1, Math.min(...deadlines) - now));
   }
   private connect(): void {
     const generation = ++this.generation;
@@ -79,6 +98,7 @@ export class HostedClient {
     };
     const heartbeat = () => {
       if (!current()) return;
+      this.display();
       if (this.runtime.now() - lastResponse >= 90000) { disconnect(); return; }
       try { if (opened) socket.send("ping"); } catch { disconnect(); return; }
       this.timer = this.runtime.setTimeout(heartbeat, 30000);
@@ -89,7 +109,7 @@ export class HostedClient {
       socket.onopen = () => {
         if (!current()) return;
         opened = true;
-        try { socket.send(JSON.stringify({ v: 1, type: "auth", readCapability: this.location.read })); }
+        try { socket.send(JSON.stringify({ v: 1, type: "auth", protocolVersion: 2, readCapability: this.location.read })); }
         catch { disconnect(); }
       };
       socket.onmessage = event => {
@@ -97,8 +117,9 @@ export class HostedClient {
         try {
           if (event.data === "pong") { if (hydrated) lastResponse = this.runtime.now(); return; }
           if (typeof event.data !== "string") throw new Error();
-          const envelope = parseHostedOverlay(event.data);
+          const envelope = parseHostedV2(event.data);
           if (!hydrated && envelope.type !== "snapshot") throw new Error();
+          if (this.presence && envelope.presence.generation < this.presence.generation) return;
           let changed = !this.appearance;
           if (envelope.death && (!this.death || BigInt(envelope.death.revision) > BigInt(this.death.revision))) {
             this.death = envelope.death; changed = true;
@@ -106,9 +127,13 @@ export class HostedClient {
           if (envelope.appearance && (!this.appearance || BigInt(envelope.appearance.revision) > BigInt(this.appearance.revision))) {
             this.appearance = envelope.appearance; changed = true;
           }
+          if (!this.presence || envelope.presence.generation >= this.presence.generation) {
+            this.presence = envelope.presence;
+            this.presenceReceivedAt = this.runtime.now();
+          }
           if (!hydrated) { hydrated = true; this.delay = 1000; }
           lastResponse = this.runtime.now();
-          if (changed) this.render(this.death, this.appearance!);
+          this.display(changed);
         } catch { disconnect(4400); }
       };
       socket.onerror = () => disconnect();

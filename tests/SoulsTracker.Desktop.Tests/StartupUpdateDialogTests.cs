@@ -157,7 +157,7 @@ public sealed class StartupUpdateDialogTests
                     Assert.True(open.IsKeyboardFocused);
                     var before = (vm.UpdateCurrentVersion, vm.UpdateLatestVersion, vm.UpdateCheckStatus);
                     open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                    Assert.Equal(new Uri("https://beingkairo.com/tools/souls-tracker/"), launcher.Opened);
+                    Assert.Equal(new Uri("https://beingkairo.com/tools/soulstracker/"), launcher.Opened);
                     Assert.Equal(before, (vm.UpdateCurrentVersion, vm.UpdateLatestVersion, vm.UpdateCheckStatus));
                     Assert.True(dialog.IsVisible);
                     var error = (TextBlock)dialog.FindName("UpdatePageActionError");

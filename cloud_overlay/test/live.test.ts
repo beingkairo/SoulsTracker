@@ -24,13 +24,67 @@ const sessionRequestId = "3".repeat(32);
 async function send(action: string, body: unknown, token = write) {
   const result = await exports.default.fetch(`https://overlay.test/api/v1/overlays/${id}/${action}`, {
     method: action === "state" ? "PUT" : "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body)
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body && typeof body === "object" ? { protocolVersion: 2, ...body } : body)
   });
   return { status: result.status, body: await result.json() };
 }
 const acquire = () => send("session", { v: 1, expectedEpoch: "0", sessionRequestId });
 const candidate = (sequence = "1", value = "9007199254740993") => ({ v: 1, epoch: "1", sessionRequestId, sequence,
   death: { value, availability: "available" } });
+it("fences authenticated legacy mutations while compatible presence is live", async () => {
+  await provision(); await acquire(); await send("state", candidate());
+  const stub = env.OVERLAYS.getByName(id);
+  const control = () => runInDurableObject(stub, (_, state) => JSON.parse(state.storage.sql.exec<{ value: string }>(
+    "SELECT value FROM records WHERE key='control'").one().value));
+  const before = await control();
+  const legacy = await exports.default.fetch(`https://overlay.test/api/v1/overlays/${id}/session`, {
+    method: "POST", headers: { Authorization: `Bearer ${write}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ v: 1, expectedEpoch: before.epoch, sessionRequestId: "4".repeat(32) })
+  });
+  expect(legacy.status).toBe(409);
+  expect(await legacy.json()).toEqual({ error: "client_update_required" });
+  const after = await control();
+  expect(after.legacyContactExpiresAt).toBeGreaterThan(Date.now());
+  delete after.legacyContactExpiresAt;
+  expect(after).toEqual(before);
+  const socket = await connect();
+  const snapshot = next(socket);
+  socket.send(JSON.stringify({ v: 1, type: "auth", protocolVersion: 2, readCapability: read }));
+  expect(JSON.parse(await snapshot)).toMatchObject({ v: 2, type: "snapshot", presence: { confirmed: true },
+    death: { value: candidate().death.value } });
+  socket.close();
+  await runInDurableObject(stub, (_, state) => {
+    const expired = { ...before, leaseExpiresAt: 1, legacyContactExpiresAt: 1 };
+    state.storage.sql.exec("UPDATE records SET value=? WHERE key='control'", JSON.stringify(expired));
+  });
+  const inactive = await connect();
+  const hydration = next(inactive);
+  inactive.send(JSON.stringify({ v: 1, type: "auth", protocolVersion: 2, readCapability: read }));
+  expect(JSON.parse(await hydration).presence).toMatchObject({ leaseExpiresAt: 1, legacyContactExpiresAt: 1 });
+  inactive.close();
+  const quietLegacy = await exports.default.fetch(`https://overlay.test/api/v1/overlays/${id}/publisher`, {
+    headers: { Authorization: `Bearer ${write}` }
+  });
+  expect(quietLegacy.status).toBe(409);
+  expect((await control()).legacyContactExpiresAt).toBe(1);
+  const late = await exports.default.fetch(`https://overlay.test/api/v1/overlays/${id}/state`, {
+    method: "PUT", headers: { Authorization: `Bearer ${write}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ...candidate("2", "999"), protocolVersion: 3 })
+  });
+  expect(late.status).toBe(409);
+  expect(await late.json()).toEqual({ error: "client_update_required" });
+  const rejected = await control();
+  expect(rejected.legacyContactExpiresAt).toBeGreaterThan(Date.now());
+  delete rejected.legacyContactExpiresAt;
+  expect(rejected).toEqual({ ...before, leaseExpiresAt: 1 });
+  const update = await connect();
+  const notice = next(update);
+  update.send(JSON.stringify({ v: 1, type: "auth", protocolVersion: 2, readCapability: read }));
+  expect(JSON.parse(await notice)).toMatchObject({ v: 2, death: { value: candidate().death.value },
+    presence: { leaseExpiresAt: 1, legacyContactExpiresAt: expect.any(Number) } });
+  update.close();
+});
 async function authenticate(socket: WebSocket, token = read) {
   const snapshot = next(socket);
   socket.send(JSON.stringify({ v: 1, type: "auth", readCapability: token }));
@@ -229,7 +283,7 @@ it("reconstructs authenticated attachments and filters revoked generations after
   expect(JSON.parse(await update).death.revision).toBe("1");
   await runInDurableObject(stub, (_, state) => {
     const sockets = state.getWebSockets(); expect(sockets).toHaveLength(1);
-    expect(sockets[0].deserializeAttachment()).toEqual({ phase: "authenticated", generation: "0" });
+    expect(sockets[0].deserializeAttachment()).toEqual({ phase: "authenticated", generation: "0", protocolVersion: 1 });
     const control = JSON.parse(state.storage.sql.exec<{ value: string }>("SELECT value FROM records WHERE key='control'").one().value);
     control.readGeneration = "1";
     state.storage.sql.exec("UPDATE records SET value=? WHERE key='control'", JSON.stringify(control));

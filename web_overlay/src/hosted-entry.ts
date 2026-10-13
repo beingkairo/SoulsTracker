@@ -9,7 +9,7 @@ if (root) {
     root.replaceChildren();
     const location = parseHostedLocation(window.location.href);
     if (location) {
-      client = new HostedClient(location, (death, appearance) => renderHosted(root, death, appearance, "__HOSTED_SKULL__"));
+      client = new HostedClient(location, (death, appearance, status) => renderHosted(root, death, appearance, "__HOSTED_SKULL__", status));
       client.start();
     }
   };

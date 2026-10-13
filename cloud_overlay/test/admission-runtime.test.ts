@@ -8,7 +8,7 @@ import type {} from "./authority.test";
 const id = "1".repeat(32), other = "2".repeat(32), write = "3".repeat(64), read = "4".repeat(64);
 afterEach(() => reset());
 const request = (identity = id, token = write) => new Request(`https://overlay.test/api/v1/overlays/${identity}/publisher`, {
-  headers: { Authorization: `Bearer ${token}` }
+  headers: { Authorization: `Bearer ${token}`, "X-SoulsTracker-Protocol": "2" }
 });
 async function provision() {
   await runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => {

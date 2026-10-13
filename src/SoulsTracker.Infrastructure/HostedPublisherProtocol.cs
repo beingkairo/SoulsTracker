@@ -69,6 +69,7 @@ internal static class HostedPublisherProtocol
         Dictionary<string, object?> fields = new()
         {
             ["v"] = 1,
+            ["protocolVersion"] = 2,
             ["epoch"] = epoch,
             ["sessionRequestId"] = session,
             ["sequence"] = sequence.ToString(CultureInfo.InvariantCulture),

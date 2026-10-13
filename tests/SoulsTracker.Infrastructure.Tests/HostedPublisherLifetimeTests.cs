@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text;
+using System.Text.Json;
 using static SoulsTracker.Infrastructure.Tests.HostedPublisherTests;
 using static SoulsTracker.Infrastructure.Tests.HostedPublisherRaceTests;
 
@@ -6,6 +8,38 @@ namespace SoulsTracker.Infrastructure.Tests;
 
 public sealed class HostedPublisherLifetimeTests
 {
+    [Fact]
+    public async Task IncompatibleServerVersionStopsPublisherAsInvalidProtocol()
+    {
+        var server = new Server
+        {
+            Intercept = (_, _, _) => Task.FromResult<HttpResponseMessage?>(new HttpResponseMessage(HttpStatusCode.Conflict)
+            {
+                Content = new StringContent("{\"error\":\"client_update_required\"}", Encoding.UTF8, "application/json")
+            })
+        };
+        await using var sender = new HostedOverlayPublisher(Configuration(), server);
+        await WaitUntil(() => sender.Status == HostedPublisherStatus.InvalidProtocol);
+        Assert.Single(server.Methods);
+    }
+
+    [Fact]
+    public async Task UnchangedDeathRenewsPresenceWithoutPublishingAnotherChannel()
+    {
+        var clock = new Clock();
+        var server = new Server();
+        await using var sender = new HostedOverlayPublisher(Configuration(), server, clock);
+        Assert.True(sender.Offer(Offer("7")));
+        await WaitUntil(() => sender.Status == HostedPublisherStatus.Ready && server.Methods.Count >= 3);
+        clock.Advance(TimeSpan.FromSeconds(60));
+        await WaitUntil(() => server.Methods.Count >= 4);
+        using var heartbeat = JsonDocument.Parse(server.Bodies[^1]);
+        Assert.Equal(2, heartbeat.RootElement.GetProperty("protocolVersion").GetInt32());
+        Assert.False(heartbeat.RootElement.TryGetProperty("death", out _));
+        Assert.False(heartbeat.RootElement.TryGetProperty("appearance", out _));
+        Assert.Equal("2", heartbeat.RootElement.GetProperty("sequence").GetString());
+    }
+
     [Fact]
     public async Task StatusNotificationsNeverRunUnderSenderLockEvenAfterWorkerStops()
     {
