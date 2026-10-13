@@ -41,6 +41,28 @@ public sealed class HostedPublisherLifetimeTests
     }
 
     [Fact]
+    public async Task RepeatedUnchangedOffersCannotPostponePresenceRenewal()
+    {
+        var clock = new Clock();
+        var server = new Server();
+        await using var sender = new HostedOverlayPublisher(Configuration(), server, clock);
+        Assert.True(sender.Offer(Offer("7")));
+        await WaitUntil(() => sender.Status == HostedPublisherStatus.Ready && server.Methods.Count >= 3);
+        foreach (var seconds in new[] { 20, 20, 19 })
+        {
+            clock.Advance(TimeSpan.FromSeconds(seconds));
+            Assert.True(sender.Offer(Offer("7")));
+            await WaitUntil(() => sender.Status == HostedPublisherStatus.Ready);
+            Assert.Equal(3, server.Methods.Count);
+        }
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await WaitUntil(() => server.Methods.Count >= 4);
+        Assert.Equal(4, server.Methods.Count);
+        using var heartbeat = JsonDocument.Parse(server.Bodies[^1]);
+        Assert.False(heartbeat.RootElement.TryGetProperty("death", out _));
+    }
+
+    [Fact]
     public async Task StatusNotificationsNeverRunUnderSenderLockEvenAfterWorkerStops()
     {
         var server = new Server { Intercept = (_, _, _) => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.Conflict)) };
@@ -124,6 +146,8 @@ public sealed class HostedPublisherLifetimeTests
         private readonly List<Timer> timers = [];
         private TimeSpan elapsed;
         public override DateTimeOffset GetUtcNow() { lock (gate) return DateTimeOffset.UnixEpoch + elapsed; }
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() { lock (gate) return elapsed.Ticks; }
         internal int ActiveTimers { get { lock (gate) return timers.Count(t => !t.Disposed && t.Due != Timeout.InfiniteTimeSpan); } }
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {

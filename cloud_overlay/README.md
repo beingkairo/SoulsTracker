@@ -25,11 +25,10 @@ npm audit
 It does not deploy. Do not omit that flag. Tests use the official Cloudflare
 Vitest pool and local workerd with SQLite storage. They inject synthetic
 verifiers through `runInDurableObject`; no application database is accessed.
-The tracked production configuration omits anonymous-create rate bindings, the
-provisioning-authority binding and migration, and all ceiling configuration, so
-anonymous creation fails closed until a later owner-approved deployment configuration
-supplies them. The separate test Worker configuration provides deterministic local
-authority, limiter, configuration-version, ceiling and hard-maximum fixtures only.
+The tracked production configuration includes anonymous-create admission bindings
+and a versioned provisioning authority. Its current lifetime ceiling is a temporary
+rollout safety stop, not a permanent product capacity policy. The separate test
+Worker configuration supplies deterministic local authority and limiter fixtures.
 There is no production HTTP override. Playwright starts a separate test-only
 Wrangler configuration on local TLS at port 8799. That harness injects synthetic
 credentials into isolated workerd storage and can disconnect readers; its entry
@@ -73,6 +72,23 @@ These write-authorized HTTPS endpoints exist under `/api/v1/overlays/{id}`:
 - `POST /session`: `{v, expectedEpoch, sessionRequestId}`.
 - `PUT /state`: `{v, epoch, sessionRequestId, sequence, death?, appearance?}`.
 - `POST /credentials`: `{v, rotationId, expectedGeneration, readCapability?, writeCapability?}`.
+
+Desktop v2.1.1 identifies itself with Hosted Overlay `protocolVersion:2`, separate
+from the `v:1` transport shape. Publisher GET uses the `X-SoulsTracker-Protocol: 2`
+header; mutations carry `protocolVersion:2` in the JSON body and the matching
+header. Missing/unsupported versions on otherwise authenticated, valid mutations
+return 409 `client_update_required`. They cannot publish or rotate credentials;
+they can only refresh a 180-second incompatible-contact marker. Legacy publisher
+GET and browser readers never mark contact. The current client confirms death or
+appearance on the existing state route and sends presence-only state requests
+every 60 seconds without changing channel revisions. Each accepted request grants
+a 180-second server-clock publisher lease. Exact replay does not extend the lease.
+Expired publishers leave stored identity, URL, and last values intact. A new
+compatible session must confirm state or renew presence to become live. The v2
+reader shows `Please update SoulsTracker.` only during recent authenticated legacy
+contact with no live compatible publisher; otherwise an inactive publisher shows
+`Please open SoulsTracker.` Old browser assets require refresh to display these
+states, so a rollout must retain prior hashed assets while existing readers drain.
 
 Every endpoint requires `Authorization: Bearer <write-capability>`. Query
 credentials, cookie authentication, CORS access and other routes/methods are not
@@ -185,6 +201,23 @@ referrers and set nosniff. Rendering uses textContent and typed CSS properties,
 without inline scripts, style text or external resources. Dynamic responses are
 no-store and do not enable CORS or authentication cookies. Local browser tests
 check actual CSP behavior, asset loading and cache headers.
+
+## Provisioning and rollout gate
+
+Existing protected Desktop pairings and reserved create requests reuse their
+original identity and URL. Disabling Hosted Overlay stops network activity but does
+not revoke identity or remove the last stored display. New creation remains subject
+to the versioned authority's lifetime ceiling; historical inactive identities still
+consume that ceiling. A scalable allocation policy has not been approved. Do not
+increase or remove this stop based on a guessed Cloudflare account limit. First
+reconcile aggregate active/reserved ledger counts, legacy seed count, distinct union
+and overlap, effective deployed and persisted configuration, account plan, usage,
+and resource headroom using an authorized read-only operator report. Record an
+evidence-backed creation budget and emergency stop procedure before changing the
+authority policy. Existing reads, authenticated compatible writes and exact pending
+replay must remain available when new creation is stopped. Deployment also requires
+an explicit checked-in/deployed/persisted config comparison; a source match to
+deployed metadata alone does not establish persisted authority equality.
 
 ## Before any live use
 

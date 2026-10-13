@@ -113,6 +113,7 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
             bool uncertainDeath = false, uncertainAppearance = false;
             bool confirmedDeath = false;
             int failures = 0;
+            long lastAccepted = clock.GetTimestamp();
             while (true)
             {
                 stop.Token.ThrowIfCancellationRequested();
@@ -133,7 +134,8 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
                 NotifyStatus();
                 if (candidate is null)
                 {
-                    if (await WaitForWorkAsync().ConfigureAwait(false)) continue;
+                    var remaining = TimeSpan.FromSeconds(60) - clock.GetElapsedTime(lastAccepted);
+                    if (await WaitForWorkAsync(remaining).ConfigureAwait(false)) continue;
                     lock (gate)
                     {
                         if (closing) return;
@@ -160,6 +162,7 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
                         if (candidate.Appearance is not null) appearanceAcknowledged = candidate.AppearanceGeneration;
                     }
                     current = ack;
+                    lastAccepted = clock.GetTimestamp();
                     if (candidate.Death is not null) confirmedDeath = true;
                     uncertainDeath = uncertainAppearance = false;
                     retry = null;
@@ -181,11 +184,12 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
     }
 
     private sealed record Candidate(HostedDeath? Death, HostedAppearance? Appearance, long DeathGeneration, long AppearanceGeneration, string Body, long Sequence);
-    private async Task<bool> WaitForWorkAsync()
+    private async Task<bool> WaitForWorkAsync(TimeSpan remaining)
     {
+        if (remaining <= TimeSpan.Zero) return false;
         using var wait = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
         var signal = wake.WaitAsync(wait.Token);
-        var deadline = Task.Delay(TimeSpan.FromSeconds(60), clock, wait.Token);
+        var deadline = Task.Delay(remaining, clock, wait.Token);
         var first = await Task.WhenAny(signal, deadline).ConfigureAwait(false);
         await wait.CancelAsync().ConfigureAwait(false);
         try { await (first == signal ? deadline : signal).ConfigureAwait(false); }

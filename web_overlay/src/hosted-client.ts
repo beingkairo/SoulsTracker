@@ -25,7 +25,7 @@ interface Runtime {
   clearTimeout(id: number): void;
 }
 const browserRuntime: Runtime = {
-  socket: url => new WebSocket(url), now: () => Date.now(), random: () => Math.random(),
+  socket: url => new WebSocket(url), now: () => performance.now(), random: () => Math.random(),
   setTimeout: (callback, delay) => window.setTimeout(callback, delay), clearTimeout: id => window.clearTimeout(id)
 };
 
