@@ -1,8 +1,9 @@
 import type { Env } from "./index";
+import { digest } from "./protocol";
 
 // Local test-worker invocation only. This module is not imported by the Worker
 // entry or exposed as a Durable Object RPC. No production operation is authorized.
-type Reason = "none" | "uninitialized" | "invalid_configuration" | "invalid_ledger" | "read_failure";
+type Reason = "none" | "uninitialized" | "invalid_configuration" | "seed_configuration_mismatch" | "invalid_ledger" | "read_failure";
 type Report = {
   report_schema_version: 1;
   observed_start_utc: string;
@@ -47,10 +48,13 @@ export function reconcileAuthority(state: DurableObjectState, env: Env): Report 
         "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('allocations','authority_configuration')"
       ).toArray();
       if (tables.length !== 2) return { reason: "uninitialized" as const };
-      const configs = state.storage.sql.exec<{ configuration_version: number; ceiling: number; hard_maximum: number }>(
-        "SELECT configuration_version,ceiling,hard_maximum FROM authority_configuration WHERE singleton=1"
+      const configs = state.storage.sql.exec<{ configuration_version: number; ceiling: number; hard_maximum: number; seeds_digest: string | null }>(
+        "SELECT * FROM authority_configuration WHERE singleton=1"
       ).toArray();
       if (configs.length !== 1) return { reason: "uninitialized" as const };
+      if (typeof configs[0].seeds_digest !== "string" ||
+          !/^[0-9a-f]{64}$/.test(configs[0].seeds_digest) ||
+          configs[0].seeds_digest !== digest(seeds)) return { reason: "seed_configuration_mismatch" as const };
       const counts = state.storage.sql.exec<{ total: number; active: number; reserved: number; seed_origin: number; invalid: number }>(
         `SELECT COUNT(*) AS total,
           COUNT(*) FILTER (WHERE phase='active') AS active,
@@ -68,7 +72,8 @@ export function reconcileAuthority(state: DurableObjectState, env: Env): Report 
         ...seeds).one().count;
       return { config: configs[0], counts, overlap };
     });
-    if ("reason" in result) return empty("uninitialized", "uninitialized");
+    if ("reason" in result) return result.reason === "uninitialized"
+      ? empty("uninitialized", "uninitialized") : empty("seed_configuration_mismatch", "unavailable");
     const { config, counts, overlap } = result;
     if (![config.configuration_version, config.ceiling, config.hard_maximum, counts.total,
       counts.active, counts.reserved, counts.seed_origin, counts.invalid, overlap].every(safe) ||
