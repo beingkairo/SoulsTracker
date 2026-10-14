@@ -57,12 +57,20 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
     $readme -notmatch '(?m)^- Global hotkeys$') {
     throw 'README is missing its release link or current hotkey feature.'
 }
-$expectedChanges = @(
-    '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
-    '- Choose whether closing the window minimizes SoulsTracker to the tray with the optional Minimize to tray on close setting.',
-    '- Fixed Sticky Preview scrollbar stutter while docking and undocking.',
-    '- Settings organization and Hosted Overlay disabled-state behavior have been refined.'
-) -join "`n"
+$expectedChanges = if ($version -eq '2.1.1') {
+    @(
+        '- Hosted Overlay shows when SoulsTracker is closed or an older client needs an update.',
+        '- Hosted Overlay URLs stay the same when updating to this version.',
+        '- The update popup opens the SoulsTracker product page.'
+    ) -join "`n"
+} else {
+    @(
+        '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
+        '- Choose whether closing the window minimizes SoulsTracker to the tray with the optional Minimize to tray on close setting.',
+        '- Fixed Sticky Preview scrollbar stutter while docking and undocking.',
+        '- Settings organization and Hosted Overlay disabled-state behavior have been refined.'
+    ) -join "`n"
+}
 $changesMatch = [regex]::Match($releaseBody, '(?ms)^## Latest changes\s*\r?\n(.*?)(?=^## |\z)')
 if (-not $changesMatch.Success -or $changesMatch.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedChanges) {
     throw 'Release notes must contain exactly the approved latest changes.'
