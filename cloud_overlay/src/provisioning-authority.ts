@@ -26,25 +26,22 @@ function legacySeeds(value: unknown): string[] | null {
 }
 
 export class ProvisioningAuthority extends DurableObject<Env> {
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS allocations (
+  async provision(value: unknown): Promise<ProvisioningResult> {
+    // Schema creation belongs exclusively to the provisioning write path.
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS allocations (
       request_id TEXT PRIMARY KEY,
       request_digest TEXT NOT NULL,
       overlay_id TEXT NOT NULL UNIQUE,
       phase TEXT NOT NULL CHECK (phase IN ('reserved','active')),
       schema_version INTEGER NOT NULL CHECK (schema_version = 1)
     )`);
-    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS authority_configuration (
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS authority_configuration (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
       configuration_version INTEGER NOT NULL,
       ceiling INTEGER NOT NULL,
       hard_maximum INTEGER NOT NULL,
       seeds_digest TEXT NOT NULL
     )`);
-  }
-
-  async provision(value: unknown): Promise<ProvisioningResult> {
     let claim: Provisioning;
     try { claim = provisioning(value); } catch { return { ok: false }; }
     const configurationVersion = positiveInteger(this.env.PROVISIONING_CONFIGURATION_VERSION);
