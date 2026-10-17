@@ -12,6 +12,10 @@ function Assert-Distribution([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+function ConvertTo-HexString([byte[]]$Bytes) {
+    return [BitConverter]::ToString($Bytes).Replace('-', '')
+}
+
 function Format-InventoryKey([string]$Key) {
     # deps.json is a build input, but a malformed key must not print a local path.
     if ($Key -cmatch '^[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+$') { return $Key }
@@ -71,8 +75,8 @@ function Test-ApphostTemplatePaths([byte[]]$Bytes, [object[]]$PathMatches) {
             if ($original.Count -ne 1 -or ($section.PointerToRawData + $section.SizeOfRawData) -gt $Bytes.Length -or ($section.PointerToRawData + $section.SizeOfRawData) -gt $templateBytes.Length) { return $false }
             $hash = [Security.Cryptography.SHA256]::Create()
             try {
-                $actualHash = [Convert]::ToHexString($hash.ComputeHash($Bytes, $section.PointerToRawData, $section.SizeOfRawData))
-                $originalHash = [Convert]::ToHexString($hash.ComputeHash($templateBytes, $section.PointerToRawData, $section.SizeOfRawData))
+                $actualHash = ConvertTo-HexString ($hash.ComputeHash($Bytes, $section.PointerToRawData, $section.SizeOfRawData))
+                $originalHash = ConvertTo-HexString ($hash.ComputeHash($templateBytes, $section.PointerToRawData, $section.SizeOfRawData))
                 if ($actualHash -cne $originalHash) { return $false }
             } finally { $hash.Dispose() }
         }
@@ -181,7 +185,10 @@ $normalized = $reviewed.Replace("`r`n", "`n")
 foreach ($id in $textHashes.Keys) {
     $sections = [regex]::Matches($normalized, "(?s)<!-- BEGIN $id -->`n(.*?)`n<!-- END $id -->")
     Assert-Distribution ($sections.Count -eq 1) 'Required upstream license/notice text is missing or duplicated.'
-    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sections[0].Groups[1].Value)))
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = ConvertTo-HexString ($sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($sections[0].Groups[1].Value)))
+    } finally { $sha256.Dispose() }
     Assert-Distribution ($hash -eq $textHashes[$id]) 'Required upstream license/notice text has changed.'
 }
 $restoredWebView2Notice = (Read-RequiredText (Resolve-RestoredFile 'microsoft.web.webview2/1.0.4191.47/NOTICE.txt')).Replace("`r`n", "`n")
