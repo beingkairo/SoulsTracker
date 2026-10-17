@@ -22,7 +22,6 @@ $requirements = @(
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "# SoulsTracker v$version" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Choose whether to enable Hosted Overlay." },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Fixed Sticky Preview scrollbar stutter" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.release_notes" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.artifact_stem" },
@@ -59,6 +58,7 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
 }
 $expectedChanges = if ($version -eq '2.1.1') {
     @(
+        '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
         '- Hosted Overlay shows when SoulsTracker is closed or an older client needs an update.',
         '- Hosted Overlay URLs stay the same when updating to this version.',
         '- The update popup opens the SoulsTracker product page.'
