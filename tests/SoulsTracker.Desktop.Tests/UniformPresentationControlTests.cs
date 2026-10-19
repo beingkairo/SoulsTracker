@@ -258,15 +258,46 @@ public sealed class UniformPresentationControlTests
             Assert.Equal(42, total.FontSize);
             Assert.DoesNotContain(Tree(window).OfType<Button>(), x => x.IsVisible && (Equals(x.Content, "Refresh") || AutomationProperties.GetName(x) == "Copy directory path"));
             Assert.Equal(id == "demons", Tree(window).OfType<Button>().Any(x => x.IsVisible && AutomationProperties.GetName(x) == "Increase manual deaths"));
-            ((TabItem)window.FindName("SettingsWorkspaceTab")).IsSelected = true; await Idle();
-            Assert.True(((TextBox)window.FindName("IncrementHotkeyTextBox")).IsVisible);
-            Assert.Equal(id == "demons", ((TextBox)window.FindName("IncrementHotkeyTextBox")).IsEnabled);
+            var settings = (TabItem)window.FindName("SettingsWorkspaceTab");
+            settings.IsSelected = true;
+            var increment = (TextBox)window.FindName("IncrementHotkeyTextBox");
+            await WaitUntilVisible(increment);
+            Assert.True(increment.IsVisible);
+            Assert.Equal(id == "demons", increment.IsEnabled);
             Assert.Empty(repository.Saves);
         }
         finally { window.Close(); }
     });
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
+    private static async Task WaitUntilVisible(FrameworkElement element)
+    {
+        if (element.IsVisible) return;
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        RoutedEventHandler? loaded = null;
+        DependencyPropertyChangedEventHandler? visibilityChanged = null;
+        void CompleteIfVisible()
+        {
+            if (element.IsVisible) completion.TrySetResult();
+        }
+
+        loaded = (_, _) => CompleteIfVisible();
+        visibilityChanged = (_, _) => CompleteIfVisible();
+        element.Loaded += loaded;
+        element.IsVisibleChanged += visibilityChanged;
+        try
+        {
+            CompleteIfVisible();
+            await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Idle();
+        }
+        finally
+        {
+            element.Loaded -= loaded;
+            element.IsVisibleChanged -= visibilityChanged;
+        }
+    }
     private sealed class Discovery(params DiscoveredLocalSave[] choices) : ILocalSaveDiscovery
     {
         public ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken) =>
