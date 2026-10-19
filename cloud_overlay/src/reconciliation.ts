@@ -3,7 +3,7 @@ import { digest } from "./protocol";
 
 // Local test-worker invocation only. This module is not imported by the Worker
 // entry or exposed as a Durable Object RPC. No production operation is authorized.
-type Reason = "none" | "uninitialized" | "invalid_configuration" | "seed_configuration_mismatch" | "invalid_ledger" | "read_failure";
+type Reason = "none" | "uninitialized" | "invalid_configuration" | "seed_configuration_mismatch" | "unsupported_policy" | "invalid_ledger" | "read_failure";
 type Report = {
   report_schema_version: 1;
   observed_start_utc: string;
@@ -41,6 +41,10 @@ export function reconcileAuthority(state: DurableObjectState, env: Env): Report 
       !seeds.every(id => typeof id === "string" && /^[0-9a-f]{32}$/.test(id)) ||
       new Set(seeds).size !== seeds.length) return empty("invalid_configuration", "unavailable");
   try {
+    // This version-1 local report describes the lifetime policy only. Do not
+    // mislabel the retained legacy ceiling as an active windowed-policy cap.
+    if (state.storage.sql.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='allocation_policy'").toArray().length)
+      return empty("unsupported_policy", "unavailable");
     // Atomic only for this authority object; Worker vars and independent overlay
     // objects do not participate. Synchronous reads cannot interleave DO writes.
     const result = state.storage.transactionSync(() => {

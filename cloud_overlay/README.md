@@ -206,10 +206,11 @@ check actual CSP behavior, asset loading and cache headers.
 
 Existing protected Desktop pairings and reserved create requests reuse their
 original identity and URL. Disabling Hosted Overlay stops network activity but does
-not revoke identity or remove the last stored display. New creation remains subject
-to the versioned authority's lifetime ceiling; historical inactive identities still
-consume that ceiling. A scalable allocation policy has not been approved. Do not
-increase or remove this stop based on a guessed Cloudflare account limit. First
+not revoke identity or remove the last stored display. The checked-in deployment
+configuration retains its versioned lifetime ceiling. The authority also supports
+an explicitly configured window budget for new allocations, verified locally with
+synthetic settings. No Production window budget has been selected or enabled. Do not
+increase or remove the existing stop based on a guessed Cloudflare account limit. First
 reconcile aggregate active/reserved ledger counts, legacy seed count, distinct union
 and overlap, effective deployed and persisted configuration, account plan, usage,
 and resource headroom using an authorized read-only operator report. Record an
@@ -218,6 +219,59 @@ authority policy. Existing reads, authenticated compatible writes and exact pend
 replay must remain available when new creation is stopped. Deployment also requires
 an explicit checked-in/deployed/persisted config comparison; a source match to
 deployed metadata alone does not establish persisted authority equality.
+
+### Windowed allocation policy
+
+`PROVISIONING_ALLOCATION_POLICY` is an optional structured Worker variable with
+exactly these fields. It is not supplied by the public creation request:
+
+| Field | Contract |
+| --- | --- |
+| `v` | Policy schema version, exactly `1` |
+| `revision` | Positive safe integer; first activation is `1`, changes advance exactly one revision |
+| `enabled` | Boolean; `false` stops new reservations |
+| `windowSeconds` | Positive integer duration whose milliseconds and server-time deadline are safe integers |
+| `maxNewAllocations` | Positive safe integer maximum new reservations in one window |
+
+No default duration or budget is inferred. Without the variable and without prior
+activation, the existing lifetime ceiling continues to apply. Once activated,
+missing, malformed, stale, skipped, or conflicting policy settings deny new
+allocations. The retained authority version, ceiling, hard maximum and seed digest
+must still match their separate configuration contract. Windowed admission does
+not use the lifetime ceiling as an identity limit; it does not delete or recycle
+any identity. Removing the variable after activation cannot restore the old mode.
+
+One singleton `allocation_policy` row tracks revision, configuration digest,
+window deadline, consumed reservations and last observed server time. The first
+eligible request starts a fixed-duration window. At expiry, the next request
+starts one new window. Budget is consumed atomically with the allocation INSERT,
+before target initialization, and survives restart. A failed target keeps its
+charged reservation for recovery; it receives no refund. An allocation INSERT
+failure rolls back its charge. No full-ledger count runs on windowed admission.
+Policy changes retain unexpired consumption and can extend its deadline; stop,
+resume and duration edits cannot reset a consumed budget. Server clock regression,
+unsafe arithmetic and missing/corrupt policy state fail closed without repair.
+
+To stop new reservations, supply `enabled=false` in the next consecutive policy
+revision. Resume uses another consecutive revision with an approved budget.
+Exact verifier-bound replay and reserved-target recovery run before this gate and
+spend no additional slots, including while stopped or when policy settings are
+unavailable. Existing authority configuration checks still apply. Publisher and
+viewer authentication, leases, rates and socket limits remain independent.
+The anonymous create route retains both pre-parse rate limiters, fixed origin,
+bounded strict body and request-bound verifier checks. It does not establish a
+human identity or prevent distributed abuse by itself. The authority budget is
+separate from the provider's per-key admission counters.
+
+Before activation, review real persisted authority/seed/allocation aggregates,
+account-wide plan/usage/headroom, expected growth and spending tolerance. Measure
+reservation/heartbeat storage writes and global-authority throughput. No test
+budget is a recommended operational value. Deployment needs a separately reviewed
+policy revision, additive storage transition and rollback that retains policy
+enforcement; an older binary does not enforce the new singleton. The local
+version-1 reconciliation report returns `unsupported_policy` after activation,
+with null aggregates. Any later aggregate-read integration must explicitly support
+and review the new policy state before use.
 
 ## Before any live use
 

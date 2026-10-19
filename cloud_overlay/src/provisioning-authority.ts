@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
 import { digest, provisioning, type Provisioning } from "./protocol";
+import { reserveNewAllocation } from "./allocation-policy";
 
 interface Allocation extends Record<string, string | number> {
   request_id: string;
@@ -79,8 +80,15 @@ export class ProvisioningAuthority extends DurableObject<Env> {
         "SELECT request_id,request_digest,overlay_id,phase,schema_version FROM allocations WHERE request_id=?",
         claim.requestId).toArray()[0];
       if (existing) return existing.request_digest === requestDigest ? existing : null;
-      const count = this.ctx.storage.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM allocations").toArray()[0]?.count;
-      if (!Number.isSafeInteger(count) || count >= configuredCeiling) return null;
+      // Exact replay/recovery above does not spend budget and remains available
+      // while new allocations are stopped. Existing publisher/read paths never
+      // consult this policy. Missing opt-in retains the historical lifetime gate.
+      const admission = reserveNewAllocation(this.ctx.storage.sql, this.env.PROVISIONING_ALLOCATION_POLICY, Date.now());
+      if (admission === "deny") return null;
+      if (admission === "legacy") {
+        const count = this.ctx.storage.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM allocations").toArray()[0]?.count;
+        if (!Number.isSafeInteger(count) || count >= configuredCeiling) return null;
+      }
       const overlayId = this.env.OVERLAYS.newUniqueId().toString();
       this.ctx.storage.sql.exec(
         "INSERT INTO allocations(request_id,request_digest,overlay_id,phase,schema_version) VALUES(?,?,?,'reserved',1)",
