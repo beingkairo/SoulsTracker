@@ -242,8 +242,8 @@ not use the lifetime ceiling as an identity limit; it does not delete or recycle
 any identity. Removing the variable after activation cannot restore the old mode.
 
 One singleton `allocation_policy` row tracks revision, configuration digest,
-window deadline, consumed reservations and last observed server time. The first
-eligible request starts a fixed-duration window. At expiry, the next request
+window deadline, consumed reservations and last observed server time. Explicit
+application starts the first fixed-duration window. At expiry, the next request
 starts one new window. Budget is consumed atomically with the allocation INSERT,
 before target initialization, and survives restart. A failed target keeps its
 charged reservation for recovery; it receives no refund. An allocation INSERT
@@ -252,8 +252,10 @@ Policy changes retain unexpired consumption and can extend its deadline; stop,
 resume and duration edits cannot reset a consumed budget. Server clock regression,
 unsafe arithmetic and missing/corrupt policy state fail closed without repair.
 
-To stop new reservations, supply `enabled=false` in the next consecutive policy
-revision. Resume uses another consecutive revision with an approved budget.
+To stop new reservations, configure `enabled=false` in the next consecutive policy
+revision and explicitly apply it. Configuration mismatch already denies new
+reservations while application is pending. Resume requires explicit application
+of another consecutive revision with an approved budget.
 Exact verifier-bound replay and reserved-target recovery run before this gate and
 spend no additional slots, including while stopped or when policy settings are
 unavailable. Existing authority configuration checks still apply. Publisher and
@@ -270,8 +272,92 @@ budget is a recommended operational value. Deployment needs a separately reviewe
 policy revision, additive storage transition and rollback that retains policy
 enforcement; an older binary does not enforce the new singleton. The local
 version-1 reconciliation report returns `unsupported_policy` after activation,
-with null aggregates. Any later aggregate-read integration must explicitly support
-and review the new policy state before use.
+with null aggregates. The separate policy status report below supports policy
+state; it does not supply identity-population or account-resource aggregates.
+
+### Explicit policy application and readback
+
+The authority RPC `applyConfiguredPolicy(credential, expectedRevision)` implements
+the `apply-configured-policy` operation. It reads only the reviewed
+`PROVISIONING_ALLOCATION_POLICY` Worker variable; the caller cannot submit a policy.
+It requires a matching persisted authority configuration, including seed equality,
+before doing any policy work. It never initializes authority configuration, inserts
+seed/allocation rows, generates identities or accesses overlay objects. Public
+creation cannot initialize the policy table or advance its revision. Configured
+but unapplied policy, missing policy after activation and any mismatch fail closed
+for new reservations. Exact reservation replay retains its existing checks.
+
+`expectedRevision` is the persisted revision the operator has reviewed, or `0`
+before first activation. The configured revision must be exactly one greater.
+Conflicting content at the same revision and stale/skipped revisions are rejected.
+An exact repeat with the original expected revision returns `already_applied`
+without changing storage, consumption, clock or deadline. Applying a new revision
+preserves an unexpired window's consumption and never shortens its deadline;
+the deadline may extend to the new duration measured from application. An expired
+window starts a new window with zero consumption. A disabled policy consumes no
+new reservations. Clock regression or unsafe deadline arithmetic rejects apply.
+
+Apply requires the independent secret `PROVISIONING_POLICY_APPLY_KEY`; status
+requires `PROVISIONING_POLICY_READ_KEY`. Each is a separately generated 32-byte
+lowercase hex credential supplied as a Worker secret, never a checked-in variable,
+URL parameter or log value. Missing/malformed keys and using the same key for both
+permissions fail closed. Each RPC authenticates independently before storage
+access. Possession of a Service Binding or namespace binding alone does not confer
+either permission. Remove an apply credential to disable apply access without
+removing read access. Publisher/read capabilities authorize neither operation.
+No HTTP, public creation, publisher or browser route dispatches these RPCs.
+
+`policyStatus(credential)` performs only SELECT statements within one synchronous
+authority transaction. It never initializes schema, repairs state, rolls windows,
+updates the clock or calls overlay objects. Its schema-version-1 report includes
+activation state, persisted revision, configured-policy validity and equality,
+configured enabled state, stored window consumption/deadline/last observed time,
+observation time, clock validity and window expiry. `new_allocation_state` describes
+only this policy gate, not overall creation eligibility or available account
+resources. `active` means policy storage exists and is valid, including a stopped
+policy. It is not publisher activity. Missing/corrupt storage and failed reads
+produce explicit unavailable/null fields. An absent table means never activated;
+an existing table with a missing singleton is invalid and is never repaired.
+
+The persisted row stores an equality digest, not a reconstructable policy.
+`persisted_enabled` and `persisted_limits` are therefore null with an explicit
+reason. Configured enabled state must not be reported as persisted truth when
+equality fails. No report returns credentials, digests, identity rows or URLs.
+Worker configuration is outside the storage transaction; verify the deployed
+artifact/configuration separately. The legacy aggregate report remains separate
+and must not label a retained lifetime ceiling as an active window-policy cap.
+
+Any apply transport failure, timeout or `outcome_unknown` is ambiguous. There is
+no automatic retry. Obtain separately authorized readback and compare revision,
+equality, consumption and deadline before deciding whether to perform an explicit
+repeat with the same expected revision. If readback is unavailable, stop and
+escalate operationally; do not infer failure or advance the revision. An unexpected
+storage failure during apply is also reported as unknown without exception details.
+
+### Rollback and ongoing emergency-stop gate
+
+Before activation, a rollback retaining the legacy configuration and absent policy
+uses the existing lifetime gate. After activation, rollback must retain this
+explicit-apply and exact-match admission implementation, the policy table, the
+legacy-write rejection boundary, existing namespace/classes/migrations, seed list,
+authority version and all identity/reservation rows. Removing the policy variable
+or reverting to a lower configured revision blocks new reservations while exact
+recovery and existing identities remain available. Never drop the policy table or
+restore a pre-policy binary to resume creation. Resume with a reviewed consecutive
+revision; do not reuse an old revision or refund consumed budget. Pin and verify
+a compatible rollback artifact before any live change.
+
+No ongoing Production operator ingress is installed by this implementation.
+Temporary diagnostic ingress is not an emergency-stop mechanism and its separate
+branch is not integrated here. Before activation, establish and independently
+review a supported operator mechanism that can invoke apply with its own credential
+and status with the separate read credential, remains accessible after temporary
+diagnostic teardown, has tested credential custody/revocation and ambiguous-outcome
+handling, and can stop allocations without provisioning or revoking identities.
+If diagnostic teardown would remove the only operator path, do not activate or
+tear down that path while relying on it for emergency stop. Ongoing authenticated
+emergency-stop access remains an unresolved activation gate. This code does not
+invent a replacement ingress or authorize its deployment.
 
 ## Before any live use
 

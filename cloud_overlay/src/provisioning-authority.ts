@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
-import { digest, provisioning, type Provisioning } from "./protocol";
-import { reserveNewAllocation } from "./allocation-policy";
+import { digest, equalVerifier, provisioning, type Provisioning } from "./protocol";
+import { applyConfiguredPolicy, reportConfiguredPolicy, reserveNewAllocation } from "./allocation-policy";
 
 interface Allocation extends Record<string, string | number> {
   request_id: string;
@@ -27,8 +27,52 @@ function legacySeeds(value: unknown): string[] | null {
 }
 
 export class ProvisioningAuthority extends DurableObject<Env> {
+  #policyAuthorized(value: unknown, permission: "apply" | "read"): boolean {
+    const key = permission === "apply" ? this.env.PROVISIONING_POLICY_APPLY_KEY : this.env.PROVISIONING_POLICY_READ_KEY;
+    const other = permission === "apply" ? this.env.PROVISIONING_POLICY_READ_KEY : this.env.PROVISIONING_POLICY_APPLY_KEY;
+    // A Service Binding/DO binding is not a method-level permission. Missing,
+    // malformed and reused keys fail closed before touching storage.
+    return typeof key === "string" && typeof value === "string" && key !== other && equalVerifier(key, value);
+  }
+
+  async applyConfiguredPolicy(credential: unknown, expectedRevision: unknown) {
+    if (!this.#policyAuthorized(credential, "apply")) return { ok: false as const, error: "forbidden" as const };
+    try {
+      return this.ctx.storage.transactionSync(() => {
+        // Policy application cannot initialize authority configuration or seeds.
+        // Require the reviewed legacy configuration to be persisted and equal.
+        const seeds = legacySeeds(this.env.PROVISIONED_IDS);
+        const version = positiveInteger(this.env.PROVISIONING_CONFIGURATION_VERSION);
+        const ceiling = positiveInteger(this.env.PROVISIONING_CEILING);
+        const maximum = positiveInteger(this.env.PROVISIONING_HARD_MAXIMUM);
+        if (!seeds || version === null || ceiling === null || maximum === null || ceiling > maximum)
+          return { ok: false as const, error: "authority_configuration_unavailable" as const };
+        if (!this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='authority_configuration'").toArray().length)
+          return { ok: false as const, error: "authority_configuration_unavailable" as const };
+        const rows = this.ctx.storage.sql.exec<{ singleton: number; configuration_version: number; ceiling: number;
+          hard_maximum: number; seeds_digest: string }>("SELECT * FROM authority_configuration").toArray();
+        if (rows.length !== 1 || rows[0].singleton !== 1 || rows[0].configuration_version !== version ||
+            rows[0].ceiling !== ceiling || rows[0].hard_maximum !== maximum || rows[0].seeds_digest !== digest(seeds))
+          return { ok: false as const, error: "authority_configuration_unavailable" as const };
+        return applyConfiguredPolicy(this.ctx.storage.sql, this.env.PROVISIONING_ALLOCATION_POLICY, expectedRevision, Date.now());
+      });
+    } catch {
+      // A thrown storage/transport operation may have committed. Never retry it
+      // here and never expose exception text. Read status before operator action.
+      return { ok: false as const, error: "outcome_unknown" as const };
+    }
+  }
+
+  async policyStatus(credential: unknown) {
+    if (!this.#policyAuthorized(credential, "read")) return { ok: false as const, error: "forbidden" as const };
+    try {
+      return { ok: true as const, report: this.ctx.storage.transactionSync(() =>
+        reportConfiguredPolicy(this.ctx.storage.sql, this.env.PROVISIONING_ALLOCATION_POLICY, Date.now())) };
+    } catch { return { ok: false as const, error: "read_unavailable" as const }; }
+  }
+
   async provision(value: unknown): Promise<ProvisioningResult> {
-    // Schema creation belongs exclusively to the provisioning write path.
+    // Legacy authority/allocation schema belongs to the provisioning write path.
     this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS allocations (
       request_id TEXT PRIMARY KEY,
       request_digest TEXT NOT NULL,
