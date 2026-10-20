@@ -32,7 +32,8 @@ export class ProvisioningAuthority extends DurableObject<Env> {
     const other = permission === "apply" ? this.env.PROVISIONING_POLICY_READ_KEY : this.env.PROVISIONING_POLICY_APPLY_KEY;
     // A Service Binding/DO binding is not a method-level permission. Missing,
     // malformed and reused keys fail closed before touching storage.
-    return typeof key === "string" && typeof value === "string" && key !== other && equalVerifier(key, value);
+    return typeof key === "string" && typeof value === "string" && key !== other &&
+      key !== this.env.PROVISIONING_DIAGNOSTIC_READ_KEY && equalVerifier(key, value);
   }
 
   async applyConfiguredPolicy(credential: unknown, expectedRevision: unknown) {

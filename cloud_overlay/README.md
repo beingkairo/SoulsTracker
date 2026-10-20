@@ -347,17 +347,15 @@ restore a pre-policy binary to resume creation. Resume with a reviewed consecuti
 revision; do not reuse an old revision or refund consumed budget. Pin and verify
 a compatible rollback artifact before any live change.
 
-No ongoing Production operator ingress is installed by this implementation.
-Temporary diagnostic ingress is not an emergency-stop mechanism and its separate
-branch is not integrated here. Before activation, establish and independently
-review a supported operator mechanism that can invoke apply with its own credential
-and status with the separate read credential, remains accessible after temporary
-diagnostic teardown, has tested credential custody/revocation and ambiguous-outcome
-handling, and can stop allocations without provisioning or revoking identities.
-If diagnostic teardown would remove the only operator path, do not activate or
-tear down that path while relying on it for emergency stop. Ongoing authenticated
-emergency-stop access remains an unresolved activation gate. This code does not
-invent a replacement ingress or authorize its deployment.
+The separate disabled operator gateway and optional temporary aggregate module
+are documented in [operator operations](operator/README.md). Permanent read/apply
+controls retain separate target credentials and survive diagnostic removal. The
+offline stop-proposal helper cannot deploy or apply configuration. No ongoing
+Production ingress, Access policies or credentials are installed. Verified live
+operator access and the controlled configuration-staging workflow remain activation
+gates. Temporary diagnostics are not an emergency-stop mechanism. The complete
+local deployment/rollback inventory explicitly requires Production parity and
+resource evidence before any separately authorized use.
 
 ## Before any live use
 

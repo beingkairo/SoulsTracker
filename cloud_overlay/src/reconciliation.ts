@@ -1,10 +1,10 @@
 import type { Env } from "./index";
 import { digest } from "./protocol";
 
-// Local test-worker invocation only. This module is not imported by the Worker
-// entry or exposed as a Durable Object RPC. No production operation is authorized.
+// SELECT-only legacy aggregate implementation. Only the optional diagnostic
+// module exposes it through independently authenticated RPC.
 type Reason = "none" | "uninitialized" | "invalid_configuration" | "seed_configuration_mismatch" | "unsupported_policy" | "invalid_ledger" | "read_failure";
-type Report = {
+export type Report = {
   report_schema_version: 1;
   observed_start_utc: string;
   observed_end_utc: string;

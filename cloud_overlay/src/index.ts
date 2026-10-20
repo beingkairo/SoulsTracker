@@ -3,6 +3,7 @@ import { OverlayState } from "./overlay-state";
 import { ProvisioningAuthority } from "./provisioning-authority";
 import { authorize, failure, reject, response, route } from "./protocol";
 export { OverlayState, ProvisioningAuthority };
+export { PolicyReadEntrypoint, PolicyApplyEntrypoint } from "./operator-entrypoints";
 
 export interface Env {
   OVERLAYS: DurableObjectNamespace<OverlayState>;
@@ -16,6 +17,8 @@ export interface Env {
   PROVISIONING_ALLOCATION_POLICY?: unknown;
   PROVISIONING_POLICY_APPLY_KEY?: unknown;
   PROVISIONING_POLICY_READ_KEY?: unknown;
+  PROVISIONING_DIAGNOSTIC_READ_KEY?: unknown;
+  PROVISIONING_DIAGNOSTIC_ENABLED?: unknown;
   PUBLISHER_RATE_LIMITER: RateLimit;
   LIVE_RATE_LIMITER: RateLimit;
   CREATE_CLIENT_RATE_LIMITER?: RateLimit;

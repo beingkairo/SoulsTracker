@@ -1,0 +1,14 @@
+{
+  "name": "soulstracker-temporary-reconciliation",
+  "main": "src/diagnostic.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "vars": { "OPERATOR_ENABLED": "false" },
+  "services": [
+    { "binding": "DIAGNOSTIC_READ", "service": "soulstracker-cloud-overlay", "entrypoint": "DiagnosticReadEntrypoint" }
+  ]
+}
