@@ -7,7 +7,11 @@
   "preview_urls": false,
   "send_metrics": false,
   "observability": { "enabled": false },
-  "vars": { "OPERATOR_ENABLED": "false" },
+  "routes": [{ "pattern": "soulstracker-operator.beingkairo.com", "custom_domain": true }],
+  "vars": {
+    "OPERATOR_ENABLED": "false",
+    "OPERATOR_HOST": "soulstracker-operator.beingkairo.com"
+  },
   "services": [
     { "binding": "POLICY_READ", "service": "soulstracker-cloud-overlay", "entrypoint": "PolicyReadEntrypoint" },
     { "binding": "POLICY_APPLY", "service": "soulstracker-cloud-overlay", "entrypoint": "PolicyApplyEntrypoint" }
