@@ -4,8 +4,8 @@ import { authenticate, once, reply, type GatewaySettings } from "./common";
 import { checkedApply, checkedStatus } from "./contract";
 
 export interface GatewayEnv extends GatewaySettings {
-  ACCESS_READ_AUDIENCE?: string; ACCESS_READ_OPERATOR?: string; ACCESS_READ_POLICY?: string;
-  ACCESS_APPLY_AUDIENCE?: string; ACCESS_APPLY_OPERATOR?: string; ACCESS_APPLY_POLICY?: string;
+  ACCESS_READ_AUDIENCE?: string; ACCESS_READ_OPERATOR?: string;
+  ACCESS_APPLY_AUDIENCE?: string; ACCESS_APPLY_OPERATOR?: string;
   POLICY_READ?: Service<PolicyReadEntrypoint>;
   POLICY_APPLY?: Service<PolicyApplyEntrypoint>;
 }
@@ -39,14 +39,14 @@ export default {
     const apply = path === "/operator/policy/apply" && request.method === "POST";
     let credential: string; let expected: number | undefined;
     try {
-      // Distinct audiences and policies prevent a read JWT being used for apply.
+      // Each application has exactly one distinct audience. No claim policy ID
+      // is assumed; Access enforces that application's configured Allow policy.
       if ((!read && !apply) || !env.ACCESS_READ_AUDIENCE || !env.ACCESS_APPLY_AUDIENCE ||
-          !env.ACCESS_READ_POLICY || !env.ACCESS_APPLY_POLICY || env.ACCESS_READ_AUDIENCE === env.ACCESS_APPLY_AUDIENCE ||
-          env.ACCESS_READ_POLICY === env.ACCESS_APPLY_POLICY || (read && (request.body !== null || request.headers.has("Content-Length"))) ||
+          env.ACCESS_READ_AUDIENCE === env.ACCESS_APPLY_AUDIENCE ||
+          (read && (request.body !== null || request.headers.has("Content-Length"))) ||
           (read ? !env.POLICY_READ : !env.POLICY_APPLY)) throw new Error("denied");
       credential = await authenticate(request, env, { audience: (read ? env.ACCESS_READ_AUDIENCE : env.ACCESS_APPLY_AUDIENCE)!,
-        operator: (read ? env.ACCESS_READ_OPERATOR : env.ACCESS_APPLY_OPERATOR) ?? "",
-        policy: (read ? env.ACCESS_READ_POLICY : env.ACCESS_APPLY_POLICY)! });
+        operator: (read ? env.ACCESS_READ_OPERATOR : env.ACCESS_APPLY_OPERATOR) ?? "" });
       if (apply) expected = await once(revision(request), 3000);
     } catch { return reply(403, { error: "unavailable" }); }
     try {

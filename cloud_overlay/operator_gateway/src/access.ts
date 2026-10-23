@@ -1,6 +1,6 @@
 import { validateHostedJsonTokens } from "../../../web_overlay/src/hosted-contracts";
 
-export interface AccessPolicy { issuer: string; audience: string; operator: string; policy: string }
+export interface AccessPolicy { issuer: string; audience: string; operator: string }
 
 const decode = (part: string): Uint8Array => {
   if (!/^[A-Za-z0-9_-]+$/.test(part) || part.length > 8192) throw new Error("invalid");
@@ -17,25 +17,25 @@ const object = (bytes: Uint8Array): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
-// Adapted from the separately reviewed temporary diagnostic verifier. No Access
-// header is trusted without signature and role-specific claim verification.
+// Verify the documented identity application JWT. MFA and authentication age
+// are enforced by Access, not asserted by iat or optional IdP claims. The
+// gateway's separate configuration interlock must remain closed until that
+// Access enforcement has been verified; this function only verifies the JWT.
 export async function verifyAccess(jwt: string, expected: AccessPolicy, now = Date.now()): Promise<void> {
-  const { issuer, audience, operator, policy } = expected;
+  const { issuer, audience, operator } = expected;
   if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(issuer) ||
-      !audience || !operator || !policy || !Number.isSafeInteger(now) || now < 0) throw new Error("invalid");
+      !audience || !operator || !Number.isSafeInteger(now) || now < 0) throw new Error("invalid");
   const parts = jwt.split(".");
   if (jwt.length > 16384 || parts.length !== 3 || parts.some(p => !p)) throw new Error("invalid");
   const h = object(decode(parts[0])), p = object(decode(parts[1]));
   const audienceMatches = p.aud === audience || (Array.isArray(p.aud) && p.aud.length === 1 && p.aud[0] === audience);
   if (Object.keys(h).some(k => !["alg", "kid", "typ"].includes(k)) || h.alg !== "RS256" ||
       (h.typ !== undefined && h.typ !== "JWT") || typeof h.kid !== "string" || !/^[\w-]{1,128}$/.test(h.kid) ||
-      p.iss !== issuer || !audienceMatches || p.email !== operator || typeof p.sub !== "string" || !p.sub ||
-      p.policy !== policy || !Array.isArray(p.amr) || !p.amr.includes("mfa") ||
-      ![p.exp, p.nbf, p.iat, p.auth_time].every(v => typeof v === "number" && Number.isSafeInteger(v) && v >= 0) ||
+      p.type !== "app" || p.iss !== issuer || !audienceMatches || p.email !== operator || typeof p.sub !== "string" || !p.sub ||
+      ![p.exp, p.nbf, p.iat].every(v => typeof v === "number" && Number.isSafeInteger(v) && v >= 0) ||
       (p.nbf as number) > now / 1000 || (p.iat as number) > now / 1000 || (p.exp as number) <= now / 1000 ||
-      (p.auth_time as number) > (p.iat as number) || (p.iat as number) >= (p.exp as number) ||
-      (p.nbf as number) >= (p.exp as number) || (p.exp as number) - (p.auth_time as number) > 900 ||
-      now / 1000 - (p.auth_time as number) > 900) throw new Error("invalid");
+      (p.iat as number) >= (p.exp as number) || (p.nbf as number) >= (p.exp as number) ||
+      (p.exp as number) - (p.iat as number) > 900) throw new Error("invalid");
   const response = await fetch(`${issuer}/cdn-cgi/access/certs`, { cache: "no-store", redirect: "manual",
     signal: AbortSignal.timeout(3000) });
   if (!response.ok || !response.body) throw new Error("unavailable");

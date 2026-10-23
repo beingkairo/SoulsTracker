@@ -11,16 +11,16 @@ const readKey = "c".repeat(64), applyKey = "d".repeat(64), diagKey = "e".repeat(
 const issuer = "https://synthetic.cloudflareaccess.com", operator = "operator@example.invalid";
 const policy = { v: 1, revision: 1, enabled: true, windowSeconds: 3600, maxNewAllocations: 2 };
 const settings = { OPERATOR_ENABLED: "true", OPERATOR_HOST: "operator.example.invalid", ACCESS_ISSUER: issuer,
-  ACCESS_READ_AUDIENCE: "read", ACCESS_READ_POLICY: "read-policy", ACCESS_READ_OPERATOR: operator,
-  ACCESS_APPLY_AUDIENCE: "apply", ACCESS_APPLY_POLICY: "apply-policy", ACCESS_APPLY_OPERATOR: operator };
+  ACCESS_AUTHENTICATION_PROFILE: "independent-mfa-every-login-15m",
+  ACCESS_READ_AUDIENCE: "read", ACCESS_READ_OPERATOR: operator,
+  ACCESS_APPLY_AUDIENCE: "apply", ACCESS_APPLY_OPERATOR: operator };
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwk = { ...keys.publicKey.export({ format: "jwk" }), kid: "synthetic", alg: "RS256", use: "sig" };
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 function jwt(role = "read", overrides: Record<string, unknown> = {}, key = keys.privateKey) {
   const now = Math.floor(Date.now() / 1000);
   const input = `${encode({ alg: "RS256", kid: "synthetic" })}.${encode({ iss: issuer, aud: role, email: operator,
-    sub: "synthetic-subject", policy: `${role}-policy`, amr: ["mfa"], exp: now + 300, iat: now - 1, nbf: now - 1,
-    auth_time: now - 1, ...overrides })}`;
+    sub: "synthetic-subject", type: "app", exp: now + 300, iat: now - 1, nbf: now - 1, ...overrides })}`;
   return `${input}.${Buffer.from(sign("RSA-SHA256", Buffer.from(input), key)).toString("base64url")}`;
 }
 function request(role = "read", credential = role === "apply" ? applyKey : readKey, token = jwt(role), body = '{"expectedRevision":0}') {
@@ -65,7 +65,8 @@ function options(temporary = true, targetScript = scripts.target, configuredPoli
   if (temporary) workers.push({ name: "diagnostic", script: scripts.diagnostic, modules: true,
     compatibilityDate: "2026-08-15", compatibilityFlags: ["nodejs_compat"], outboundService: outbound,
     bindings: { OPERATOR_ENABLED: "true", OPERATOR_HOST: "diagnostic.example.invalid", ACCESS_ISSUER: issuer,
-      ACCESS_DIAGNOSTIC_AUDIENCE: "diagnostic", ACCESS_DIAGNOSTIC_POLICY: "diagnostic-policy", ACCESS_DIAGNOSTIC_OPERATOR: operator },
+      ACCESS_AUTHENTICATION_PROFILE: "independent-mfa-every-login-15m",
+      ACCESS_DIAGNOSTIC_AUDIENCE: "diagnostic", ACCESS_DIAGNOSTIC_OPERATOR: operator },
     serviceBindings: { DIAGNOSTIC_READ: { name: "authority", entrypoint: "DiagnosticReadEntrypoint" } } });
   return convertV4MiniflareOptions({ workers, cf: false });
 }
@@ -101,8 +102,8 @@ it("uses actual named multi-Worker RPC with separate credentials and no allocati
 
 it("requires Access as well as the target role credential and rejects malformed policy bodies", async () => {
   await start(); await fixture("seed"); await fixture("settings", policy); const before = await fixture("snapshot");
-  for (const overrides of [{ aud: "other" }, { amr: undefined }, { amr: [] }, { policy: undefined }, { auth_time: undefined },
-    { exp: 1 }, { nbf: 9999999999 }, { auth_time: 1 }, { email: "other@example.invalid" }, { aud: ["read", "apply"] }])
+  for (const overrides of [{ aud: "other" }, { type: undefined }, { type: "org" }, { sub: "" },
+    { exp: 1 }, { nbf: 9999999999 }, { iat: 1 }, { email: "other@example.invalid" }, { aud: ["read", "apply"] }])
     expect((await call(request("read", readKey, jwt("read", overrides)))).status).toBe(403);
   expect((await call(request("apply", applyKey, jwt("read")))).status).toBe(403);
   expect((await call(request("read", readKey, "forged"))).status).toBe(403);
@@ -221,7 +222,8 @@ it("denies malformed routes, cross-origin/browser requests, and disabled or coll
     const req = request(); req.headers.set(header, "synthetic");
     expect((await gateway.fetch(req, env)).status).toBe(403);
   }
-  for (const config of [{ ...env, OPERATOR_ENABLED: undefined }, { ...env, ACCESS_APPLY_POLICY: "read-policy" },
+  for (const config of [{ ...env, OPERATOR_ENABLED: undefined }, { ...env, ACCESS_APPLY_AUDIENCE: "read" },
+    { ...env, ACCESS_AUTHENTICATION_PROFILE: undefined }, { ...env, ACCESS_AUTHENTICATION_PROFILE: "unverified" },
     { ...env, ACCESS_READ_AUDIENCE: undefined }]) expect((await gateway.fetch(request(), config)).status).toBe(403);
   expect(status).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled();
 });
@@ -253,8 +255,8 @@ it("rejects malformed downstream responses rather than exposing secret fields or
   expect(response.headers.get("Cache-Control")).toBe("no-store");
 });
 
-it("fails closed for missing claim policy/MFA, duplicate JWT fields, bad keys and JWKS failure", async () => {
-  const expected = { issuer, audience: "read", operator, policy: "read-policy" };
+it("verifies application JWTs without unsupported claims and rejects duplicate fields, bad keys and JWKS failure", async () => {
+  const expected = { issuer, audience: "read", operator };
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ keys: [jwk] }))));
   await expect(verifyAccess(jwt(), expected)).resolves.toBeUndefined();
   const token = jwt().split(".");

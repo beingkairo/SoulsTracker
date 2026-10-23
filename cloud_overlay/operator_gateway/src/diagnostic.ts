@@ -3,7 +3,7 @@ import { authenticate, once, reply, type GatewaySettings } from "./common";
 import { checkedAggregate } from "./diagnostic-contract";
 
 export interface DiagnosticGatewayEnv extends GatewaySettings {
-  ACCESS_DIAGNOSTIC_AUDIENCE?: string; ACCESS_DIAGNOSTIC_OPERATOR?: string; ACCESS_DIAGNOSTIC_POLICY?: string;
+  ACCESS_DIAGNOSTIC_AUDIENCE?: string; ACCESS_DIAGNOSTIC_OPERATOR?: string;
   DIAGNOSTIC_READ?: Service<DiagnosticReadEntrypoint>;
 }
 export default {
@@ -13,7 +13,7 @@ export default {
       if (new URL(request.url).pathname !== "/operator/reconcile" || request.method !== "GET" ||
           request.body !== null || request.headers.has("Content-Length") || !env.DIAGNOSTIC_READ) throw new Error("denied");
       credential = await authenticate(request, env, { audience: env.ACCESS_DIAGNOSTIC_AUDIENCE ?? "",
-        operator: env.ACCESS_DIAGNOSTIC_OPERATOR ?? "", policy: env.ACCESS_DIAGNOSTIC_POLICY ?? "" });
+        operator: env.ACCESS_DIAGNOSTIC_OPERATOR ?? "" });
     } catch { return reply(403, { error: "unavailable" }); }
     try {
       const result: unknown = await once(env.DIAGNOSTIC_READ!.aggregate(credential));

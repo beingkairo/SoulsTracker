@@ -1,7 +1,7 @@
 # Policy operations and local candidate packaging
 
 The operator gateway is separate from the public overlay Worker. Its checked-in
-configuration is disabled, has no routes, and has no Access or credential values.
+configuration is disabled and has no Access or credential values.
 All commands below are local verification or packaging. They grant no authority
 to deploy, collect Production data, create credentials, provision an identity or
 apply a Production policy. The checked-in authority remains version 3, 100/100,
@@ -25,18 +25,49 @@ redirect-based authentication, provisioning, SQL, enumeration, configuration-edi
 arbitrary RPC, policy submission or target-selection operation.
 
 Before enablement, supply `OPERATOR_HOST`, `ACCESS_ISSUER`, and distinct
-`ACCESS_READ_AUDIENCE`/`ACCESS_APPLY_AUDIENCE` and
-`ACCESS_READ_POLICY`/`ACCESS_APPLY_POLICY`, with the exact authorized
+`ACCESS_READ_AUDIENCE`/`ACCESS_APPLY_AUDIENCE`, with the exact authorized
 `ACCESS_READ_OPERATOR`/`ACCESS_APPLY_OPERATOR`. The same human may hold both roles;
-their authorizations and credentials remain distinct. JWT signature, pinned team
-issuer, exact audience/operator/policy, subject, MFA and integer time claims are
-verified. Authentication age and declared session duration must be at most 15
-minutes. Required claims include `amr` containing `mfa`, `policy`, `auth_time`,
-`iat`, `nbf`, and `exp`. Missing assurances fail closed. Local signed fixtures do
-not prove this account emits these claims. Demonstrate real claim compatibility
-through separately authorized sanitized evidence; do not weaken checks to enable
-an unsupported account. Certificate responses are bounded, redirects rejected,
-and certificate or authentication failure denies access.
+their authorizations and credentials remain distinct. The gateway verifies JWT
+RS256 signature, pinned team issuer, exactly one expected audience, exact owner
+email, nonempty subject, `type=app`, integer `iat`/`nbf`/`exp`, current validity,
+and `exp - iat <= 900`. A Read token cannot authorize Apply or vice versa. Global
+session and service-token identities are rejected. Certificate responses are
+bounded, redirects rejected, and certificate or authentication failure denies
+access. No client identity/MFA header or cookie substitutes for the signed JWT.
+
+Cloudflare's documented application JWT does not guarantee top-level `policy`,
+`amr` or `auth_time`. Application authorization is bound to the separately
+configured AUD. The 900-second token lifetime is not proof of authentication
+age: `iat` is issuance time, not the time of MFA. Independent MFA and its
+freshness are a trust boundary enforced by Cloudflare Access.
+
+Leave `ACCESS_AUTHENTICATION_PROFILE` unset until an authorized administrator
+verifies all of the following for both operator applications:
+
+- Exact owner-only Allow authorization, correct distinct application AUDs and
+  paths, no bypass/service-auth/alternate Allow path, and no alternate ingress.
+- Effective independent MFA is required on every application login, with no
+  policy-level exemption, cached MFA reuse or IdP-AMR skip. Policy settings
+  override application settings, which override organization settings.
+- Effective policy/application token lifetime is at most 15 minutes, and
+  Cloudflare One Client/WARP authentication cannot override these sessions.
+- Application-token issuance and renewal actually require fresh independent
+  MFA; a valid global session must not silently mint a new usable application
+  token without the required MFA. Verify expiry/renewal on both roles. A cached
+  15-minute MFA session followed by a 15-minute token does not establish the
+  required 15-minute freshness bound.
+
+Only after that verification and explicit activation approval may the deployment
+administrator set `ACCESS_AUTHENTICATION_PROFILE=independent-mfa-every-login-15m`.
+This is an operator-controlled release interlock, not a Cloudflare attestation or
+automatic configuration check. Unset/unknown values deny every operator request,
+even with `OPERATOR_ENABLED=true`. If the Access-side guarantee cannot be
+established, keep the interlock unset and the gateway disabled. End pre-change
+sessions before acceptance. No paid service is required by this correction.
+
+References: [Application JWT](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/),
+[independent MFA enforcement](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/mfa-requirements/),
+and [session renewal](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/).
 
 `POLICY_READ` binds only to `PolicyReadEntrypoint`; `POLICY_APPLY` binds only to
 `PolicyApplyEntrypoint`. The gateway has no Durable Object binding. The target
@@ -105,7 +136,7 @@ bindings and migrations. The default permanent module contains no aggregate RPC.
 This is a targeted adaptation of diagnostic candidate `342b784`, not a branch merge.
 
 The separate temporary gateway accepts only `GET /operator/reconcile`. It requires
-its own host, Access audience/operator/policy and independent
+its own host, Access audience/operator and independent
 `PROVISIONING_DIAGNOSTIC_READ_KEY` supplied by the client. The target additionally
 requires `PROVISIONING_DIAGNOSTIC_ENABLED=true`; direct aggregate RPC without that
 distinct credential is denied before SQL. Permanent credentials authorize neither

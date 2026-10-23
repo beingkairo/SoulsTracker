@@ -18,6 +18,21 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def validate_disabled_gateway(name, gateway):
+    variables = {"OPERATOR_ENABLED": "false"}
+    routes = gateway.get("routes")
+    if name == "policy-gateway" and routes is not None:
+        host = "soulstracker-operator.beingkairo.com"
+        require(routes == [{"pattern": host, "custom_domain": True}], "unexpected operator route")
+        variables["OPERATOR_HOST"] = host
+    else:
+        require(routes is None, "unexpected gateway route")
+    # Exact vars also exclude credentials and the authentication-profile
+    # interlock. A risk acceptance must never silently enable the gateway.
+    require(gateway["vars"] == variables, "gateway must remain disabled")
+    require("durable_objects" not in gateway, "gateway resource boundary changed")
+
+
 def verify_package(destination):
     manifest = json.loads((destination / "manifest.json").read_text())
     expected = {"manifest.json"}
@@ -66,8 +81,7 @@ def freeze(root, source_sha, source_tree, clean):
     configurations = {"target": target, "temporary-target": temporary}
     for name, filename in [("policy-gateway", "wrangler.jsonc"), ("diagnostic-gateway", "diagnostic.wrangler.jsonc")]:
         gateway = json.loads((source / "operator_gateway" / filename).read_text())
-        require(gateway["vars"] == {"OPERATOR_ENABLED": "false"}, "gateway must remain disabled")
-        require("durable_objects" not in gateway and "routes" not in gateway, "gateway resource boundary changed")
+        validate_disabled_gateway(name, gateway)
         gateway.update(main=f"../{name}/index.js", no_bundle=True, find_additional_modules=False)
         configurations[name] = gateway
     for name, configuration in configurations.items():

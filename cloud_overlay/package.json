@@ -7,7 +7,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "build": "wrangler deploy --dry-run --outdir dist",
-    "test": "vitest run && vitest run --config vitest.operator.config.ts",
+    "test": "vitest run && vitest run --config vitest.operator.config.ts && node --disable-warning=ExperimentalWarning test/operator-node/access-compatibility.test.mjs",
     "build:operator": "cd operator_gateway && wrangler deploy --dry-run --config wrangler.jsonc --outdir ../dist/policy-gateway && wrangler deploy --dry-run --config diagnostic.wrangler.jsonc --outdir ../dist/diagnostic-gateway",
     "build:diagnostic": "wrangler deploy src/diagnostic-index.ts --dry-run --outdir dist/diagnostic-target"
   },
