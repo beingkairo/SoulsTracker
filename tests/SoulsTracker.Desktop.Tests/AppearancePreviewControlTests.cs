@@ -69,8 +69,14 @@ public sealed class AppearancePreviewControlTests
             string content = await browser.CoreWebView2.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
             Assert.Contains("0", content);
             vm.TotalDeathsAppearanceDraft.Title = "Offline test"; await Idle();
-            await Task.Delay(100);
-            content = await browser.CoreWebView2.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
+            // WPF idle does not join WebView2's posted message and animation frame.
+            // Wait for the browser DOM that the assertion actually observes.
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            do
+            {
+                content = await core.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent").WaitAsync(timeout.Token);
+                if (!content.Contains("Offline test", StringComparison.Ordinal)) await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            } while (!content.Contains("Offline test", StringComparison.Ordinal));
             Assert.Contains("Offline test", content);
             Assert.Empty(repository.Saves);
             Assert.Equal(0, (int)preview.GetType().GetProperty("BlockedRequestCount")!.GetValue(preview)!);
