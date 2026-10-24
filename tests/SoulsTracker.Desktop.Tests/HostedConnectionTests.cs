@@ -135,18 +135,22 @@ public sealed class HostedConnectionTests
         var thread = new Thread(() =>
         {
             var dispatcher = Dispatcher.CurrentDispatcher;
+            Exception? failure = null;
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
             dispatcher.BeginInvoke(async () =>
             {
-                try
+                try { await test(); }
+                catch (Exception error) { failure = error; }
+                finally
                 {
-                    try { await test(); }
-                    finally { dispatcher.InvokeShutdown(); }
-                    completion.SetResult();
+                    // Let the callback unwind and queued UI cleanup finish before
+                    // stopping the pump. Completion owns the whole dispatcher loop.
+                    dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
                 }
-                catch (Exception error) { completion.SetException(error); }
             });
             Dispatcher.Run();
+            if (failure is null) completion.SetResult();
+            else completion.SetException(failure);
         })
         { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
