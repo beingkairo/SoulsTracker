@@ -60,6 +60,10 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     private string updatePreferenceStatus = string.Empty;
     private bool isSavingUpdatePreference;
     private bool pendingUpdatePreferenceValue;
+    private Func<bool, Task>? saveTrayClosePreference;
+    private bool minimizeToTrayOnClose;
+    private bool isSavingTrayClosePreference;
+    private string trayClosePreferenceStatus = string.Empty;
     private string updatePageActionError = string.Empty;
     private bool hasCheckedForUpdates;
     private string? updateCurrentVersion;
@@ -205,6 +209,40 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public bool CanOpenAvailableUpdateReleasePage => !updateChecksStopped && AvailableUpdateReleasePage is not null;
 
     public bool CheckForUpdatesOnStartup => state?.CheckForUpdatesOnStartup ?? false;
+    public bool MinimizeToTrayOnClose { get => minimizeToTrayOnClose; private set => SetField(ref minimizeToTrayOnClose, value); }
+    public bool IsSavingTrayClosePreference => isSavingTrayClosePreference;
+    public bool CanChangeTrayClosePreference => saveTrayClosePreference is not null && !isSavingTrayClosePreference;
+    public string TrayClosePreferenceStatus { get => trayClosePreferenceStatus; private set => SetField(ref trayClosePreferenceStatus, value); }
+
+    internal void ConfigureTrayClosePreference(bool enabled, Func<bool, Task> save)
+    {
+        saveTrayClosePreference = save ?? throw new ArgumentNullException(nameof(save));
+        MinimizeToTrayOnClose = enabled;
+        OnPropertyChanged(nameof(CanChangeTrayClosePreference));
+    }
+
+    public async Task SetMinimizeToTrayOnCloseAsync(bool enabled)
+    {
+        if (!CanChangeTrayClosePreference) return;
+        isSavingTrayClosePreference = true;
+        OnPropertyChanged(nameof(CanChangeTrayClosePreference));
+        try
+        {
+            await saveTrayClosePreference!(enabled);
+            MinimizeToTrayOnClose = enabled;
+            TrayClosePreferenceStatus = string.Empty;
+        }
+        catch
+        {
+            TrayClosePreferenceStatus = "The close setting could not be saved. Your previous choice is still active.";
+            OnPropertyChanged(nameof(MinimizeToTrayOnClose));
+        }
+        finally
+        {
+            isSavingTrayClosePreference = false;
+            OnPropertyChanged(nameof(CanChangeTrayClosePreference));
+        }
+    }
     public bool IsSavingUpdatePreference => isSavingUpdatePreference;
     public bool PendingUpdatePreferenceValue => pendingUpdatePreferenceValue;
     public bool CanChangeUpdatePreference => state is not null && !IsLoading && (!IsBusy || IsSavingUpdatePreference);
@@ -1245,12 +1283,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public Task IncrementManualDeathsAsync(CancellationToken cancellationToken = default) =>
         !IsManualGameSelected || !ControlsEnabled
             ? Task.CompletedTask
-            : SubmitAsync(new IncrementManualDeathsCommand(), cancellationToken);
+            : SubmitManualCounterAsync(new IncrementManualDeathsCommand(), cancellationToken);
 
     public Task DecrementManualDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanDecrementManualDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new DecrementManualDeathsCommand(), cancellationToken);
+            : SubmitManualCounterAsync(new DecrementManualDeathsCommand(), cancellationToken);
 
     /// <summary>Routes the shared global increment binding to the active supported counter.</summary>
     public Task IncrementGlobalTrackedDeathsAsync(CancellationToken cancellationToken = default) =>
@@ -1271,12 +1309,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public Task IncrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanAdjustEldenRingMissedDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: true), cancellationToken);
+            : SubmitEldenRingMissedDeathsAsync(new AdjustEldenRingMissedDeathsCommand(Increment: true), cancellationToken);
 
     public Task DecrementEldenRingMissedDeathsAsync(CancellationToken cancellationToken = default) =>
         !CanDecrementEldenRingMissedDeaths
             ? Task.CompletedTask
-            : SubmitAsync(new AdjustEldenRingMissedDeathsCommand(Increment: false), cancellationToken);
+            : SubmitEldenRingMissedDeathsAsync(new AdjustEldenRingMissedDeathsCommand(Increment: false), cancellationToken);
 
 
     public Task SetTotalDeathsOverlayEnabledAsync(bool isEnabled, CancellationToken cancellationToken = default) =>
@@ -1321,11 +1359,48 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         }
     }
 
+    private Task SubmitEldenRingMissedDeathsAsync(AdjustEldenRingMissedDeathsCommand command, CancellationToken cancellationToken) =>
+        SubmitCounterAsync(command, () => EldenRingMissedDeaths,
+            nameof(EldenRingMissedDeaths), () => CanDecrementEldenRingMissedDeaths,
+            nameof(CanDecrementEldenRingMissedDeaths), cancellationToken);
+
     private Task SubmitOverlayPresentationAsync(
         bool totalDeathsEnabled,
         bool showGameName,
         CancellationToken cancellationToken) =>
         SubmitAsync(new UpdateOverlayPresentationCommand(totalDeathsEnabled, showGameName), cancellationToken);
+
+    private Task SubmitManualCounterAsync(ITrackerCommand command, CancellationToken cancellationToken) =>
+        SubmitCounterAsync(command, () => ManualDeaths,
+            nameof(ManualDeaths), () => CanDecrementManualDeaths, nameof(CanDecrementManualDeaths), cancellationToken);
+
+    private async Task SubmitCounterAsync(ITrackerCommand command,
+        Func<long> getCount, string countProperty, Func<bool> canDecrement, string canDecrementProperty,
+        CancellationToken cancellationToken)
+    {
+        ErrorMessage = null;
+        try
+        {
+            TrackerCommandExecutionResult result = await coordinator.SubmitAsync(command, cancellationToken);
+            if (result.CommittedState is not null)
+            {
+                long previousDeaths = getCount();
+                bool previousCanDecrement = canDecrement();
+                state = result.CommittedState;
+                UpdateTotalDeathsText();
+                if (getCount() != previousDeaths) OnPropertyChanged(countProperty);
+                if (canDecrement() != previousCanDecrement) OnPropertyChanged(canDecrementProperty);
+            }
+            if (result.Status is TrackerCommandExecutionStatus.SaveFailed or TrackerCommandExecutionStatus.NotInitialized)
+                ErrorMessage = "SoulsTracker could not save the requested tracker change. The displayed state was not changed.";
+            else if (result.Status == TrackerCommandExecutionStatus.DeliveryFailed)
+                ErrorMessage = "The tracker change was saved, but a local update could not be delivered.";
+        }
+        catch
+        {
+            ErrorMessage = "SoulsTracker could not apply the requested tracker change. Try again.";
+        }
+    }
 
     private async Task SubmitAsync(ITrackerCommand command, CancellationToken cancellationToken)
     {
@@ -1408,11 +1483,15 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         DraftTitleIconModeChoice = TitleIconModes.Single(choice => choice.Value == state.OverlayConfiguration.TotalDeaths.TitleIconMode);
 
         GameId? selectedId = state.SelectedGameId;
-        SelectedGame = GameChoices.Single(choice => choice.GameId == selectedId);
+        GameChoice selectedChoice = GameChoices.Single(choice => choice.GameId == selectedId);
+        if (!ReferenceEquals(SelectedGame, selectedChoice))
+        {
+            SelectedGame = selectedChoice;
+            OnPropertyChanged(nameof(SelectedGame));
+            OnPropertyChanged(nameof(GameSelectionAutomationName));
+        }
         SelectedEldenRingProfileSlot = EldenRingProfileSlots.SingleOrDefault(slot => slot.Index == state.EldenRingSave.SlotIndex);
 
-        OnPropertyChanged(nameof(SelectedGame));
-        OnPropertyChanged(nameof(GameSelectionAutomationName));
         OnPropertyChanged(nameof(SelectedEldenRingProfileSlot));
 
 

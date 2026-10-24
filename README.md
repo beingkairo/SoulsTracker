@@ -29,6 +29,14 @@ A simple death counter for supported games.
 1. Install and open SoulsTracker.
 2. Select your game and choose a save or character if prompted.
 3. Start playing.
-4. If you're streaming, copy your URL from the Overlay tab.
+4. If you're streaming, enable hosted Overlay in the Overlay tab, then copy your URL there. New installations start with hosted publication off.
 
 See the [getting-started guide](docs/RELEASE-GETTING-STARTED.md) for additional setup.
+
+Minimize the window to keep tracking from the Windows notification area. In Settings,
+enable **Minimize to tray on close** if you also want Close to keep tracking there.
+Otherwise Close exits the app.
+Click the SoulsTracker icon or choose **Open SoulsTracker** from its menu to restore
+the window. Choose **Exit** in that menu to stop
+tracking and quit. You can reach notification-area icons with Win+B, then use
+the arrow keys and Enter or Space to open the icon and its menu.

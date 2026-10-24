@@ -17,6 +17,8 @@ namespace SoulsTracker.Desktop;
 /// <summary>Hosts the P3-01 manual tracking surface.</summary>
 public partial class MainWindow : Window
 {
+    private const double NormalPreviewBottomInset = 70;
+    private const double DockedPreviewBottomInset = 54;
     private bool isRestoringEldenRingProfileSelection;
     private bool isRestoringEldenRingSaveSelection;
     private bool isRestoringBlackMythWukongSaveSelection;
@@ -41,6 +43,7 @@ public partial class MainWindow : Window
     private long hotkeyOperationVersion;
     private bool savingRecordedHotkey;
     private bool updatingPreviewDock;
+    private System.Windows.Controls.Primitives.ScrollBar? overlayVerticalScrollBar;
     private double? previewAnchorOffset;
     private FrameworkElement? lastOverlayFocus;
     private double? savedOverlayOffset;
@@ -50,6 +53,19 @@ public partial class MainWindow : Window
     private DispatcherOperation? updateNoticePresentation;
     private StartupUpdateDialog? updateDialog;
     private bool updateDialogShown;
+    private FrameworkElement? trayFocus;
+
+    internal void RememberTrayFocus() => trayFocus = Keyboard.FocusedElement as FrameworkElement;
+
+    internal void RestoreTrayFocus()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsVisible || !IsActive) return;
+            if (trayFocus is not { IsVisible: true, IsEnabled: true, Focusable: true } target || !target.Focus())
+                WorkspaceTabs.Focus();
+        }, DispatcherPriority.Input);
+    }
 
     protected override void OnContentRendered(EventArgs e)
     {
@@ -97,6 +113,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         LocalAppearancePreview.ScrollTarget = OverlayConfigurationScrollViewer;
         LocalAppearancePreview.SetBinding(DataContextProperty, new System.Windows.Data.Binding(nameof(DataContext)) { Source = this });
+        OverlayConfigurationScrollViewer.ScrollChanged += (_, _) => UpdateOverlayScrollBar();
         LayoutUpdated += UpdatePreviewDock;
         DockedPreviewCard.MouseWheel += (_, e) =>
         {
@@ -234,6 +251,7 @@ public partial class MainWindow : Window
         var scroll = OverlayConfigurationScrollViewer;
         if (scroll.Content is not FrameworkElement content) return;
         var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+        UpdateOverlayScrollBar();
         if (previewAnchorOffset is double requestedOffset)
         {
             // Inset and offset belong to one arrange transaction. Do not make
@@ -246,7 +264,7 @@ public partial class MainWindow : Window
         try
         {
             bool docked = ReferenceEquals(LocalAppearancePreview.Parent, DockedPreviewSlot);
-            if (docked) NormalPreviewSlot.Height = 180 + LocalAppearancePreview.RowDefinitions[1].ActualHeight;
+            if (docked) NormalPreviewSlot.Height = 180;
             // Compare in normal-page coordinates, excluding the offset used to
             // anchor the content when the compact card insets the presenter.
             double bottom = NormalPreviewSection.TranslatePoint(new System.Windows.Point(0, NormalPreviewSection.ActualHeight), content).Y;
@@ -256,9 +274,9 @@ public partial class MainWindow : Window
             DockedPreviewCard.Margin = new Thickness(24, 0, 24 + Math.Max(0, barWidth), 0);
             if (docked)
             {
-                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? 72 : 96);
                 scroll.UpdateLayout();
-                SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54));
+                SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, DockedPreviewBottomInset));
             }
             if (dock == docked) return;
 
@@ -270,11 +288,11 @@ public partial class MainWindow : Window
             {
                 NormalPreviewSlot.Height = LocalAppearancePreview.ActualHeight;
                 NormalPreviewSlot.Children.Remove(LocalAppearancePreview);
-                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? Math.Max(48, 72 - LocalAppearancePreview.RowDefinitions[1].ActualHeight) : 96);
+                LocalAppearancePreview.RowDefinitions[0].Height = new GridLength(scroll.ActualHeight < 300 ? 72 : 96);
                 DockedPreviewSlot.Children.Add(LocalAppearancePreview);
                 DockedPreviewCard.Visibility = Visibility.Visible;
                 scroll.UpdateLayout();
-                SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, 54));
+                SetPreviewViewport(new Thickness(24, DockedPreviewCard.ActualHeight + 4, 24, DockedPreviewBottomInset));
             }
             else
             {
@@ -283,7 +301,7 @@ public partial class MainWindow : Window
                 NormalPreviewSlot.Children.Add(LocalAppearancePreview);
                 NormalPreviewSlot.Height = double.NaN;
                 DockedPreviewCard.Visibility = Visibility.Collapsed;
-                SetPreviewViewport(new Thickness(24, 24, 24, 70));
+                SetPreviewViewport(new Thickness(24, 24, 24, NormalPreviewBottomInset));
             }
             if (Keyboard.FocusedElement is null && focusedBeforeMove is { IsVisible: true, IsEnabled: true, Focusable: true })
                 focusedBeforeMove.Focus();
@@ -295,7 +313,34 @@ public partial class MainWindow : Window
                     focusedBeforeMove.Focus();
             }, DispatcherPriority.Loaded);
         }
-        finally { updatingPreviewDock = false; }
+        finally { updatingPreviewDock = false; UpdateOverlayScrollBar(); }
+    }
+
+    private void UpdateOverlayScrollBar()
+    {
+        var scroll = OverlayConfigurationScrollViewer;
+        if (!scroll.IsLoaded || previewAnchorOffset.HasValue) return;
+        overlayVerticalScrollBar ??= scroll.Template.FindName("OverlayVerticalScrollBar", scroll) as System.Windows.Controls.Primitives.ScrollBar;
+        if (overlayVerticalScrollBar is null) return;
+        var presenter = scroll.Template.FindName("PART_ScrollContentPresenter", scroll) as ScrollContentPresenter;
+        if (presenter is null) return;
+        double inset = presenter.Margin.Top - scroll.Padding.Top;
+        // The compact Preview reduces the editable viewport. Keep the thumb in
+        // page coordinates so docking cannot jump it during a drag or wheel step.
+        overlayVerticalScrollBar.ViewportSize = scroll.ViewportHeight + inset + presenter.Margin.Bottom - NormalPreviewBottomInset;
+        overlayVerticalScrollBar.LargeChange = Math.Max(1, scroll.ViewportHeight);
+        // The docked editor has less trailing margin. Its final
+        // reachable page coordinate is correspondingly lower.
+        overlayVerticalScrollBar.Maximum = Math.Max(0, scroll.ExtentHeight - overlayVerticalScrollBar.ViewportSize -
+            (NormalPreviewBottomInset - DockedPreviewBottomInset));
+        overlayVerticalScrollBar.Value = Math.Clamp(presenter.VerticalOffset - inset, 0, overlayVerticalScrollBar.Maximum);
+    }
+
+    private void OverlayVerticalScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
+    {
+        var scroll = OverlayConfigurationScrollViewer;
+        var presenter = (ScrollContentPresenter)scroll.Template.FindName("PART_ScrollContentPresenter", scroll);
+        presenter.SetVerticalOffset(e.NewValue + presenter.Margin.Top - scroll.Padding.Top);
     }
 
     private void SetPreviewViewport(Thickness margin)
@@ -585,7 +630,12 @@ public partial class MainWindow : Window
 
     private async void DecrementDeaths_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel viewModel) await viewModel.DecrementManualDeathsAsync();
+        if (DataContext is not DesktopTrackerViewModel viewModel) return;
+        bool hadFocus = ReferenceEquals(Keyboard.FocusedElement, sender);
+        await viewModel.DecrementManualDeathsAsync();
+        if (hadFocus && !viewModel.CanDecrementManualDeaths && viewModel.IsManualGameSelected &&
+            ReferenceEquals(DataContext, viewModel))
+            Keyboard.Focus(IncrementManualDeathsButton);
     }
 
     private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)
@@ -1050,6 +1100,15 @@ public partial class MainWindow : Window
     {
         if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection }) await connection.RetryAsync();
     }
+    private async void HostedOverlayEnabled_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel { HostedOverlay: { } connection } &&
+            sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            await connection.SetEnabledAsync(checkBox.IsChecked == true);
+            checkBox.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, connection.IsEnabled);
+        }
+    }
 
     private static void CopyOverlayUrl(System.Windows.Controls.Button? button, string? value)
     {
@@ -1088,6 +1147,19 @@ public partial class MainWindow : Window
                     }
                 }, DispatcherPriority.Loaded);
             }
+        }
+    }
+
+    private async void MinimizeToTrayOnClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel viewModel && sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            if (viewModel.IsSavingTrayClosePreference)
+            {
+                checkBox.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, viewModel.MinimizeToTrayOnClose);
+                return;
+            }
+            await viewModel.SetMinimizeToTrayOnCloseAsync(checkBox.IsChecked == true);
         }
     }
 

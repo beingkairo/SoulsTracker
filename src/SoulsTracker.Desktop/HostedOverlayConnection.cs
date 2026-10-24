@@ -13,17 +13,19 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     private readonly Dispatcher dispatcher;
     private readonly HostedPublisherConfigurationStore store;
     private readonly HostedProvisioningStateStore? pendingStore;
-    private readonly HostedOverlayProvisioningClient? provisioningClient;
+    private HostedOverlayProvisioningClient? provisioningClient;
+    private readonly Func<HostedOverlayProvisioningClient>? createProvisioningClient;
+    private readonly HostedOverlayPreferenceStore? preferenceStore;
     private readonly Func<HostedPublisherConfiguration, HostedOverlayPublisher> createSender;
     private readonly Action<HostedDesktopPublisher, HostedOverlayPublisher> attachSender;
     private readonly Func<TimeSpan, CancellationToken, Task> retryDelay;
-    private readonly CancellationTokenSource stop = new();
+    private CancellationTokenSource stop = new();
     private HostedPublisherConfiguration? configuration, persistedConfiguration;
     private HostedProvisioningState? pending;
     private HostedDesktopPublisher? adapter;
     private HostedOverlayPublisher? sender;
     private Task? operation, disposal;
-    private bool closing, busy, setupStopped, canRetry, provisioningRequested;
+    private bool closing, busy, setupStopped, canRetry, provisioningRequested, enabled, stopping;
     private string statusText = string.Empty, copyFeedbackText = string.Empty;
 
     internal HostedOverlayConnection(Dispatcher dispatcher, HostedPublisherConfigurationStore store,
@@ -31,22 +33,29 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         HostedProvisioningStateStore? pendingStore = null,
         HostedOverlayProvisioningClient? provisioningClient = null,
         Func<TimeSpan, CancellationToken, Task>? retryDelay = null,
-        Action<HostedDesktopPublisher, HostedOverlayPublisher>? attachSender = null)
+        Action<HostedDesktopPublisher, HostedOverlayPublisher>? attachSender = null,
+        HostedOverlayPreferenceStore? preferenceStore = null, bool initiallyEnabled = true,
+        Func<HostedOverlayProvisioningClient>? createProvisioningClient = null)
     {
         this.dispatcher = dispatcher; this.store = store; this.pendingStore = pendingStore;
         this.provisioningClient = provisioningClient;
+        this.createProvisioningClient = createProvisioningClient;
+        this.preferenceStore = preferenceStore;
+        enabled = initiallyEnabled;
         this.createSender = createSender ?? (config => new HostedOverlayPublisher(config));
         this.retryDelay = retryDelay ?? Task.Delay;
         this.attachSender = attachSender ?? ((adapter, next) => adapter.Attach(next));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    public string UrlText => configuration?.BuildReadUrl() ?? (busy ? "Preparing overlay URL..." : string.Empty);
+    public string UrlText => !enabled ? string.Empty : configuration?.BuildReadUrl() ?? (busy ? "Preparing overlay URL..." : string.Empty);
     public string StatusText => statusText;
     public string CopyFeedbackText => copyFeedbackText;
-    public bool CanCopy => adapter is not null && !closing && !setupStopped && !busy && configuration is not null;
-    public bool CanRetry => canRetry && adapter is not null && !closing && !setupStopped && !busy && configuration is null;
+    public bool CanCopy => enabled && adapter is not null && !closing && !setupStopped && !busy && configuration is not null;
+    public bool CanRetry => enabled && canRetry && adapter is not null && !closing && !setupStopped && !busy && configuration is null;
     public bool IsPreparing => busy && configuration is null;
+    public bool IsEnabled => enabled;
+    public bool CanChangeEnabled => adapter is not null && !closing && !setupStopped && (!busy || enabled) && !stopping;
 
     private void Changed()
     {
@@ -59,9 +68,16 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         dispatcher.VerifyAccess();
         if (adapter is not null || closing) return Task.CompletedTask;
         adapter = new HostedDesktopPublisher(null, initial);
+        if (!enabled)
+        {
+            busy = true;
+            Changed();
+            return LoadDisabledIdentityAsync();
+        }
         return RunOperationAsync(async () =>
         {
             persistedConfiguration = await store.LoadAsync(stop.Token);
+            provisioningClient ??= createProvisioningClient?.Invoke();
             if (persistedConfiguration is not null)
             {
                 try
@@ -81,12 +97,29 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
             pending = await pendingStore.LoadPendingAsync(stop.Token);
             if (pending is not null || provisioningRequested)
                 await RecoverOrProvisionAsync(allowNewRequest: provisioningRequested);
+            else if (preferenceStore is not null)
+            {
+                canRetry = true;
+                statusText = "No saved Hosted Overlay pairing was found. Choose Try again to prepare a new URL.";
+            }
         }, showFailure: true);
+    }
+
+    private async Task LoadDisabledIdentityAsync()
+    {
+        try
+        {
+            configuration = persistedConfiguration = await store.LoadAsync(stop.Token);
+            statusText = "Hosted Overlay is off. Existing shared URLs may still display previously published content.";
+        }
+        catch { statusText = "Hosted Overlay is off. The saved URL could not be read; local tracking is available."; }
+        finally { busy = false; Changed(); }
     }
 
     internal Task EnsureProvisionedAsync()
     {
         dispatcher.VerifyAccess();
+        if (!enabled) return Task.CompletedTask;
         provisioningRequested = true;
         bool canRecoverSavedPromotion = persistedConfiguration is not null && pending?.Matches(persistedConfiguration) == true;
         if (configuration is not null || (persistedConfiguration is not null && !canRecoverSavedPromotion) ||
@@ -98,9 +131,71 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
 
     internal Task RetryAsync() => !CanRetry ? Task.CompletedTask : EnsureProvisionedAsync();
 
+    public async Task SetEnabledAsync(bool next)
+    {
+        dispatcher.VerifyAccess();
+        if (preferenceStore is null || closing || setupStopped || stopping || (next && busy) || enabled == next) return;
+        if (!next)
+        {
+            // Fence synchronous callers before the durable save or any await.
+            enabled = false;
+            stopping = true;
+            canRetry = false;
+            adapter?.Attach(null);
+            stop.Cancel();
+            HostedOverlayPublisher? previous = sender;
+            sender = null;
+            if (previous is not null) previous.StatusChanged -= Sender_StatusChanged;
+            Task stoppedSender = previous?.CancelAsync().AsTask() ?? Task.CompletedTask;
+            statusText = "Stopping Hosted Overlay...";
+            Changed();
+            bool saved = true;
+            try { await preferenceStore.SaveAsync(false); }
+            catch { saved = false; }
+            if (operation is not null) await operation;
+            await stoppedSender;
+            stopping = false;
+            statusText = saved
+                ? "Hosted Overlay is off. Previously published content and shared URLs remain available online."
+                : "Could not save the off setting. Hosted Overlay is stopped for this session; it may restart next launch.";
+            Changed();
+            return;
+        }
+        try { await preferenceStore.SaveAsync(true); }
+        catch { statusText = "Could not save the Hosted Overlay setting. Try again."; Changed(); return; }
+        stop.Dispose(); stop = new CancellationTokenSource();
+        enabled = true;
+        configuration = null;
+        persistedConfiguration = null;
+        pending = null;
+        provisioningRequested = true;
+        canRetry = false;
+        statusText = "Connecting to Hosted Overlay...";
+        Changed();
+        await RunOperationAsync(async () =>
+        {
+            provisioningClient ??= createProvisioningClient?.Invoke();
+            persistedConfiguration = await store.LoadAsync(stop.Token);
+            if (persistedConfiguration is not null)
+            {
+                if (pendingStore is not null) pending = await pendingStore.LoadPendingAsync(stop.Token);
+                await ConnectAsync(persistedConfiguration);
+                configuration = persistedConfiguration;
+                if (pending?.Matches(configuration) == true)
+                { await pendingStore!.RemovePendingAsync(stop.Token); pending = null; }
+            }
+            else if (pendingStore is not null)
+            {
+                pending = await pendingStore.LoadPendingAsync(stop.Token);
+                await RecoverOrProvisionAsync(allowNewRequest: true);
+            }
+
+        }, showFailure: true);
+    }
+
     private async Task RecoverOrProvisionAsync(bool allowNewRequest)
     {
-        canRetry = false; statusText = string.Empty; Changed();
+        canRetry = false; statusText = "Preparing overlay URL..."; Changed();
         if (pending is { IsPreReleaseVersion1: true } old)
         {
             if (old.Phase == HostedProvisioningPhase.Acknowledged) { await PromoteAsync(old); return; }
@@ -121,7 +216,7 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         }
         if (pending.Phase == HostedProvisioningPhase.Acknowledged) { await PromoteAsync(pending); return; }
 
-        for (int attempt = 0; attempt < 3 && !closing && !setupStopped; attempt++)
+        for (int attempt = 0; attempt < 3 && enabled && !closing && !setupStopped; attempt++)
         {
             HostedProvisioningResult result = await provisioningClient!.ProvisionAsync(pending, stop.Token);
             if (result.Kind == HostedProvisioningResultKind.Provisioned && result.OverlayId is not null)
@@ -151,13 +246,16 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
         HostedPublisherConfiguration nextConfiguration = acknowledged.Configuration(HostedProductionOrigins.Approved);
         await store.SaveAsync(nextConfiguration, stop.Token);
         persistedConfiguration = nextConfiguration;
+        stop.Token.ThrowIfCancellationRequested();
         HostedOverlayPublisher next = createSender(nextConfiguration);
         await ActivateSenderAsync(next);
         configuration = nextConfiguration;
         try { await pendingStore!.RemovePendingAsync(stop.Token); pending = null; }
         catch (OperationCanceledException) when (closing || setupStopped) { throw; }
         catch { }
-        canRetry = false; statusText = string.Empty;
+        canRetry = false;
+        statusText = string.Empty;
+        if (sender is not null) Sender_StatusChanged(sender, EventArgs.Empty);
     }
 
     internal bool CopyReadUrl(Action<string> copy)
@@ -171,13 +269,13 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
     private Task RunOperationAsync(Func<Task> action, bool showFailure)
     {
         dispatcher.VerifyAccess();
-        if (closing || busy) return Task.CompletedTask;
+        if (closing || busy || !enabled) return Task.CompletedTask;
         busy = true; copyFeedbackText = string.Empty; Changed();
         return operation = RunAsync();
         async Task RunAsync()
         {
             try { await action(); }
-            catch (OperationCanceledException) when (closing || setupStopped) { }
+            catch (OperationCanceledException) when (closing || setupStopped || !enabled) { }
             catch
             {
                 if (showFailure)
@@ -193,22 +291,46 @@ public sealed class HostedOverlayConnection : INotifyPropertyChanged, ITrackerSt
 
     private async Task ConnectAsync(HostedPublisherConfiguration nextConfiguration)
     {
-        if (closing || setupStopped) return;
+        if (closing || setupStopped || !enabled) return;
+        stop.Token.ThrowIfCancellationRequested();
         await ActivateSenderAsync(createSender(nextConfiguration));
     }
 
     private async Task ActivateSenderAsync(HostedOverlayPublisher next)
     {
         HostedOverlayPublisher? previous = sender;
-        try { attachSender(adapter!, next); }
-        catch { await next.DisposeAsync(); throw; }
+        try { stop.Token.ThrowIfCancellationRequested(); attachSender(adapter!, next); }
+        catch { await next.CancelAsync(); throw; }
+        if (previous is not null) previous.StatusChanged -= Sender_StatusChanged;
         sender = next;
+        next.StatusChanged += Sender_StatusChanged;
+        Sender_StatusChanged(next, EventArgs.Empty);
         if (previous is not null) await previous.DisposeAsync();
+    }
+
+    private void Sender_StatusChanged(object? source, EventArgs args)
+    {
+        if (!dispatcher.CheckAccess())
+        {
+            _ = dispatcher.BeginInvoke(() => Sender_StatusChanged(source, args));
+            return;
+        }
+        if (preferenceStore is null || !enabled || !ReferenceEquals(source, sender)) return;
+        statusText = sender!.Status switch
+        {
+            HostedPublisherStatus.Ready => "Hosted Overlay is connected.",
+            HostedPublisherStatus.Retrying => "Hosted Overlay is offline. Retrying while enabled; local tracking continues.",
+            HostedPublisherStatus.CredentialsRequired or HostedPublisherStatus.Conflict or HostedPublisherStatus.InvalidProtocol or HostedPublisherStatus.CounterExhausted =>
+                "Hosted Overlay could not connect. Local tracking continues; check your connection or pairing.",
+            _ => "Connecting to Hosted Overlay...",
+        };
+        Changed();
     }
 
     private async Task RetireAsync()
     {
         HostedOverlayPublisher? previous = sender; sender = null; adapter?.Attach(null);
+        if (previous is not null) previous.StatusChanged -= Sender_StatusChanged;
         if (previous is not null) await previous.DisposeAsync();
     }
 

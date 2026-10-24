@@ -4,4 +4,4 @@ For a quick start, see [Getting started](https://github.com/beingkairo/SoulsTrac
 
 The Windows installer checks for Microsoft WebView2 Runtime and installs it when needed.
 
-Opening Overlay automatically prepares one private URL for https://overlay.beingkairo.com; no account, login, or operator action is required. Local tracking and TXT work without opening Overlay; either startup order is supported. Replace an existing local overlay URL once using **Copy URL**. Keep Overlay URLs private.
+New installations start with Hosted Overlay off. To publish a hosted counter, enable it in the Overlay tab. SoulsTracker then prepares one private URL for https://overlay.beingkairo.com; no account or login is required. Local tracking, TXT and Preview work while hosted publication is off or unavailable. Replace an existing local overlay URL once using **Copy URL** in the Overlay tab. Keep Overlay URLs private. Turning publication off does not remove previously published content or revoke shared URLs.

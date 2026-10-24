@@ -14,16 +14,14 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class SectionHelpControlTests
 {
-    private static readonly string[] OverlayHelpNames = ["Overlay", "Preview", "Appearance", "DockedPreview"];
+    private static readonly string[] OverlayHelpNames = ["Preview", "Appearance", "DockedPreview"];
 
     public static IEnumerable<object[]> SectionCases()
     {
         foreach (var (width, height) in new[] { (560, 400), (560, 760), (1060, 760) })
         {
-            yield return [width, height, "Overlay", "Overlay", "Your overlay URL is a private link. Anyone with it can view the overlay, so only share it where you need to."];
             yield return [width, height, "Preview", "Overlay", "Preview your changes before applying them to the overlay. Large designs are scaled down to fit this preview. The live overlay keeps your chosen sizes."];
             yield return [width, height, "Appearance", "Overlay", "The overlay uses these settings. Click Apply to live overlay to show your changes."];
-            yield return [width, height, "Updates", "Settings", "Checks GitHub for the latest updates."];
             yield return [width, height, "StreamingTextExport", "Settings", "Write local TXT files for text sources in your streaming software."];
         }
     }
@@ -159,7 +157,7 @@ public sealed class SectionHelpControlTests
             {
                 ("Main", new[] { ("GameSession", "GAME SESSION"), ("TotalDeaths", "TOTAL DEATHS") }),
                 ("Overlay", new[] { ("Overlay", "OVERLAY URL"), ("Preview", "PREVIEW"), ("Appearance", "APPEARANCE") }),
-                ("Settings", new[] { ("Updates", "UPDATES"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "STREAMING TEXT EXPORT") })
+                ("Settings", new[] { ("Updates", "OPTIONS"), ("GlobalHotkeys", "GLOBAL HOTKEYS"), ("StreamingTextExport", "TEXT EXPORT") })
             })
             {
                 ((TabItem)window.FindName(workspace + "WorkspaceTab")).IsSelected = true; await Idle();
@@ -231,16 +229,17 @@ public sealed class SectionHelpControlTests
             scroll.ScrollToEnd(); await Idle(); scroll.ScrollToTop(); await Idle();
             foreach (var help in helps) Assert.False(((ToolTip)help.ToolTip).IsOpen);
 
-            var overlayHelp = helps[0];
-            Assert.True(overlayHelp.Focus()); await Idle();
-            Assert.True(((ToolTip)overlayHelp.ToolTip).IsOpen);
+            var previewHelp = helps[0];
+            previewHelp.BringIntoView(); await Idle();
+            Assert.True(previewHelp.Focus()); await Idle();
+            Assert.True(((ToolTip)previewHelp.ToolTip).IsOpen);
             main.IsSelected = true; await Idle();
-            Assert.False(((ToolTip)overlayHelp.ToolTip).IsOpen);
+            Assert.False(((ToolTip)previewHelp.ToolTip).IsOpen);
             overlay.IsSelected = true; await Idle();
-            Assert.False(((ToolTip)overlayHelp.ToolTip).IsOpen);
-            Assert.True(overlayHelp.IsKeyboardFocused);
+            Assert.False(((ToolTip)previewHelp.ToolTip).IsOpen);
+            Assert.True(previewHelp.IsKeyboardFocused);
             Assert.True(((FrameworkElement)window.FindName("AppearanceActions")).Focus()); await Idle();
-            Assert.False(((ToolTip)overlayHelp.ToolTip).IsOpen);
+            Assert.False(((ToolTip)previewHelp.ToolTip).IsOpen);
         }
         finally { window.Close(); }
     });

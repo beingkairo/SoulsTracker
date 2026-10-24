@@ -19,6 +19,10 @@ public partial class App : System.Windows.Application, IDisposable
     private DesktopGlobalHotkeyService? globalHotkeys;
     private bool mainWindowCloseRequested;
     private bool finalShutdownRequested;
+    private DesktopActivationPipe? activationPipe;
+    private DesktopTrayLifecycle? trayLifecycle;
+    private WindowsTrayIcon? trayIcon;
+    private bool pendingRestore;
     private TextExportStatePublisher? textExportPublisher;
     private RuntimeGameReaderCoordinator? runtimeReaders;
     private EldenRingSaveDeathReader? eldenRingSaveReader;
@@ -35,7 +39,8 @@ public partial class App : System.Windows.Application, IDisposable
 
     public App()
     {
-        singleInstanceStartup = new DesktopStartupController(new WindowsSingleInstanceLeaseFactory());
+        singleInstanceStartup = new DesktopStartupController(new WindowsSingleInstanceLeaseFactory(),
+            () => DesktopActivationPipe.RequestRestoreAsync(DesktopActivationPipe.ProductionName, TimeSpan.FromSeconds(2)));
         shutdownCoordinator = new DesktopShutdownCoordinator(
             stopInputsAsync: DisposeGlobalHotkeysAsync,
             drainProducersAsync: DisposeCoordinatorAsync,
@@ -58,6 +63,11 @@ public partial class App : System.Windows.Application, IDisposable
             {
                 return;
             }
+            if (decision.Status == DesktopStartupStatus.ActivatedExisting)
+            {
+                Shutdown();
+                return;
+            }
 
             System.Windows.MessageBox.Show(decision.UserMessage!, "SoulsTracker", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
@@ -78,20 +88,52 @@ public partial class App : System.Windows.Application, IDisposable
         }
     }
 
-    private Task StartTrackerAsync() => startupTask = StartTrackerCoreAsync();
+    private Task StartTrackerAsync()
+    {
+        try
+        {
+            activationPipe = new DesktopActivationPipe(DesktopActivationPipe.ProductionName,
+                () => _ = Dispatcher.BeginInvoke(() =>
+                {
+                    pendingRestore = true;
+                    RestoreMainWindow();
+                }));
+            activationPipe.Start();
+        }
+        catch
+        {
+            activationPipe?.Dispose();
+            activationPipe = null;
+            // The mutex still prevents duplicate trackers. The window remains usable.
+        }
+        return startupTask = StartTrackerCoreAsync();
+    }
 
     private async Task StartTrackerCoreAsync()
     {
         DesktopDataRootSelection stateSelection = dataRootSelection ?? throw new InvalidOperationException("The desktop data root was not initialized.");
         var protector = new CurrentUserDpapiSecretProtector();
+        var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
+        var preference = new HostedOverlayPreferenceStore(stateSelection.RootPath);
+        var pairing = new HostedPublisherConfigurationStore(Path.Combine(stateSelection.RootPath, "hosted-pairing.private"),
+            protector, HostedProductionOrigins.Approved);
+        bool hostedEnabled;
+        try
+        {
+            hostedEnabled = await preference.ResolveAsync(async ct =>
+            {
+                try { return await pairing.LoadAsync(ct) is not null; }
+                catch { return false; }
+            }, startupCancellation.Token);
+        }
+        catch { hostedEnabled = false; /* Local tracking must not depend on preference storage. */ }
         hostedConnection = new HostedOverlayConnection(Dispatcher,
-            new HostedPublisherConfigurationStore(Path.Combine(stateSelection.RootPath, "hosted-pairing.private"),
-                protector, HostedProductionOrigins.Approved),
+            pairing,
             pendingStore: new HostedProvisioningStateStore(Path.Combine(stateSelection.RootPath, "overlay-setup.private"),
                 protector, HostedProductionOrigins.Approved),
-            provisioningClient: new HostedOverlayProvisioningClient(HostedProductionOrigins.Approved.Single()));
+            preferenceStore: preference, initiallyEnabled: hostedEnabled,
+            createProvisioningClient: () => new HostedOverlayProvisioningClient(HostedProductionOrigins.Approved.Single()));
         textExportPublisher = new TextExportStatePublisher();
-        var repository = new SqliteTrackerStateRepository(stateSelection.RootPath, "tracker.db");
         coordinator = new SerializedTrackerCoordinator(repository,
             new DesktopStateChangePublisher(Dispatcher, runtimePublication,
                 new CompositeTrackerStateChangePublisher(hostedConnection, textExportPublisher)),
@@ -99,6 +141,13 @@ public partial class App : System.Windows.Application, IDisposable
 
         var viewModel = new DesktopTrackerViewModel(coordinator);
         trackerViewModel = viewModel;
+        var trayPreference = new TrayClosePreferenceStore(stateSelection.RootPath);
+        try
+        {
+            bool minimizeOnClose = await trayPreference.ResolveAsync(startupCancellation.Token);
+            viewModel.ConfigureTrayClosePreference(minimizeOnClose, enabled => trayPreference.SaveAsync(enabled));
+        }
+        catch { /* Fail closed to normal shutdown if preference storage is unavailable. */ }
         viewModel.ConfigureHostedOverlay(hostedConnection);
 
         textExportPublisher.WriteCompleted += (_, succeeded) => Dispatcher.InvokeAsync(() =>
@@ -116,6 +165,27 @@ public partial class App : System.Windows.Application, IDisposable
         window.Closing += MainWindow_Closing;
         MainWindow = window;
         window.Show();
+        if (pendingRestore) RestoreMainWindow();
+        trayLifecycle = new DesktopTrayLifecycle(() => { window.RememberTrayFocus(); window.Hide(); }, RestoreMainWindow,
+            () => _ = ExitApplicationAsync(), message =>
+            {
+                if (!window.IsVisible)
+                {
+                    try { trayIcon?.ShowGuidance(message); }
+                    catch { TrayFailed(window); }
+                }
+            }, () => viewModel.MinimizeToTrayOnClose);
+        window.StateChanged += (_, _) =>
+        {
+            if (window.WindowState == WindowState.Minimized) trayLifecycle.Minimized();
+        };
+        try
+        {
+            trayIcon = new WindowsTrayIcon(window, trayLifecycle.Restore, trayLifecycle.Exit,
+                () => trayLifecycle.TrayAvailable = true,
+                () => TrayFailed(window));
+        }
+        catch { TrayFailed(window); }
         await viewModel.InitializeAsync(startupCancellation.Token);
         if (!mainWindowCloseRequested && viewModel.CurrentState is { } initializedState)
         {
@@ -186,6 +256,11 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if (trayLifecycle is { Exiting: false } lifecycle && !mainWindowCloseRequested)
+        {
+            lifecycle.Closing(e);
+            return;
+        }
         if (mainWindowCloseRequested)
         {
             e.Cancel = !finalShutdownRequested;
@@ -193,9 +268,31 @@ public partial class App : System.Windows.Application, IDisposable
         }
 
         e.Cancel = true;
+        await ExitApplicationAsync();
+    }
+
+    private async Task ExitApplicationAsync()
+    {
+        if (mainWindowCloseRequested) return;
         mainWindowCloseRequested = true;
         try { await shutdownCoordinator.RequestApplicationShutdownAsync(FinalShutdown); }
         catch { /* Components have been awaited; final shutdown already ran. */ }
+    }
+
+    private void RestoreMainWindow()
+    {
+        if (mainWindowCloseRequested || MainWindow is not MainWindow window) return;
+        pendingRestore = false;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        if (!window.IsVisible) window.Show();
+        window.Activate();
+        window.RestoreTrayFocus();
+    }
+
+    private void TrayFailed(MainWindow window)
+    {
+        if (trayLifecycle is not null) trayLifecycle.TrayAvailable = false;
+        RestoreMainWindow();
     }
 
     private void FinalShutdown()
@@ -267,6 +364,10 @@ public partial class App : System.Windows.Application, IDisposable
     private async ValueTask DisposeGlobalHotkeysAsync()
     {
         startupCancellation.Cancel();
+        activationPipe?.Dispose();
+        activationPipe = null;
+        trayIcon?.Dispose();
+        trayIcon = null;
         if (MainWindow is not null) MainWindow.IsEnabled = false;
         hostedConnection?.StopSetup();
         try

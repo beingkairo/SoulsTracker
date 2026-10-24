@@ -26,10 +26,10 @@ try {
 
     $verifier = Join-Path $fixture "scripts\Verify-ReleaseGuide.ps1"
     $guidePath = Join-Path $fixture "docs\RELEASE-GETTING-STARTED.md"
-    $currentStatement = "either startup order is supported"
+    $currentStatement = "https://github.com/beingkairo/SoulsTracker#getting-started"
     $guide = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($guidePath))
     if (-not $guide.Contains($currentStatement)) {
-        throw "Current guide is missing the startup-order statement required by this test."
+        throw "Current guide is missing the getting-started link required by this test."
     }
 
     $readmePath = Join-Path $fixture 'README.md'
@@ -44,7 +44,7 @@ try {
         [IO.File]::WriteAllText($releasePath, $release)
         [IO.File]::WriteAllText($workflowPath, $workflow)
         switch ($case) {
-            'obsolete' { [IO.File]::WriteAllText($guidePath, $guide.Replace($currentStatement, 'Open SoulsTracker before OBS')) }
+            'obsolete' { [IO.File]::WriteAllText($guidePath, $guide.Replace($currentStatement, 'SoulsTracker#obsolete')) }
             'games-drift' { [IO.File]::WriteAllText($readmePath, $readme.Replace("- Demon's Souls", '- Demon Souls')) }
             'release-qualifier' { [IO.File]::WriteAllText($releasePath, $release.Replace("- Demon's Souls", "- Demon's Souls: manual")) }
             'notes' { [IO.File]::WriteAllText($releasePath, "$release`n## Notes`n`nRemoved disclosure.`n") }

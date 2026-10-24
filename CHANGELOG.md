@@ -2,6 +2,14 @@
 
 Historical releases through v1.3.2 are archived here. For current releases, see the [GitHub releases](https://github.com/beingkairo/SoulsTracker/releases).
 
+## 2.1.0
+
+* Added control over Hosted Overlay, with Hosted Overlay disabled by default on fresh installs.
+* Added Windows notification-area support, including optional "Minimize to tray on close".
+* Fixed Sticky Preview scrollbar stutter while docking and undocking.
+* Improved manual death-counter updates so unrelated game and profile controls remain visually stable.
+* Refined Settings organization and Hosted Overlay disabled-state behavior.
+
 ## 1.3.2 - 2026-08-21
 
 * Added automatic, read-only Bloodborne lifetime death tracking.

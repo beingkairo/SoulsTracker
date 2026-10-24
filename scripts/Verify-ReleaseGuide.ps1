@@ -18,12 +18,11 @@ $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "## Compatible games" },
     @{ Path = $readmePath; Content = $readme; Text = "## Getting started" },
     @{ Path = $readmePath; Content = $readme; Text = "docs/RELEASE-GETTING-STARTED.md" },
-    @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "either startup order is supported" },
-    @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "SoulsTracker#getting-started" },
+    @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "https://github.com/beingkairo/SoulsTracker#getting-started" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "# SoulsTracker v$version" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Death Counter Overlays are now hosted instead of being local only." },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Uninstall now offers a choice to keep or delete local SoulsTracker settings." },
+    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Choose whether to enable Hosted Overlay." },
+    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Fixed Sticky Preview scrollbar stutter" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.release_notes" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.artifact_stem" },
@@ -59,11 +58,10 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
     throw 'README is missing its release link or current hotkey feature.'
 }
 $expectedChanges = @(
-    '- SoulsTracker now focuses entirely on total deaths. Boss lists and death sounds have been removed.',
-    '- Death Counter Overlays are now hosted instead of being local only.',
-    '- Improved game and save selection, Overlay customization, and in-app previews.',
-    '- Added optional update checks.',
-    '- Uninstall now offers a choice to keep or delete local SoulsTracker settings.'
+    '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
+    '- Choose whether closing the window minimizes SoulsTracker to the tray with the optional Minimize to tray on close setting.',
+    '- Fixed Sticky Preview scrollbar stutter while docking and undocking.',
+    '- Settings organization and Hosted Overlay disabled-state behavior have been refined.'
 ) -join "`n"
 $changesMatch = [regex]::Match($releaseBody, '(?ms)^## Latest changes\s*\r?\n(.*?)(?=^## |\z)')
 if (-not $changesMatch.Success -or $changesMatch.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedChanges) {
