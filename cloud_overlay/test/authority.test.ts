@@ -61,7 +61,9 @@ it("rejects malformed routes and unconfigured admission before namespace access"
   expect((await listDurableObjectIds(env.OVERLAYS)).map(id => id.toString())).toEqual(before);
 });
 
-it("denies cross-identity, swapped-role, missing and malformed credentials on every publisher endpoint", async () => {
+// Each endpoint has its own fixture and timeout budget. These independent denial
+// checks need not accumulate all four HTTP matrices in one test on busy runners.
+it.each(["publisher", "session", "state", "credentials"] as const)("denies cross-identity, swapped-role, missing and malformed credentials on %s", async route => {
   await provision(); await acquire(); await publish();
   await runInDurableObject(env.OVERLAYS.getByName(otherId), (_instance, state) => {
     state.storage.sql.exec("INSERT INTO records (key, value) VALUES ('control', ?)", JSON.stringify({
@@ -70,18 +72,20 @@ it("denies cross-identity, swapped-role, missing and malformed credentials on ev
     }));
   });
   const before = await stored();
-  for (const [route, method, body] of [["publisher", "GET", undefined], ["session", "POST", acquisition],
-    ["state", "PUT", candidate("2")], ["credentials", "POST", { v: 1, rotationId: "8".repeat(32), expectedGeneration: "0", readCapability: read }]] as const) {
-    for (const token of [read, "", "bad", `${write}, ${write}`]) {
-      const result = await request(route, method, body, token);
-      expect(result.status).toBe(403);
-      expect(result.headers.get("Cache-Control")).toBe("no-store");
-      expect(result.headers.has("Access-Control-Allow-Origin")).toBe(false);
-      expect(result.headers.has("Set-Cookie")).toBe(false);
-      expect(await result.text()).toBe('{"error":"forbidden"}');
-    }
-    expect((await request(route, method, body, write, otherId)).status).toBe(403);
+  const [method, body] = ({
+    publisher: ["GET", undefined], session: ["POST", acquisition],
+    state: ["PUT", candidate("2")],
+    credentials: ["POST", { v: 1, rotationId: "8".repeat(32), expectedGeneration: "0", readCapability: read }]
+  } as const)[route];
+  for (const token of [read, "", "bad", `${write}, ${write}`]) {
+    const result = await request(route, method, body, token);
+    expect(result.status).toBe(403);
+    expect(result.headers.get("Cache-Control")).toBe("no-store");
+    expect(result.headers.has("Access-Control-Allow-Origin")).toBe(false);
+    expect(result.headers.has("Set-Cookie")).toBe(false);
+    expect(await result.text()).toBe('{"error":"forbidden"}');
   }
+  expect((await request(route, method, body, write, otherId)).status).toBe(403);
   expect(await stored()).toEqual(before);
 });
 
