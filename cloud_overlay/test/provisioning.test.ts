@@ -5,6 +5,9 @@ import worker, { type Env } from "../src/index";
 import { ProvisioningAuthority } from "../src/provisioning-authority";
 import { verifier, verifierV2 } from "../src/protocol";
 import type {} from "./authority.test";
+import { workerDiagnostics } from "./worker-diagnostics";
+
+const diagnostics = workerDiagnostics("provisioning");
 
 const legacyId = "1".repeat(32);
 const requestId = "2".repeat(64), readCapability = "3".repeat(64), writeCapability = "4".repeat(64);
@@ -12,7 +15,7 @@ const claim = { v: 1 as const, requestId, readVerifier: verifierV2(requestId, "r
   writeVerifier: verifierV2(requestId, "write", writeCapability) };
 const admitted = { limit: vi.fn(async () => ({ success: true })) } as unknown as RateLimit;
 
-afterEach(() => { vi.restoreAllMocks(); return reset(); });
+afterEach(() => { vi.restoreAllMocks(); return diagnostics.cleanup(reset); });
 
 function request(body: unknown = claim, options: { method?: string; headers?: Record<string, string>; suffix?: string } = {}) {
   return new Request(`https://overlay.test/api/v1/overlays${options.suffix ?? ""}`, {
@@ -48,6 +51,7 @@ it("derives fixed versioned role verifiers", () => {
 });
 
 it("consumes both admission layers before rejecting malformed create requests", async () => {
+  const trace = diagnostics.capture("malformed-create");
   const client = vi.fn(async () => ({ success: true }));
   const service = vi.fn(async () => ({ success: true }));
   const authority = { getByName: vi.fn() } as unknown as Env["PROVISIONING_AUTHORITY"];
@@ -65,9 +69,9 @@ it("consumes both admission layers before rejecting malformed create requests", 
     rawCreate("{"),
     rawCreate(encoded + " ".repeat(8193))
   ]) {
-    const result = await worker.fetch(malformed, environment({ PROVISIONING_AUTHORITY: authority,
+    const result = await trace.phase("malformed", () => worker.fetch(malformed, environment({ PROVISIONING_AUTHORITY: authority,
       CREATE_CLIENT_RATE_LIMITER: { limit: client } as unknown as RateLimit,
-      CREATE_SERVICE_RATE_LIMITER: { limit: service } as unknown as RateLimit }));
+      CREATE_SERVICE_RATE_LIMITER: { limit: service } as unknown as RateLimit })));
     expect(result.status).toBeGreaterThanOrEqual(400);
   }
   expect(client).toHaveBeenCalledTimes(11);
@@ -111,59 +115,62 @@ it("fails closed when trusted metadata or either admission dependency is unavail
 });
 
 it("returns the same namespace identity for exact replay and stores verifier-only target state", async () => {
-  const first = await worker.fetch(request(), environment());
+  const trace = diagnostics.capture("create-replay");
+  const first = await trace.phase("create", () => worker.fetch(request(), environment()));
   expect(first.status).toBe(200);
-  const body = await first.json() as { v: number; status: string; overlayId: string };
+  const body = await trace.phase("body", () => first.json()) as { v: number; status: string; overlayId: string };
   expect(body.v).toBe(1);
   expect(body.status).toBe("provisioned");
   expect(body.overlayId).toMatch(/^[0-9a-f]{64}$/);
-  const replay = await worker.fetch(request(), environment());
-  expect(await replay.json()).toEqual(body);
-  const rows = await targetRows(body.overlayId);
+  const replay = await trace.phase("replay", () => worker.fetch(request(), environment()));
+  expect(await trace.phase("body", () => replay.json())).toEqual(body);
+  const rows = await trace.phase("stored", () => targetRows(body.overlayId));
   expect(rows.map(row => row.key)).toEqual(["appearance", "control", "death"]);
   const control = JSON.parse(rows.find(row => row.key === "control")!.value);
   expect(control).toMatchObject({ authVersion: 2, requestId, readVerifier: claim.readVerifier,
     writeVerifier: claim.writeVerifier, epoch: "0", generation: "0" });
   expect(JSON.stringify(rows)).not.toContain(readCapability);
   expect(JSON.stringify(rows)).not.toContain(writeCapability);
-  await abortAllDurableObjects();
-  expect(await (await worker.fetch(request(), environment())).json()).toEqual(body);
-  expect(await targetRows(body.overlayId)).toEqual(rows);
+  await trace.phase("restart", () => abortAllDurableObjects());
+  expect(await (await trace.phase("replay", () => worker.fetch(request(), environment()))).json()).toEqual(body);
+  expect(await trace.phase("stored", () => targetRows(body.overlayId))).toEqual(rows);
 });
 
 it("supports version-2 publisher authentication and rejects role or domain swaps", async () => {
-  const created = await (await worker.fetch(request(), environment())).json() as { overlayId: string };
+  const trace = diagnostics.capture("v2-auth");
+  const response = await trace.phase("create", () => worker.fetch(request(), environment()));
+  const created = await trace.phase("body", () => response.json()) as { overlayId: string };
   const authorized = (action: string, method: string, capability: string, body?: unknown) => new Request(
     `https://overlay.test/api/v1/overlays/${created.overlayId}/${action}`,
     { method, headers: { Authorization: "Bearer " + capability, "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const publisher = (capability: string) => authorized("publisher", "GET", capability);
-  expect((await worker.fetch(publisher(writeCapability), environment())).status).toBe(200);
-  expect((await worker.fetch(publisher(readCapability), environment())).status).toBe(403);
-  expect((await worker.fetch(publisher("5".repeat(64)), environment())).status).toBe(403);
+  expect((await trace.phase("request", () => worker.fetch(publisher(writeCapability), environment()))).status).toBe(200);
+  expect((await trace.phase("request", () => worker.fetch(publisher(readCapability), environment()))).status).toBe(403);
+  expect((await trace.phase("request", () => worker.fetch(publisher("5".repeat(64)), environment()))).status).toBe(403);
   const sessionId = "6".repeat(32);
   const acquisition = { v: 1, expectedEpoch: "0", sessionRequestId: sessionId };
-  expect((await worker.fetch(authorized("session", "POST", readCapability, acquisition), environment())).status).toBe(403);
-  expect((await worker.fetch(authorized("session", "POST", writeCapability, acquisition), environment())).status).toBe(200);
+  expect((await trace.phase("request", () => worker.fetch(authorized("session", "POST", readCapability, acquisition), environment()))).status).toBe(403);
+  expect((await trace.phase("request", () => worker.fetch(authorized("session", "POST", writeCapability, acquisition), environment()))).status).toBe(200);
   const update = { v: 1, epoch: "1", sessionRequestId: sessionId, sequence: "1",
     death: { value: "7", availability: "available" } };
-  expect((await worker.fetch(authorized("state", "PUT", writeCapability, update), environment())).status).toBe(200);
+  expect((await trace.phase("request", () => worker.fetch(authorized("state", "PUT", writeCapability, update), environment()))).status).toBe(200);
 
-  const live = await worker.fetch(new Request(`https://overlay.test/api/v1/overlays/${created.overlayId}/live`,
-    { headers: { Upgrade: "websocket", Origin: "https://overlay.test" } }), environment());
+  const live = await trace.phase("upgrade", () => worker.fetch(new Request(`https://overlay.test/api/v1/overlays/${created.overlayId}/live`,
+    { headers: { Upgrade: "websocket", Origin: "https://overlay.test" } }), environment()));
   expect(live.status).toBe(101);
-  const socket = live.webSocket!; socket.accept();
+  const socket = live.webSocket!; socket.accept(); trace.watch(socket);
   const snapshot = new Promise<MessageEvent>(resolve => socket.addEventListener("message", resolve, { once: true }));
   socket.send(JSON.stringify({ v: 1, type: "auth", readCapability }));
-  expect(JSON.parse(String((await snapshot).data)).death).toEqual({ revision: "1", value: "7", availability: "available" });
+  expect(JSON.parse(String((await trace.phase("snapshot", () => snapshot)).data)).death).toEqual({ revision: "1", value: "7", availability: "available" });
   socket.close();
 
-  const deniedLive = await worker.fetch(new Request(`https://overlay.test/api/v1/overlays/${created.overlayId}/live`,
-    { headers: { Upgrade: "websocket", Origin: "https://overlay.test" } }), environment());
-  const deniedSocket = deniedLive.webSocket!; deniedSocket.accept();
+  const deniedLive = await trace.phase("upgrade", () => worker.fetch(new Request(`https://overlay.test/api/v1/overlays/${created.overlayId}/live`,
+    { headers: { Upgrade: "websocket", Origin: "https://overlay.test" } }), environment()));
+  const deniedSocket = deniedLive.webSocket!; deniedSocket.accept(); trace.watch(deniedSocket);
   const closed = new Promise<CloseEvent>(resolve => deniedSocket.addEventListener("close", resolve, { once: true }));
   deniedSocket.send(JSON.stringify({ v: 1, type: "auth", readCapability: writeCapability }));
-  expect((await closed).code).toBe(4401);
+  expect((await trace.phase("closed", () => closed)).code).toBe(4401);
 });
 
 it("enforces the serialized hard ceiling while preserving exact replay", async () => {
