@@ -5,16 +5,21 @@ import { randomBytes } from "node:crypto";
 import { defaultAppearance, verifier } from "../src/protocol";
 import type {} from "./authority.test";
 import worker from "../src/index";
+import { workerDiagnostics } from "./worker-diagnostics";
+
+const diagnostics = workerDiagnostics("live");
 
 const id = "11111111111111111111111111111111";
 const read = Buffer.from(randomBytes(32)).toString("hex"), write = Buffer.from(randomBytes(32)).toString("hex");
-afterEach(() => reset());
-async function provision() {
+afterEach(() => diagnostics.cleanup(reset));
+async function provision(trace = diagnostics.capture()) {
   await runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => {
+    trace.mark("seed-sql", "write");
     state.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?)", JSON.stringify({
       readVerifier: verifier(id, "read", read), writeVerifier: verifier(id, "write", write),
       epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null
     }));
+    trace.mark("seed-sql", "end");
   });
 }
 function next(socket: WebSocket): Promise<string> {
@@ -54,36 +59,40 @@ async function connect() {
   return socket;
 }
 it("hydrates an authenticated read socket with empty death and complete default appearance", async () => {
-  await provision();
-  const socket = await connect();
+  const trace = diagnostics.capture("live-hydration");
+  await trace.phase("seed", () => provision(trace));
+  const socket = await trace.phase("upgrade", () => connect());
+  trace.watch(socket);
   const snapshot = next(socket);
   socket.send(JSON.stringify({ v: 1, type: "auth", readCapability: read }));
-  expect(JSON.parse(await snapshot)).toEqual({ v: 1, type: "snapshot", death: null, appearance: defaultAppearance });
+  expect(JSON.parse(await trace.phase("snapshot", () => snapshot))).toEqual({ v: 1, type: "snapshot", death: null, appearance: defaultAppearance });
   socket.close();
 });
 
 it("broadcasts committed complete channels once and never broadcasts retries, no-ops or SQL rollback", async () => {
-  await provision(); await acquire();
-  const socket = await connect(); await authenticate(socket);
+  const trace = diagnostics.capture("live-broadcast");
+  await trace.phase("seed", () => provision(trace)); await trace.phase("acquire", () => acquire());
+  const socket = await trace.phase("upgrade", () => connect()); trace.watch(socket);
+  await trace.phase("authenticate", () => authenticate(socket));
   const received: string[] = [];
   socket.addEventListener("message", event => { if (event.data !== "pong") received.push(String(event.data)); });
   const update = next(socket);
-  expect((await send("state", candidate())).status).toBe(200);
-  expect(JSON.parse(await update)).toEqual({ v: 1, type: "update", death: { ...candidate().death, revision: "1" } });
-  expect((await send("state", candidate())).status).toBe(200); await quiet(socket);
-  expect((await send("state", candidate("2"))).status).toBe(200); await quiet(socket);
+  expect((await trace.phase("publish", () => send("state", candidate()))).status).toBe(200);
+  expect(JSON.parse(await trace.phase("update", () => update))).toEqual({ v: 1, type: "update", death: { ...candidate().death, revision: "1" } });
+  expect((await trace.phase("publish", () => send("state", candidate()))).status).toBe(200); await trace.phase("barrier", () => quiet(socket));
+  expect((await trace.phase("publish", () => send("state", candidate("2")))).status).toBe(200); await trace.phase("barrier", () => quiet(socket));
   expect(received).toHaveLength(1);
-  await runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => {
+  await trace.phase("fixture-sql", () => runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => {
     state.storage.sql.exec("CREATE TRIGGER fail_control BEFORE UPDATE ON records WHEN NEW.key='control' BEGIN SELECT RAISE(ABORT,'synthetic'); END");
-  });
+  }));
   const { revision: _, ...style } = defaultAppearance;
   const both = { ...candidate("3", "0"), appearance: { ...style, title: "Changed" } };
-  expect((await send("state", both)).status).toBe(500); await quiet(socket);
+  expect((await trace.phase("publish", () => send("state", both))).status).toBe(500); await trace.phase("barrier", () => quiet(socket));
   expect(received).toHaveLength(1);
-  await runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => { state.storage.sql.exec("DROP TRIGGER fail_control"); });
+  await trace.phase("fixture-sql", () => runInDurableObject(env.OVERLAYS.getByName(id), (_, state) => { state.storage.sql.exec("DROP TRIGGER fail_control"); }));
   const combined = next(socket);
-  expect((await send("state", both)).status).toBe(200);
-  expect(JSON.parse(await combined)).toEqual({ v: 1, type: "update", death: { ...both.death, revision: "2" },
+  expect((await trace.phase("publish", () => send("state", both))).status).toBe(200);
+  expect(JSON.parse(await trace.phase("update", () => combined))).toEqual({ v: 1, type: "update", death: { ...both.death, revision: "2" },
     appearance: { ...both.appearance, revision: "1" } });
   expect(received).toHaveLength(2);
   socket.close();
