@@ -5,6 +5,9 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Env } from "../src/index";
 import worker from "../src/index";
 import corpus from "../../tests/fixtures/hosted-overlay/contracts.json";
+import { workerDiagnostics } from "./worker-diagnostics";
+
+const diagnostics = workerDiagnostics("authority");
 
 declare global {
   namespace Cloudflare {
@@ -19,12 +22,14 @@ const write = Buffer.from(randomBytes(32)).toString("hex"), read = Buffer.from(r
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const verifier = (role: string, capability: string, identity = id) => hash(`overlay-v1:${identity}:${role}:${capability}`);
 const stub = () => env.OVERLAYS.getByName(id);
-async function provision(identity = id) {
+async function provision(identity = id, trace = diagnostics.capture()) {
   await runInDurableObject(env.OVERLAYS.getByName(identity), (_instance, state) => {
+    trace.mark("seed-sql", "write");
     state.storage.sql.exec("INSERT INTO records (key, value) VALUES ('control', ?)", JSON.stringify({
       readVerifier: verifier("read", read, identity), writeVerifier: verifier("write", write, identity),
       epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null
     }));
+    trace.mark("seed-sql", "end");
   });
 }
 const request = async (route = "publisher", method = "GET", body?: unknown, capability = write, identity = id) => {
@@ -37,7 +42,7 @@ const request = async (route = "publisher", method = "GET", body?: unknown, capa
 async function stored() {
   return runInDurableObject(stub(), (_instance, state) => state.storage.sql.exec("SELECT key, value FROM records ORDER BY key").toArray());
 }
-afterEach(() => reset());
+afterEach(() => diagnostics.cleanup(reset));
 
 async function replaceRecord(key: string, transform: (value: any) => unknown) {
   await runInDurableObject(stub(), (_instance, state) => {
@@ -64,29 +69,34 @@ it("rejects malformed routes and unconfigured admission before namespace access"
 // Each endpoint has its own fixture and timeout budget. These independent denial
 // checks need not accumulate all four HTTP matrices in one test on busy runners.
 it.each(["publisher", "session", "state", "credentials"] as const)("denies cross-identity, swapped-role, missing and malformed credentials on %s", async route => {
-  await provision(); await acquire(); await publish();
-  await runInDurableObject(env.OVERLAYS.getByName(otherId), (_instance, state) => {
+  const trace = diagnostics.capture(`authority-${route}`);
+  await trace.phase("seed", () => provision(id, trace));
+  await trace.phase("acquire", () => acquire());
+  await trace.phase("publish", () => publish());
+  await trace.phase("other-seed", () => runInDurableObject(env.OVERLAYS.getByName(otherId), (_instance, state) => {
+    trace.mark("other-seed-sql", "write");
     state.storage.sql.exec("INSERT INTO records (key, value) VALUES ('control', ?)", JSON.stringify({
       readVerifier: verifier("read", read, otherId), writeVerifier: verifier("write", Buffer.from(randomBytes(32)).toString("hex"), otherId),
       epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null
     }));
-  });
-  const before = await stored();
+    trace.mark("other-seed-sql", "end");
+  }));
+  const before = await trace.phase("stored", () => stored());
   const [method, body] = ({
     publisher: ["GET", undefined], session: ["POST", acquisition],
     state: ["PUT", candidate("2")],
     credentials: ["POST", { v: 1, rotationId: "8".repeat(32), expectedGeneration: "0", readCapability: read }]
   } as const)[route];
   for (const token of [read, "", "bad", `${write}, ${write}`]) {
-    const result = await request(route, method, body, token);
+    const result = await trace.phase("request", () => request(route, method, body, token));
     expect(result.status).toBe(403);
     expect(result.headers.get("Cache-Control")).toBe("no-store");
     expect(result.headers.has("Access-Control-Allow-Origin")).toBe(false);
     expect(result.headers.has("Set-Cookie")).toBe(false);
     expect(await result.text()).toBe('{"error":"forbidden"}');
   }
-  expect((await request(route, method, body, write, otherId)).status).toBe(403);
-  expect(await stored()).toEqual(before);
+  expect((await trace.phase("request", () => request(route, method, body, write, otherId))).status).toBe(403);
+  expect(await trace.phase("stored", () => stored())).toEqual(before);
 });
 
 it("rejects wrong methods, plaintext transport and cookie-only authority", async () => {

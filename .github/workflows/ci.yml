@@ -73,7 +73,8 @@ jobs:
         run: npm run build --prefix cloud_overlay
 
       - name: Run local Worker tests
-        run: npm test --prefix cloud_overlay
+        shell: pwsh
+        run: ./scripts/Invoke-WorkerTestDiagnostics.ps1
 
       - name: Run hosted overlay tests
         run: npm test --prefix web_overlay
