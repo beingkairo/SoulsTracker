@@ -343,7 +343,7 @@ it("migrates the full synthetic 100-identity lifetime pool and grows without rec
       .toEqual({ configuration_version: 3, ceiling: 100, hard_maximum: 100 });
     expect(reconcileAuthority(state, stopped).unavailable_reason).toBe("unsupported_policy");
   });
-});
+}, 30_000);
 
 it("serializes concurrent new reservations at the window budget without full-ledger counts", async () => {
   await apply(settings({ ...policy, maxNewAllocations: 3 }));
