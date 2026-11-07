@@ -8,14 +8,14 @@ import shutil
 import subprocess
 import zipfile
 
-IMPLEMENTATION = "7e36436f7b06a1d7851fd51c9ed85480dc0755e2"
-SOURCE = "e3ef84445f5cd446ed6a95aa5f282016c2a14bc5"
-STEM = "SoulsTrackerV2.1.1"
+IMPLEMENTATION = "b65d3ca91aefd95037ca8737807979c341adfc80"
+SOURCE = "b65d3ca91aefd95037ca8737807979c341adfc80"
+STEM = "SoulsTrackerV2.1.2"
 APPROVED = {
-    f"{STEM}.exe": "5076d9bcb8ea5b35a45b67aec7bd2e38b9a4db235c66e5f89625fc30477f371e",
-    f"{STEM}-portable.zip": "a6abd0d199f67094ec331c38efd9a03cfe429d18f62d3e86a199d300665bcae4",
+    f"{STEM}.exe": "1feb12a4205e7d4edcae0a1553e7046666dee8812943266fd52d244df0ddfca2",
+    f"{STEM}-portable.zip": "1785143b35e460c6190b77876f21b62b5ceaf2599ffad74133f960e2482589b2",
 }
-PAYLOAD = "494c0c7dc27d15cb05006a821374b1cb1085589b305bdaf40cc4c3e2a1d87d33"
+PAYLOAD = "520796fe2171323cfd953a3c60f3f086ae08efc7ada2003f905ff39b4a8f78f8"
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
 
 
@@ -76,14 +76,14 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None):
     files = inventory(payload)
     require(len(files) == 491, "Desktop distribution file count changed")
     check_zip(folder / NAMES[1], files)
-    shutil.copyfile(source / "docs/releases/v2.1.1.md", folder / "release-notes.md")
+    shutil.copyfile(source / "docs/releases/v2.1.2.md", folder / "release-notes.md")
     hashes = {name: sha(folder / name) for name in NAMES}
     (folder / "SHA256SUMS.txt").write_text("".join(f"{hashes[n]}  {n}\n" for n in NAMES), encoding="ascii")
     hashes.update({name: sha(folder / name) for name in ["SHA256SUMS.txt", "release-notes.md"]})
     comparison = {name: hashes[name] == expected for name, expected in APPROVED.items()}
     comparison["payload_inventory"] = inventory_digest(files) == PAYLOAD
     manifest = {
-        "schema_version": 1, "version": "2.1.1", "source_commit": SOURCE,
+        "schema_version": 1, "version": "2.1.2", "source_commit": SOURCE,
         "implementation_commit": IMPLEMENTATION,
         "source_tree": subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD^{tree}"], text=True).strip(),
         "preparation_mode": "github_actions" if run_id else "local_unsigned",
@@ -98,7 +98,7 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None):
 
 def inspect(folder):
     manifest = json.loads((folder / "release-manifest.json").read_text(encoding="utf8"))
-    require(manifest["source_commit"] == SOURCE and manifest["version"] == "2.1.1", "Unapproved release source")
+    require(manifest["source_commit"] == SOURCE and manifest["version"] == "2.1.2", "Unapproved release source")
     require(manifest.get("implementation_commit") == IMPLEMENTATION, "Unapproved application implementation")
     expected_names = set(NAMES + ["SHA256SUMS.txt", "release-notes.md"])
     require(set(manifest["artifacts"]) == expected_names, "Unexpected release files")
