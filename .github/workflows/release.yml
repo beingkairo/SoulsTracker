@@ -155,8 +155,11 @@ jobs:
           if ($LASTEXITCODE) { throw 'Cannot inspect artifact' }
           if ($artifact.expired -or $artifact.workflow_run.id.ToString() -cne $env:PREPARED_RUN -or $artifact.name -cnotmatch "^desktop-v2\.1\.1-$($env:PREPARED_RUN)-[1-9][0-9]*$") { throw 'Artifact does not belong to preparation run' }
           # Prove absence rather than treating authentication/network failures as absence.
-          $status = gh api --include "repos/$repo/git/ref/tags/v2.1.1" 2>&1 | Out-String
-          if ($status -notmatch 'HTTP/[^ ]+ 404') { throw 'Cannot prove release tag is absent' }
+          foreach ($resource in @('git/ref/tags/v2.1.1', 'releases/tags/v2.1.1')) {
+            $status = gh api --include "repos/$repo/$resource" 2>&1 | Out-String
+            if ($status -notmatch 'HTTP/[^ ]+ 404') { throw 'Cannot prove release and tag are absent' }
+          }
+          $global:LASTEXITCODE = 0
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ inputs.artifact_id }}
