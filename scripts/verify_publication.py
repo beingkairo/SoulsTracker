@@ -9,7 +9,7 @@ import subprocess
 import zipfile
 
 IMPLEMENTATION = "7e36436f7b06a1d7851fd51c9ed85480dc0755e2"
-SOURCE = "8ad6a664abe56db65e8771bdd61d20f3bf31ba7d"
+SOURCE = "e3ef84445f5cd446ed6a95aa5f282016c2a14bc5"
 STEM = "SoulsTrackerV2.1.1"
 APPROVED = {
     f"{STEM}.exe": "5076d9bcb8ea5b35a45b67aec7bd2e38b9a4db235c66e5f89625fc30477f371e",
