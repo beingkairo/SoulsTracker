@@ -99,6 +99,8 @@ test("background follows current content and skull gaps match", async ({ page, r
       await publish(request, { appearance: { ...style, title, titleIconMode, padding: 12, backgroundOpacity: 100 } });
       await expect(panel).toHaveText(title && titleIconMode !== "skullOnly" ? `${title}: 7` : "7");
       await expect(panel).toHaveCSS("padding", "12px");
+      // Text can match the previous appearance while an uncached skull loads.
+      await expect(panel.locator("img")).toHaveCount(titleIconMode !== "off" && (title !== "" || titleIconMode === "skullOnly") ? 1 : 0);
       if (await panel.locator("img").count()) await expect.poll(() => panel.locator("img").evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
       const metrics = await panel.evaluate(node => {
         const content = node.querySelector("h1, p")!;
