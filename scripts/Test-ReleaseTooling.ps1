@@ -248,18 +248,19 @@ try {
     Write-Output 'Release target fixture cases passed.'
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
-    Assert-True ($workflow.Contains('path: artifacts/desktop')) 'SBOM must scan the prepared Desktop payload.'
-    foreach ($required in @('ref: ${{ github.sha }}', 'RELEASE_EVENT: ${{ github.event_name }}', 'RELEASE_REF: ${{ github.ref }}', 'RELEASE_COMMIT: ${{ github.sha }}', '-EventName $env:RELEASE_EVENT -EventRef $env:RELEASE_REF -ExpectedCommit $env:RELEASE_COMMIT', 'tag_name: ${{ steps.target.outputs.tag }}', 'generate_release_notes: false', 'body_path: ${{ steps.version.outputs.release_notes }}', 'run: ./scripts/Build-Release.ps1')) {
+    Assert-True ($workflow.Contains('path: source/artifacts/desktop')) 'SBOM must scan the prepared Desktop payload.'
+    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: 7e36436f7b06a1d7851fd51c9ed85480dc0755e2', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.1.1', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ./scripts/Build-Release.ps1')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }
     $last = -1
-    foreach ($step in @('actions/checkout@', 'id: target', 'actions/setup-dotnet@', 'Install Inno Setup', 'run: ./scripts/Build-Release.ps1', 'Create portable archive', 'Attest release artifacts', 'Publish GitHub release')) {
+    foreach ($step in @('actions/checkout@', 'actions/setup-dotnet@', 'Install Inno Setup', 'run: ./scripts/Build-Release.ps1', 'Create portable archive', 'Generate SBOM', 'Reconcile candidate checksums', 'Attest release artifacts', 'actions/upload-artifact@', 'Validate immutable preparation', 'actions/download-artifact@', 'Verify approved bytes and signed provenance', 'Publish GitHub release')) {
         $index = $workflow.IndexOf($step)
         Assert-True ($index -gt $last) "Workflow ordering invalid at $step."
         $last = $index
     }
     Assert-True ($workflow -notmatch 'Append setup guide|generate_release_notes: true|gh api --method PATCH') 'Published release body must not gain appended or generated prose.'
     Assert-True ($workflow -notmatch 'SkipTests|SkipInstaller|continue-on-error|always\(\)|GITHUB_REF_NAME') 'Workflow contains a qualification bypass or unvalidated target.'
+    Assert-True ($workflow -notmatch '(?m)^  push:') 'Tag push must not silently build or publish different artifacts.'
     Assert-True ([regex]::Matches($workflow, 'run: ./scripts/Build-Release.ps1').Count -eq 1) 'Exactly one qualification path is required.'
     Write-Output 'Release tooling characterization passed. Synthetic payloads are not distribution evidence.'
 } finally {

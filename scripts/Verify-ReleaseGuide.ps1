@@ -23,9 +23,9 @@ $requirements = @(
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Choose whether to enable Hosted Overlay." },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.release_notes" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.artifact_stem" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "artifacts/SHA256SUMS.txt" }
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/release-notes.md" },
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SoulsTrackerV$version.exe" },
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SHA256SUMS.txt" }
 )
 
 foreach ($requirement in $requirements) {
@@ -83,7 +83,7 @@ if ($releaseBody.Trim().Replace("`r`n", "`n") -cne $expectedReleaseBody) {
     throw 'Release notes must be exactly the approved title and two sections.'
 }
 if ($releaseWorkflow -notmatch '(?m)^\s+generate_release_notes: false\s*$' -or
-    $releaseWorkflow -notmatch '(?m)^\s+body_path: \$\{\{ steps\.version\.outputs\.release_notes \}\}\s*$' -or
+    $releaseWorkflow -notmatch '(?m)^\s+body_path: prepared/release-notes\.md\s*$' -or
     $releaseWorkflow -match 'Append setup guide|gh api --method PATCH|generate_release_notes: true') {
     throw 'Release workflow must publish only the static release notes without generated or appended prose.'
 }
