@@ -69,8 +69,15 @@ public sealed class AppearancePreviewControlTests
             string content = await browser.CoreWebView2.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
             Assert.Contains("0", content);
             vm.TotalDeathsAppearanceDraft.Title = "Offline test"; await Idle();
-            await Task.Delay(100);
-            content = await browser.CoreWebView2.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
+            // WPF's idle queue does not drain WebView2's message/animation-frame queue.
+            // Observe the rendered draft instead of assuming one arrived within 100 ms.
+            var rendered = System.Diagnostics.Stopwatch.StartNew();
+            do
+            {
+                content = await core.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
+                if (content.Contains("Offline test", StringComparison.Ordinal)) break;
+                await Task.Delay(10);
+            } while (rendered.Elapsed < TimeSpan.FromSeconds(5));
             Assert.Contains("Offline test", content);
             Assert.Empty(repository.Saves);
             Assert.Equal(0, (int)preview.GetType().GetProperty("BlockedRequestCount")!.GetValue(preview)!);

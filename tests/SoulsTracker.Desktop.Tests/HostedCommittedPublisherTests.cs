@@ -43,11 +43,20 @@ public sealed class HostedCommittedPublisherTests
                 new DesktopStateChangePublisher(Dispatcher.CurrentDispatcher, session, new CompositeTrackerStateChangePublisher(adapter, text)));
             var desktop = new DesktopTrackerViewModel(coordinator);
             await desktop.InitializeAsync();
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            async Task WaitForStage(Task task, TimeSpan timeout, string stage)
+            {
+                try { await task.WaitAsync(timeout); }
+                catch (TimeoutException error)
+                {
+                    throw new TimeoutException($"Timed out waiting for {stage}; hosted={sender.Status}, desktop={desktop.TotalDeathsText}, error={desktop.ErrorMessage}", error);
+                }
+            }
+            await WaitForStage(entered.Task, TimeSpan.FromSeconds(5), "initial hosted request");
             var written = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             text.WriteCompleted += (_, success) => written.TrySetResult(success);
-            await desktop.IncrementManualDeathsAsync().WaitAsync(TimeSpan.FromSeconds(1));
-            Assert.True(await written.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            await WaitForStage(desktop.IncrementManualDeathsAsync(), TimeSpan.FromSeconds(1), "manual increment commit");
+            await WaitForStage(written.Task, TimeSpan.FromSeconds(5), "TXT write completion");
+            Assert.True(await written.Task);
             Assert.Equal("1", desktop.TotalDeathsText);
             Assert.Equal("Total Deaths: 1", await File.ReadAllTextAsync(state.TextExports.DeathsPath!));
             Assert.Equal(1, (await repository.LoadAsync()).State!.ManualDemonsSoulsDeathCounter.Value);
