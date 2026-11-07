@@ -28,7 +28,8 @@ class PublicationTests(unittest.TestCase):
         hashes = {n: release.sha(self.folder / n) for n in release.NAMES}
         (self.folder / "SHA256SUMS.txt").write_text("".join(f"{hashes[n]}  {n}\n" for n in release.NAMES))
         hashes.update({n: release.sha(self.folder / n) for n in ["SHA256SUMS.txt", "release-notes.md"]})
-        self.manifest = {"source_commit": release.SOURCE, "version": "2.1.1", "artifacts": hashes,
+        self.manifest = {"source_commit": release.SOURCE, "implementation_commit": release.IMPLEMENTATION,
+                         "version": "2.1.1", "artifacts": hashes,
                          "payload_files": files, "payload_inventory_sha256": release.inventory_digest(files),
                          "preparation_mode": "github_actions", "workflow_commit": "a" * 40,
                          "prepared_run_id": "123"}
@@ -49,6 +50,12 @@ class PublicationTests(unittest.TestCase):
         self.manifest["source_commit"] = "b" * 40
         self.save()
         with self.assertRaisesRegex(ValueError, "Unapproved release source"):
+            self.verify()
+
+    def test_wrong_implementation(self):
+        self.manifest["implementation_commit"] = "b" * 40
+        self.save()
+        with self.assertRaisesRegex(ValueError, "Unapproved application implementation"):
             self.verify()
 
     def test_changed_artifact(self):

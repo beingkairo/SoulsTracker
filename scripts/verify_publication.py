@@ -8,7 +8,8 @@ import shutil
 import subprocess
 import zipfile
 
-SOURCE = "7e36436f7b06a1d7851fd51c9ed85480dc0755e2"
+IMPLEMENTATION = "7e36436f7b06a1d7851fd51c9ed85480dc0755e2"
+SOURCE = "8ad6a664abe56db65e8771bdd61d20f3bf31ba7d"
 STEM = "SoulsTrackerV2.1.1"
 APPROVED = {
     f"{STEM}.exe": "5076d9bcb8ea5b35a45b67aec7bd2e38b9a4db235c66e5f89625fc30477f371e",
@@ -83,6 +84,7 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None):
     comparison["payload_inventory"] = inventory_digest(files) == PAYLOAD
     manifest = {
         "schema_version": 1, "version": "2.1.1", "source_commit": SOURCE,
+        "implementation_commit": IMPLEMENTATION,
         "source_tree": subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD^{tree}"], text=True).strip(),
         "preparation_mode": "github_actions" if run_id else "local_unsigned",
         "workflow_commit": workflow_commit, "prepared_run_id": str(run_id) if run_id else None,
@@ -97,6 +99,7 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None):
 def inspect(folder):
     manifest = json.loads((folder / "release-manifest.json").read_text(encoding="utf8"))
     require(manifest["source_commit"] == SOURCE and manifest["version"] == "2.1.1", "Unapproved release source")
+    require(manifest.get("implementation_commit") == IMPLEMENTATION, "Unapproved application implementation")
     expected_names = set(NAMES + ["SHA256SUMS.txt", "release-notes.md"])
     require(set(manifest["artifacts"]) == expected_names, "Unexpected release files")
     require(all(p.is_file() for p in folder.iterdir()), "Unexpected directory in publication set")

@@ -249,7 +249,7 @@ try {
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
     Assert-True ($workflow.Contains('path: source/artifacts/desktop')) 'SBOM must scan the prepared Desktop payload.'
-    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: 7e36436f7b06a1d7851fd51c9ed85480dc0755e2', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.1.1', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ./scripts/Build-Release.ps1')) {
+    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: 8ad6a664abe56db65e8771bdd61d20f3bf31ba7d', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.1.1', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ./scripts/Build-Release.ps1')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }
     $last = -1
