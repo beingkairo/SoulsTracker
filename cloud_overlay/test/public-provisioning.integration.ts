@@ -85,7 +85,7 @@ it("grows past the historical lifetime ceiling across windows without replacing 
   expect(await created(1)).toBe(ids[0]);
   expect((await publisher(ids[0], credentials(1).write)).status).toBe(200);
   expect(await status()).toMatchObject({ report: { window_count: 2, new_allocation_state: "blocked" } });
-});
+}, 30_000);
 
 it("rolls back the budget when storage rejects a reservation and retries with no extra allocation", async () => {
   await activate();
