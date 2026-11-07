@@ -21,7 +21,6 @@ $requirements = @(
     @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "https://github.com/beingkairo/SoulsTracker#getting-started" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "# SoulsTracker v$version" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Choose whether to enable Hosted Overlay." },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/release-notes.md" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SoulsTrackerV$version.exe" },
@@ -56,7 +55,12 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
     $readme -notmatch '(?m)^- Global hotkeys$') {
     throw 'README is missing its release link or current hotkey feature.'
 }
-$expectedChanges = if ($version -eq '2.1.1') {
+$expectedChanges = if ($version -eq '2.1.2') {
+    @(
+        '- Expanded Bloodborne 1.09 death tracking to compatible PC runtimes, including Mrsuss60 bbport, Lantern Engine and deadinside28 Windows bbport, while preserving existing shadPS4 tracking.',
+        '- Compatible Bloodborne PC runtimes are detected independently of their executable filenames, with stable tracking through character changes and game restarts.'
+    ) -join "`n"
+} elseif ($version -eq '2.1.1') {
     @(
         '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
         '- Hosted Overlay shows when SoulsTracker is closed or an older client needs an update.',

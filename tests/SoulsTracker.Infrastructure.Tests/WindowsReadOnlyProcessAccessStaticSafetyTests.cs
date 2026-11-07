@@ -10,7 +10,7 @@ public sealed class WindowsReadOnlyProcessAccessStaticSafetyTests
     {
         string source = File.ReadAllText(GetSourcePath());
 
-        Assert.Equal(6, Count(source, "[DllImport("));
+        Assert.Equal(7, Count(source, "[DllImport("));
         Assert.Contains("OpenProcess", source, StringComparison.Ordinal);
         Assert.Contains("QueryFullProcessImageName", source, StringComparison.Ordinal);
         Assert.Contains("ReadProcessMemory", source, StringComparison.Ordinal);
@@ -24,7 +24,7 @@ public sealed class WindowsReadOnlyProcessAccessStaticSafetyTests
         Assert.DoesNotContain("ProcessQueryLimitedInformation", source, StringComparison.Ordinal);
         Assert.DoesNotContain("0x0020", source, StringComparison.Ordinal);
         Assert.DoesNotContain("0x0002", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("VirtualQueryEx", source, StringComparison.Ordinal);
+        Assert.Contains("VirtualQueryEx", source, StringComparison.Ordinal);
     }
 
     [Fact]

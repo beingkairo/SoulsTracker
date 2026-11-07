@@ -51,20 +51,27 @@ public interface IReadOnlyProcessAttachment : IAsyncDisposable
 /// </summary>
 public sealed class ReadOnlyProcessAttachmentResult
 {
-    private ReadOnlyProcessAttachmentResult(ReadOnlyProcessAttachmentOutcome outcome, IReadOnlyProcessAttachment? attachment)
+    private ReadOnlyProcessAttachmentResult(ReadOnlyProcessAttachmentOutcome outcome, IReadOnlyProcessAttachment? attachment, bool accessDenied = false)
     {
         Outcome = outcome;
         Attachment = attachment;
+        AccessDenied = accessDenied;
     }
 
     public ReadOnlyProcessAttachmentOutcome Outcome { get; }
 
     public IReadOnlyProcessAttachment? Attachment { get; }
 
+    // Diagnostic evidence only: the public reader outcome and requested rights remain unchanged.
+    internal bool AccessDenied { get; }
+
     public static ReadOnlyProcessAttachmentResult Attached(IReadOnlyProcessAttachment attachment) =>
         new(ReadOnlyProcessAttachmentOutcome.Attached, attachment ?? throw new ArgumentNullException(nameof(attachment)));
 
     public static ReadOnlyProcessAttachmentResult Unavailable() => new(ReadOnlyProcessAttachmentOutcome.Unavailable, null);
+
+    internal static ReadOnlyProcessAttachmentResult Unavailable(int nativeError) =>
+        new(ReadOnlyProcessAttachmentOutcome.Unavailable, null, accessDenied: nativeError == 5);
 
     public static ReadOnlyProcessAttachmentResult Cancelled() => new(ReadOnlyProcessAttachmentOutcome.Cancelled, null);
 }
@@ -255,8 +262,9 @@ public sealed class WindowsReadOnlyProcessAttachmentFactory : IReadOnlyProcessAt
             SafeProcessHandle handle = OpenProcess(ProcessVmRead | ProcessQueryInformation, false, (uint)processId);
             if (handle.IsInvalid)
             {
+                int nativeError = Marshal.GetLastWin32Error();
                 handle.Dispose();
-                return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Unavailable());
+                return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Unavailable(nativeError));
             }
 
             if (cancellationToken.IsCancellationRequested)
@@ -267,13 +275,13 @@ public sealed class WindowsReadOnlyProcessAttachmentFactory : IReadOnlyProcessAt
 
             return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Attached(new WindowsReadOnlyProcessAttachment(handle)));
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception exception)
         {
-            return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Unavailable());
+            return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Unavailable(exception.NativeErrorCode));
         }
         catch (UnauthorizedAccessException)
         {
-            return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Unavailable());
+            return ValueTask.FromResult(ReadOnlyProcessAttachmentResult.Unavailable(5));
         }
         catch (InvalidOperationException)
         {
@@ -298,7 +306,7 @@ public sealed class WindowsReadOnlyProcessAttachmentFactory : IReadOnlyProcessAt
         private static extern bool CloseHandle(nint handle);
     }
 
-    private sealed class WindowsReadOnlyProcessAttachment : IReadOnlyProcessAttachment
+    private sealed class WindowsReadOnlyProcessAttachment : IReadOnlyProcessAttachment, IReadOnlyProcessMemoryMap
     {
         private readonly SafeProcessHandle handle;
         private bool disposed;
@@ -420,6 +428,18 @@ public sealed class WindowsReadOnlyProcessAttachmentFactory : IReadOnlyProcessAt
             }
         }
 
+        public ValueTask<ReadOnlyProcessMemoryRegion?> QueryRegionAsync(nuint address, CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested || disposed || handle.IsInvalid || handle.IsClosed || IntPtr.Size != sizeof(ulong))
+                return ValueTask.FromResult<ReadOnlyProcessMemoryRegion?>(null);
+
+            nuint size = (nuint)Marshal.SizeOf<MemoryBasicInformation>();
+            nuint returned = VirtualQueryEx(handle, address, out MemoryBasicInformation region, size);
+            return ValueTask.FromResult<ReadOnlyProcessMemoryRegion?>(returned == size && !cancellationToken.IsCancellationRequested
+                ? new(region.BaseAddress, region.AllocationBase, region.RegionSize, region.State, region.Protect, region.Type)
+                : null);
+        }
+
         public ValueTask<ReadOnlyMainModuleBaseResult> QueryMainModuleBaseAsync(CancellationToken cancellationToken)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -531,6 +551,28 @@ public sealed class WindowsReadOnlyProcessAttachmentFactory : IReadOnlyProcessAt
             [Out] byte[] buffer,
             nuint size,
             out nuint bytesRead);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern nuint VirtualQueryEx(
+            SafeProcessHandle process,
+            nuint address,
+            out MemoryBasicInformation information,
+            nuint informationSize);
+
+        // MEMORY_BASIC_INFORMATION64: the DWORD at +20 and final padding are reserved.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MemoryBasicInformation
+        {
+            public nuint BaseAddress;
+            public nuint AllocationBase;
+            public uint AllocationProtect;
+            public uint Alignment;
+            public nuint RegionSize;
+            public uint State;
+            public uint Protect;
+            public uint Type;
+            public uint Alignment2;
+        }
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
