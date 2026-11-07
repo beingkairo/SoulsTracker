@@ -62,8 +62,10 @@ public sealed class HostedPublisherLifetimeTests
         Assert.False(heartbeat.RootElement.TryGetProperty("death", out _));
     }
 
-    [Fact]
-    public async Task StatusNotificationsNeverRunUnderSenderLockEvenAfterWorkerStops()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StatusNotificationsNeverRunUnderSenderLockEvenAfterWorkerStops(bool cancel)
     {
         var server = new Server { Intercept = (_, _, _) => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.Conflict)) };
         await using var sender = new HostedOverlayPublisher(Configuration(), server);
@@ -74,7 +76,10 @@ public sealed class HostedPublisherLifetimeTests
         object gate = typeof(HostedOverlayPublisher).GetField("gate", flags)!.GetValue(sender)!;
         bool notified = false, underLock = false;
         sender.StatusChanged += (_, _) => { notified = true; underLock |= Monitor.IsEntered(gate); };
-        await sender.DisposeAsync();
+        Task disposal = cancel ? sender.CancelAsync().AsTask() : sender.DisposeAsync().AsTask();
+        Assert.Same(disposal, sender.DisposeAsync().AsTask());
+        Assert.Same(disposal, sender.CancelAsync().AsTask());
+        await disposal;
         Assert.True(notified);
         Assert.False(underLock);
     }

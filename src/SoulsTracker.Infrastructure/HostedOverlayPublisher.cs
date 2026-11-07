@@ -339,7 +339,9 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
 
     private async Task CancelWorkerAsync()
     {
-        await worker.ConfigureAwait(false);
+        // Disposal starts under gate; even an already-stopped worker must yield
+        // before cleanup and subscriber notifications.
+        await worker.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         client.Dispose();
         stop.Dispose();
         wake.Dispose();
@@ -351,7 +353,7 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
     {
         using var flush = new CancellationTokenSource();
         var deadline = Task.Delay(TimeSpan.FromSeconds(2), clock, flush.Token);
-        await Task.WhenAny(worker, deadline).ConfigureAwait(false);
+        await Task.WhenAny(worker, deadline).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         await flush.CancelAsync().ConfigureAwait(false);
         await stop.CancelAsync().ConfigureAwait(false);
         await worker.ConfigureAwait(false);

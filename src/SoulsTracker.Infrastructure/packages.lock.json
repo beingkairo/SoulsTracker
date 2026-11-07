@@ -4,11 +4,11 @@
     "net10.0": {
       "Microsoft.Data.Sqlite.Core": {
         "type": "Direct",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
+        "requested": "[10.0.13, )",
+        "resolved": "10.0.13",
+        "contentHash": "Gge8XsSCOwcbkbdmt2UDAe6kIv9Q0vA6yb3wsTStjjexaMFLTWfc/1gH4kbhJ+zWiXRTRA4lG2sOQNVfir204w==",
         "dependencies": {
-          "SQLitePCLRaw.core": "2.1.11"
+          "SQLitePCLRaw.core": "2.1.13"
         }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
@@ -23,9 +23,9 @@
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Direct",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "BKt0SQgq2lq3ESE68jkeLwv95ypANrPDtkTOIFGcnhg2aRUeUUBDrQlkVDZctrg1WenVcvn5P5XZnuYI7q6rFQ=="
+        "requested": "[10.0.13, )",
+        "resolved": "10.0.13",
+        "contentHash": "aUSmC6cPjFLSE0rDTsmkR3wvUOnscqewebOaaELEToh12sNmoltZqT3f0C81mJ1zhxKjWco25soHTvYwsXCsUw=="
       },
       "SourceGear.sqlite3": {
         "type": "Transitive",
@@ -56,7 +56,7 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[2.0.0, )"
+          "SoulsTracker.Domain": "[2.1.0, )"
         }
       },
       "soulstracker.domain": {
