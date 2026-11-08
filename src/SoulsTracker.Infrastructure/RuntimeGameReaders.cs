@@ -50,6 +50,12 @@ public sealed record RuntimeGameReadResult
     public RuntimeGameReaderStatus Status { get; }
 
     public RuntimeGameObservation? Observation { get; }
+    public PersistentPluginObservation? PluginObservation { get; private init; }
+    public string? PluginStatus { get; private init; }
+
+    public static RuntimeGameReadResult FromHollowKnight(PersistentPluginObservation? observation, string status) =>
+        new(GameId.HollowKnight, observation is null ? RuntimeGameReaderStatus.Unavailable : RuntimeGameReaderStatus.Synced, null)
+        { PluginObservation = observation, PluginStatus = status };
 
     /// <summary>Contains optional setup-only metadata for a validated Wukong save.</summary>
     public BlackMythWukongSaveMetadata? BlackMythWukongSaveMetadata { get; }
@@ -69,10 +75,6 @@ public sealed record RuntimeGameReadResult
 
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
-
-    /// <summary>Monitoring status only; the observed total belongs to committed application state.</summary>
-    public static RuntimeGameReadResult MonitoringHollowKnight() =>
-        new(GameId.HollowKnight, RuntimeGameReaderStatus.Synced, null);
 
     public static RuntimeGameReadResult WaitingForSaveFile(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForSaveFile, null);

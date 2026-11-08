@@ -73,6 +73,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
     private PersistentTrackerState? state;
     private RuntimeGameObservation? runtimeObservation;
+    private PersistentPluginObservation? pluginObservation;
+    private string? pluginStatus;
     private RuntimeGameReaderStatus runtimeReaderStatus;
     private bool runtimeReaderHasNoRecordedDeaths;
     private bool runtimeReaderIsCurrentSaveCache;
@@ -519,12 +521,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
                 return null;
             }
 
+            if (selectedGameId == GameId.HollowKnight) return pluginStatus ?? HollowKnightSetupStatus;
             if (selectedGameId == GameId.DemonsSouls) return "Manual";
-
-            if (selectedGameId == GameId.HollowKnight)
-                return runtimeReaderStatus == RuntimeGameReaderStatus.Synced
-                    ? "Tracking observed deaths across Hollow Knight saves. Deaths while tracking is inactive cannot be recovered."
-                    : "Observed deaths saved. Waiting for supported Hollow Knight gameplay; tracking is inactive.";
 
             if (runtimeReaderStatus == RuntimeGameReaderStatus.PendingLowerValue)
             {
@@ -690,6 +688,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             return;
         }
 
+        pluginObservation = result?.GameId == state?.SelectedGameId ? result?.PluginObservation : null;
+        pluginStatus = result?.GameId == state?.SelectedGameId ? result?.PluginStatus : null;
         InvalidateWukongMetadataOperations();
         if (state is null)
         {
@@ -697,6 +697,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
             runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
+            pluginObservation = null;
             SetBlackMythWukongSaveMetadata(null);
             UpdateTotalDeathsText();
             OnPropertyChanged(nameof(RuntimeReaderStatusText));
@@ -733,6 +734,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
             runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
+            pluginObservation = null;
             SetBlackMythWukongSaveMetadata(null);
         }
         else if (liesOfPSaveIsUnconfigured)
@@ -741,6 +743,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             runtimeReaderStatus = RuntimeGameReaderStatus.WaitingForSaveFile;
             runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
+            pluginObservation = null;
             SetBlackMythWukongSaveMetadata(null);
         }
         else
@@ -748,6 +751,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
             runtimeReaderHasNoRecordedDeaths = false;
             runtimeObservation = null;
+            pluginObservation = null;
             SetBlackMythWukongSaveMetadata(null);
         }
 
@@ -772,11 +776,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         ReconcileWukongSaveSourceFromCommittedState();
     }
 
-    internal void ApplyHollowKnightCommit(PersistentTrackerState committedState, bool saved)
-    {
-        ApplyCommittedState(committedState);
-        ErrorMessage = saved ? null : "An observed Hollow Knight death could not be saved. Retrying while tracking remains active.";
-    }
+
 
     public HostedOverlayConnection? HostedOverlay { get; private set; }
     internal void ConfigureHostedOverlay(HostedOverlayConnection connection)
@@ -1461,6 +1461,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         }
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
         string? previousSource = state is null ? null : EffectiveDeathTotalResult.SourceIdentityFor(state);
+        if (previousSource != EffectiveDeathTotalResult.SourceIdentityFor(committedState)) { pluginObservation = null; pluginStatus = null; }
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
         OnPropertyChanged(nameof(CheckForUpdatesOnStartup));
 
@@ -1474,6 +1475,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         if (runtimeReaderGameId != state.SelectedGameId || blackMythWukongSaveIsUnconfigured || liesOfPSaveIsUnconfigured)
         {
             runtimeObservation = null;
+            pluginObservation = null;
             runtimeReaderHasNoRecordedDeaths = false;
             runtimeReaderStatus = blackMythWukongSaveIsUnconfigured || liesOfPSaveIsUnconfigured
                 ? RuntimeGameReaderStatus.WaitingForSaveFile
@@ -1483,6 +1485,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         else if (!string.Equals(previousSource, EffectiveDeathTotalResult.SourceIdentityFor(state), StringComparison.Ordinal))
         {
             runtimeObservation = null;
+            pluginObservation = null;
             runtimeReaderHasNoRecordedDeaths = false;
             runtimeReaderStatus = RuntimeGameReaderStatus.Unavailable;
             runtimeReaderGameId = state.SelectedGameId;
@@ -1537,7 +1540,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             return;
         }
 
-        long? combined = EffectiveDeathTotalResult.Resolve(state, runtimeObservation?.GameId == selectedId ? runtimeObservation : null).EffectiveDisplayedTotal;
+        long? combined = EffectiveDeathTotalResult.Resolve(state, runtimeObservation?.GameId == selectedId ? runtimeObservation : null, pluginObservation).EffectiveDisplayedTotal;
         TotalDeathsText = combined.HasValue
             ? combined.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : IsManualGame(selectedId)
@@ -1580,6 +1583,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         OnPropertyChanged(nameof(IsEldenRingSelected));
         OnPropertyChanged(nameof(IsBlackMythWukongSelected));
         OnPropertyChanged(nameof(IsLiesOfPSelected));
+        NotifyHollowKnight();
         OnPropertyChanged(nameof(CanSelectEldenRingProfile));
         OnPropertyChanged(nameof(EldenRingCharacterStatus));
         OnPropertyChanged(nameof(IsManualGameSelected));

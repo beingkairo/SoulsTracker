@@ -22,6 +22,14 @@ function New-DistributionFixture([string]$Fixture, [string]$PublishPath) {
         Copy-Item -LiteralPath (Join-Path $root $relative) -Destination $destination
     }
     $null = New-Item -ItemType Directory -Path $PublishPath -Force
+    foreach ($relative in @('plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll', 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt')) {
+        $source = Join-Path $Fixture $relative
+        $null = New-Item -ItemType Directory -Path (Split-Path $source) -Force
+        Set-Content -LiteralPath $source 'synthetic plugin distribution asset'
+        $destination = Join-Path $PublishPath ('HollowKnight/' + (Split-Path $relative -Leaf))
+        $null = New-Item -ItemType Directory -Path (Split-Path $destination) -Force
+        Copy-Item -LiteralPath $source -Destination $destination
+    }
     $version = & (Join-Path $root 'eng/Get-Version.ps1')
     $targetName = '.NETCoreApp,Version=v10.0/win-x64'
     $deps = @{ runtimeTarget = @{ name = $targetName }; targets = @{ $targetName = @{} }; libraries = @{} }

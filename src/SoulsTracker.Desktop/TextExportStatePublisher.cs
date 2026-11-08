@@ -11,6 +11,7 @@ namespace SoulsTracker.Desktop;
 internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, IAsyncDisposable
 {
     private RuntimeGameObservation? runtimeObservation;
+    private PersistentPluginObservation? pluginObservation;
     private readonly Channel<(PersistentTrackerState State, long? Total)> writes = Channel.CreateUnbounded<(PersistentTrackerState, long?)>();
     private readonly Task worker;
 
@@ -26,7 +27,10 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
         }
         RuntimeGameObservation? observation = RuntimeObservationFor(notification.State, Volatile.Read(ref runtimeObservation));
         if (observation is null) Volatile.Write(ref runtimeObservation, null);
-        long? displayedTotal = EffectiveDeathTotalResult.Resolve(notification.State, observation).EffectiveDisplayedTotal;
+        PersistentPluginObservation? plugin = Volatile.Read(ref pluginObservation);
+        if (notification.State.SelectedGameId != GameId.HollowKnight || plugin?.SourceIdentity != EffectiveDeathTotalResult.SourceIdentityFor(notification.State))
+            Volatile.Write(ref pluginObservation, null);
+        long? displayedTotal = EffectiveDeathTotalResult.Resolve(notification.State, observation, Volatile.Read(ref pluginObservation)).EffectiveDisplayedTotal;
         await QueueWrite(notification.State, displayedTotal).ConfigureAwait(false);
     }
 
@@ -37,7 +41,8 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
             ? RuntimeObservationFor(state, candidate)
             : null;
         Volatile.Write(ref runtimeObservation, observation);
-        await QueueWrite(state, EffectiveDeathTotalResult.Resolve(state, observation).EffectiveDisplayedTotal).ConfigureAwait(false);
+        Volatile.Write(ref pluginObservation, result?.PluginObservation);
+        await QueueWrite(state, EffectiveDeathTotalResult.Resolve(state, observation, result?.PluginObservation).EffectiveDisplayedTotal).ConfigureAwait(false);
     }
 
     private static RuntimeGameObservation? RuntimeObservationFor(PersistentTrackerState state, RuntimeGameObservation? observation) =>
@@ -80,7 +85,7 @@ internal sealed class TextExportStatePublisher : ITrackerStateChangePublisher, I
             succeeded &= await AtomicWriteAsync(config.DeathsPath, $"Total Deaths: {total}").ConfigureAwait(false);
         }
         else if (config.DeathsEnabled && config.DeathsPath is not null &&
-            (state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP))
+            (state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP || state.SelectedGameId == GameId.HollowKnight))
         {
             succeeded &= await AtomicWriteAsync(config.DeathsPath, string.Empty).ConfigureAwait(false);
         }

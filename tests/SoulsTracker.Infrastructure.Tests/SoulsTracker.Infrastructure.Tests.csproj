@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SoulsTracker.Infrastructure\SoulsTracker.Infrastructure.csproj" />
+    <ProjectReference Include="../../plugins/Soulstracker.DeathTracker/Soulstracker.DeathTracker.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
 </Project>

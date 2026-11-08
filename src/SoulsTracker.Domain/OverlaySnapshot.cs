@@ -10,7 +10,7 @@ public enum TotalDeathsDisplaySource
     Unavailable,
     Manual,
     GameLifetimeReader,
-    ObservedDeaths,
+    PersistentPlugin,
 }
 
 /// <summary>
@@ -52,11 +52,6 @@ public sealed class OverlayGameMetadata
 /// </summary>
 public sealed class TotalDeathsDisplayValue
 {
-    public static TotalDeathsDisplayValue FromObservedHollowKnightDeaths(HollowKnightDeaths deaths)
-    {
-        ArgumentNullException.ThrowIfNull(deaths);
-        return new(TotalDeathsDisplaySource.ObservedDeaths, GameId.HollowKnight, deaths.Count);
-    }
     private TotalDeathsDisplayValue(TotalDeathsDisplaySource source, GameId? gameId, long? value)
     {
         Source = source;
@@ -84,6 +79,12 @@ public sealed class TotalDeathsDisplayValue
     {
         ArgumentNullException.ThrowIfNull(gameId);
         return new TotalDeathsDisplayValue(TotalDeathsDisplaySource.Unavailable, gameId, null);
+    }
+
+    public static TotalDeathsDisplayValue FromPersistentPlugin(long total)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(total);
+        return new(TotalDeathsDisplaySource.PersistentPlugin, GameId.HollowKnight, total);
     }
 
     /// <summary>Creates a manual display value for Demon Souls.</summary>
@@ -338,9 +339,9 @@ public sealed class OverlaySnapshot
     {
         switch (totalDeaths.Source)
         {
-            case TotalDeathsDisplaySource.ObservedDeaths:
+            case TotalDeathsDisplaySource.PersistentPlugin:
                 if (selectedDefinition.Id != GameId.HollowKnight || totalDeaths.GameId != GameId.HollowKnight || totalDeaths.Value is null or < 0)
-                    throw new ArgumentException("Observed deaths must match Hollow Knight.", nameof(totalDeaths));
+                    throw new ArgumentException("Persistent plugin totals require Hollow Knight.", nameof(totalDeaths));
                 return;
             case TotalDeathsDisplaySource.Unavailable:
                 if (totalDeaths.GameId != selectedDefinition.Id ||

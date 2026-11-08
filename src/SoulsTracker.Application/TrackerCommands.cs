@@ -7,8 +7,7 @@ namespace SoulsTracker.Application;
 /// </summary>
 public interface ITrackerCommand;
 
-/// <summary>Commits one observed Hollow Knight death, with retry deduplication.</summary>
-public sealed record RecordHollowKnightDeathCommand(Guid EventId) : ITrackerCommand;
+public sealed record UpdateHollowKnightConfigurationCommand(HollowKnightConfiguration Configuration) : ITrackerCommand;
 
 /// <summary>Sets the opt-in update check for future desktop launches.</summary>
 public sealed record SetCheckForUpdatesOnStartupCommand(bool Enabled) : ITrackerCommand;
@@ -85,5 +84,5 @@ public enum TrackerCommandType
     UpdateTextExports,
     LegacyImport,
     SetCheckForUpdatesOnStartup,
-    RecordHollowKnightDeath,
+    UpdateHollowKnightConfiguration,
 }

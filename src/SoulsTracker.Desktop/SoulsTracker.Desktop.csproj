@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../../plugins/Soulstracker.DeathTracker/Soulstracker.DeathTracker.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <Content Include="../../plugins/Soulstracker.DeathTracker/bin/$(Configuration)/net472/Soulstracker.DeathTracker.dll" Link="HollowKnight/Soulstracker.DeathTracker.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt" Link="HollowKnight/HOLLOW-KNIGHT-MODDING-API.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="..\SoulsTracker.Application\SoulsTracker.Application.csproj" />
     <ProjectReference Include="..\SoulsTracker.Infrastructure\SoulsTracker.Infrastructure.csproj" />
     <ProjectReference Include="..\SoulsTracker.Overlay\SoulsTracker.Overlay.csproj" />

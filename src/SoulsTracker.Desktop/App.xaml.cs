@@ -28,7 +28,7 @@ public partial class App : System.Windows.Application, IDisposable
     private EldenRingSaveDeathReader? eldenRingSaveReader;
     private BlackMythWukongSaveDeathReader? blackMythWukongSaveReader;
     private LiesOfPSaveDeathReader? liesOfPSaveReader;
-    private HollowKnightRuntimeReader? hollowKnightReader;
+    private HollowKnightRecordReader? hollowKnightReader;
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
     private readonly RuntimePublicationSession runtimePublication = new();
@@ -188,6 +188,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
         catch { TrayFailed(window); }
         await viewModel.InitializeAsync(startupCancellation.Token);
+        if (!mainWindowCloseRequested) await viewModel.DiscoverHollowKnightAsync();
         if (!mainWindowCloseRequested && viewModel.CurrentState is { } initializedState)
         {
             runtimePublication.SelectState(initializedState);
@@ -209,7 +210,7 @@ public partial class App : System.Windows.Application, IDisposable
             eldenRingSaveReader = new EldenRingSaveDeathReader();
             blackMythWukongSaveReader = new BlackMythWukongSaveDeathReader();
             liesOfPSaveReader = new LiesOfPSaveDeathReader();
-            hollowKnightReader = new HollowKnightRuntimeReader();
+            hollowKnightReader = new HollowKnightRecordReader();
             runtimeReaders = new RuntimeGameReaderCoordinator([
                 new DarkSoulsRemasteredActiveCharacterDeathReader(
                     new ExactNameDarkSoulsRemasteredProcessEnumerator(),
@@ -247,9 +248,10 @@ public partial class App : System.Windows.Application, IDisposable
                 eldenRingSaveReader,
                 blackMythWukongSaveReader,
                 liesOfPSaveReader,
+                hollowKnightReader,
             ]);
             runtimeReaderCancellation = new CancellationTokenSource();
-            runtimeReaderPollingTask = Task.Run(() => PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token));
+            runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
         }
         if (!mainWindowCloseRequested) viewModel.StartStartupUpdateCheck();
     }
@@ -461,9 +463,6 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async Task PollRuntimeReadersAsync(DesktopTrackerViewModel viewModel, CancellationToken cancellationToken)
     {
-        long hollowKnightGeneration = -1;
-        DateTimeOffset nextHollowKnightPublication = default;
-        RuntimeGameReaderStatus? lastHollowKnightStatus = null;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -475,51 +474,13 @@ public partial class App : System.Windows.Application, IDisposable
                     eldenRingSaveReader?.Configure(currentState.EldenRingSave);
                     blackMythWukongSaveReader?.Configure(currentState.BlackMythWukongSave);
                     liesOfPSaveReader?.Configure(currentState.LiesOfPSave);
+                    hollowKnightReader?.Configure(currentState.HollowKnight);
                     return (Ticket: runtimePublication.BeginRead(currentState), currentState.SelectedGameId);
                 });
-                RuntimeGameReadResult? result;
-                bool observedDeathCommitted = false;
-                if (read.SelectedGameId == GameId.HollowKnight)
-                {
-                    if (hollowKnightGeneration != read.Ticket.Generation)
-                    {
-                        await hollowKnightReader!.ResetAsync().ConfigureAwait(false);
-                        hollowKnightGeneration = read.Ticket.Generation;
-                        nextHollowKnightPublication = default;
-                    }
-                    Guid? pendingBeforeRead = hollowKnightReader!.PendingEvent;
-                    result = await hollowKnightReader.ReadAsync(cancellationToken).ConfigureAwait(false);
-                    bool currentRead = await Dispatcher.InvokeAsync(() => runtimePublication.IsCurrent(read.Ticket));
-                    if (!currentRead)
-                    {
-                        if (pendingBeforeRead is null && hollowKnightReader.PendingEvent is Guid staleEvent)
-                            hollowKnightReader.Acknowledge(staleEvent);
-                        await hollowKnightReader.ResetAsync().ConfigureAwait(false);
-                        continue;
-                    }
-                    if (hollowKnightReader.PendingEvent is Guid eventId)
-                    {
-                        TrackerCommandExecutionResult committed = await coordinator!.SubmitAsync(new RecordHollowKnightDeathCommand(eventId), cancellationToken).ConfigureAwait(false);
-                        bool saved = committed.CommittedState?.HollowKnightDeaths.LastEventId == eventId;
-                        if (saved) hollowKnightReader.Acknowledge(eventId);
-                        observedDeathCommitted = saved;
-                        await Dispatcher.InvokeAsync(() =>
-                        {
-                            if (!mainWindowCloseRequested)
-                                viewModel.ApplyHollowKnightCommit(runtimePublication.CurrentState!, saved);
-                        });
-                    }
-                }
-                else
-                {
-                    await hollowKnightReader!.ResetAsync().ConfigureAwait(false);
-                    hollowKnightGeneration = -1;
-                    result = await runtimeReaders!.PollAsync(read.SelectedGameId, cancellationToken).ConfigureAwait(false);
-                }
-                // Sample quickly, but retain the existing output cadence unless a death or status changes.
-                bool publish = read.SelectedGameId != GameId.HollowKnight || observedDeathCommitted ||
-                    result?.Status != lastHollowKnightStatus || DateTimeOffset.UtcNow >= nextHollowKnightPublication;
-                if (publish) await Dispatcher.InvokeAsync(() =>
+                RuntimeGameReadResult? result = await runtimeReaders!
+                    .PollAsync(read.SelectedGameId, cancellationToken)
+                    .ConfigureAwait(false);
+                await Dispatcher.InvokeAsync(() =>
                 {
                     if (mainWindowCloseRequested) return;
                     PersistentTrackerState currentState = viewModel.CurrentState!;
@@ -530,20 +491,11 @@ public partial class App : System.Windows.Application, IDisposable
                             hostedConnection?.PublishAccepted(runtimePublication.CurrentState!, publication);
                         }, cancellationToken);
                 });
-                if (publish && read.SelectedGameId == GameId.HollowKnight)
-                {
-                    nextHollowKnightPublication = DateTimeOffset.UtcNow.AddSeconds(2);
-                    lastHollowKnightStatus = result?.Status;
-                }
-                await Task.Delay(read.SelectedGameId == GameId.HollowKnight ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-        }
-        finally
-        {
-            if (hollowKnightReader is not null) await hollowKnightReader.DisposeAsync().ConfigureAwait(false);
         }
     }
 

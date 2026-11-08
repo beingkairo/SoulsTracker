@@ -255,6 +255,17 @@ foreach ($relative in $allowed) {
 foreach ($relative in @('SoulsTracker.Desktop.exe', 'SoulsTracker.Desktop.deps.json', 'SoulsTracker.Desktop.runtimeconfig.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
     $null = $allowed.Add($relative)
 }
+$pluginAssets = @{
+    'HollowKnight/Soulstracker.DeathTracker.dll' = 'plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll'
+    'HollowKnight/HOLLOW-KNIGHT-MODDING-API.txt' = 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt'
+}
+foreach ($relative in $pluginAssets.Keys) {
+    $null = $allowed.Add($relative)
+    $source = Join-Path $root $pluginAssets[$relative]
+    $destination = Join-Path $payload $relative
+    Assert-Distribution ((Test-Path -LiteralPath $source -PathType Leaf) -and (Test-Path -LiteralPath $destination -PathType Leaf)) 'A required Hollow Knight plugin asset is missing.'
+    Assert-Distribution ((Get-FileHash -LiteralPath $source).Hash -ceq (Get-FileHash -LiteralPath $destination).Hash) 'Hollow Knight plugin asset differs from the reviewed build or license.'
+}
 foreach ($file in Get-ChildItem -LiteralPath $payload -Recurse -Force) {
     Assert-Distribution (-not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'Distribution contains a prohibited link.'
     $relative = [IO.Path]::GetRelativePath($payload, $file.FullName).Replace('\', '/')

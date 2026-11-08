@@ -20,8 +20,6 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
     internal PersistentTrackerState? CurrentState { get; private set; }
     internal readonly record struct ReadTicket(long Sequence, long CompletedBeforeStart, long Generation);
 
-    internal bool IsCurrent(ReadTicket read) => read.Generation == generation;
-
     // Called for every committed selection, including switches between polls.
     internal void SelectState(PersistentTrackerState state)
     {
@@ -55,6 +53,19 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         RuntimeGameReadResult? publication = NormalizeRuntimePublication(state, result);
         if (result is not null && publication is null) return;
         completedSequence = read.Sequence;
+        if (state.SelectedGameId == GameId.HollowKnight)
+        {
+            if (publication?.PluginObservation is { } plugin)
+            {
+                if (newestObservation is { } newest && plugin.ObservedAtUtc <= newest) return;
+                if (accepted?.PluginObservation is { } previous && previous.RunId == plugin.RunId && plugin.Revision < previous.Revision) return;
+                newestObservation = plugin.ObservedAtUtc;
+            }
+            accepted = publication;
+            applyDesktop(publication);
+            publishOutputs(publication);
+            return;
+        }
         if (publication?.Status == RuntimeGameReaderStatus.Cached)
         {
             if (accepted is not null && hasFreshPresentation)
@@ -102,6 +113,8 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
     internal static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
         if (result is null || result.GameId != state.SelectedGameId) return null;
+        if (state.SelectedGameId == GameId.HollowKnight)
+            return result.Observation is null && EffectiveDeathTotalResult.Resolve(state, null, result.PluginObservation).Status != EffectiveDeathTotalStatus.SourceMismatch ? result : null;
         if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
         if (result.Observation is not null &&
             EffectiveDeathTotalResult.Resolve(state, result.Observation).Status == EffectiveDeathTotalStatus.SourceMismatch)

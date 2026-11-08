@@ -565,12 +565,14 @@ public partial class MainWindow : Window
             // from racing a subsequent user selection.
             if (ReferenceEquals(choice, viewModel.SelectedGame))
             {
+                await viewModel.DiscoverHollowKnightAsync();
                 return;
             }
 
             if (viewModel.RequestGameSelection(choice))
             {
                 await SelectGameOnWindowDispatcherAsync(viewModel, choice);
+                await viewModel.DiscoverHollowKnightAsync();
             }
             else
             {
@@ -636,6 +638,39 @@ public partial class MainWindow : Window
         if (hadFocus && !viewModel.CanDecrementManualDeaths && viewModel.IsManualGameSelected &&
             ReferenceEquals(DataContext, viewModel))
             Keyboard.Focus(IncrementManualDeathsButton);
+    }
+
+    private async void BrowseHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm && chooseSaveDirectory("Choose Hollow Knight game folder", vm.HollowKnightGameDirectory) is { } directory)
+            await vm.SetHollowKnightGameDirectoryAsync(directory);
+    }
+
+    private async void InstallHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel vm) return;
+        var plan = await vm.PrepareHollowKnightInstallAsync();
+        if (plan is null) return;
+        if (System.Windows.MessageBox.Show(this, $"Install death tracking in {plan.Directory}?\n\nThis will write {plan.Files.Count} files. " +
+            (plan.ReusesApi ? "The verified Modding API will be reused." : "The official Modding API will replace game assemblies; originals will be backed up.") +
+            "\nOther mods will remain. Close Hollow Knight before continuing.", "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            await vm.ApplyHollowKnightInstallAsync(plan);
+    }
+
+    private async void UninstallHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm && System.Windows.MessageBox.Show(this,
+            "Remove only Soulstracker death tracking? Saved totals, the shared Modding API and other mods will remain.",
+            "Uninstall Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            await vm.UninstallHollowKnightAsync();
+    }
+
+    private async void RollbackHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm && System.Windows.MessageBox.Show(this,
+            "Restore files changed by an incomplete death tracking installation from their verified local backups?",
+            "Roll Back Failed Install", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            await vm.RollbackHollowKnightAsync();
     }
 
     private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)

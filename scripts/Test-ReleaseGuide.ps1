@@ -71,7 +71,7 @@ try {
                 elseif ($case -eq 'notes') { 'removed disclosure or migration commentary' }
                 elseif ($case -eq 'extra-prose') { 'exactly the approved latest changes' }
                 elseif ($case -in @('generated-notes', 'appended-guide')) { 'publish only the static release notes' }
-                else { 'must list exactly the nine current compatible game names' }
+                else { 'must list exactly the current compatible game names' }
             if ($process.ExitCode -eq 0 -or -not $output.Contains($expected)) {
                 throw "$case must fail for the expected reason."
             }

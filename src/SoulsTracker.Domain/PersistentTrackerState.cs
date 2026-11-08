@@ -49,7 +49,7 @@ public sealed class PersistentTrackerState
         EldenRingMissedDeathAdjustments? eldenRingMissedDeathAdjustments = null,
         LiesOfPSaveConfiguration? liesOfPSave = null,
         bool checkForUpdatesOnStartup = false,
-        HollowKnightDeaths? hollowKnightDeaths = null)
+        HollowKnightConfiguration? hollowKnight = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
         {
@@ -64,7 +64,7 @@ public sealed class PersistentTrackerState
         ArgumentNullException.ThrowIfNull(overlayConfiguration);
 
         SchemaVersion = schemaVersion;
-        HollowKnightDeaths = hollowKnightDeaths ?? HollowKnightDeaths.Empty;
+        HollowKnight = hollowKnight ?? HollowKnightConfiguration.Default;
         CheckForUpdatesOnStartup = checkForUpdatesOnStartup;
         SelectedGameId = selectedGameId;
 
@@ -92,7 +92,7 @@ public sealed class PersistentTrackerState
     /// <summary>Gets whether the next desktop launch may check for updates.</summary>
     public bool CheckForUpdatesOnStartup { get; }
 
-    public HollowKnightDeaths HollowKnightDeaths { get; }
+    public HollowKnightConfiguration HollowKnight { get; }
 
     /// <summary>
     /// Gets the selected canonical game. Legacy absent values normalize to Demon Souls.

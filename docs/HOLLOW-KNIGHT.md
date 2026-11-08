@@ -1,23 +1,41 @@
-# Hollow Knight tracking
+# Hollow Knight persistent tracking
 
-Select Hollow Knight in SoulsTracker and run the original game normally. Tracking uses read-only process memory. No game changes, mod loader, additional downloads or player-installed libraries are required.
+Soulstracker.DeathTracker.dll records deaths inside the original Hollow Knight through the official [Hollow Knight Modding API](https://github.com/hk-modding/api). Counting continues while SoulsTracker is closed. The desktop reads saved records without independently detecting deaths.
 
-The displayed count is deaths observed while Hollow Knight is selected and tracking is active. SoulsTracker saves this count locally across application and game restarts. It accumulates across Hollow Knight saves and modes within this SoulsTracker data folder. It starts at zero when no observed deaths have been saved. It is not a character's lifetime total. Deaths while the app is closed, another game is selected, or tracking is unavailable cannot be recovered.
+## Installation and compatibility
 
-## Compatibility
+Select Hollow Knight. Steam installation and library folders are searched automatically. **Change Game Folder** is always available. Close Hollow Knight, click **Install Death Tracking**, review the target folder and file changes, then confirm. Launch Hollow Knight and load a save. Tracking active requires a fresh plugin heartbeat matched to that process; DLL presence alone is insufficient.
 
-The reader recognizes the exact original executable names `hollow_knight` and `Hollow Knight` on Windows. It requires one matching process and a recognized 64-bit memory layout. Initial profiles use the runtime version strings `1.5.68.11808`, `1.5.78.11833`, and `1.5.12459`. These profiles are supported by source inspection and synthetic memory tests; live gameplay validation is still required before release. Storefront compatibility has not been independently established. Older 32-bit builds, unknown versions, changed layouts, ambiguous processes and unreadable memory leave tracking inactive.
+This version targets Windows game **1.5.78.11833** with official API **v77**, [release 1.5.78.11833-77](https://github.com/hk-modding/api/releases/tag/1.5.78.11833-77). Newer builds, including **1.5.12620**, and older builds are unsupported. The installer never installs an older API over an unsupported game. Compatible non-Steam folders can be selected manually; distribution-specific gameplay validation is pending.
 
-## Counting behavior
+The installer downloads the official API over HTTPS, checks the pinned archive checksum and runtime files, and reuses an exact compatible existing API. Unknown APIs, conflicting shared components, modified plugin files and linked folders are rejected. Other mods remain untouched. Originals and a recovery journal are retained in `.soulstracker-death-tracking` inside the selected game folder. Failed installations roll back. After a process interruption, close Hollow Knight and use **Roll Back Failed Install** before retrying.
 
-The detector requires two consecutive healthy gameplay samples, followed by a coherent zero-health sample from the same loaded objects. Repeated zero-health readings count once. Loading, menus, changed objects, interrupted reads and sampling gaps break continuity. Attaching during a death or reopening a dead Steel Soul save does not count that earlier death. Respawn must establish a fresh healthy baseline before another death can count.
+## Counts and persistence
 
-The reader samples at approximately 100 ms while selected. Unchanged output updates retain the usual two-second cadence. An event is committed locally before it can change the displayed or hosted count. Ordinary damage and nonlethal hazards do not count. Zero-health dream and Godhome defeats are included when observed in validated gameplay, even when the ordinary death flag remains false. Steel Soul terminal deaths can count before leaving gameplay without requiring a respawn.
+The plugin hooks `HeroController.Die`. A latch prevents repeated calls during one death from incrementing twice; healthy respawn rearms it. Nonlethal hazards use `DieFromHazard` and do not count. Lethal hazards that enter `Die` count. Dream and Godhome defeats entering `Die` count even when the normal death/save path is skipped. Steel Soul terminal deaths are written before invoking the game coroutine, without requiring respawn.
 
-Transitions that reach zero only outside gameplay, very short deaths between samples, an unobserved reload that reuses the same objects, or an interrupted terminal death may not be classified reliably. The detector avoids guessing from save timestamps, shade state or mode changes. Ordinary deaths, dream encounters, Godhome, White Palace, Radiance, lethal hazards and Steel Soul still need live validation of their exact health/state timing. A storage failure leaves the event pending for retry while this app instance remains active; an unsaved event cannot survive an app failure.
+Every save run has a random identity in the API's per-save mod settings. A new game reusing a slot gets a new identity. Copies of the same save retain its identity. Per-run records remain separate, including the final Steel Soul total. Missing known identities or existing records fail closed rather than silently resetting totals.
 
-The hosted overlay and text export show the same committed observed count, including while the game is offline. The desktop status reports whether tracking is active. Existing overlay URLs and authentication remain unchanged.
+Records live in `%LOCALAPPDATA%/SoulsTracker/HollowKnightRecords/<installation-id>`. Each increment is flushed to a checksummed per-run record with atomic replacement, then to the current-record projection. Interrupted or corrupt projections are unavailable until the plugin reconciles them. Temporary files never supply totals. Back up these records together with the game's `.modded.json` save sidecars. Lost mod settings, corrupt records, failed storage and termination before a completed write can interrupt tracking; errors never become a fabricated zero.
 
-## Technical references
+Counts start when the plugin first tracks that save. Earlier deaths, disabled-plugin periods and failed writes cannot be recovered. This is a persistent plugin total, not a verified vanilla lifetime statistic. Desktop, TXT and hosted overlay share the same validated total. While the game is closed, the last tracked save remains readable; while running without a valid active-save heartbeat, tracking is unavailable.
 
-The [LiveSplit reader](https://github.com/ShootMe/LiveSplit.HollowKnight/blob/30084da5385c58e698c4b067fe59e10acd380484/HollowKnightMemory.cs) provides the version-specific layout and singleton discovery facts; its [death split](https://github.com/ShootMe/LiveSplit.HollowKnight/blob/30084da5385c58e698c4b067fe59e10acd380484/HollowKnightComponent.cs#L1073) uses zero health. The [independent counter](https://github.com/Theuzin69/ds-death-counter/blob/430f8965c890a81e131570373425ebbc2d426d28/src/games/hollowknight.cpp) and its [technical account](https://github.com/Theuzin69/ds-death-counter/blob/430f8965c890a81e131570373425ebbc2d426d28/docs/how-it-was-made.md#hollow-knight) informed continuity and special-mode review. Both references are MIT licensed. SoulsTracker implements only bounded discovery, validated field reads and observed-event handling; no upstream runtime or generic memory library is bundled.
+## Updates and uninstall
+
+Close Hollow Knight and use **Install Death Tracking** to update the owned plugin. Extra or modified files prevent replacement. **Uninstall Death Tracking** removes only the verified plugin DLL, installation identity and ownership record. Shared API files, other mods, mod settings, saved totals and installer backups remain. Reinstalling with the same saved desktop configuration reuses the installation identity. Remove the shared API separately only after checking other mods no longer require it.
+
+## Manual validation before release
+
+Build and fixture tests do not establish live gameplay compatibility. On a supported installation:
+
+- Cancel installation confirmation and verify no game files change. Install, restart, load a save and confirm active status.
+- With SoulsTracker closed, die twice, restart both programs and verify two saved deaths in desktop, TXT and hosted overlay.
+- Verify nonlethal spikes, acid and falls do not count; lethal hazards count once. Repeat death/respawn and rapid deaths.
+- Check Dream Warrior, Dream Boss, White Palace, Radiance, Hall of Gods and Pantheon defeats, including Steel Soul variants. Confirm which scenes enter `Die`.
+- Die in Steel Soul and restart at title. Verify the final total survives. Create a new game in that slot and verify a separate total.
+- Switch all four slots, reload and copy saves, and attach the desktop during a death. Verify unrelated runs never merge and no duplicate occurs.
+- Disable the plugin and relaunch. Confirm unavailable status while running. Re-enable and verify the old total resumes without recovering disabled-period deaths.
+- With backups, test read-only storage, interrupted writes and corruption. Verify unavailable status and recovery without false zero.
+- Install beside another compatible mod, update and uninstall. Verify the other mod, shared API, backups and totals remain unchanged.
+
+The API is MIT licensed. See [third-party notices](../THIRD_PARTY_NOTICES.md) and the [API license](licenses/HOLLOW-KNIGHT-MODDING-API.txt).

@@ -18,7 +18,10 @@ public static class TrackerStateTransitionService
 
         return command switch
         {
-            RecordHollowKnightDeathCommand death => ApplyHollowKnightDeath(state, death),
+            UpdateHollowKnightConfigurationCommand hk => Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId,
+                state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter,
+                state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments,
+                state.LiesOfPSave, state.CheckForUpdatesOnStartup, hk.Configuration), TrackerCommandType.UpdateHollowKnightConfiguration),
             SetCheckForUpdatesOnStartupCommand updateStartup => ApplyUpdateStartup(state, updateStartup),
             SelectGameCommand selectGame => ApplySelectGame(state, selectGame),
             IncrementManualDeathsCommand increment => ApplyIncrementManualDeaths(state, increment),
@@ -35,18 +38,6 @@ public static class TrackerStateTransitionService
         };
     }
 
-    private static TrackerTransitionResult ApplyHollowKnightDeath(PersistentTrackerState state, RecordHollowKnightDeathCommand command)
-    {
-        HollowKnightDeaths deaths = state.HollowKnightDeaths.Record(command.EventId);
-        return ReferenceEquals(deaths, state.HollowKnightDeaths)
-            ? Unchanged(state, TrackerCommandType.RecordHollowKnightDeath)
-            : Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId,
-                state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter,
-                state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave,
-                state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, deaths),
-                TrackerCommandType.RecordHollowKnightDeath);
-    }
-
     private static TrackerTransitionResult ApplyUpdateStartup(PersistentTrackerState state, SetCheckForUpdatesOnStartupCommand command) =>
         state.CheckForUpdatesOnStartup == command.Enabled
             ? Unchanged(state, TrackerCommandType.SetCheckForUpdatesOnStartup)
@@ -54,7 +45,7 @@ public static class TrackerStateTransitionService
                 state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports,
                 state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged,
                 state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments,
-                state.LiesOfPSave, command.Enabled, state.HollowKnightDeaths), TrackerCommandType.SetCheckForUpdatesOnStartup);
+                state.LiesOfPSave, command.Enabled, state.HollowKnight), TrackerCommandType.SetCheckForUpdatesOnStartup);
 
     private static TrackerTransitionResult ApplySelectGame(PersistentTrackerState state, SelectGameCommand command)
     {
@@ -72,7 +63,7 @@ public static class TrackerStateTransitionService
             new PersistentTrackerState(
                 state.SchemaVersion,
                 gameId,
-                state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
             TrackerCommandType.SelectGame);
     }
 
@@ -87,7 +78,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports,
                 state.ManualDemonsSoulsDeathCounter.Increment(), state.EldenRingNoticeAcknowledged, state.EldenRingSave,
-                state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
             TrackerCommandType.IncrementManualDeaths);
     }
 
@@ -109,7 +100,7 @@ public static class TrackerStateTransitionService
                 state.SelectedGameId,
                 state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports,
                 updatedCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
-                state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
             TrackerCommandType.DecrementManualDeaths);
     }
 
@@ -131,7 +122,7 @@ public static class TrackerStateTransitionService
             new PersistentTrackerState(
                 state.SchemaVersion,
                 state.SelectedGameId,
-                updatedConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                updatedConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
             TrackerCommandType.UpdateOverlayPresentation);
     }
 
@@ -140,7 +131,7 @@ public static class TrackerStateTransitionService
         OverlayConfiguration existing = state.OverlayConfiguration;
         OverlayConfiguration updated = new OverlayConfiguration(existing.SchemaVersion,
             new TotalDeathsOverlayOptions(existing.TotalDeaths.IsEnabled, existing.TotalDeaths.ShowGameName, existing.TotalDeaths.CompactTitle, OverlayAppearance.Default, existing.TotalDeaths.TitleIconMode));
-        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, updated, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths), TrackerCommandType.ResetOverlayAppearance);
+        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, updated, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight), TrackerCommandType.ResetOverlayAppearance);
     }
 
     private static TrackerTransitionResult ApplyUpdateOverlayAppearance(PersistentTrackerState state, UpdateOverlayAppearanceCommand command)
@@ -149,7 +140,7 @@ public static class TrackerStateTransitionService
         OverlayConfiguration existing = state.OverlayConfiguration;
         OverlayConfiguration updated = new OverlayConfiguration(existing.SchemaVersion,
             new TotalDeathsOverlayOptions(existing.TotalDeaths.IsEnabled, command.TotalDeathsShowGameName, command.TotalDeathsCompactTitle, command.Appearance, command.TotalDeathsTitleIconMode));
-        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, updated, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths), TrackerCommandType.UpdateOverlayAppearance);
+        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, updated, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight), TrackerCommandType.UpdateOverlayAppearance);
     }
 
 
@@ -166,7 +157,7 @@ public static class TrackerStateTransitionService
                     state.TextExports,
                     state.ManualDemonsSoulsDeathCounter,
                     eldenRingNoticeAcknowledged: true,
-                    state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                    state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
                 TrackerCommandType.AcknowledgeEldenRingNotice);
 
     private static TrackerTransitionResult ApplyUpdateEldenRingSaveConfiguration(PersistentTrackerState state, UpdateEldenRingSaveConfigurationCommand command)
@@ -187,7 +178,7 @@ public static class TrackerStateTransitionService
                 state.TextExports,
                 state.ManualDemonsSoulsDeathCounter,
                 state.EldenRingNoticeAcknowledged,
-                command.Configuration, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                command.Configuration, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
             TrackerCommandType.UpdateEldenRingSaveConfiguration);
     }
 
@@ -212,7 +203,7 @@ public static class TrackerStateTransitionService
                 state.EldenRingSave,
 
                 command.Configuration,
-                state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths),
+                state.EldenRingMissedDeathAdjustments, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight),
             TrackerCommandType.UpdateBlackMythWukongSaveConfiguration);
     }
 
@@ -225,7 +216,7 @@ public static class TrackerStateTransitionService
             state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
             state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments,
-            command.Configuration, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths), TrackerCommandType.UpdateLiesOfPSaveConfiguration);
+            command.Configuration, state.CheckForUpdatesOnStartup, state.HollowKnight), TrackerCommandType.UpdateLiesOfPSaveConfiguration);
     }
 
     private static TrackerTransitionResult ApplyAdjustEldenRingMissedDeaths(PersistentTrackerState state, AdjustEldenRingMissedDeathsCommand command)
@@ -247,7 +238,7 @@ public static class TrackerStateTransitionService
             state.SchemaVersion, state.SelectedGameId,
             state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
-            state.BlackMythWukongSave, updated, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnightDeaths), TrackerCommandType.AdjustEldenRingMissedDeaths);
+            state.BlackMythWukongSave, updated, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight), TrackerCommandType.AdjustEldenRingMissedDeaths);
     }
 
     private static bool PresentationEquals(OverlayConfiguration left, OverlayConfiguration right) =>

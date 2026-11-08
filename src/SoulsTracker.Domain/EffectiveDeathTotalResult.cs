@@ -9,19 +9,25 @@ public sealed record EffectiveDeathTotalResult
     public long? GameSpecificAdjustment { get; init; }
     public long? EffectiveDisplayedTotal { get; init; }
 
-    public static EffectiveDeathTotalResult Resolve(PersistentTrackerState state, RuntimeGameObservation? observation)
+    public static EffectiveDeathTotalResult Resolve(PersistentTrackerState state, RuntimeGameObservation? observation, PersistentPluginObservation? plugin = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         string source = SourceIdentityFor(state);
         if (state.SelectedGameId == GameId.HollowKnight)
+        {
+            if (plugin is null) return Unavailable(state.SelectedGameId, source);
+            if (plugin.SourceIdentity != source || state.HollowKnight.InstallationId is null ||
+                plugin.RunId == Guid.Empty || plugin.Slot is < 1 or > 4 || plugin.Total < 0 || plugin.Revision < 1)
+                return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };
             return new()
             {
                 SourceIdentity = source,
-                Status = state.HollowKnightDeaths.Count == 0 ? EffectiveDeathTotalStatus.Zero : EffectiveDeathTotalStatus.Synced,
-                SavedOrManualBase = state.HollowKnightDeaths.Count,
+                Status = plugin.Total == 0 ? EffectiveDeathTotalStatus.Zero : EffectiveDeathTotalStatus.Synced,
+                SavedOrManualBase = plugin.Total,
                 GameSpecificAdjustment = 0,
-                EffectiveDisplayedTotal = state.HollowKnightDeaths.Count
+                EffectiveDisplayedTotal = plugin.Total
             };
+        }
         if (observation is null) return Unavailable(state.SelectedGameId, source);
         if ((state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP) && string.IsNullOrWhiteSpace(observation.SourceIdentity))
             return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };
@@ -50,7 +56,12 @@ public sealed record EffectiveDeathTotalResult
                 ? $"{state.SelectedGameId.Value}:{state.BlackMythWukongSave.LocalPath}"
                 : state.SelectedGameId == GameId.LiesOfP
                     ? $"{state.SelectedGameId.Value}:{state.LiesOfPSave.LocalPath}"
-                    : state.SelectedGameId.Value;
+                    : state.SelectedGameId == GameId.HollowKnight
+                        ? HollowKnightSourceIdentityFor(state.HollowKnight)
+                        : state.SelectedGameId.Value;
+
+    public static string HollowKnightSourceIdentityFor(HollowKnightConfiguration configuration) =>
+        $"{GameId.HollowKnight.Value}:{configuration.GameDirectory}:{configuration.InstallationId}";
 
     public static EffectiveDeathTotalResult Unavailable(GameId gameId, string? sourceIdentity = null) => new()
     {

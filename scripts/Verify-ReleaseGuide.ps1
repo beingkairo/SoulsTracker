@@ -61,7 +61,7 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
     throw 'README is missing its release link or current hotkey feature.'
 }
 $expectedChanges = if ($version -eq '2.2.0') {
-    '- Added self-contained Hollow Knight tracking for deaths observed while tracking is active, with counts saved across application restarts.'
+    '- Added persistent Hollow Knight death tracking through an installable game plugin, with separate save totals retained while SoulsTracker is closed.'
 } elseif ($version -eq '2.1.2') {
     @(
         '- Expanded Bloodborne 1.09 death tracking to compatible PC runtimes, including Mrsuss60 bbport, Lantern Engine and deadinside28 Windows bbport, while preserving existing shadPS4 tracking.',
