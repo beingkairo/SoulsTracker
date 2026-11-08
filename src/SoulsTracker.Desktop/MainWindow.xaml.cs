@@ -652,7 +652,9 @@ public partial class MainWindow : Window
         var plan = await vm.PrepareHollowKnightInstallAsync();
         if (plan is null) return;
         if (System.Windows.MessageBox.Show(this, $"Install death tracking in {plan.Directory}?\n\nThis will write {plan.Files.Count} files. " +
-            (plan.ReusesApi ? "The verified Modding API will be reused." : "The official Modding API will replace game assemblies; originals will be backed up.") +
+            (plan.ReusesApi ? "The verified Modding API will be reused." : plan.ApiProfile == HollowKnightPluginInstaller.ApiTag
+                ? "The official Modding API v77 will replace game assemblies; originals will be backed up."
+                : "The verified API 78 build from upstream PR #164 will replace game assemblies; originals will be backed up. This API is unreleased and still requires gameplay validation.") +
             "\nOther mods will remain. Close Hollow Knight before continuing.", "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
             await vm.ApplyHollowKnightInstallAsync(plan);
     }

@@ -6,6 +6,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
+using Soulstracker.DeathTracking;
 
 namespace SoulsTracker.Infrastructure;
 
@@ -83,7 +84,7 @@ public static partial class HollowKnightInstallDiscovery
                 }
             }
             if (version is null) return null;
-            return new(path, version, api, version == SupportedGameVersion);
+            return new(path, version, api, HollowKnightCompatibility.SupportsGame(version));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or BadImageFormatException or ArgumentException or InvalidOperationException or IndexOutOfRangeException or KeyNotFoundException or OverflowException)
         { return null; }

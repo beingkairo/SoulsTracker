@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Content Include="../../plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip" Condition="Exists('../../plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip')" Link="HollowKnight/api-12620.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../docs/licenses/HOLLOW-KNIGHT-API-12620-NOTICES.txt" Link="HollowKnight/HOLLOW-KNIGHT-API-12620-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../../plugins/Soulstracker.DeathTracker/Soulstracker.DeathTracker.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <Content Include="../../plugins/Soulstracker.DeathTracker/bin/$(Configuration)/net472/Soulstracker.DeathTracker.dll" Link="HollowKnight/Soulstracker.DeathTracker.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt" Link="HollowKnight/HOLLOW-KNIGHT-MODDING-API.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

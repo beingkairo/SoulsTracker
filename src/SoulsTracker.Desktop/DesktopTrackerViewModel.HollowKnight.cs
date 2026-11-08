@@ -58,11 +58,13 @@ public sealed partial class DesktopTrackerViewModel
             return await Task.Run(async () =>
             {
                 HollowKnightInstallation game = HollowKnightInstallDiscovery.Inspect(directory) ?? throw new IOException("Invalid game folder.");
-                if (!game.Supported) throw new IOException("Unsupported version. API v77 requires Hollow Knight 1.5.78.11833; newer builds are unsupported.");
+                if (!game.Supported) throw new IOException("Unsupported Hollow Knight version.");
                 if (HollowKnightInstallDiscovery.IsGameRunning()) throw new IOException("Close Hollow Knight before installing death tracking.");
                 if (game.HasApi && !HollowKnightPluginInstaller.HasCompatibleApi(directory)) throw new IOException("The installed Modding API is incompatible; it will not be replaced.");
                 var installer = new HollowKnightPluginInstaller();
-                byte[]? api = HollowKnightPluginInstaller.HasCompatibleApi(directory) ? null : await HollowKnightPluginInstaller.DownloadOfficialApiAsync(CancellationToken.None);
+                byte[]? api = HollowKnightPluginInstaller.HasCompatibleApi(directory) ? null : game.Version == "1.5.12620"
+                    ? HollowKnightPluginInstaller.ReadVerifiedModernApiBundle()
+                    : await HollowKnightPluginInstaller.DownloadOfficialApiAsync(CancellationToken.None);
                 byte[] plugin = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "HollowKnight", HollowKnightPluginInstaller.PluginName));
                 return installer.Prepare(directory, plugin, api, state?.HollowKnight.InstallationId);
             });

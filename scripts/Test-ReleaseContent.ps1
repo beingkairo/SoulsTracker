@@ -22,7 +22,7 @@ function New-DistributionFixture([string]$Fixture, [string]$PublishPath) {
         Copy-Item -LiteralPath (Join-Path $root $relative) -Destination $destination
     }
     $null = New-Item -ItemType Directory -Path $PublishPath -Force
-    foreach ($relative in @('plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll', 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt')) {
+    foreach ($relative in @('plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll', 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt', 'docs/licenses/HOLLOW-KNIGHT-API-12620-NOTICES.txt')) {
         $source = Join-Path $Fixture $relative
         $null = New-Item -ItemType Directory -Path (Split-Path $source) -Force
         Set-Content -LiteralPath $source 'synthetic plugin distribution asset'
@@ -30,6 +30,17 @@ function New-DistributionFixture([string]$Fixture, [string]$PublishPath) {
         $null = New-Item -ItemType Directory -Path (Split-Path $destination) -Force
         Copy-Item -LiteralPath $source -Destination $destination
     }
+    $package = Join-Path $Fixture 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip'
+    $null = New-Item -ItemType Directory -Path (Split-Path $package) -Force
+    $zip = [IO.Compression.ZipFile]::Open($package, [IO.Compression.ZipArchiveMode]::Create)
+    $entry = $zip.CreateEntry('Assembly-CSharp.dll')
+    $stream = $entry.Open()
+    $bytes = [Text.Encoding]::UTF8.GetBytes('synthetic API component')
+    $stream.Write($bytes, 0, $bytes.Length); $stream.Dispose(); $zip.Dispose()
+    $profilePath = Join-Path $Fixture 'src/SoulsTracker.Infrastructure/HollowKnightApi12620.json'
+    $null = New-Item -ItemType Directory -Path (Split-Path $profilePath) -Force
+    @{ RuntimeFiles = @{ 'Assembly-CSharp.dll' = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)) } } | ConvertTo-Json | Set-Content -LiteralPath $profilePath
+    Copy-Item -LiteralPath $package -Destination (Join-Path $PublishPath 'HollowKnight/api-12620.zip')
     $version = & (Join-Path $root 'eng/Get-Version.ps1')
     $targetName = '.NETCoreApp,Version=v10.0/win-x64'
     $deps = @{ runtimeTarget = @{ name = $targetName }; targets = @{ $targetName = @{} }; libraries = @{} }
@@ -94,7 +105,7 @@ if ($DefineFixturesOnly) { return }
 if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
     $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-release-content-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'project-runtime-drift', 'floating-runtime', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
+        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'project-runtime-drift', 'floating-runtime', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record', 'api-package-component', 'api-package-duplicate')) {
             $fixture = Join-Path $fixtureRoot $case
             $payload = Join-Path $fixture 'payload'
             New-DistributionFixture $fixture $payload
@@ -103,6 +114,16 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
             $expected = ''
             $diagnostics = @()
             switch ($case) {
+                { $_ -in @('api-package-component', 'api-package-duplicate') } {
+                    $zipPath = Join-Path $payload 'HollowKnight/api-12620.zip'
+                    $zip = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Update)
+                    if ($case -eq 'api-package-component') { $zip.GetEntry('Assembly-CSharp.dll').Delete() }
+                    $entry = $zip.CreateEntry('Assembly-CSharp.dll')
+                    $stream = $entry.Open()
+                    $stream.WriteByte(1); $stream.Dispose(); $zip.Dispose()
+                    Copy-Item -LiteralPath $zipPath -Destination (Join-Path $fixture 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip') -Force
+                    $expected = if ($case -eq 'api-package-component') { 'API package component differs' } else { 'API package entry count differs' }
+                }
                 'missing-license' { Remove-Item (Join-Path $fixture 'LICENSE'); $expected = 'Required distribution input is missing' }
                 'missing-notices' { Remove-Item (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'Required distribution input is missing' }
                 'missing-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', '<!-- absent -->') | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text is missing' }

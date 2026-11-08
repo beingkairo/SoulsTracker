@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace SoulsTracker.Infrastructure;
 
 public sealed record HollowKnightInstallPlan(string Directory, Guid InstallationId, bool ReusesApi, IReadOnlyList<string> Files,
-    IReadOnlyDictionary<string, byte[]> Contents, IReadOnlyDictionary<string, string?> BeforeHashes);
+    IReadOnlyDictionary<string, byte[]> Contents, IReadOnlyDictionary<string, string?> BeforeHashes, string ApiProfile = "1.5.78.11833-77");
 
 /// <summary>Bounded, hash-checked install transactions. Shared API components are never uninstalled.</summary>
 public sealed class HollowKnightPluginInstaller
@@ -21,11 +21,11 @@ public sealed class HollowKnightPluginInstaller
     private readonly Func<bool> running;
     private readonly Func<string, HollowKnightInstallation?> inspect;
     private readonly Action<int>? afterWrite;
-    private static readonly Dictionary<string, string> ApiHashes = LoadHashes();
+    private readonly HollowKnightApiProfile? profileOverride;
 
     public HollowKnightPluginInstaller() : this(HollowKnightInstallDiscovery.IsGameRunning, HollowKnightInstallDiscovery.Inspect) { }
-    internal HollowKnightPluginInstaller(Func<bool> running, Func<string, HollowKnightInstallation?> inspect, Action<int>? afterWrite = null)
-    { this.running = running; this.inspect = inspect; this.afterWrite = afterWrite; }
+    internal HollowKnightPluginInstaller(Func<bool> running, Func<string, HollowKnightInstallation?> inspect, Action<int>? afterWrite = null, HollowKnightApiProfile? profile = null)
+    { this.running = running; this.inspect = inspect; this.afterWrite = afterWrite; profileOverride = profile; }
 
     public static async Task<byte[]> DownloadOfficialApiAsync(CancellationToken token)
     {
@@ -46,7 +46,52 @@ public sealed class HollowKnightPluginInstaller
         return archive;
     }
 
-    public static bool HasCompatibleApi(string root) => ApiHashes.All(pair => ExistingHash(Target(root, Managed + pair.Key)) == pair.Value);
+    public static bool HasCompatibleApi(string root) => HollowKnightApiProfile.ForVersion(HollowKnightInstallDiscovery.Inspect(root)?.Version ?? "") is { } profile && HasApi(root, profile);
+    private static bool HasApi(string root, HollowKnightApiProfile profile) => profile.RuntimeFiles.All(pair => ExistingHash(Target(root, Managed + pair.Key)) == pair.Value) &&
+        profile.VanillaFiles.Where(pair => !profile.RuntimeFiles.ContainsKey(pair.Key)).All(pair => ExistingHash(Target(root, Managed + pair.Key)) == pair.Value);
+    private static void ValidateVanilla(string root, HollowKnightApiProfile profile)
+    {
+        foreach (var file in profile.VanillaFiles)
+            if (ExistingHash(Target(root, Managed + file.Key)) != file.Value) throw new IOException("The game files do not match the verified clean Steam build; no files were changed.");
+    }
+    private HollowKnightApiProfile ProfileFor(string identity) => profileOverride?.ApiVersion == identity ? profileOverride : HollowKnightApiProfile.ForIdentity(identity);
+
+    public static byte[] ReadVerifiedModernApiBundle()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "HollowKnight", "api-12620.zip");
+        if (!File.Exists(path) || new FileInfo(path).Length > 33554432) throw new IOException("The verified API 78 package is unavailable in this build.");
+        HollowKnightInstallDiscovery.EnsureSafePath(path);
+        byte[] archive = File.ReadAllBytes(path);
+        VerifyArchive(archive, HollowKnightApiProfile.V78);
+        return archive;
+    }
+
+    private static Dictionary<string, byte[]> VerifyArchive(byte[] bytes, HollowKnightApiProfile profile)
+    {
+        if (bytes.Length > 33554432 || profile.ArchiveHash is { } hash && Hash(bytes) != hash) throw new IOException("API package verification failed.");
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        if (profile.ArchiveHash is null && (zip.Entries.Count != profile.RuntimeFiles.Count || zip.Entries.Any(entry => !profile.RuntimeFiles.ContainsKey(entry.FullName))))
+            throw new IOException("Unexpected API package entries.");
+        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in profile.RuntimeFiles)
+        {
+            ZipArchiveEntry entry = zip.GetEntry(pair.Key) ?? throw new IOException("Incomplete API package.");
+            if (entry.Length > 16777216) throw new IOException("Unexpected API component size.");
+            using Stream input = entry.Open();
+            using var output = new MemoryStream();
+            byte[] block = new byte[65536];
+            int read;
+            while ((read = input.Read(block, 0, block.Length)) != 0)
+            {
+                if (output.Length + read > 16777216) throw new IOException("API component is too large.");
+                output.Write(block, 0, read);
+            }
+            byte[] contents = output.ToArray();
+            if (Hash(contents) != pair.Value) throw new IOException("API component verification failed.");
+            files.Add(pair.Key, contents);
+        }
+        return files;
+    }
 
     public static Guid? GetInstalledIdentity(string root)
     {
@@ -61,27 +106,24 @@ public sealed class HollowKnightPluginInstaller
         root = Path.GetFullPath(root);
         CheckClosed(root);
         HollowKnightInstallation game = inspect(root) ?? throw new IOException("Invalid Hollow Knight game folder.");
-        if (!game.Supported) throw new IOException("Unsupported version. Official API v77 supports Hollow Knight 1.5.78.11833 only.");
-        bool reuse = HasCompatibleApi(root);
+        HollowKnightApiProfile profile = profileOverride ?? HollowKnightApiProfile.ForVersion(game.Version) ?? throw new IOException("Unsupported Hollow Knight version.");
+        if (!game.Supported || profile.GameVersion != game.Version) throw new IOException("Unsupported Hollow Knight version.");
+        bool reuse = HasApi(root, profile);
         if (game.HasApi && !reuse) throw new IOException("The installed Modding API is incompatible; it will not be replaced.");
         if (File.Exists(Path.Combine(root, "doorstop_config.ini")) || System.IO.Directory.Exists(Path.Combine(root, "BepInEx"))) throw new IOException("An incompatible loader is installed.");
         if (Pending(root) is { Completed: false }) throw new IOException("A previous install needs rollback before continuing.");
         var writes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         if (!reuse)
         {
-            if (apiArchive is null || Hash(apiArchive) != ArchiveHash) throw new IOException("A verified official API package is required.");
-            using var zip = new ZipArchive(new MemoryStream(apiArchive), ZipArchiveMode.Read);
-            foreach (var item in ApiHashes)
+            if (apiArchive is null) throw new IOException("A verified API package is required.");
+            ValidateVanilla(root, profile);
+            foreach (var item in VerifyArchive(apiArchive, profile))
             {
-                ZipArchiveEntry entry = zip.GetEntry(item.Key) ?? throw new IOException("Incomplete API archive.");
-                using Stream stream = entry.Open();
-                using var bytes = new MemoryStream(); stream.CopyTo(bytes);
-                byte[] contents = bytes.ToArray();
-                if (Hash(contents) != item.Value) throw new IOException("API payload verification failed.");
                 string relative = Managed + item.Key;
-                if (item.Key is not ("Assembly-CSharp.dll" or "mscorlib.dll") && ExistingHash(Target(root, relative)) is string old && old != item.Value)
+                bool ownedVanilla = profile.VanillaFiles.ContainsKey(item.Key) || profile == HollowKnightApiProfile.V77 && item.Key is ("Assembly-CSharp.dll" or "mscorlib.dll");
+                if (!ownedVanilla && ExistingHash(Target(root, relative)) is string old && old != Hash(item.Value))
                     throw new IOException("An existing shared component would be overwritten.");
-                writes.Add(relative, contents);
+                writes.Add(relative, item.Value);
             }
         }
         string folder = Target(root, PluginFolder);
@@ -96,14 +138,16 @@ public sealed class HollowKnightPluginInstaller
         writes.Add(PluginFolder + "/installation.id", Encoding.UTF8.GetBytes(id.ToString("D")));
         writes.Add(PluginFolder + "/ownership.json", JsonSerializer.SerializeToUtf8Bytes(new Ownership(id, Hash(plugin))));
         var before = writes.Keys.ToDictionary(path => path, path => ExistingHash(Target(root, path)), StringComparer.OrdinalIgnoreCase);
-        return new(root, id, reuse, writes.Keys.ToArray(), writes, before);
+        return new(root, id, reuse, writes.Keys.ToArray(), writes, before, profile.ApiVersion);
     }
 
     public void Apply(HollowKnightInstallPlan plan)
     {
         CheckClosed(plan.Directory);
-        if (inspect(plan.Directory) is not { Supported: true } || (plan.ReusesApi && !HasCompatibleApi(plan.Directory)))
+        HollowKnightApiProfile profile = ProfileFor(plan.ApiProfile);
+        if (inspect(plan.Directory) is not { Supported: true } current || current.Version != profile.GameVersion || (plan.ReusesApi && !HasApi(plan.Directory, profile)))
             throw new IOException("Game compatibility changed after confirmation; nothing was written.");
+        if (!plan.ReusesApi) ValidateVanilla(plan.Directory, profile);
         foreach (string file in plan.Files)
             if (ExistingHash(Target(plan.Directory, file)) != plan.BeforeHashes[file]) throw new IOException("Installation changed after confirmation; nothing was written.");
         string transaction = Path.Combine(plan.Directory, ".soulstracker-death-tracking", Guid.NewGuid().ToString("N"));
@@ -118,7 +162,7 @@ public sealed class HollowKnightPluginInstaller
             if (File.Exists(path)) File.Copy(path, Path.Combine(transaction, backup));
             entries.Add(new(relative, backup, plan.BeforeHashes[relative], Hash(plan.Contents[relative])));
         }
-        var journal = new Journal(transaction, false, entries);
+        var journal = new Journal(transaction, false, entries, plan.ApiProfile);
         WriteJournal(plan.Directory, journal);
         try
         {
@@ -128,7 +172,7 @@ public sealed class HollowKnightPluginInstaller
                 AtomicWrite(Target(plan.Directory, entries[index].RelativePath), plan.Contents[entries[index].RelativePath]);
                 afterWrite?.Invoke(index);
             }
-            if (!HasCompatibleApi(plan.Directory)) throw new IOException("Installed API verification failed.");
+            if (!HasApi(plan.Directory, profile)) throw new IOException("Installed API verification failed.");
             VerifyOwnedFiles(plan.Directory, ReadOwnership(plan.Directory));
             WriteJournal(plan.Directory, journal with { Completed = true });
         }
@@ -140,14 +184,15 @@ public sealed class HollowKnightPluginInstaller
         CheckClosed(root);
         Journal journal = Pending(root) ?? throw new IOException("No installation journal found.");
         if (journal.Completed) return;
+        HollowKnightApiProfile profile = ProfileFor(journal.ApiProfile);
         string transactionRoot = Path.GetFullPath(Path.Combine(root, ".soulstracker-death-tracking")) + Path.DirectorySeparatorChar;
         if (!Path.GetFullPath(journal.BackupDirectory).StartsWith(transactionRoot, StringComparison.OrdinalIgnoreCase)) throw new IOException("Invalid recovery location.");
-        if (journal.Files.Count is < 3 or > 12 || journal.Files.Select(entry => entry.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() != journal.Files.Count)
+        if ((journal.Files.Count < 3 || journal.Files.Count > profile.RuntimeFiles.Count + 3) || journal.Files.Select(entry => entry.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() != journal.Files.Count)
             throw new IOException("Invalid recovery entries.");
         // Validate the whole transaction before restoring any target.
         foreach (JournalEntry entry in journal.Files)
         {
-            if (!(ApiHashes.Keys.Select(name => Managed + name).Concat(new[] { PluginFolder + "/" + PluginName, PluginFolder + "/installation.id", PluginFolder + "/ownership.json" })).Contains(entry.RelativePath, StringComparer.Ordinal) ||
+            if (!(profile.RuntimeFiles.Keys.Select(name => Managed + name).Concat(new[] { PluginFolder + "/" + PluginName, PluginFolder + "/installation.id", PluginFolder + "/ownership.json" })).Contains(entry.RelativePath, StringComparer.Ordinal) ||
                 entry.BackupName != Path.GetFileName(entry.BackupName)) throw new IOException("Invalid recovery target.");
             string? current = ExistingHash(Target(root, entry.RelativePath));
             if (current != entry.BeforeHash && current != entry.AfterHash) throw new IOException("A recovery target changed; backups were preserved.");
@@ -264,12 +309,7 @@ public sealed class HollowKnightPluginInstaller
         return File.Exists(file) ? JsonSerializer.Deserialize<Journal>(File.ReadAllBytes(file)) ?? throw new IOException("Invalid install journal.") : null;
     }
     private static void WriteJournal(string root, Journal journal) => AtomicWrite(Target(root, ".soulstracker-death-tracking/pending.json"), JsonSerializer.SerializeToUtf8Bytes(journal));
-    private static Dictionary<string, string> LoadHashes()
-    {
-        using Stream stream = typeof(HollowKnightPluginInstaller).Assembly.GetManifestResourceStream("SoulsTracker.Infrastructure.HollowKnightApiV77.json")!;
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(stream)!;
-    }
     private sealed record Ownership(Guid InstallationId, string PluginHash);
     private sealed record JournalEntry(string RelativePath, string BackupName, string? BeforeHash, string AfterHash);
-    private sealed record Journal(string BackupDirectory, bool Completed, List<JournalEntry> Files);
+    private sealed record Journal(string BackupDirectory, bool Completed, List<JournalEntry> Files, string ApiProfile = "1.5.78.11833-77");
 }

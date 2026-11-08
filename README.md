@@ -25,7 +25,7 @@ A simple death counter for supported games.
 - TXT export
 - Global hotkeys
 
-Hollow Knight uses the included persistent death tracking plugin and the official [Hollow Knight Modding API](https://github.com/hk-modding/api). Select Hollow Knight, choose the game folder and click **Install Death Tracking**. Counts remain active while SoulsTracker is closed and are separated by save. API v77 supports Windows game version 1.5.78.11833; newer versions, including 1.5.12620, are unsupported. See [Hollow Knight tracking](docs/HOLLOW-KNIGHT.md) for installation, limitations and uninstallation.
+Hollow Knight uses the included persistent death tracking plugin and the [Hollow Knight Modding API](https://github.com/hk-modding/api). Select Hollow Knight, choose the game folder and click **Install Death Tracking**. Counts continue while SoulsTracker is closed and are separated by save. Windows profiles cover 1.5.78.11833 with official API v77 and the verified Steam 1.5.12620 build with a pinned source build of API 78 from upstream PR #164. API 78 remains unreleased and requires live gameplay validation before release. See [Hollow Knight tracking](docs/HOLLOW-KNIGHT.md) for installation, limitations and uninstallation.
 
 ## Getting started
 

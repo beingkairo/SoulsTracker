@@ -258,6 +258,8 @@ foreach ($relative in @('SoulsTracker.Desktop.exe', 'SoulsTracker.Desktop.deps.j
 $pluginAssets = @{
     'HollowKnight/Soulstracker.DeathTracker.dll' = 'plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll'
     'HollowKnight/HOLLOW-KNIGHT-MODDING-API.txt' = 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt'
+    'HollowKnight/HOLLOW-KNIGHT-API-12620-NOTICES.txt' = 'docs/licenses/HOLLOW-KNIGHT-API-12620-NOTICES.txt'
+    'HollowKnight/api-12620.zip' = 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip'
 }
 foreach ($relative in $pluginAssets.Keys) {
     $null = $allowed.Add($relative)
@@ -266,6 +268,21 @@ foreach ($relative in $pluginAssets.Keys) {
     Assert-Distribution ((Test-Path -LiteralPath $source -PathType Leaf) -and (Test-Path -LiteralPath $destination -PathType Leaf)) 'A required Hollow Knight plugin asset is missing.'
     Assert-Distribution ((Get-FileHash -LiteralPath $source).Hash -ceq (Get-FileHash -LiteralPath $destination).Hash) 'Hollow Knight plugin asset differs from the reviewed build or license.'
 }
+# The API package is verified independently of its container or download source.
+Add-Type -AssemblyName System.IO.Compression
+$apiProfile = (Read-RequiredText (Join-Path $root 'src/SoulsTracker.Infrastructure/HollowKnightApi12620.json')) | ConvertFrom-Json -AsHashtable
+$apiPackage = [IO.Compression.ZipFile]::OpenRead((Join-Path $payload 'HollowKnight/api-12620.zip'))
+try {
+    Assert-Distribution ($apiPackage.Entries.Count -eq $apiProfile.RuntimeFiles.Count) 'API package entry count differs from its verified profile.'
+    $seenApiFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $apiPackage.Entries) {
+        Assert-Distribution ($apiProfile.RuntimeFiles.ContainsKey($entry.FullName) -and $entry.Length -le 16777216 -and $seenApiFiles.Add($entry.FullName)) 'API package contains an unexpected entry.'
+        $stream = $entry.Open()
+        $hash = [Security.Cryptography.SHA256]::Create()
+        try { $actual = ConvertTo-HexString ($hash.ComputeHash($stream)) } finally { $hash.Dispose(); $stream.Dispose() }
+        Assert-Distribution ($actual -ceq $apiProfile.RuntimeFiles[$entry.FullName]) 'API package component differs from the verified source build.'
+    }
+} finally { $apiPackage.Dispose() }
 foreach ($file in Get-ChildItem -LiteralPath $payload -Recurse -Force) {
     Assert-Distribution (-not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'Distribution contains a prohibited link.'
     $relative = [IO.Path]::GetRelativePath($payload, $file.FullName).Replace('\', '/')

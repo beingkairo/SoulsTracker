@@ -39,8 +39,8 @@ public sealed class DeathTrackerMod : Mod, ILocalSettings<SaveIdentity>
 
     public override void Initialize()
     {
-        if (typeof(Constants).GetField("GAME_VERSION")?.GetRawConstantValue() as string != "1.5.78.11833" || ModHooks.ModVersion != "1.5.78.11833-77")
-            throw new NotSupportedException("Death tracking requires Hollow Knight 1.5.78.11833 and API v77.");
+        if (!HollowKnightCompatibility.SupportsRuntime(typeof(Constants).GetField("GAME_VERSION")?.GetRawConstantValue() as string, ModHooks.ModVersion))
+            throw new NotSupportedException("Unsupported Hollow Knight and Modding API combination.");
         string directory = Path.GetDirectoryName(typeof(DeathTrackerMod).Assembly.Location)!;
         installation = Guid.Parse(File.ReadAllText(Path.Combine(directory, "installation.id")));
         store = new RecordStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoulsTracker", "HollowKnightRecords", installation.ToString("D")));

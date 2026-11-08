@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="../../plugins/Soulstracker.DeathTracker/HollowKnightCompatibility.cs" Link="HollowKnight/HollowKnightCompatibility.cs" />
+    <EmbeddedResource Include="HollowKnightApi12620.json" />
     <Compile Include="../../plugins/Soulstracker.DeathTracker/DeathRecord.cs" Link="HollowKnight/DeathRecord.cs" />
     <Compile Include="../../plugins/Soulstracker.DeathTracker/RecordStore.cs" Link="HollowKnight/RecordStore.cs" />
     <Compile Include="../../plugins/Soulstracker.DeathTracker/DeathSession.cs" Link="HollowKnight/DeathSession.cs" />
