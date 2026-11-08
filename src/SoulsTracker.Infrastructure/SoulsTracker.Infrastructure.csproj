@@ -6,6 +6,7 @@
     <Compile Include="../../plugins/Soulstracker.DeathTracker/DeathRecord.cs" Link="HollowKnight/DeathRecord.cs" />
     <Compile Include="../../plugins/Soulstracker.DeathTracker/RecordStore.cs" Link="HollowKnight/RecordStore.cs" />
     <Compile Include="../../plugins/Soulstracker.DeathTracker/DeathSession.cs" Link="HollowKnight/DeathSession.cs" />
+    <Compile Include="../../plugins/Soulstracker.DeathTracker/SaveTrackingLifecycle.cs" Link="HollowKnight/SaveTrackingLifecycle.cs" />
     <EmbeddedResource Include="HollowKnightApiV77.json" />
     <ProjectReference Include="..\SoulsTracker.Domain\SoulsTracker.Domain.csproj" />
     <ProjectReference Include="..\SoulsTracker.Application\SoulsTracker.Application.csproj" />

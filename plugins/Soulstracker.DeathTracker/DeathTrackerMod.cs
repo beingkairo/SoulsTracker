@@ -7,24 +7,17 @@ using Modding;
 
 namespace Soulstracker.DeathTracking;
 
-public sealed class SaveIdentity
-{
-    public string RunId = "";
-}
-
 /// <summary>Official API adapter. All counting originates in the game's Die hook.</summary>
 public sealed class DeathTrackerMod : Mod, ILocalSettings<SaveIdentity>
 {
-    private SaveIdentity identity = new SaveIdentity();
-    private DeathSession? session;
-    private RecordStore? store;
+    private SaveIdentity initialIdentity = new SaveIdentity();
+    private SaveTrackingLifecycle? tracking;
     private Guid installation;
     private DateTime nextFlush;
     private DateTime nextSample;
     private static readonly PropertyInfo HeroInstance = typeof(HeroController).GetProperty("instance", BindingFlags.Public | BindingFlags.Static)!;
     private static readonly FieldInfo HeroState = typeof(HeroController).GetField("cState")!;
     private static readonly FieldInfo DeadState = HeroState.FieldType.GetField("dead")!;
-    private bool newGameSeen;
     private bool failed;
     private readonly int processId;
     private readonly long startedTicks;
@@ -34,8 +27,12 @@ public sealed class DeathTrackerMod : Mod, ILocalSettings<SaveIdentity>
         using (Process process = Process.GetCurrentProcess()) { processId = process.Id; startedTicks = process.StartTime.ToUniversalTime().Ticks; }
     }
     public override string GetVersion() => "2.2.0";
-    public void OnLoadLocal(SaveIdentity settings) { Guard(() => { session?.Close(); store?.WriteStatus(installation, processId, startedTicks, false); }); identity = settings ?? new SaveIdentity(); }
-    public SaveIdentity OnSaveLocal() => identity;
+    public void OnLoadLocal(SaveIdentity settings)
+    {
+        initialIdentity = settings ?? new SaveIdentity();
+        if (tracking != null) Guard(() => tracking.LoadLocal(initialIdentity));
+    }
+    public SaveIdentity OnSaveLocal() => tracking?.Identity ?? initialIdentity;
 
     public override void Initialize()
     {
@@ -43,47 +40,37 @@ public sealed class DeathTrackerMod : Mod, ILocalSettings<SaveIdentity>
             throw new NotSupportedException("Unsupported Hollow Knight and Modding API combination.");
         string directory = Path.GetDirectoryName(typeof(DeathTrackerMod).Assembly.Location)!;
         installation = Guid.Parse(File.ReadAllText(Path.Combine(directory, "installation.id")));
-        store = new RecordStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoulsTracker", "HollowKnightRecords", installation.ToString("D")));
-        session = new DeathSession(store, installation);
+        var store = new RecordStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoulsTracker", "HollowKnightRecords", installation.ToString("D")));
+        tracking = new SaveTrackingLifecycle(store, installation, active => store.WriteStatus(installation, processId, startedTicks, active));
+        tracking.LoadLocal(initialIdentity);
         // The API does not invoke OnLoadLocal when a save has no settings for this mod.
         // Clear the previous run before the API loads a different save's sidecar.
         On.GameManager.LoadGame += (original, manager, slot, callback) =>
         {
-            Guard(() => { session.Close(); store.WriteStatus(installation, processId, startedTicks, false); });
-            identity = new SaveIdentity();
-            newGameSeen = false;
+            Guard(tracking.BeginLoad);
             original(manager, slot, callback);
         };
-        ModHooks.SavegameLoadHook += slot => Guard(() => Open(slot, false));
-        ModHooks.NewGameHook += () => Guard(() => { if (!newGameSeen) { newGameSeen = true; identity = new SaveIdentity(); Open(CurrentSlot(), true); } });
-        ModHooks.BeforeSceneLoadHook += scene =>
+        ModHooks.SavegameLoadHook += slot => Guard(() => tracking.LoadGame(slot));
+        // NewGameHook fires twice and menu loads can bypass BeforeSceneLoadHook.
+        // StartNewGame is the one boundary after save-space allocation and before gameplay.
+        On.GameManager.StartNewGame += (original, manager, permaDeath, bossRush) =>
         {
-            if (scene == "Menu_Title" || scene == "Quit_To_Menu") { Guard(() => { session.Close(); store.WriteStatus(installation, processId, startedTicks, false); }); newGameSeen = false; }
-            return scene;
+            Guard(() => tracking.StartNewGame(CurrentSlot(manager)));
+            original(manager, permaDeath, bossRush);
+        };
+        On.GameManager.ReturnToMainMenu += (original, manager, saveMode, callback) =>
+        {
+            Guard(tracking.LeaveGame);
+            return original(manager, saveMode, callback);
         };
         On.HeroController.Die += Die;
         ModHooks.HeroUpdateHook += Update;
-        ModHooks.ApplicationQuitHook += () => Guard(() => { session.Flush(); store.WriteStatus(installation, processId, startedTicks, false); });
-        store.WriteStatus(installation, processId, startedTicks, false);
-    }
-
-    private void Open(int slot, bool newGame)
-    {
-        failed = false;
-        if (!newGame) newGameSeen = false;
-        bool create = !Guid.TryParse(identity.RunId, out Guid run);
-        if (create)
-        {
-            if (!newGame && store!.HasSlot(slot)) throw new IOException("Tracking identity was lost; existing records were preserved.");
-            run = Guid.NewGuid(); identity.RunId = run.ToString("D");
-        }
-        session!.Open(run, slot, create);
-        store!.WriteStatus(installation, processId, startedTicks, true);
+        ModHooks.ApplicationQuitHook += () => Guard(tracking.LeaveGame);
     }
 
     private IEnumerator Die(On.HeroController.orig_Die original, HeroController hero)
     {
-        Guard(() => { if (!IsDead(hero)) session!.Die(); });
+        Guard(() => { if (!IsDead(hero)) tracking!.Die(); });
         return original(hero);
     }
 
@@ -93,11 +80,11 @@ public sealed class DeathTrackerMod : Mod, ILocalSettings<SaveIdentity>
         nextSample = DateTime.UtcNow.AddMilliseconds(100);
         // Positive health only rearms the hook latch. It never creates a death event.
         object? hero = HeroInstance.GetValue(null, null);
-        if (hero != null && PlayerData.instance.GetInt("health") > 0 && !IsDead(hero)) session!.Healthy();
+        if (hero != null && PlayerData.instance.GetInt("health") > 0 && !IsDead(hero)) tracking!.Healthy();
         if (DateTime.UtcNow < nextFlush) return;
         nextFlush = DateTime.UtcNow.AddSeconds(2);
-        Guard(() => { session!.Flush(); failed = false; });
-        try { store!.WriteStatus(installation, processId, startedTicks, session!.Available && !failed); }
+        Guard(() => { tracking!.Flush(); failed = false; });
+        try { tracking!.ReportStatus(!failed); }
         catch (IOException) { failed = true; }
         catch (UnauthorizedAccessException) { failed = true; }
     }
@@ -109,17 +96,16 @@ public sealed class DeathTrackerMod : Mod, ILocalSettings<SaveIdentity>
             exception is InvalidOperationException || exception is TargetException || exception is TargetInvocationException || exception is NullReferenceException)
         {
             failed = true;
-            try { store?.WriteStatus(installation, processId, startedTicks, false); }
+            try { tracking?.ReportStatus(false); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
             LogError("Death tracking unavailable: " + exception.Message);
         }
     }
 
-    private static int CurrentSlot()
+    private static int CurrentSlot(object manager)
     {
         // Reflection avoids a dependency on Unity assemblies in the one-DLL plugin build.
-        object manager = typeof(GameManager).GetProperty("instance", BindingFlags.Public | BindingFlags.Static)!.GetValue(null, null)!;
         return (int)typeof(GameManager).GetField("profileID")!.GetValue(manager)!;
     }
 

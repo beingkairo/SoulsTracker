@@ -24,6 +24,8 @@ Records live in `%LOCALAPPDATA%/SoulsTracker/HollowKnightRecords/<installation-i
 
 Counts start when the plugin first tracks that save. Earlier deaths, disabled-plugin periods and failed writes cannot be recovered. This is a persistent plugin total, not a verified vanilla lifetime statistic. Desktop, TXT and hosted overlay share the same validated total. While the game is closed, the last tracked save remains readable; while running without a valid active-save heartbeat, tracking is unavailable.
 
+New games initialize a separate zero total at the game's start boundary, including when replacing a used slot. Loading a previously untracked save with no tracking identity or prior slot record starts at zero; it cannot recover earlier unrecorded deaths. A known slot with lost settings, an invalid identity or a missing/corrupt known record remains unavailable and preserves the existing data.
+
 ## Updates and uninstall
 
 Close Hollow Knight and use **Install Death Tracking** to update the owned plugin. Extra or modified files prevent replacement. **Uninstall Death Tracking** removes only the verified plugin DLL, installation identity and ownership record. Shared API files, other mods, mod settings, saved totals and installer backups remain. Reinstalling with the same saved desktop configuration reuses the installation identity. Remove the shared API separately only after checking other mods no longer require it.
