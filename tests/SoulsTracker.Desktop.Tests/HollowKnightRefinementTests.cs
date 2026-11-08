@@ -97,6 +97,8 @@ public sealed class HollowKnightRefinementTests
             increment.BringIntoView(); await Idle(); increment.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
             Assert.Equal("1", vm.TotalDeathsText);
             Assert.Equal(1, vm.HollowKnightAddedDeaths);
+            Assert.Equal("0", vm.HollowKnightSavedDeathsText);
+            Assert.Equal("0", Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Hollow Knight saved deaths").Text);
             var status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
             Assert.Equal(window.FindResource("SuccessBrush"), status.Foreground);
             Render(window, "hollow-knight-installed-" + width + "-" + height);
@@ -322,6 +324,63 @@ public sealed class HollowKnightRefinementTests
         session.CompleteRead(session.BeginRead(state), state, cached, vm.ApplyRuntimeReaderResult, _ => outputs++);
         Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, vm.TotalDeathsText);
         Assert.Equal(0, outputs);
+    }
+
+    [Fact]
+    public async Task LiesOfPRealReaderPipelineCompletesUnconfiguredLoadingWithoutAcceptingStaleNumbers()
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string path = CreateSave("lp", fixture.Root);
+        byte[] original = await File.ReadAllBytesAsync(path);
+        var configured = new PersistentTrackerState(1, GameId.LiesOfP, OverlayConfiguration.Default, liesOfPSave: new(path));
+        var unconfigured = new PersistentTrackerState(1, GameId.LiesOfP, OverlayConfiguration.Default);
+        var reader = new LiesOfPSaveDeathReader();
+        reader.Configure(configured.LiesOfPSave);
+        RuntimeGameReadResult numerical = Assert.IsType<RuntimeGameReadResult>(await reader.ReadAsync(CancellationToken.None));
+        Assert.Equal(7, numerical.Observation!.TotalDeaths.Value);
+
+        foreach (var state in new[] { unconfigured, configured })
+        {
+            var repository = new MemoryRepository(GameId.LiesOfP) { State = state };
+            await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+            await using var vm = CreateViewModel(coordinator);
+            await vm.InitializeAsync();
+            Assert.Equal("Loading.", vm.TotalDeathsText);
+            var session = new RuntimePublicationSession();
+            var reads = new RuntimeGameReaderCoordinator([reader]);
+            reader.Configure(state.LiesOfPSave);
+            int desktop = 0, outputs = 0;
+            void Desktop(RuntimeGameReadResult? result) { desktop++; vm.ApplyRuntimeReaderResult(result); }
+            void Output(RuntimeGameReadResult? result)
+            {
+                outputs++;
+                Assert.Equal(state.LiesOfPSave.LocalPath is null ? null : 7L,
+                    EffectiveDeathTotalResult.Resolve(state, result?.Observation).EffectiveDisplayedTotal);
+            }
+            for (int index = 0; index < 3; index++)
+            {
+                var ticket = session.BeginRead(state);
+                var result = await reads.PollAsync(GameId.LiesOfP, CancellationToken.None);
+                session.CompleteRead(ticket, state, result, Desktop, Output);
+            }
+            Assert.Equal(3, desktop);
+            Assert.Equal(3, outputs);
+            Assert.Equal(state.LiesOfPSave.LocalPath is null ? DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage : "7", vm.TotalDeathsText);
+            Assert.NotEqual("Loading.", vm.RuntimeReaderStatusText);
+            if (state.LiesOfPSave.LocalPath is not null) continue;
+            // A current ticket cannot authorize a numerical observation from a discarded configuration.
+            session.CompleteRead(session.BeginRead(state), state, numerical, Desktop, Output);
+            Assert.Equal(3, desktop);
+            // Nor can a completion started before configuration removal cross its generation boundary.
+            var stale = session.BeginRead(configured);
+            session.SelectState(unconfigured);
+            session.CompleteRead(stale, configured, numerical, Desktop, Output);
+            Assert.Equal(3, outputs);
+            session.CompleteRead(session.BeginRead(state), state, RuntimeGameReadResult.Unavailable(GameId.LiesOfP), Desktop, Output);
+            Assert.Equal(4, desktop);
+            Assert.Equal(4, outputs);
+        }
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
     }
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;

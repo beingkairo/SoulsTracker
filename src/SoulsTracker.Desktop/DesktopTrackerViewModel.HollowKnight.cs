@@ -22,6 +22,7 @@ public sealed partial class DesktopTrackerViewModel
     public bool CanDecrementHollowKnightDeaths => CanAdjustHollowKnightDeaths && HollowKnightAddedDeaths > 0;
     public long HollowKnightAddedDeaths => CurrentHollowKnightObservation is { } value && state?.HollowKnight.InstallationId is { } id
         ? state.HollowKnight.DeathAdjustments.Get(id, value.RunId) : 0;
+    public string HollowKnightSavedDeathsText => CurrentHollowKnightObservation?.Total.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unavailable";
     private PersistentPluginObservation? CurrentHollowKnightObservation => IsHollowKnightSelected && state is not null && pluginObservation is { } value &&
         EffectiveDeathTotalResult.Resolve(state, null, value).Status != EffectiveDeathTotalStatus.SourceMismatch ? value : null;
 
@@ -168,6 +169,7 @@ public sealed partial class DesktopTrackerViewModel
         OnPropertyChanged(nameof(CanIncrementHollowKnightDeaths));
         OnPropertyChanged(nameof(CanDecrementHollowKnightDeaths));
         OnPropertyChanged(nameof(HollowKnightAddedDeaths));
+        OnPropertyChanged(nameof(HollowKnightSavedDeathsText));
         OnPropertyChanged(nameof(HollowKnightGameDirectory));
         OnPropertyChanged(nameof(HollowKnightSetupStatus));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));

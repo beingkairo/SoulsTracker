@@ -118,7 +118,10 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         if (result is null || result.GameId != state.SelectedGameId) return null;
         if (state.SelectedGameId == GameId.HollowKnight)
             return result.Observation is null && EffectiveDeathTotalResult.Resolve(state, null, result.PluginObservation).Status != EffectiveDeathTotalStatus.SourceMismatch ? result : null;
-        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
+        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null &&
+            (result.Observation is not null || result.PluginObservation is not null || result.Status is not
+                (RuntimeGameReaderStatus.WaitingForSaveFile or RuntimeGameReaderStatus.WaitingForActiveCharacter or
+                 RuntimeGameReaderStatus.Unavailable or RuntimeGameReaderStatus.SelectedSaveUnreadable))) return null;
         if (result.Observation is not null &&
             EffectiveDeathTotalResult.Resolve(state, result.Observation).Status == EffectiveDeathTotalStatus.SourceMismatch)
         {

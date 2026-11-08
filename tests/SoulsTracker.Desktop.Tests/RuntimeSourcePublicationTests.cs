@@ -30,18 +30,51 @@ public sealed class RuntimeSourcePublicationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void NormalizationRejectsUnconfiguredLiesWithOrWithoutObservation(bool hasObservation)
+    [InlineData("synced")]
+    [InlineData("cached")]
+    [InlineData("pending")]
+    [InlineData("retained-unavailable")]
+    [InlineData("cached-waiting")]
+    [InlineData("pending-waiting")]
+    public void NormalizationRejectsUnconfiguredLiesNumericalOrUnvalidatedCachedResults(string scenario)
     {
         PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion,
             GameId.LiesOfP, OverlayConfiguration.Default);
-        RuntimeGameReadResult read = hasObservation
-            ? RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.LiesOfP, 0,
-                DateTimeOffset.UnixEpoch, EffectiveDeathTotalResult.SourceIdentityFor(state)))
-            : RuntimeGameReadResult.WaitingForSaveFile(GameId.LiesOfP);
+        var observation = new RuntimeGameObservation(GameId.LiesOfP, 0,
+            DateTimeOffset.UnixEpoch, EffectiveDeathTotalResult.SourceIdentityFor(state));
+        var synced = RuntimeGameReadResult.Synced(observation);
+        var waiting = RuntimeGameReadResult.WaitingForSaveFile(GameId.LiesOfP);
+        RuntimeGameReadResult read = scenario switch
+        {
+            "cached" => RuntimeGameReadResult.Cached(synced),
+            "pending" => RuntimeGameReadResult.PendingLowerValue(synced),
+            "retained-unavailable" => RuntimeGameReadResult.Unavailable(GameId.LiesOfP, observation),
+            "cached-waiting" => RuntimeGameReadResult.Cached(waiting),
+            "pending-waiting" => RuntimeGameReadResult.PendingLowerValue(waiting),
+            _ => synced,
+        };
 
         Assert.Null(Normalize(state, read));
+    }
+
+    [Theory]
+    [InlineData("waiting-save")]
+    [InlineData("waiting-character")]
+    [InlineData("unreadable")]
+    [InlineData("unavailable")]
+    public void NormalizationPreservesUnconfiguredLiesValueFreeReaderStatus(string scenario)
+    {
+        PersistentTrackerState state = new(PersistentTrackerState.CurrentSchemaVersion,
+            GameId.LiesOfP, OverlayConfiguration.Default);
+        RuntimeGameReadResult read = scenario switch
+        {
+            "waiting-save" => RuntimeGameReadResult.WaitingForSaveFile(GameId.LiesOfP),
+            "waiting-character" => RuntimeGameReadResult.WaitingForActiveCharacter(GameId.LiesOfP),
+            "unreadable" => RuntimeGameReadResult.SelectedSaveUnreadable(GameId.LiesOfP),
+            _ => RuntimeGameReadResult.Unavailable(GameId.LiesOfP),
+        };
+
+        Assert.Same(read, Normalize(state, read));
     }
 
     [Theory]
