@@ -310,7 +310,7 @@ public sealed class HollowKnightRefinementTests
     }
 
     [Fact]
-    public async Task FirstCachedReadEndsLoadingWithoutAcceptingOrPublishingTheCachedValue()
+    public async Task FirstCachedReadKeepsLoadingWithoutAcceptingOrPublishingTheCachedValue()
     {
         var repository = new MemoryRepository(GameId.Ds1);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
@@ -322,7 +322,7 @@ public sealed class HollowKnightRefinementTests
         var cached = RuntimeGameReadResult.Cached(RuntimeGameReadResult.Synced(new(GameId.Ds1, 99, DateTimeOffset.UtcNow,
             EffectiveDeathTotalResult.SourceIdentityFor(state))));
         session.CompleteRead(session.BeginRead(state), state, cached, vm.ApplyRuntimeReaderResult, _ => outputs++);
-        Assert.Equal(DesktopTrackerViewModel.GameTotalDeathsUnavailableMessage, vm.TotalDeathsText);
+        Assert.Equal("Loading.", vm.TotalDeathsText);
         Assert.Equal(0, outputs);
     }
 

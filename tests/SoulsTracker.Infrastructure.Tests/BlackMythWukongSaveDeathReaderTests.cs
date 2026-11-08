@@ -7,6 +7,25 @@ namespace SoulsTracker.Infrastructure.Tests;
 
 public sealed class BlackMythWukongSaveDeathReaderTests : IDisposable
 {
+    [Fact]
+    public async Task NewSelectionReparsesInsteadOfUsingThePreviousSelectionsCache()
+    {
+        string path = WriteArchive("ArchiveSaveFile.1.sav", WukongSaveFixture.Create(7));
+        var configuration = new BlackMythWukongSaveConfiguration(path);
+        var reader = new BlackMythWukongSaveDeathReader();
+        reader.Configure(configuration);
+        Assert.Equal(RuntimeGameReaderStatus.Synced, (await reader.ReadAsync(default))!.Status);
+        Assert.Equal(RuntimeGameReaderStatus.Cached, (await reader.ReadAsync(default))!.Status);
+        reader.Configure(configuration, requireFreshRead: true);
+        var fresh = (await reader.ReadAsync(default))!;
+        Assert.Equal(RuntimeGameReaderStatus.Synced, fresh.Status);
+        Assert.Equal(7, fresh.Observation!.TotalDeaths.Value);
+        Assert.Equal(RuntimeGameReaderStatus.Cached, (await reader.ReadAsync(default))!.Status);
+        File.Delete(path);
+        reader.Configure(configuration, requireFreshRead: true);
+        Assert.Equal(RuntimeGameReaderStatus.SelectedSaveUnreadable, (await reader.ReadAsync(default))!.Status);
+    }
+
     private readonly string root = Path.Combine(Path.GetTempPath(), "SoulsTrackerTests", Guid.NewGuid().ToString("N"));
 
     [Theory]

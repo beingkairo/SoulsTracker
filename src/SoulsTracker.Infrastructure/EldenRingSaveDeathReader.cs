@@ -22,10 +22,10 @@ public sealed class EldenRingSaveDeathReader : IRuntimeGameDeathReader
     public GameId GameId => GameId.EldenRing;
 
     /// <summary>Updates only the private local selection used by the next poll.</summary>
-    public void Configure(EldenRingSaveConfiguration value)
+    public void Configure(EldenRingSaveConfiguration value, bool requireFreshRead = false)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (configuration.LocalPath != value.LocalPath || configuration.SlotIndex != value.SlotIndex)
+        if (requireFreshRead || configuration.LocalPath != value.LocalPath || configuration.SlotIndex != value.SlotIndex)
         {
             configuration = value;
             lastFingerprint = null;

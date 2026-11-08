@@ -18,6 +18,7 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
     private long generation;
     private bool hasFreshPresentation;
     internal PersistentTrackerState? CurrentState { get; private set; }
+    internal bool RequiresFreshSaveRead => accepted?.Observation is null;
     internal readonly record struct ReadTicket(long Sequence, long CompletedBeforeStart, long Generation);
 
     // Called for every committed selection, including switches between polls.
@@ -71,8 +72,6 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         {
             if (accepted is not null && hasFreshPresentation)
                 applyDesktop(pending is null ? RuntimeGameReadResult.Cached(accepted, publication.IsCurrentSaveCache) : RuntimeGameReadResult.PendingLowerValue(accepted));
-            else if (accepted is null)
-                applyDesktop(RuntimeGameReadResult.Unavailable(state.SelectedGameId));
             return;
         }
         if (publication is { Status: RuntimeGameReaderStatus.Synced, Observation: { } observation })

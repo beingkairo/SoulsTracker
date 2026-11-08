@@ -679,6 +679,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
+        if (IsSaveReaderSourcePending) return;
         if (state is not null && result is not null && (result.GameId != state.SelectedGameId ||
             (result.PluginObservation is { } plugin && EffectiveDeathTotalResult.Resolve(state, null, plugin).Status == EffectiveDeathTotalStatus.SourceMismatch) ||
             (result.Observation is { } observed && EffectiveDeathTotalResult.Resolve(state, observed).Status == EffectiveDeathTotalStatus.SourceMismatch))) return;
@@ -814,6 +815,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public async Task RescanEldenRingSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsEldenRingSelected) return;
+        using var resolution = BeginSaveReaderSourceResolution(GameId.EldenRing);
         if (HasDirectorySelection(GameId.EldenRing)) { await RescanDirectoryAsync(GameId.EldenRing, cancellationToken); return; }
         long version = Interlocked.Increment(ref eldenRingDiscoveryVersion);
         LocalSaveSourceState stableState = EldenRingSaveSourceState;
@@ -922,6 +924,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public async Task RescanBlackMythWukongSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsBlackMythWukongSelected) return;
+        using var resolution = BeginSaveReaderSourceResolution(GameId.BlackMythWukong);
         if (HasDirectorySelection(GameId.BlackMythWukong)) { await RescanDirectoryAsync(GameId.BlackMythWukong, cancellationToken); return; }
         long selectionVersion = BeginWukongSelectionOperation();
         long version = saveGameConfigurationWorkflow.BeginWukongDiscovery();
@@ -1066,6 +1069,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     public async Task RescanLiesOfPSavesAsync(CancellationToken cancellationToken = default)
     {
         if (!IsLiesOfPSelected) return;
+        using var resolution = BeginSaveReaderSourceResolution(GameId.LiesOfP);
         if (HasDirectorySelection(GameId.LiesOfP)) { await RescanDirectoryAsync(GameId.LiesOfP, cancellationToken); return; }
         LiesOfPSaveSourceState = LocalSaveSourceState.Scanning;
         SetLiesOfPSaveDiscoveryStatus("Looking for local saves…");
@@ -1236,22 +1240,17 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             return;
         }
 
-        SoulsTracker.Domain.GameId? selectedGameBeforeSelection = state?.SelectedGameId;
         await SubmitAsync(new SelectGameCommand(choice.GameId), cancellationToken);
-        if (state?.SelectedGameId != selectedGameBeforeSelection)
-        {
-
-        }
 
         if (state?.SelectedGameId == SoulsTracker.Domain.GameId.EldenRing)
         {
             await RescanEldenRingSavesAsync(cancellationToken);
         }
-        if (state?.SelectedGameId == SoulsTracker.Domain.GameId.BlackMythWukong)
+        else if (state?.SelectedGameId == SoulsTracker.Domain.GameId.BlackMythWukong)
         {
             await RescanBlackMythWukongSavesAsync(cancellationToken);
         }
-        if (state?.SelectedGameId == SoulsTracker.Domain.GameId.LiesOfP)
+        else if (state?.SelectedGameId == SoulsTracker.Domain.GameId.LiesOfP)
         {
             await RescanLiesOfPSavesAsync(cancellationToken);
         }
@@ -1469,7 +1468,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         }
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
         string? previousSource = state is null ? null : EffectiveDeathTotalResult.SourceIdentityFor(state);
-        if (previousSource != EffectiveDeathTotalResult.SourceIdentityFor(committedState)) { pluginObservation = null; pluginStatus = null; }
+        if (previousSource != EffectiveDeathTotalResult.SourceIdentityFor(committedState))
+        {
+            saveReaderSelectionEpoch++;
+            pluginObservation = null;
+            pluginStatus = null;
+        }
         isInitialDeathReadPending = previousSource != EffectiveDeathTotalResult.SourceIdentityFor(committedState)
             ? !IsManualGame(committedState.SelectedGameId) : isInitialDeathReadPending;
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));

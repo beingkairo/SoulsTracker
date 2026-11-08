@@ -27,6 +27,23 @@ public sealed class RuntimeGameReadersTests
     }
 
     [Fact]
+    public async Task CoordinatorRetentionRequiresTheCurrentSourceWhenSupplied()
+    {
+        var observation = new RuntimeGameObservation(GameId.EldenRing, 17, DateTimeOffset.UtcNow, "save-a");
+        var reader = new StubReader(GameId.EldenRing, RuntimeGameReadResult.Synced(observation));
+        var coordinator = new RuntimeGameReaderCoordinator([reader]);
+        await coordinator.PollAsync(GameId.EldenRing, default, "save-a");
+        reader.Result = null;
+        var retained = await coordinator.PollAsync(GameId.EldenRing, default, "save-a");
+        Assert.Same(observation, retained!.Observation);
+        Assert.Null(await coordinator.PollAsync(GameId.EldenRing, default, "save-b"));
+        Assert.Null(coordinator.CurrentObservation);
+        reader.Result = RuntimeGameReadResult.Synced(observation);
+        await coordinator.PollAsync(GameId.EldenRing, default, "save-a");
+        Assert.Null(await coordinator.PollAsync(GameId.LiesOfP, default, "save-a"));
+    }
+
+    [Fact]
     public async Task CoordinatorRetainsRecentObservationForLoadingGapAndClearsOnSelectionChange()
     {
         var reader = new StubReader(GameId.Ds1, RuntimeGameReadResult.Synced(new RuntimeGameObservation(GameId.Ds1, 3, DateTimeOffset.UtcNow)));
