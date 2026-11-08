@@ -106,11 +106,11 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                     $fixtureTarget = $fixtureDeps.targets['.NETCoreApp,Version=v10.0/win-x64']
                     switch ($case) {
                         'drift' {
-                            $key = 'Microsoft.Data.Sqlite.Core/10.0.10'
+                            $key = 'Microsoft.Data.Sqlite.Core/10.0.13'
                             $fixtureDeps.libraries['Microsoft.Data.Sqlite.Core/99.0.0'] = $fixtureDeps.libraries[$key]
                             $fixtureTarget['Microsoft.Data.Sqlite.Core/99.0.0'] = $fixtureTarget[$key]
                             $fixtureDeps.libraries.Remove($key); $fixtureTarget.Remove($key)
-                            $diagnostics = @('version mismatch', 'Microsoft.Data.Sqlite.Core/99.0.0', 'Microsoft.Data.Sqlite.Core/10.0.10')
+                            $diagnostics = @('version mismatch', 'Microsoft.Data.Sqlite.Core/99.0.0', 'Microsoft.Data.Sqlite.Core/10.0.13')
                         }
                         'target-extra' { $fixtureTarget['Extra.Package/1.0.0'] = @{}; $diagnostics = @('target/libraries', 'unexpected [Extra.Package/1.0.0]', 'missing []') }
                         'target-missing' { $fixtureTarget.Remove('SourceGear.sqlite3/3.50.4.5'); $diagnostics = @('target/libraries', 'missing [SourceGear.sqlite3/3.50.4.5]') }
@@ -163,7 +163,7 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                     $fixtureDeps | ConvertTo-Json -Depth 30 | Set-Content $depsPath
                     $expected = 'inventory drift'
                 }
-                'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
+                'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.13', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
                 'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack differs from the Desktop project pin' }
                 'project-runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>', '<RuntimeFrameworkVersion>10.0.11</RuntimeFrameworkVersion>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'version mismatch' }
                 'floating-runtime' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>', '<TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'must pin one exact runtime version' }

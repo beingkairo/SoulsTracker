@@ -14,7 +14,7 @@ with Desktop and are not included in the distribution inventory.
 | Microsoft.NETCore.App.Runtime.win-x64 | 10.0.9 | MIT and included notices | .NET Foundation and Contributors; self-contained runtime |
 | Microsoft.WindowsDesktop.App.Runtime.win-x64 | 10.0.9 | MIT and included notices | .NET Foundation and Contributors; WPF and Windows Forms runtime |
 | Microsoft.Web.WebView2 | 1.0.4191.47 | BSD-3-Clause and included notices | Microsoft; managed WPF WebView2 SDK and native loader |
-| Microsoft.Data.Sqlite.Core | 10.0.10 | MIT | Microsoft; managed SQLite provider |
+| Microsoft.Data.Sqlite.Core | 10.0.13 | MIT | Microsoft; managed SQLite provider |
 | SourceGear.sqlite3 | 3.50.4.5 | Public domain | SQLite native runtime |
 | SQLitePCLRaw.bundle_e_sqlite3 | 3.0.3 | Apache-2.0 | Copyright 2014-2026 SourceGear, LLC; dependency-selection metadata, no separate assembly |
 | SQLitePCLRaw.config.e_sqlite3 | 3.0.3 | Apache-2.0 | Copyright 2014-2026 SourceGear, LLC; SQLite initialization |
@@ -26,7 +26,7 @@ revision f3f967adafad853375597a6387cacb7573c5b343 and the config revision
 96043b8cff323f21919df86a431c136655d81b4a. They are reproduced once below.
 The Windows Desktop runtime package pins dotnet/dotnet revision
 901ca941248413c79832d2fdbd709da0c4386353. Microsoft.Data.Sqlite.Core pins
-f7d90799ce4ef09a0bb257852a57248d2a8fb8dd.
+4099f83977f4d29604a9aeb971fb0a7bc1d5f699.
 
 The SoulsTracker installer distributes Microsoft's unmodified WebView2
 Evergreen Bootstrapper. Its current Microsoft Edge WebView2 Runtime terms are
@@ -1792,7 +1792,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ### Microsoft.Data.Sqlite.Core license
 
-Source: https://raw.githubusercontent.com/dotnet/dotnet/f7d90799ce4ef09a0bb257852a57248d2a8fb8dd/src/efcore/LICENSE.txt
+Source: https://raw.githubusercontent.com/dotnet/dotnet/4099f83977f4d29604a9aeb971fb0a7bc1d5f699/src/efcore/LICENSE.txt
 
 SHA256 (LF): ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b
 
