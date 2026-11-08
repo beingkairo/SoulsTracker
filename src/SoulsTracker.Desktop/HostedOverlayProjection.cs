@@ -37,7 +37,7 @@ internal sealed class HostedOverlayProjection
         OverlaySnapshot snapshot = OverlaySnapshotFactory.Create(state, observation, 0);
         if (fresh && snapshot.TotalDeaths.Source == TotalDeathsDisplaySource.GameLifetimeReader)
             mayPublishUnavailable = true;
-        bool includeDeath = mayPublishUnavailable || state.SelectedGameId == GameId.DemonsSouls;
+        bool includeDeath = mayPublishUnavailable || state.SelectedGameId == GameId.DemonsSouls || state.SelectedGameId == GameId.HollowKnight;
         HostedDeath? death = includeDeath ? new()
         {
             Revision = "0",

@@ -13,6 +13,10 @@ $readme = Get-Content -Raw -Encoding utf8 $readmePath
 $releaseGuide = Get-Content -Raw -Encoding utf8 $releaseGuidePath
 $releaseBody = Get-Content -Raw -Encoding utf8 $releaseBodyPath
 $releaseWorkflow = Get-Content -Raw -Encoding utf8 $releaseWorkflowPath
+# Publication remains pinned to its independently approved source/version until release approval.
+$workflowVersionMatch = [regex]::Match($releaseWorkflow, "metadata.Version -ne '([0-9]+\.[0-9]+\.[0-9]+)'")
+if (-not $workflowVersionMatch.Success) { throw 'Release workflow is missing its pinned version guard.' }
+$workflowVersion = $workflowVersionMatch.Groups[1].Value
 
 $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "## Compatible games" },
@@ -23,7 +27,7 @@ $requirements = @(
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/release-notes.md" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SoulsTrackerV$version.exe" },
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SoulsTrackerV$workflowVersion.exe" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SHA256SUMS.txt" }
 )
 
@@ -44,18 +48,21 @@ $expectedGames = @(
     'Black Myth: Wukong',
     'Lies of P'
 )
+if ([version]$version -ge [version]'2.2.0') { $expectedGames += 'Hollow Knight' }
 $expectedList = ($expectedGames | ForEach-Object { "- $_" }) -join "`n"
 foreach ($document in @(@{ Name = 'README'; Body = $readme }, @{ Name = 'release notes'; Body = $releaseBody })) {
     $match = [regex]::Match($document.Body, '(?ms)^## Compatible games\s*\r?\n(.*?)(?=^## |\z)')
     if (-not $match.Success -or $match.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedList) {
-        throw "$($document.Name) must list exactly the nine current compatible game names in order."
+        throw "$($document.Name) must list exactly the current compatible game names in order."
     }
 }
 if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com/beingkairo/SoulsTracker/releases/latest\)\.$' -or
     $readme -notmatch '(?m)^- Global hotkeys$') {
     throw 'README is missing its release link or current hotkey feature.'
 }
-$expectedChanges = if ($version -eq '2.1.2') {
+$expectedChanges = if ($version -eq '2.2.0') {
+    '- Added self-contained Hollow Knight tracking for deaths observed while tracking is active, with counts saved across application restarts.'
+} elseif ($version -eq '2.1.2') {
     @(
         '- Expanded Bloodborne 1.09 death tracking to compatible PC runtimes, including Mrsuss60 bbport, Lantern Engine and deadinside28 Windows bbport, while preserving existing shadPS4 tracking.',
         '- Compatible Bloodborne PC runtimes are detected independently of their executable filenames, with stable tracking through character changes and game restarts.'
@@ -84,7 +91,7 @@ if ($releaseBody -match '(?m)^## Notes\s*$' -or $releaseBody -match 'Existing lo
 }
 $expectedReleaseBody = "# SoulsTracker v$version`n`n## Compatible games`n`n$expectedList`n`n## Latest changes`n`n$expectedChanges"
 if ($releaseBody.Trim().Replace("`r`n", "`n") -cne $expectedReleaseBody) {
-    throw 'Release notes must be exactly the approved title and two sections.'
+    throw 'Release notes must match the checked version''s title and two sections.'
 }
 if ($releaseWorkflow -notmatch '(?m)^\s+generate_release_notes: false\s*$' -or
     $releaseWorkflow -notmatch '(?m)^\s+body_path: prepared/release-notes\.md\s*$' -or

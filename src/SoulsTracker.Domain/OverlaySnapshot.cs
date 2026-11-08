@@ -10,6 +10,7 @@ public enum TotalDeathsDisplaySource
     Unavailable,
     Manual,
     GameLifetimeReader,
+    ObservedDeaths,
 }
 
 /// <summary>
@@ -51,6 +52,11 @@ public sealed class OverlayGameMetadata
 /// </summary>
 public sealed class TotalDeathsDisplayValue
 {
+    public static TotalDeathsDisplayValue FromObservedHollowKnightDeaths(HollowKnightDeaths deaths)
+    {
+        ArgumentNullException.ThrowIfNull(deaths);
+        return new(TotalDeathsDisplaySource.ObservedDeaths, GameId.HollowKnight, deaths.Count);
+    }
     private TotalDeathsDisplayValue(TotalDeathsDisplaySource source, GameId? gameId, long? value)
     {
         Source = source;
@@ -332,6 +338,10 @@ public sealed class OverlaySnapshot
     {
         switch (totalDeaths.Source)
         {
+            case TotalDeathsDisplaySource.ObservedDeaths:
+                if (selectedDefinition.Id != GameId.HollowKnight || totalDeaths.GameId != GameId.HollowKnight || totalDeaths.Value is null or < 0)
+                    throw new ArgumentException("Observed deaths must match Hollow Knight.", nameof(totalDeaths));
+                return;
             case TotalDeathsDisplaySource.Unavailable:
                 if (totalDeaths.GameId != selectedDefinition.Id ||
                     totalDeaths.Value is < 0 ||

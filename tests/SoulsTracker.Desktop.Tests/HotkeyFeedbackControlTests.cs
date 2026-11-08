@@ -131,7 +131,7 @@ public sealed class HotkeyFeedbackControlTests
             window.Show(); await Settings(window);
             var settings = (TabItem)window.FindName("SettingsWorkspaceTab");
             var field = (TextBox)window.FindName("IncrementHotkeyTextBox");
-            Assert.Equal(9, vm.GameChoices.Count);
+            Assert.Equal(10, vm.GameChoices.Count);
             foreach (var game in vm.GameChoices)
             {
                 await vm.SelectGameAsync(game); await Settings(window);

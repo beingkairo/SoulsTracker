@@ -13,6 +13,15 @@ public sealed record EffectiveDeathTotalResult
     {
         ArgumentNullException.ThrowIfNull(state);
         string source = SourceIdentityFor(state);
+        if (state.SelectedGameId == GameId.HollowKnight)
+            return new()
+            {
+                SourceIdentity = source,
+                Status = state.HollowKnightDeaths.Count == 0 ? EffectiveDeathTotalStatus.Zero : EffectiveDeathTotalStatus.Synced,
+                SavedOrManualBase = state.HollowKnightDeaths.Count,
+                GameSpecificAdjustment = 0,
+                EffectiveDisplayedTotal = state.HollowKnightDeaths.Count
+            };
         if (observation is null) return Unavailable(state.SelectedGameId, source);
         if ((state.SelectedGameId == GameId.BlackMythWukong || state.SelectedGameId == GameId.LiesOfP) && string.IsNullOrWhiteSpace(observation.SourceIdentity))
             return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };

@@ -17,6 +17,7 @@ public static class GameCatalog
         new(GameId.EldenRing, "Elden Ring", GameUiAvailability.Selectable, GameTrackingMode.GameLifetimeReadOnly, ReaderBindingState.PendingVerification),
         new(GameId.BlackMythWukong, "Black Myth: Wukong", GameUiAvailability.Selectable, GameTrackingMode.GameLifetimeReadOnly, ReaderBindingState.PendingVerification),
         new(GameId.LiesOfP, "Lies of P", GameUiAvailability.Selectable, GameTrackingMode.GameLifetimeReadOnly, ReaderBindingState.PendingVerification),
+        new(GameId.HollowKnight, "Hollow Knight", GameUiAvailability.Selectable, GameTrackingMode.ObservedDeaths, ReaderBindingState.PendingVerification),
     ]);
 
     private static readonly ReadOnlyDictionary<GameId, GameDefinition> DefinitionsById =

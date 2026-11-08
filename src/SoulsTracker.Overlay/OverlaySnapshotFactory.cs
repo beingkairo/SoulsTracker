@@ -12,7 +12,9 @@ public static class OverlaySnapshotFactory
         bool usable = EffectiveDeathTotalResult.Resolve(state, observation).Status is not EffectiveDeathTotalStatus.SourceMismatch && observation?.GameId == state.SelectedGameId &&
             (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
             (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null);
-        TotalDeathsDisplayValue deaths = usable
+        TotalDeathsDisplayValue deaths = state.SelectedGameId == GameId.HollowKnight
+            ? TotalDeathsDisplayValue.FromObservedHollowKnightDeaths(state.HollowKnightDeaths)
+            : usable
             ? TotalDeathsDisplayValue.FromRuntimeObservation(observation!)
             : GameCatalog.GetRequired(state.SelectedGameId).TrackingMode == GameTrackingMode.ManualOnly
                 ? TotalDeathsDisplayValue.FromManualCounter(state.SelectedGameId, state.GetManualDeathCounter(state.SelectedGameId))

@@ -1,7 +1,7 @@
 namespace SoulsTracker.Domain;
 
 public enum GameUiAvailability { Selectable, DisabledSoon }
-public enum GameTrackingMode { GameLifetimeReadOnly, ManualOnly, Unavailable }
+public enum GameTrackingMode { GameLifetimeReadOnly, ManualOnly, Unavailable, ObservedDeaths }
 public enum ReaderBindingState { PendingVerification, IntentionallyUnavailable }
 
 public sealed class GameDefinition

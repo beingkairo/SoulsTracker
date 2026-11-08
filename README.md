@@ -15,6 +15,7 @@ A simple death counter for supported games.
 - Elden Ring
 - Black Myth: Wukong
 - Lies of P
+- Hollow Knight
 
 ## Features
 
@@ -23,6 +24,8 @@ A simple death counter for supported games.
 - Overlay customization and preview
 - TXT export
 - Global hotkeys
+
+Hollow Knight counts deaths observed while it is selected and tracking is active. The count is saved across app restarts and shared across Hollow Knight saves. See [Hollow Knight tracking](docs/HOLLOW-KNIGHT.md) for supported layouts and limitations.
 
 ## Getting started
 

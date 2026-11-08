@@ -20,6 +20,8 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
     internal PersistentTrackerState? CurrentState { get; private set; }
     internal readonly record struct ReadTicket(long Sequence, long CompletedBeforeStart, long Generation);
 
+    internal bool IsCurrent(ReadTicket read) => read.Generation == generation;
+
     // Called for every committed selection, including switches between polls.
     internal void SelectState(PersistentTrackerState state)
     {

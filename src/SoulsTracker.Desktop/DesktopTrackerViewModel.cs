@@ -521,6 +521,11 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
             if (selectedGameId == GameId.DemonsSouls) return "Manual";
 
+            if (selectedGameId == GameId.HollowKnight)
+                return runtimeReaderStatus == RuntimeGameReaderStatus.Synced
+                    ? "Tracking observed deaths across Hollow Knight saves. Deaths while tracking is inactive cannot be recovered."
+                    : "Observed deaths saved. Waiting for supported Hollow Knight gameplay; tracking is inactive.";
+
             if (runtimeReaderStatus == RuntimeGameReaderStatus.PendingLowerValue)
             {
                 return IsProcessReaderGame(selectedGameId) ? GameSyncedMessage : "Confirming lower death count";
@@ -765,6 +770,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     {
         ApplyCommittedState(committedState);
         ReconcileWukongSaveSourceFromCommittedState();
+    }
+
+    internal void ApplyHollowKnightCommit(PersistentTrackerState committedState, bool saved)
+    {
+        ApplyCommittedState(committedState);
+        ErrorMessage = saved ? null : "An observed Hollow Knight death could not be saved. Retrying while tracking remains active.";
     }
 
     public HostedOverlayConnection? HostedOverlay { get; private set; }

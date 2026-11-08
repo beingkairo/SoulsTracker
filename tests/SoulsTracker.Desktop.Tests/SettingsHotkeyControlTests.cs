@@ -258,7 +258,7 @@ public sealed class SettingsHotkeyControlTests
             var main = (TabItem)window.FindName("MainWorkspaceTab");
             var help = (Button)window.FindName("GlobalHotkeysHelpButton");
             var tooltip = (ToolTip)help.ToolTip;
-            Assert.Equal(9, vm.GameChoices.Count);
+            Assert.Equal(10, vm.GameChoices.Count);
             foreach (var choice in vm.GameChoices)
             {
                 await vm.SelectGameAsync(choice); await Idle();

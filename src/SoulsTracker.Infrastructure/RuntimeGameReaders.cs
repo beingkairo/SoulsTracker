@@ -70,6 +70,10 @@ public sealed record RuntimeGameReadResult
     public static RuntimeGameReadResult WaitingForActiveCharacter(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForActiveCharacter, null);
 
+    /// <summary>Monitoring status only; the observed total belongs to committed application state.</summary>
+    public static RuntimeGameReadResult MonitoringHollowKnight() =>
+        new(GameId.HollowKnight, RuntimeGameReaderStatus.Synced, null);
+
     public static RuntimeGameReadResult WaitingForSaveFile(GameId gameId) =>
         new(gameId, RuntimeGameReaderStatus.WaitingForSaveFile, null);
 
