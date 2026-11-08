@@ -47,6 +47,7 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         if (cancellationToken.IsCancellationRequested) return;
         if (CurrentState is null ||
             !string.Equals(EffectiveDeathTotalResult.SourceIdentityFor(state), source, StringComparison.Ordinal) ||
+            (state.SelectedGameId == GameId.HollowKnight && !state.HollowKnight.DeathAdjustments.Equals(CurrentState.HollowKnight.DeathAdjustments)) ||
             (state.SelectedGameId == GameId.EldenRing && state.EldenRingMissedDeathAdjustments.Get(state.EldenRingSave) !=
                 CurrentState.EldenRingMissedDeathAdjustments.Get(CurrentState.EldenRingSave)) || read.Generation != generation ||
             read.Sequence > sequence || read.Sequence <= completedSequence) return;
@@ -70,6 +71,8 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         {
             if (accepted is not null && hasFreshPresentation)
                 applyDesktop(pending is null ? RuntimeGameReadResult.Cached(accepted, publication.IsCurrentSaveCache) : RuntimeGameReadResult.PendingLowerValue(accepted));
+            else if (accepted is null)
+                applyDesktop(RuntimeGameReadResult.Unavailable(state.SelectedGameId));
             return;
         }
         if (publication is { Status: RuntimeGameReaderStatus.Synced, Observation: { } observation })

@@ -79,6 +79,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
     private bool runtimeReaderHasNoRecordedDeaths;
     private bool runtimeReaderIsCurrentSaveCache;
     private GameId? runtimeReaderGameId;
+    private bool isInitialDeathReadPending;
     private bool isLoading = true;
     private bool isBusy;
     private string? errorMessage;
@@ -480,6 +481,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
                 OnPropertyChanged(nameof(CanConfigureTotalDeathsGameName));
                 OnPropertyChanged(nameof(CanSelectEldenRingProfile));
                 NotifyTextExportControlAvailability();
+                NotifyHollowKnight();
             }
         }
     }
@@ -521,7 +523,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
                 return null;
             }
 
-            if (selectedGameId == GameId.HollowKnight) return pluginStatus ?? HollowKnightSetupStatus;
+            if (isInitialDeathReadPending) return "Loading.";
+            if (selectedGameId == GameId.HollowKnight) return state is not null && EffectiveDeathTotalResult.Resolve(state, null, pluginObservation).EffectiveDisplayedTotal.HasValue ? GameSyncedMessage : GameUnavailableMessage;
             if (selectedGameId == GameId.DemonsSouls) return "Manual";
 
             if (runtimeReaderStatus == RuntimeGameReaderStatus.PendingLowerValue)
@@ -676,6 +679,9 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
     internal void ApplyRuntimeReaderResult(RuntimeGameReadResult? result)
     {
+        if (state is not null && result is not null && (result.GameId != state.SelectedGameId ||
+            (result.PluginObservation is { } plugin && EffectiveDeathTotalResult.Resolve(state, null, plugin).Status == EffectiveDeathTotalStatus.SourceMismatch) ||
+            (result.Observation is { } observed && EffectiveDeathTotalResult.Resolve(state, observed).Status == EffectiveDeathTotalStatus.SourceMismatch))) return;
         if (result is
             {
                 GameId: var resultGameId,
@@ -688,6 +694,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             return;
         }
 
+        isInitialDeathReadPending = false;
         pluginObservation = result?.GameId == state?.SelectedGameId ? result?.PluginObservation : null;
         pluginStatus = result?.GameId == state?.SelectedGameId ? result?.PluginStatus : null;
         InvalidateWukongMetadataOperations();
@@ -757,6 +764,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
         UpdateTotalDeathsText();
         OnPropertyChanged(nameof(EldenRingSavedDeathsText));
+        NotifyHollowKnight();
         OnPropertyChanged(nameof(RuntimeReaderStatusText));
     }
 
@@ -1462,6 +1470,8 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         string? previousWukongSavePath = state?.BlackMythWukongSave.LocalPath;
         string? previousSource = state is null ? null : EffectiveDeathTotalResult.SourceIdentityFor(state);
         if (previousSource != EffectiveDeathTotalResult.SourceIdentityFor(committedState)) { pluginObservation = null; pluginStatus = null; }
+        isInitialDeathReadPending = previousSource != EffectiveDeathTotalResult.SourceIdentityFor(committedState)
+            ? !IsManualGame(committedState.SelectedGameId) : isInitialDeathReadPending;
         state = committedState ?? throw new ArgumentNullException(nameof(committedState));
         OnPropertyChanged(nameof(CheckForUpdatesOnStartup));
 
@@ -1528,6 +1538,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
         }
 
         GameId selectedId = state.SelectedGameId;
+        if (isInitialDeathReadPending) { TotalDeathsText = "Loading."; return; }
         if (runtimeReaderHasNoRecordedDeaths)
         {
             TotalDeathsText = NoDeathsRecordedMessage;

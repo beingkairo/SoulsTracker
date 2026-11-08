@@ -477,6 +477,7 @@ public partial class MainWindow : Window
             var game when game == GameId.EldenRing => vm?.EldenRingDirectoryPath,
             var game when game == GameId.BlackMythWukong => vm?.BlackMythWukongDirectoryPath,
             var game when game == GameId.LiesOfP => vm?.LiesOfPDirectoryPath,
+            var game when game == GameId.HollowKnight => vm?.HollowKnightGameDirectory,
             _ => null
         });
 
@@ -495,6 +496,7 @@ public partial class MainWindow : Window
         if (e.PropertyName is not (null or "" or nameof(DesktopTrackerViewModel.SelectedGame)
             or nameof(DesktopTrackerViewModel.EldenRingDirectoryPath)
             or nameof(DesktopTrackerViewModel.BlackMythWukongDirectoryPath)
+            or nameof(DesktopTrackerViewModel.HollowKnightGameDirectory)
             or nameof(DesktopTrackerViewModel.LiesOfPDirectoryPath)) || sender is not DesktopTrackerViewModel vm) return;
 
         // Capture each transition before dispatch so returning to an earlier
@@ -649,6 +651,13 @@ public partial class MainWindow : Window
     private async void InstallHollowKnight_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not DesktopTrackerViewModel vm) return;
+        if (vm.HasHollowKnightPendingRollback)
+        {
+            if (System.Windows.MessageBox.Show(this, "Restore the interrupted installation from its verified backups before retrying?",
+                "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            await vm.RollbackHollowKnightAsync();
+            if (vm.ErrorMessage is not null) return;
+        }
         var plan = await vm.PrepareHollowKnightInstallAsync();
         if (plan is null) return;
         if (System.Windows.MessageBox.Show(this, $"Install death tracking in {plan.Directory}?\n\nThis will write {plan.Files.Count} files. " +
@@ -667,12 +676,17 @@ public partial class MainWindow : Window
             await vm.UninstallHollowKnightAsync();
     }
 
-    private async void RollbackHollowKnight_Click(object sender, RoutedEventArgs e)
+    private async void RefreshHollowKnight_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is DesktopTrackerViewModel vm && System.Windows.MessageBox.Show(this,
-            "Restore files changed by an incomplete death tracking installation from their verified local backups?",
-            "Roll Back Failed Install", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-            await vm.RollbackHollowKnightAsync();
+        if (DataContext is DesktopTrackerViewModel vm) await vm.DiscoverHollowKnightAsync();
+    }
+    private async void IncrementHollowKnightDeaths_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm) await vm.IncrementHollowKnightDeathsAsync();
+    }
+    private async void DecrementHollowKnightDeaths_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm) await vm.DecrementHollowKnightDeathsAsync();
     }
 
     private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)

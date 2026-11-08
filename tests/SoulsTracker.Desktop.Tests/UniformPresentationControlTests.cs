@@ -80,6 +80,8 @@ public sealed class UniformPresentationControlTests
         {
             window.Show(); await vm.InitializeAsync(); await Idle();
             TextBlock status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
+            Assert.Equal("Loading.", status.Text);
+            vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(Game(game))); await Idle();
             Assert.Equal("Choose a character to continue.", status.Text);
             Assert.Same(status, Assert.Single(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == status.Text));
             Assert.Contains(Tree(window).OfType<TextBlock>(), x => x.IsVisible && x.Text == fixture.Root);
@@ -249,7 +251,7 @@ public sealed class UniformPresentationControlTests
             window.Show(); await Idle();
             var status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
             var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
-            Assert.Equal(id == "demons" ? "Manual" : "Game unavailable", status.Text);
+            Assert.Equal(id == "demons" ? "Manual" : "Loading.", status.Text);
             if (id != "demons") vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.Synced(new(game, 0, DateTimeOffset.UtcNow, game.Value)));
             await Idle();
             Assert.Equal(id == "demons" ? "Manual" : "Synced", status.Text);

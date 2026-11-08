@@ -271,6 +271,31 @@ public sealed class HollowKnightPersistentTrackingTests : IDisposable
         archive.GetEntry("Assembly-CSharp.dll")!.ExtractToFile(Path.Combine(managed, "Assembly-CSharp.dll"), true);
     }
 
+    [Fact]
+    public void PendingRecoveryInspectionIsReadOnlyAndRollbackVerifiesEveryTargetBeforeRetry()
+    {
+        MakeGame();
+        var installer = Installer();
+        installer.Apply(installer.Prepare(Game, [1, 2, 3], Api, installation));
+        string journal = Path.Combine(Game, ".soulstracker-death-tracking", "pending.json");
+        File.WriteAllText(journal, File.ReadAllText(journal).Replace("\"Completed\":true", "\"Completed\":false", StringComparison.Ordinal));
+        string plugin = Path.Combine(Game, HollowKnightPluginInstaller.PluginFolder, HollowKnightPluginInstaller.PluginName);
+        byte[] before = File.ReadAllBytes(plugin), journalBytes = File.ReadAllBytes(journal);
+        Assert.True(HollowKnightPluginInstaller.HasPendingRollback(Game));
+        // Declining the recovery prompt does not invoke rollback or installation.
+        Assert.Equal(before, File.ReadAllBytes(plugin));
+        Assert.Equal(journalBytes, File.ReadAllBytes(journal));
+        File.WriteAllText(plugin, "changed after interruption");
+        Assert.Throws<IOException>(() => installer.RollbackPending(Game));
+        Assert.Equal("changed after interruption", File.ReadAllText(plugin));
+        Assert.True(HollowKnightPluginInstaller.HasPendingRollback(Game));
+        File.WriteAllBytes(plugin, before);
+        installer.RollbackPending(Game);
+        Assert.False(HollowKnightPluginInstaller.HasPendingRollback(Game));
+        Assert.Equal("original game", File.ReadAllText(Path.Combine(Game, "hollow_knight_Data", "Managed", "Assembly-CSharp.dll")));
+        Assert.NotNull(installer.Prepare(Game, [4], Api, installation));
+    }
+
     [Theory]
     [InlineData("hollow_knight", true)]
     [InlineData("HOLLOW_KNIGHT", true)]

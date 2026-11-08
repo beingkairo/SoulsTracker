@@ -9,6 +9,9 @@ public interface ITrackerCommand;
 
 public sealed record UpdateHollowKnightConfigurationCommand(HollowKnightConfiguration Configuration) : ITrackerCommand;
 
+/// <summary>Adjusts local added deaths for an explicitly identified Hollow Knight save.</summary>
+public sealed record AdjustHollowKnightDeathsCommand(Guid Installation, Guid Run, bool Increment) : ITrackerCommand;
+
 /// <summary>Sets the opt-in update check for future desktop launches.</summary>
 public sealed record SetCheckForUpdatesOnStartupCommand(bool Enabled) : ITrackerCommand;
 
@@ -85,4 +88,5 @@ public enum TrackerCommandType
     LegacyImport,
     SetCheckForUpdatesOnStartup,
     UpdateHollowKnightConfiguration,
+    AdjustHollowKnightDeaths,
 }

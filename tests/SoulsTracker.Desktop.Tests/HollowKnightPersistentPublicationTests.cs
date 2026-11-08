@@ -82,7 +82,7 @@ public sealed class HollowKnightPersistentPublicationTests
         await vm.InitializeAsync();
         vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.FromHollowKnight(Observation(901), "Tracking active"));
         Assert.Equal("901", vm.TotalDeathsText);
-        Assert.Equal("Tracking active", vm.RuntimeReaderStatusText);
+        Assert.Equal("Synced", vm.RuntimeReaderStatusText);
         var preview = new AppearancePreviewModel(new OverlayAppearanceDraft(), OverlayAppearance.Default);
         preview.Update(OverlayTitleIconMode.Off, vm.TotalDeathsText);
         Assert.False(preview.IsRepresentative);
@@ -90,7 +90,7 @@ public sealed class HollowKnightPersistentPublicationTests
         Assert.Empty(repository.Saves);
         vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.FromHollowKnight(null, "Tracking unavailable"));
         Assert.NotEqual("0", vm.TotalDeathsText);
-        Assert.Equal("Tracking unavailable", vm.RuntimeReaderStatusText);
+        Assert.Equal("Game unavailable", vm.RuntimeReaderStatusText);
     }
 
     [Fact]

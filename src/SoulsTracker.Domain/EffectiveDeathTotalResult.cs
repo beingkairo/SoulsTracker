@@ -19,13 +19,15 @@ public sealed record EffectiveDeathTotalResult
             if (plugin.SourceIdentity != source || state.HollowKnight.InstallationId is null ||
                 plugin.RunId == Guid.Empty || plugin.Slot is < 1 or > 4 || plugin.Total < 0 || plugin.Revision < 1)
                 return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.SourceMismatch };
+            long added = state.HollowKnight.DeathAdjustments.Get(state.HollowKnight.InstallationId.Value, plugin.RunId);
+            if (plugin.Total > long.MaxValue - added) return new() { SourceIdentity = source, Status = EffectiveDeathTotalStatus.Unreadable };
             return new()
             {
                 SourceIdentity = source,
-                Status = plugin.Total == 0 ? EffectiveDeathTotalStatus.Zero : EffectiveDeathTotalStatus.Synced,
+                Status = plugin.Total == 0 && added == 0 ? EffectiveDeathTotalStatus.Zero : EffectiveDeathTotalStatus.Synced,
                 SavedOrManualBase = plugin.Total,
-                GameSpecificAdjustment = 0,
-                EffectiveDisplayedTotal = plugin.Total
+                GameSpecificAdjustment = added,
+                EffectiveDisplayedTotal = plugin.Total + added
             };
         }
         if (observation is null) return Unavailable(state.SelectedGameId, source);

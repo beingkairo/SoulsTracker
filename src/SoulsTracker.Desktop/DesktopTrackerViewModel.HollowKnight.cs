@@ -7,45 +7,95 @@ namespace SoulsTracker.Desktop;
 
 public sealed partial class DesktopTrackerViewModel
 {
+    private string? verifiedHollowKnightDirectory;
+    private Guid? verifiedHollowKnightInstallation;
+    private bool hollowKnightDirectoryWasAutomatic;
+    private long hollowKnightInspection;
+    public bool IsHollowKnightInstalled => IsHollowKnightSelected && verifiedHollowKnightInstallation is not null &&
+        verifiedHollowKnightInstallation == state?.HollowKnight.InstallationId && PathsEqual(verifiedHollowKnightDirectory, HollowKnightGameDirectory);
+    public bool IsHollowKnightInstallVisible => !IsHollowKnightInstalled;
+    public bool IsDeathTrackerVisible => !IsHollowKnightSelected || IsHollowKnightInstalled;
+    public bool HollowKnightDirectoryWasAutomatic => hollowKnightDirectoryWasAutomatic;
+    public string HollowKnightDirectoryPath => HollowKnightGameDirectory ?? "No directory selected";
+    public bool CanAdjustHollowKnightDeaths => ControlsEnabled && IsHollowKnightInstalled && CurrentHollowKnightObservation is not null;
+    public bool CanIncrementHollowKnightDeaths => CanAdjustHollowKnightDeaths && CurrentHollowKnightObservation!.Total < long.MaxValue - HollowKnightAddedDeaths;
+    public bool CanDecrementHollowKnightDeaths => CanAdjustHollowKnightDeaths && HollowKnightAddedDeaths > 0;
+    public long HollowKnightAddedDeaths => CurrentHollowKnightObservation is { } value && state?.HollowKnight.InstallationId is { } id
+        ? state.HollowKnight.DeathAdjustments.Get(id, value.RunId) : 0;
+    private PersistentPluginObservation? CurrentHollowKnightObservation => IsHollowKnightSelected && state is not null && pluginObservation is { } value &&
+        EffectiveDeathTotalResult.Resolve(state, null, value).Status != EffectiveDeathTotalStatus.SourceMismatch ? value : null;
+
+    public Task IncrementHollowKnightDeathsAsync(CancellationToken cancellationToken = default) => ChangeHollowKnightDeathsAsync(true, cancellationToken);
+    public Task DecrementHollowKnightDeathsAsync(CancellationToken cancellationToken = default) => ChangeHollowKnightDeathsAsync(false, cancellationToken);
+    private Task ChangeHollowKnightDeathsAsync(bool increment, CancellationToken token)
+    {
+        if (!(increment ? CanIncrementHollowKnightDeaths : CanDecrementHollowKnightDeaths) || CurrentHollowKnightObservation is not { } value || state?.HollowKnight.InstallationId is not { } installation)
+            return Task.CompletedTask;
+        return SubmitAsync(new AdjustHollowKnightDeathsCommand(installation, value.RunId, increment), token);
+    }
+
     public bool IsHollowKnightSelected => state?.SelectedGameId == GameId.HollowKnight;
     public string? HollowKnightGameDirectory => state?.HollowKnight.GameDirectory;
     public string HollowKnightSetupStatus { get; private set; } = "Not installed";
+    public bool HasHollowKnightPendingRollback
+    {
+        get
+        {
+            try { return HollowKnightGameDirectory is { } root && HollowKnightPluginInstaller.HasPendingRollback(root); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { return false; }
+        }
+    }
 
     public async Task DiscoverHollowKnightAsync()
     {
         if (!IsHollowKnightSelected || IsBusy) return;
-        if (HollowKnightGameDirectory is { } chosen)
+        long version = ++hollowKnightInspection;
+        string? chosen = HollowKnightGameDirectory;
+        if (chosen is null)
         {
-            HollowKnightInstallation? game = await Task.Run(() => HollowKnightInstallDiscovery.Inspect(chosen));
-            Guid? installed = null;
-            try { if (game is not null) installed = HollowKnightPluginInstaller.GetInstalledIdentity(chosen); }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
-            if (installed.HasValue && installed != state?.HollowKnight.InstallationId)
-                await SubmitAsync(new UpdateHollowKnightConfigurationCommand(new(chosen, installed)), CancellationToken.None);
-            HollowKnightSetupStatus = game is null ? "Tracking unavailable" : !game.Supported ? "Unsupported version" : installed is not null ? "Installed - restart game" :
-                Directory.Exists(Path.Combine(chosen, HollowKnightPluginInstaller.PluginFolder)) ? "Tracking unavailable" : "Not installed";
+            string? discovered = await Task.Run(HollowKnightInstallDiscovery.Discover);
+            if (version != hollowKnightInspection || !IsHollowKnightSelected || HollowKnightGameDirectory is not null || discovered is null) return;
+            await SetHollowKnightGameDirectoryAsync(discovered);
+            hollowKnightDirectoryWasAutomatic = true;
             NotifyHollowKnight();
             return;
         }
-        string? directory = await Task.Run(HollowKnightInstallDiscovery.Discover);
-        if (IsHollowKnightSelected && HollowKnightGameDirectory is null && directory is not null)
-            await SetHollowKnightGameDirectoryAsync(directory);
+        var inspected = await InspectHollowKnightAsync(chosen);
+        if (version != hollowKnightInspection || !IsHollowKnightSelected || !PathsEqual(chosen, HollowKnightGameDirectory)) return;
+        if (inspected.Id.HasValue && inspected.Id != state?.HollowKnight.InstallationId)
+            await SubmitAsync(new UpdateHollowKnightConfigurationCommand(new(chosen, inspected.Id)), CancellationToken.None);
+        ApplyHollowKnightInspection(chosen, inspected.Game, inspected.Id);
+    }
+
+    private static async Task<(HollowKnightInstallation? Game, Guid? Id)> InspectHollowKnightAsync(string directory) => await Task.Run(() =>
+    {
+        HollowKnightInstallation? game = HollowKnightInstallDiscovery.Inspect(directory);
+        Guid? id = null;
+        try { if (game is not null && !HollowKnightPluginInstaller.HasPendingRollback(directory)) id = HollowKnightPluginInstaller.GetInstalledIdentity(directory); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
+        return (game, id);
+    });
+
+    private void ApplyHollowKnightInspection(string directory, HollowKnightInstallation? game, Guid? id)
+    {
+        verifiedHollowKnightDirectory = directory;
+        verifiedHollowKnightInstallation = game is { Supported: true } ? id : null;
+        HollowKnightSetupStatus = game is null ? "Tracking unavailable" : !game.Supported ? "Unsupported version" : id is not null ? "Installed - restart game" : "Not installed";
+        NotifyHollowKnight();
     }
 
     public async Task SetHollowKnightGameDirectoryAsync(string directory)
     {
         if (IsBusy) return;
-        HollowKnightInstallation? game = await Task.Run(() => HollowKnightInstallDiscovery.Inspect(directory));
-        if (game is null) { ErrorMessage = "Choose a Hollow Knight folder containing hollow_knight.exe and valid game data."; return; }
-        Guid? id = null;
-        try { id = HollowKnightPluginInstaller.GetInstalledIdentity(game.Directory); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
-        bool installed = id.HasValue;
+        long version = ++hollowKnightInspection;
+        var inspected = await InspectHollowKnightAsync(directory);
+        if (version != hollowKnightInspection || !IsHollowKnightSelected) return;
+        if (inspected.Game is not { } game) { ErrorMessage = "Choose a Hollow Knight folder containing hollow_knight.exe and valid game data."; return; }
+        Guid? id = inspected.Id;
         if (id is null && PathsEqual(game.Directory, HollowKnightGameDirectory)) id = state?.HollowKnight.InstallationId;
         await SubmitAsync(new UpdateHollowKnightConfigurationCommand(new(game.Directory, id)), CancellationToken.None);
-        HollowKnightSetupStatus = !game.Supported ? "Unsupported version" : installed ? "Installed - restart game" :
-            Directory.Exists(Path.Combine(game.Directory, HollowKnightPluginInstaller.PluginFolder)) ? "Tracking unavailable" : "Not installed";
-        NotifyHollowKnight();
+        hollowKnightDirectoryWasAutomatic = false;
+        ApplyHollowKnightInspection(game.Directory, game, inspected.Id);
     }
 
     public async Task<HollowKnightInstallPlan?> PrepareHollowKnightInstallAsync()
@@ -69,6 +119,8 @@ public sealed partial class DesktopTrackerViewModel
                 return installer.Prepare(directory, plugin, api, state?.HollowKnight.InstallationId);
             });
         }
+        catch (System.Text.Json.JsonException)
+        { ErrorMessage = "Tracking installation recovery data could not be read. Existing files were preserved."; return null; }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Net.Http.HttpRequestException or TaskCanceledException)
         { ErrorMessage = exception.Message; return null; }
         finally { IsBusy = false; NotifyHollowKnight(); }
@@ -95,14 +147,27 @@ public sealed partial class DesktopTrackerViewModel
         if (IsBusy || HollowKnightGameDirectory is null) return;
         IsBusy = true; ErrorMessage = null;
         try { await Task.Run(action); HollowKnightSetupStatus = "Installed - restart game"; }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        catch (System.Text.Json.JsonException)
+        { ErrorMessage = "Tracking installation recovery data could not be read. Existing files were preserved."; HollowKnightSetupStatus = "Tracking unavailable"; }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         { ErrorMessage = exception.Message; HollowKnightSetupStatus = "Tracking unavailable"; }
-        finally { IsBusy = false; NotifyHollowKnight(); }
+        finally { IsBusy = false; }
+        await DiscoverHollowKnightAsync();
+        NotifyHollowKnight();
     }
 
     private void NotifyHollowKnight()
     {
         OnPropertyChanged(nameof(IsHollowKnightSelected));
+        OnPropertyChanged(nameof(IsHollowKnightInstalled));
+        OnPropertyChanged(nameof(IsHollowKnightInstallVisible));
+        OnPropertyChanged(nameof(IsDeathTrackerVisible));
+        OnPropertyChanged(nameof(HollowKnightDirectoryPath));
+        OnPropertyChanged(nameof(HollowKnightDirectoryWasAutomatic));
+        OnPropertyChanged(nameof(CanAdjustHollowKnightDeaths));
+        OnPropertyChanged(nameof(CanIncrementHollowKnightDeaths));
+        OnPropertyChanged(nameof(CanDecrementHollowKnightDeaths));
+        OnPropertyChanged(nameof(HollowKnightAddedDeaths));
         OnPropertyChanged(nameof(HollowKnightGameDirectory));
         OnPropertyChanged(nameof(HollowKnightSetupStatus));
         OnPropertyChanged(nameof(RuntimeReaderStatusText));

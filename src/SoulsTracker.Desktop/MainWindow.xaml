@@ -445,8 +445,11 @@
                 <StackPanel>
                     <Border Style="{StaticResource Panel}" AutomationProperties.Name="Game session panel">
                         <StackPanel>
-                            <HeaderedContentControl x:Name="GameSessionSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="GAME SESSION" />
-                            <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,10" Text="Choose the game currently being tracked." />
+                            <HeaderedContentControl x:Name="GameSessionSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="GAME SESSION">
+                                <Button Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Game session help" AutomationProperties.HelpText="Choose the game you'd like to track.">
+                                    <Button.ToolTip><ToolTip Content="Choose the game you'd like to track." /></Button.ToolTip>
+                                </Button>
+                            </HeaderedContentControl>
                             <ComboBox x:Name="GameSelector"
                                       ItemsSource="{Binding GameChoices}"
                                       SelectedItem="{Binding SelectedGame, Mode=OneWay}"
@@ -471,18 +474,32 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsHollowKnightSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Hollow Knight death tracking setup">
-                                <TextBlock Style="{StaticResource PanelTitle}" Text="HOLLOW KNIGHT DEATH TRACKING" />
-                                <TextBlock Margin="0,8,0,8" Text="{Binding HollowKnightGameDirectory}" TextWrapping="Wrap" />
-                                <WrapPanel>
-                                    <Button Content="Change Game Folder" Click="BrowseHollowKnight_Click" IsEnabled="{Binding ControlsEnabled}" />
-                                    <Button Margin="8,0,0,0" Content="Install Death Tracking" Click="InstallHollowKnight_Click" IsEnabled="{Binding ControlsEnabled}" />
+                                <WrapPanel Margin="0,10,0,8">
+                                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Chosen Directory" />
+                                    <Button Style="{StaticResource ContextHelpButton}" Visibility="{Binding HollowKnightDirectoryWasAutomatic, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Hollow Knight directory discovery help" AutomationProperties.HelpText="Save directory was found automatically">
+                                        <Button.ToolTip><ToolTip Content="Save directory was found automatically" /></Button.ToolTip>
+                                    </Button>
                                 </WrapPanel>
-                                <TextBlock Margin="0,8,0,8" Text="{Binding HollowKnightSetupStatus}" AutomationProperties.LiveSetting="Polite" />
-                                <TextBlock Text="Counts persist while SoulsTracker is closed. Requires the supported Modding API. Earlier deaths cannot be recovered." TextWrapping="Wrap" />
-                                <WrapPanel Margin="0,8,0,0">
-                                    <Button Content="Uninstall Death Tracking" Click="UninstallHollowKnight_Click" IsEnabled="{Binding ControlsEnabled}" />
-                                    <Button Margin="8,0,0,0" Content="Roll Back Failed Install" Click="RollbackHollowKnight_Click" IsEnabled="{Binding ControlsEnabled}" />
-                                </WrapPanel>
+                                <Border Style="{StaticResource DirectoryPathContainer}" Tag="{Binding HollowKnightGameDirectory}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Consolas" Text="{Binding HollowKnightDirectoryPath}" TextWrapping="Wrap" ToolTip="{Binding HollowKnightGameDirectory}" AutomationProperties.Name="Hollow Knight chosen directory" AutomationProperties.HelpText="{Binding HollowKnightGameDirectory}" />
+                                        <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource DirectoryCopyButton}" Tag="{Binding HollowKnightGameDirectory}" Click="CopyDirectoryPath_Click" />
+                                    </Grid>
+                                </Border>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Change Directory" Click="BrowseHollowKnight_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Change Hollow Knight directory" />
+                                    <Button Margin="8,0,0,0" Content="Refresh" Click="RefreshHollowKnight_Click" IsEnabled="{Binding ControlsEnabled}" AutomationProperties.Name="Refresh Hollow Knight directory" />
+                                </StackPanel>
+                                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Text="DEATH TRACKER" />
+                                    <Button Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Hollow Knight death tracker help" AutomationProperties.HelpText="Installs a DLL to capture death events after installing even while SoulsTracker is closed. If you died before installing the tracker won't include those deaths.">
+                                        <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
+                                    </Button>
+                                </StackPanel>
+                                <Button Margin="0,8,0,0" HorizontalAlignment="Left" Content="Install Death Tracking" Click="InstallHollowKnight_Click" Visibility="{Binding IsHollowKnightInstallVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
+                                <Button Margin="0,8,0,0" HorizontalAlignment="Left" Content="Uninstall Death Tracking" Click="UninstallHollowKnight_Click" Visibility="{Binding IsHollowKnightInstalled, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding ControlsEnabled}" />
+                                <TextBlock Style="{StaticResource OptionalSaveFeedback}" Foreground="{StaticResource DangerBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" AutomationProperties.Name="Hollow Knight action error" />
                             </StackPanel>
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding IsEldenRingSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Elden Ring save reader setup">
                                 <TextBlock Style="{StaticResource PanelTitle}" Text="ELDEN RING SAVE" />
@@ -598,7 +615,7 @@
                                 <TextBlock Style="{StaticResource OptionalSaveFeedback}" Text="{Binding LiesOfPDirectoryActionFeedback}" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Lies of P directory action feedback" />
                             </StackPanel>
 
-                            <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4">
+                            <Border Margin="0,14,0,0" Padding="10,8" Background="{StaticResource ElevatedSurfaceBrush}" CornerRadius="4" Visibility="{Binding IsDeathTrackerVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel>
                                     <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedTextBrush}" Text="READER STATUS" />
                                     <TextBlock x:Name="RuntimeReaderStatusTextBlock" Margin="0,3,0,0" FontWeight="SemiBold" Text="{Binding RuntimeReaderStatusText, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="Game reader status" AutomationProperties.HelpText="{Binding RuntimeReaderStatusText, Mode=OneWay}">
@@ -614,7 +631,7 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death counter panel">
+                    <Border Style="{StaticResource Panel}" Margin="0,14,0,0" AutomationProperties.Name="Death counter panel" Visibility="{Binding IsDeathTrackerVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel>
                             <HeaderedContentControl x:Name="TotalDeathsSectionHeader" Style="{StaticResource PrimarySectionHeader}" Header="TOTAL DEATHS">
                                 <Button x:Name="ManualCounterHelpButton" Style="{StaticResource ContextHelpButton}" Visibility="{Binding IsManualGameSelected, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Manual counter hotkeys help" AutomationProperties.HelpText="Customizable hotkeys for increasing and decreasing the count can be found in the Settings tab.">
@@ -657,7 +674,21 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <TextBlock x:Name="ErrorMessageTextBlock" Margin="0,8,0,0" Foreground="{StaticResource DangerBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" AutomationProperties.Name="Tracker error status" />
+                            <StackPanel Margin="0,12,0,0" Visibility="{Binding IsHollowKnightInstalled, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="Hollow Knight manual death adjustment">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource PanelTitle}" VerticalAlignment="Center" Text="MISSED DEATHS" />
+                                    <Button Style="{StaticResource ContextHelpButton}" AutomationProperties.Name="Hollow Knight manual adjustment help" AutomationProperties.HelpText="In case you've already started a playthrough you can manually adjust your deaths here and it will count towards your total.">
+                                        <Button.ToolTip><ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap" Text="{Binding PlacementTarget.(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType=ToolTip}}" /></ToolTip></Button.ToolTip>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,0" Text="Add any missed deaths manually" />
+                                <Grid Margin="0,3,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="Added deaths"/><TextBlock Grid.Column="1" Margin="12,0,0,0" Text="{Binding HollowKnightAddedDeaths}" AutomationProperties.Name="Hollow Knight added deaths"/></Grid>
+                                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                                    <Button Width="78" Click="DecrementHollowKnightDeaths_Click" IsEnabled="{Binding CanDecrementHollowKnightDeaths}" Content="−1" AutomationProperties.Name="Remove Hollow Knight added death" />
+                                    <Button Width="78" Margin="8,0,0,0" Click="IncrementHollowKnightDeaths_Click" IsEnabled="{Binding CanIncrementHollowKnightDeaths}" Content="+1" AutomationProperties.Name="Add Hollow Knight death" />
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock x:Name="ErrorMessageTextBlock" Visibility="{Binding IsHollowKnightInstallVisible, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,8,0,0" Foreground="{StaticResource DangerBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" AutomationProperties.Name="Tracker error status" />
                         </StackPanel>
                     </Border>
 

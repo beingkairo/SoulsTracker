@@ -35,7 +35,7 @@ public sealed class ProcessReaderStatusContractTests
             int writes = 0;
             text.WriteCompleted += (_, success) => { Interlocked.Increment(ref writes); written.TrySetResult(success); };
             Assert.Null(Snapshot(hosted).Death);
-            Assert.Equal("Game unavailable", desktop.RuntimeReaderStatusText);
+            Assert.Equal("Loading.", desktop.RuntimeReaderStatusText);
 
             async Task Poll()
             {

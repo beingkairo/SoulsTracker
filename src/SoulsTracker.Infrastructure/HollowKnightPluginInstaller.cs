@@ -101,6 +101,12 @@ public sealed class HollowKnightPluginInstaller
         return HasCompatibleApi(root) ? owner.InstallationId : null;
     }
 
+    public static bool HasPendingRollback(string root)
+    {
+        Journal? journal = Pending(root);
+        return journal is { Completed: false };
+    }
+
     public HollowKnightInstallPlan Prepare(string root, byte[] plugin, byte[]? apiArchive, Guid? installationId = null)
     {
         root = Path.GetFullPath(root);

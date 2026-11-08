@@ -21,7 +21,8 @@ public static class TrackerStateTransitionService
             UpdateHollowKnightConfigurationCommand hk => Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId,
                 state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter,
                 state.EldenRingNoticeAcknowledged, state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments,
-                state.LiesOfPSave, state.CheckForUpdatesOnStartup, hk.Configuration), TrackerCommandType.UpdateHollowKnightConfiguration),
+                state.LiesOfPSave, state.CheckForUpdatesOnStartup, hk.Configuration with { DeathAdjustments = state.HollowKnight.DeathAdjustments }), TrackerCommandType.UpdateHollowKnightConfiguration),
+            AdjustHollowKnightDeathsCommand hk => ApplyHollowKnightAdjustment(state, hk),
             SetCheckForUpdatesOnStartupCommand updateStartup => ApplyUpdateStartup(state, updateStartup),
             SelectGameCommand selectGame => ApplySelectGame(state, selectGame),
             IncrementManualDeathsCommand increment => ApplyIncrementManualDeaths(state, increment),
@@ -239,6 +240,18 @@ public static class TrackerStateTransitionService
             state.OverlayConfiguration, state.GlobalHotkeys, state.TextExports,
             state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged, state.EldenRingSave,
             state.BlackMythWukongSave, updated, state.LiesOfPSave, state.CheckForUpdatesOnStartup, state.HollowKnight), TrackerCommandType.AdjustEldenRingMissedDeaths);
+    }
+
+    private static TrackerTransitionResult ApplyHollowKnightAdjustment(PersistentTrackerState state, AdjustHollowKnightDeathsCommand command)
+    {
+        if (state.SelectedGameId != GameId.HollowKnight || state.HollowKnight.InstallationId != command.Installation || command.Run == Guid.Empty)
+            throw new ArgumentException("The adjustment requires the selected Hollow Knight installation and save.", nameof(command));
+        var updated = state.HollowKnight.DeathAdjustments.Change(command.Installation, command.Run, command.Increment);
+        if (ReferenceEquals(updated, state.HollowKnight.DeathAdjustments)) return Unchanged(state, TrackerCommandType.AdjustHollowKnightDeaths);
+        return Changed(new PersistentTrackerState(state.SchemaVersion, state.SelectedGameId, state.OverlayConfiguration,
+            state.GlobalHotkeys, state.TextExports, state.ManualDemonsSoulsDeathCounter, state.EldenRingNoticeAcknowledged,
+            state.EldenRingSave, state.BlackMythWukongSave, state.EldenRingMissedDeathAdjustments, state.LiesOfPSave,
+            state.CheckForUpdatesOnStartup, state.HollowKnight with { DeathAdjustments = updated }), TrackerCommandType.AdjustHollowKnightDeaths);
     }
 
     private static bool PresentationEquals(OverlayConfiguration left, OverlayConfiguration right) =>
