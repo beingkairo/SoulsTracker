@@ -48,6 +48,11 @@ public sealed class HollowKnightRecordReader : IRuntimeGameDeathReader
             bool gameRunning = running();
             if (gameRunning && !IsActive(root, installation))
                 return ValueTask.FromResult<RuntimeGameReadResult?>(Result(null, "Tracking unavailable"));
+            // A heartbeat from another save must not validate an earlier record snapshot.
+            // Recheck both files after liveness validation, including offline transitions.
+            if (ReadBounded(Path.Combine(root, record.Run.ToString("D") + ".record")) != active ||
+                ReadBounded(Path.Combine(root, "active.record")) != active)
+                return ValueTask.FromResult<RuntimeGameReadResult?>(Result(null, "Tracking unavailable"));
             var observation = new PersistentPluginObservation(EffectiveDeathTotalResult.HollowKnightSourceIdentityFor(config), record.Run, record.Slot, record.Total, record.Revision, now());
             return ValueTask.FromResult<RuntimeGameReadResult?>(Result(observation, gameRunning ? "Tracking active" : "Saved total (game closed)"));
         }

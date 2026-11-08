@@ -109,6 +109,66 @@ public sealed class HollowKnightPersistentTrackingTests : IDisposable
         Assert.Null(Read(true).PluginObservation);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task SaveSwitchDuringLivenessValidationDiscardsOldSnapshotAndNextReadUsesNewSave(bool gameRunning, bool switchDuringHeartbeat)
+    {
+        Guid runA = Guid.NewGuid(), runB = Guid.NewGuid();
+        var store = Store;
+        store.Commit(new(installation, runA, 1, 11, 12, DateTime.UtcNow.Ticks));
+        store.WriteStatus(installation, 123, 456, true);
+        bool switched = false;
+        void SwitchSave()
+        {
+            if (switched) return;
+            switched = true;
+            store.Commit(new(installation, runB, 2, 99, 100, DateTime.UtcNow.Ticks));
+            store.WriteStatus(installation, 123, 456, true);
+        }
+        var reader = new HollowKnightRecordReader(Path.Combine(root, "records"), () =>
+        {
+            if (!switchDuringHeartbeat) SwitchSave();
+            return gameRunning;
+        }, (_, _) =>
+        {
+            if (switchDuringHeartbeat) SwitchSave();
+            return true;
+        }, () => DateTimeOffset.UtcNow);
+        reader.Configure(new(Game, installation));
+
+        RuntimeGameReadResult interrupted = (await reader.ReadAsync(CancellationToken.None))!;
+        Assert.Null(interrupted.PluginObservation);
+        Assert.Equal("Tracking unavailable", interrupted.PluginStatus);
+
+        RuntimeGameReadResult stable = (await reader.ReadAsync(CancellationToken.None))!;
+        Assert.Equal(runB, stable.PluginObservation!.RunId);
+        Assert.Equal(2, stable.PluginObservation.Slot);
+        Assert.Equal(99, stable.PluginObservation.Total);
+        Assert.Equal(gameRunning ? "Tracking active" : "Saved total (game closed)", stable.PluginStatus);
+    }
+
+    [Fact]
+    public async Task DeathUpdateDuringLivenessValidationRemainsUnavailableUntilProjectionIsCommitted()
+    {
+        Guid run = Guid.NewGuid();
+        var store = Store;
+        store.Commit(new(installation, run, 1, 11, 12, DateTime.UtcNow.Ticks));
+        store.WriteStatus(installation, 123, 456, true);
+        var next = new DeathRecord(installation, run, 1, 12, 13, DateTime.UtcNow.Ticks);
+        var reader = new HollowKnightRecordReader(Path.Combine(root, "records"), () =>
+        {
+            File.WriteAllText(Path.Combine(root, "records", installation.ToString("D"), run.ToString("D") + ".record"), next.Encode());
+            return true;
+        }, (_, _) => true, () => DateTimeOffset.UtcNow);
+        reader.Configure(new(Game, installation));
+
+        Assert.Null((await reader.ReadAsync(CancellationToken.None))!.PluginObservation);
+        store.Publish(next);
+        Assert.Equal(12, (await reader.ReadAsync(CancellationToken.None))!.PluginObservation!.Total);
+    }
+
     [Fact]
     public void RecordChecksumAndBoundsRejectCorruptValues()
     {
