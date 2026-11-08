@@ -4,7 +4,7 @@ Soulstracker.DeathTracker.dll records deaths inside the original Hollow Knight t
 
 ## Installation and compatibility
 
-Select Hollow Knight. Steam installation and library folders are searched automatically. **Change Directory** is always available. Close Hollow Knight, click **Install Death Tracking**, review the target folder and file changes, then confirm. Launch Hollow Knight and load a save. Synced status requires a fresh plugin heartbeat matched to that process; DLL presence alone is insufficient.
+Select Hollow Knight. Steam installation and library folders are searched automatically. **Change Directory** is always available. Close Hollow Knight, click **Install Death Tracking**, review the target folder and file changes, then confirm. Launch Hollow Knight and load a save. While the game is running, Synced status requires a fresh plugin heartbeat matched to that process; DLL presence alone is insufficient.
 
 Windows profiles cover game **1.5.78.11833** with official API **v77**, [release 1.5.78.11833-77](https://github.com/hk-modding/api/releases/tag/1.5.78.11833-77), and the verified Steam **1.5.12620** managed files with source-built API **1.5.12620.0-78** from [upstream PR #164](https://github.com/hk-modding/api/pull/164), revision `468f579f25e63da2188f39fe5ece15c25d2854d7`. Other builds are unsupported. Non-Steam 1.5.12620 installations with different file hashes are rejected.
 
