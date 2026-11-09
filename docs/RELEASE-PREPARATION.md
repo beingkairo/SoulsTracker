@@ -1,6 +1,6 @@
 # Release preparation
 
-The v2.2.0 application source is pinned to `695e535f551e04a11ff84f3aef5190098b574a64`. Publication controls are reviewed separately. Gameplay code, plugin sources, assets, runtime versions and dependency locks must remain identical to that application source.
+The v2.2.0 release source is pinned to `c89b0c0be5a1d08573427ea48e6b70aa3d5c6c56`, including the verified development dependency security updates. Gameplay code, plugin sources, assets, runtime versions and installation profiles remain identical to implementation `695e535f551e04a11ff84f3aef5190098b574a64`. Publication controls are reviewed separately. Build inputs must match the pinned release source.
 
 ## Hollow Knight build input
 
