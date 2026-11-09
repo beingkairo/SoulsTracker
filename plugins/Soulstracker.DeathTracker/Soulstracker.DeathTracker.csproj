@@ -11,6 +11,7 @@
     <EnableNETAnalyzers>false</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" PrivateAssets="all" />
     <Reference Include="Assembly-CSharp"><HintPath>$(ApiDirectory)/Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="MMHOOK_Assembly-CSharp"><HintPath>$(ApiDirectory)/MMHOOK_Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
