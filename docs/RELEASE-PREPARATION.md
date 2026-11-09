@@ -1,6 +1,6 @@
 # Release preparation
 
-The v2.2.0 release source is pinned to `e2301a870f372ad3fd668bc11eb800ce9051b4aa`, including the verified development dependency security updates and explicit locked framework reference package. Gameplay and plugin C# code, assets, runtime versions and installation profiles remain identical to implementation `695e535f551e04a11ff84f3aef5190098b574a64`. Publication controls are reviewed separately. Build inputs must match the pinned release source.
+The v2.2.0 release source is pinned to `a620585494a8143959cf584bf82962616cee5f18`, including the verified development dependency security updates, explicit locked framework reference package and synchronized manual-increment UI test. Gameplay and plugin C# code, assets, runtime versions and installation profiles remain identical to implementation `695e535f551e04a11ff84f3aef5190098b574a64`. Publication controls are reviewed separately. Build inputs must match the pinned release source.
 
 ## Hollow Knight build input
 
