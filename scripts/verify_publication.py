@@ -10,8 +10,8 @@ import zipfile
 import verify_hollow_knight_input as hollow_knight
 
 IMPLEMENTATION = "695e535f551e04a11ff84f3aef5190098b574a64"
-SOURCE = "c89b0c0be5a1d08573427ea48e6b70aa3d5c6c56"
-SOURCE_TREE = "9c0dd7f6c39203401da2209f3ee2430f1911c6f6"
+SOURCE = "e2301a870f372ad3fd668bc11eb800ce9051b4aa"
+SOURCE_TREE = "cca1831ac102dca20f3e851ef0f20a1409f6422c"
 VERSION = "2.2.0"
 STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495
