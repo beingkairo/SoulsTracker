@@ -287,6 +287,8 @@ try {
     Assert-True ($workflow -notmatch 'SkipTests|SkipInstaller|LocalQualification|continue-on-error|always\(\)|GITHUB_REF_NAME') 'Workflow contains a qualification bypass or unvalidated target.'
     Assert-True ($workflow -notmatch '(?m)^  push:') 'Tag push must not silently build or publish different artifacts.'
     Assert-True ([regex]::Matches($workflow, 'run: ../control/scripts/Build-Release.ps1').Count -eq 1) 'Exactly one qualification path is required.'
+    Assert-True ([regex]::Matches($workflow, 'git -C control diff --exit-code HEAD').Count -eq 3) 'Control cleanliness must be checked before source verification, signing preparation and publication verification.'
+    Assert-True ([regex]::Matches($workflow, "throw 'Publication control commit differs'").Count -eq 3) 'Control HEAD must match the immutable workflow commit at every verification boundary.'
     Write-Output 'Release tooling characterization passed. Synthetic payloads are not distribution evidence.'
     $global:LASTEXITCODE = 0
 } finally {

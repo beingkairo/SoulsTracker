@@ -58,6 +58,9 @@ jobs:
       - name: Verify source and read version
         shell: pwsh
         run: |
+          if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
+          git -C control diff --exit-code HEAD
+          if ($LASTEXITCODE) { throw 'Publication controls changed' }
           if ((git -C source rev-parse HEAD) -cne $env:APPROVED_SOURCE) { throw 'Unapproved source' }
           python -B control/scripts/verify_publication.py source --source source
           if ($LASTEXITCODE) { throw 'Application implementation changed' }
@@ -93,6 +96,9 @@ jobs:
       - name: Reconcile candidate checksums and record exact inputs
         shell: pwsh
         run: |
+          if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
+          git -C control diff --exit-code HEAD
+          if ($LASTEXITCODE) { throw 'Publication controls changed during qualification' }
           python -B control/scripts/verify_publication.py prepare --directory release --payload "$env:GITHUB_WORKSPACE/release-output/desktop" --source source --workflow-commit '${{ github.sha }}' --run-id '${{ github.run_id }}'
           if ($LASTEXITCODE) { throw 'Release reconciliation failed' }
       - name: Generate GitHub build predicate
@@ -183,6 +189,9 @@ jobs:
           APPROVED_MANIFEST: ${{ inputs.approved_manifest_sha256 }}
           PREPARED_RUN: ${{ inputs.prepared_run_id }}
         run: |
+          if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
+          git -C control diff --exit-code HEAD
+          if ($LASTEXITCODE) { throw 'Publication controls changed before verification' }
           python -B control/scripts/verify_publication.py verify --directory prepared --approved-manifest $env:APPROVED_MANIFEST --workflow-commit '${{ github.sha }}' --run-id $env:PREPARED_RUN
           if ($LASTEXITCODE) { throw 'Publication integrity check failed' }
           Get-ChildItem prepared -File | Where-Object Name -ne 'provenance.sigstore.json' | ForEach-Object {

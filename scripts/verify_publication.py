@@ -4,7 +4,6 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import zipfile
 
@@ -24,7 +23,9 @@ APPROVED = {
 }
 PAYLOAD = "cf2ad8ba00c828c4a687004294e8a505dd68f76ffe1b31e885a9e2ee4d8c6959"
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
-NOTES = Path(__file__).resolve().parent.parent / f"docs/releases/v{VERSION}.md"
+CONTROL_ROOT = Path(__file__).resolve().parent.parent
+NOTES_RELATIVE = f"docs/releases/v{VERSION}.md"
+NOTES = CONTROL_ROOT / NOTES_RELATIVE
 PROTECTED_INPUTS = ["src", "plugins", "assets", "eng", "web_overlay", "cloud_overlay", "installer",
                     "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json",
                     "SoulsTracker.sln", "NuGet.config", "nuget.config", "LICENSE", "README.md",
@@ -47,6 +48,22 @@ def sha(path):
 
 def git(source, *arguments):
     return subprocess.check_output(["git", "-C", str(source), *arguments], text=True).strip()
+
+
+def normalized_notes(data):
+    return data.replace(b"\r\n", b"\n")
+
+
+def verify_control(expected_commit):
+    head = git(CONTROL_ROOT, "rev-parse", "HEAD")
+    require(re.fullmatch("[a-f0-9]{40}", expected_commit or "") and head == expected_commit,
+            "Publication control commit differs from the workflow")
+    subprocess.run(["git", "-C", str(CONTROL_ROOT), "diff", "--exit-code", "HEAD"],
+                   check=True, capture_output=True)
+    notes = subprocess.check_output(["git", "-C", str(CONTROL_ROOT), "show", f"{head}:{NOTES_RELATIVE}"])
+    require(normalized_notes(NOTES.read_bytes()) == normalized_notes(notes),
+            "Publication notes differ from the committed control notes")
+    return notes
 
 
 def verify_source(source, local=False):
@@ -108,13 +125,14 @@ def check_zip(path, files):
 
 
 def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=False):
-    identity = verify_source(source, local)
-    subprocess.run(["git", "-C", str(source), "diff", "--exit-code", "HEAD"], check=True, capture_output=True)
     if not local:
         require(re.fullmatch("[a-f0-9]{40}", workflow_commit or ""), "Workflow commit required")
         require(re.fullmatch("[1-9][0-9]*", str(run_id or "")), "Prepared run ID required")
     else:
         require(not workflow_commit and not run_id, "Local metadata cannot claim a workflow run")
+    notes = NOTES.read_bytes() if local else verify_control(workflow_commit)
+    identity = verify_source(source, local)
+    subprocess.run(["git", "-C", str(source), "diff", "--exit-code", "HEAD"], check=True, capture_output=True)
     hollow_knight.reject_links(folder)
     require(not (folder / "release-manifest.json").exists(), "Refusing to replace a prepared manifest")
     check_sbom(folder / NAMES[2])
@@ -123,7 +141,7 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=Fa
     api = hollow_knight.verify(payload / "HollowKnight/api-12620.zip",
                               source / "src/SoulsTracker.Infrastructure/HollowKnightApi12620.json")
     check_zip(folder / NAMES[1], files)
-    shutil.copyfile(NOTES, folder / "release-notes.md")
+    (folder / "release-notes.md").write_bytes(notes)
     hashes = {name: sha(folder / name) for name in NAMES}
     (folder / "SHA256SUMS.txt").write_text("".join(f"{hashes[n]}  {n}\n" for n in NAMES), encoding="ascii")
     hashes.update({name: sha(folder / name) for name in ["SHA256SUMS.txt", "release-notes.md"]})
@@ -133,7 +151,7 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=Fa
         "schema_version": 2, "version": VERSION, **identity,
         "preparation_mode": "local_unsigned" if local else "github_actions",
         "workflow_commit": workflow_commit, "prepared_run_id": str(run_id) if run_id else None,
-        "api78_input": api, "release_notes_sha256": sha(NOTES),
+        "api78_input": api, "release_notes_sha256": digest(notes),
         "artifacts": hashes, "payload_files": files, "payload_inventory_sha256": inventory_digest(files),
         "matches_approved_local_candidate": comparison,
         "different_artifacts_require_explicit_manifest_hash_approval": not all(comparison.values()),
@@ -150,9 +168,12 @@ def inspect(folder):
     require(manifest.get("approved_source_commit") == SOURCE, "Unapproved release source")
     require(manifest.get("preparation_mode") in ["local_unsigned", "github_actions"], "Unsupported preparation mode")
     if manifest["preparation_mode"] == "github_actions":
+        require(re.fullmatch("[a-f0-9]{40}", manifest.get("workflow_commit") or ""), "Workflow commit required")
+        notes = verify_control(manifest["workflow_commit"])
         require(manifest["source_commit"] == SOURCE and manifest["source_tree"] == SOURCE_TREE,
                 "Unapproved release source")
     else:
+        notes = NOTES.read_bytes()
         require(re.fullmatch("[a-f0-9]{40}", manifest.get("source_commit", "")) and
                 re.fullmatch("[a-f0-9]{40}", manifest.get("source_tree", "")), "Invalid local checkout identity")
         require(manifest.get("workflow_commit") is None and manifest.get("prepared_run_id") is None,
@@ -170,8 +191,11 @@ def inspect(folder):
             "Unexpected files in publication directory")
     for name, expected in manifest["artifacts"].items():
         require(sha(folder / name) == expected, "Release artifact checksum differs")
-    require(manifest.get("release_notes_sha256") == sha(folder / "release-notes.md") == sha(NOTES),
-            "Release notes differ from the publication controls")
+    published_notes = (folder / "release-notes.md").read_bytes()
+    same_notes = published_notes == notes if manifest["preparation_mode"] == "github_actions" else \
+        normalized_notes(published_notes) == normalized_notes(notes)
+    require(manifest.get("release_notes_sha256") == digest(published_notes) and same_notes,
+            "Release notes differ from the committed publication controls")
     sums = dict((name, value) for value, name in
                 (line.split("  ", 1) for line in (folder / "SHA256SUMS.txt").read_text().splitlines()))
     require(sums == {name: manifest["artifacts"][name] for name in NAMES}, "Checksum manifest differs")
