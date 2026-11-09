@@ -13,6 +13,64 @@ namespace SoulsTracker.Desktop.Tests;
 [Collection("Shell presentation")]
 public sealed class DirectoryCopyFeedbackControlTests
 {
+    [Fact]
+    public Task GameSwitchCompletionReleasesTheDiscoveredSave() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        using var fixture = new SaveDirectoryWorkflowTests();
+        string path = CreateSave("lp", fixture.Root);
+        var discovery = new HeldSaveDiscovery(path);
+        var repository = new MemoryRepository(GameId.DemonsSouls)
+        {
+            State = new(1, GameId.DemonsSouls, OverlayConfiguration.Default, liesOfPSave: new(path))
+        };
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        await using var vm = new DesktopTrackerViewModel(coordinator, liesOfPSaveDiscovery: discovery,
+            eldenRingSaveDiscovery: new EmptyDiscovery(), blackMythWukongSaveDiscovery: new EmptyDiscovery());
+        await vm.InitializeAsync();
+        var window = new MainWindow((_, _) => null, _ => { }) { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await Idle();
+            Task selection = Switch(window, vm, GameId.LiesOfP);
+            await discovery.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Idle();
+            Assert.False(selection.IsCompleted);
+            Assert.True(vm.IsSaveReaderSourcePending);
+            Assert.Throws<IOException>(() => File.Delete(path));
+            discovery.Release.TrySetResult();
+            await selection.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(discovery.Closed.Task.IsCompletedSuccessfully);
+            Assert.False(vm.IsSaveReaderSourcePending);
+            using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+            File.Delete(path);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            discovery.Release.TrySetResult();
+            await discovery.Closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await HostedDesktopPublisherTests.WaitUntil(() => !vm.IsSaveReaderSourcePending);
+            window.Close();
+        }
+    });
+
+    private sealed class HeldSaveDiscovery(string path) : ILocalSaveDiscovery
+    {
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Closed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<IReadOnlyList<DiscoveredLocalSave>> DiscoverAsync(CancellationToken cancellationToken)
+        {
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                Entered.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            Closed.TrySetResult();
+            return [new(path, "Synthetic character")];
+        }
+    }
+
     [Theory]
     [InlineData("er", true)]
     [InlineData("wk", true)]
@@ -213,9 +271,33 @@ public sealed class DirectoryCopyFeedbackControlTests
     }
     private static async Task Switch(MainWindow window, DesktopTrackerViewModel vm, GameId game)
     {
-        ((ComboBox)window.FindName("GameSelector")).SelectedItem = vm.GameChoices.Single(x => x.GameId == game);
+        var previous = SynchronizationContext.Current!;
+        // Await the complete async-void selection handler, including save discovery.
+        var selection = new SelectionCompletionContext(previous);
+        SynchronizationContext.SetSynchronizationContext(selection);
+        try
+        {
+            ((ComboBox)window.FindName("GameSelector")).SelectedItem = vm.GameChoices.Single(x => x.GameId == game);
+            await selection.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previous); }
         await HostedDesktopPublisherTests.WaitUntil(() => vm.SelectedGame?.GameId == game && !vm.IsBusy);
         await Idle();
+    }
+
+    private sealed class SelectionCompletionContext(SynchronizationContext dispatcher) : SynchronizationContext
+    {
+        private readonly TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int operations;
+        internal Task Completion => completion.Task;
+        public override void OperationStarted() => Interlocked.Increment(ref operations);
+        public override void OperationCompleted()
+        {
+            if (Interlocked.Decrement(ref operations) == 0) completion.TrySetResult();
+        }
+        public override void Post(SendOrPostCallback callback, object? state) => dispatcher.Post(callback, state);
+        public override void Send(SendOrPostCallback callback, object? state) => dispatcher.Send(callback, state);
+        public override SynchronizationContext CreateCopy() => this;
     }
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
 }
