@@ -1,19 +1,51 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [string]$SourceRoot,
+    [string]$OutputRoot,
+    [string]$HollowKnightApiPackage,
+    [string]$InstallerCompiler,
+    [switch]$LocalQualification
 )
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot
+$controlRoot = Split-Path -Parent $PSScriptRoot
+$root = if ($SourceRoot) { [IO.Path]::GetFullPath($SourceRoot) } else { $controlRoot }
 $solution = Join-Path $root "SoulsTracker.sln"
-$artifactsRoot = Join-Path $root "artifacts"
-$stagingRoot = Join-Path $root "artifacts\staging"
+$artifactsRoot = if ($OutputRoot) { [IO.Path]::GetFullPath($OutputRoot) } else { Join-Path $root "artifacts" }
+$stagingRoot = Join-Path $artifactsRoot "staging"
 $publishPath = Join-Path $stagingRoot "desktop"
 $releasePath = Join-Path $artifactsRoot "desktop"
-$webView2StagingPath = Join-Path $root "artifacts\staging\webview2"
+$webView2StagingPath = Join-Path $stagingRoot "webview2"
+$installerOutput = if ($OutputRoot) { Join-Path $artifactsRoot 'installer' } else { Join-Path $root 'installer/Output' }
 $overlayPath = Join-Path $root "web_overlay"
 $version = & (Join-Path $root "eng\Get-Version.ps1")
+
+function Assert-UnlinkedPath([string]$Path) {
+    $cursor = [IO.Path]::GetFullPath($Path)
+    if ($cursor.StartsWith('\\')) { throw 'Network release paths are unsupported.' }
+    while ($cursor) {
+        if ((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Linked release paths are unsupported.'
+        }
+        $cursor = Split-Path -Parent $cursor
+    }
+}
+
+if ($OutputRoot) {
+    Assert-UnlinkedPath $artifactsRoot
+    if (Test-Path -LiteralPath $artifactsRoot) { throw 'An isolated release output root must not already exist.' }
+    if ($artifactsRoot -eq $root -or $root.StartsWith($artifactsRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'An isolated release output root cannot contain the source checkout.'
+    }
+    foreach ($protected in @((Join-Path $root 'artifacts'), (Join-Path $controlRoot 'artifacts'), (Join-Path $root 'installer/Output'))) {
+        if ($artifactsRoot -eq $protected -or $artifactsRoot.StartsWith($protected + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'An isolated release output root cannot be inside historical artifact directories.'
+        }
+    }
+}
+Assert-UnlinkedPath $root
 
 function Invoke-External {
     param(
@@ -97,6 +129,27 @@ function Promote-VerifiedDesktopArtifact {
 & (Join-Path $PSScriptRoot "Verify-Version.ps1")
 & (Join-Path $PSScriptRoot "Verify-ReleaseGuide.ps1")
 & (Join-Path $PSScriptRoot "Test-WebView2Installer.ps1")
+if ($version -eq '2.2.0') {
+    $sourceMode = if ($LocalQualification) { 'source-local' } else { 'source' }
+    Invoke-External python @('-B', (Join-Path $PSScriptRoot 'verify_publication.py'), $sourceMode, '--source', $root)
+    if (-not $HollowKnightApiPackage) { throw 'An explicit verified Hollow Knight API v78 package is required.' }
+    Invoke-External python @('-B', (Join-Path $PSScriptRoot 'verify_hollow_knight_input.py'), '--package', $HollowKnightApiPackage,
+        '--profile', (Join-Path $root 'src/SoulsTracker.Infrastructure/HollowKnightApi12620.json'))
+    $apiDestination = Join-Path $root 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip'
+    if ([IO.Path]::GetFullPath($HollowKnightApiPackage).StartsWith((Split-Path $apiDestination) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The explicit API input must be staged outside generated build outputs.'
+    }
+    Assert-UnlinkedPath $apiDestination
+    if ((Test-Path -LiteralPath $apiDestination) -and (Get-FileHash -LiteralPath $apiDestination).Hash -cne (Get-FileHash -LiteralPath $HollowKnightApiPackage).Hash) {
+        throw 'A different existing API package was preserved.'
+    }
+    if ([IO.Path]::GetFullPath($HollowKnightApiPackage) -ne [IO.Path]::GetFullPath($apiDestination)) {
+        $null = New-Item -ItemType Directory -Path (Split-Path $apiDestination) -Force
+        Copy-Item -LiteralPath $HollowKnightApiPackage -Destination $apiDestination
+    }
+    Invoke-External python @('-B', (Join-Path $PSScriptRoot 'verify_hollow_knight_input.py'), '--package', $apiDestination,
+        '--profile', (Join-Path $root 'src/SoulsTracker.Infrastructure/HollowKnightApi12620.json'))
+}
 Initialize-CleanStagingDirectory -Path $publishPath -AllowedRoot $stagingRoot
 Invoke-External dotnet @("restore", $solution, "--locked-mode")
 Invoke-External npm @("ci", "--prefix", $overlayPath)
@@ -133,18 +186,20 @@ Invoke-External dotnet @(
     "--no-restore",
     "--output",
     $publishPath,
+    "--no-build",
     '-p:DebugType=None',
     '-p:DebugSymbols=false',
     '-p:CopyOutputSymbolsToPublishDirectory=false'
 )
 
-& (Join-Path $PSScriptRoot 'Export-ThirdPartyNotices.ps1') -PayloadPath $publishPath
+& (Join-Path $PSScriptRoot 'Export-ThirdPartyNotices.ps1') -PayloadPath $publishPath -SourceRoot $root
 
 Promote-VerifiedDesktopArtifact -StagingPath $publishPath -ReleasePath $releasePath -ArtifactsRoot $artifactsRoot
 
 if (-not $SkipInstaller) {
     $iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
-    $isccPath = if ($null -ne $iscc) {
+    $isccPath = if ($InstallerCompiler) { [IO.Path]::GetFullPath($InstallerCompiler) }
+    elseif ($null -ne $iscc) {
         $iscc.Source
     }
     else {
@@ -166,6 +221,7 @@ if (-not $SkipInstaller) {
         $webView2Bootstrapper = & (Join-Path $PSScriptRoot "Get-WebView2Bootstrapper.ps1") -DestinationPath $webView2BootstrapperPath
 
         Invoke-External $isccPath @(
+            "/O$installerOutput",
             "/DAppVersion=$version",
             "/DBuildOutput=$releasePath",
             "/DWebView2Bootstrapper=$($webView2Bootstrapper.Path)",

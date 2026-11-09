@@ -19,15 +19,15 @@ on:
         type: string
 
 concurrency:
-  group: desktop-v2.1.2-publication
+  group: desktop-v2.2.0-publication
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  APPROVED_SOURCE: b65d3ca91aefd95037ca8737807979c341adfc80
-  APPROVED_IMPLEMENTATION: b65d3ca91aefd95037ca8737807979c341adfc80
+  APPROVED_SOURCE: 695e535f551e04a11ff84f3aef5190098b574a64
+  APPROVED_IMPLEMENTATION: 695e535f551e04a11ff84f3aef5190098b574a64
 
 jobs:
   prepare:
@@ -59,36 +59,41 @@ jobs:
         shell: pwsh
         run: |
           if ((git -C source rev-parse HEAD) -cne $env:APPROVED_SOURCE) { throw 'Unapproved source' }
-          git -C source diff --exit-code $env:APPROVED_IMPLEMENTATION HEAD -- src web_overlay/src cloud_overlay/src installer eng
+          python -B control/scripts/verify_publication.py source --source source
           if ($LASTEXITCODE) { throw 'Application implementation changed' }
           $metadata = & ./source/eng/Get-ReleaseMetadata.ps1
-          if ($metadata.Version -ne '2.1.2') { throw 'Unexpected version' }
+          if ($metadata.Version -ne '2.2.0') { throw 'Unexpected version' }
+      - name: Require approved API v78 input provisioning
+        shell: pwsh
+        run: |
+          python -B control/scripts/verify_hollow_knight_input.py --require-ci-input
+          if ($LASTEXITCODE) { throw 'Authenticated API v78 input provisioning is not approved or available' }
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
       - name: Build and test approved application source
         shell: pwsh
         working-directory: source
-        run: ./scripts/Build-Release.ps1
+        run: ../control/scripts/Build-Release.ps1 -SourceRoot "$pwd" -OutputRoot "$env:GITHUB_WORKSPACE/release-output" -HollowKnightApiPackage "$env:RUNNER_TEMP/SoulsTracker-input/api-12620.zip"
       - name: Create portable archive
         shell: pwsh
         run: |
           New-Item -ItemType Directory release | Out-Null
-          Copy-Item source/installer/Output/SoulsTrackerV2.1.2.exe release/
-          Compress-Archive -Path source/artifacts/desktop/* -DestinationPath release/SoulsTrackerV2.1.2-portable.zip
+          Copy-Item "$env:GITHUB_WORKSPACE/release-output/installer/SoulsTrackerV2.2.0.exe" release/
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE/release-output/desktop/*" -DestinationPath release/SoulsTrackerV2.2.0-portable.zip
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: source/artifacts/desktop
+          path: release-output/desktop
           format: spdx-json
           syft-version: v1.52.0
-          output-file: release/SoulsTrackerV2.1.2.sbom.spdx.json
+          output-file: release/SoulsTrackerV2.2.0.sbom.spdx.json
           upload-artifact: false
           upload-release-assets: false
       - name: Reconcile candidate checksums and record exact inputs
         shell: pwsh
         run: |
-          python control/scripts/verify_publication.py prepare --directory release --payload source/artifacts/desktop --source source --workflow-commit '${{ github.sha }}' --run-id '${{ github.run_id }}'
+          python -B control/scripts/verify_publication.py prepare --directory release --payload "$env:GITHUB_WORKSPACE/release-output/desktop" --source source --workflow-commit '${{ github.sha }}' --run-id '${{ github.run_id }}'
           if ($LASTEXITCODE) { throw 'Release reconciliation failed' }
       - name: Generate GitHub build predicate
         id: predicate
@@ -121,7 +126,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         id: upload
         with:
-          name: desktop-v2.1.2-${{ github.run_id }}-${{ github.run_attempt }}
+          name: desktop-v2.2.0-${{ github.run_id }}-${{ github.run_attempt }}
           path: release/*
           retention-days: 30
           if-no-files-found: error
@@ -157,9 +162,9 @@ jobs:
           if ($run.conclusion -ne 'success' -or $run.head_sha -cne '${{ github.sha }}' -or $run.workflow_id -ne $current.workflow_id -or $run.event -ne 'workflow_dispatch') { throw 'Preparation run or workflow differs' }
           $artifact = gh api "repos/$repo/actions/artifacts/$env:ARTIFACT_ID" | ConvertFrom-Json
           if ($LASTEXITCODE) { throw 'Cannot inspect artifact' }
-          if ($artifact.expired -or $artifact.workflow_run.id.ToString() -cne $env:PREPARED_RUN -or $artifact.name -cnotmatch "^desktop-v2\.1\.2-$($env:PREPARED_RUN)-[1-9][0-9]*$") { throw 'Artifact does not belong to preparation run' }
+          if ($artifact.expired -or $artifact.workflow_run.id.ToString() -cne $env:PREPARED_RUN -or $artifact.name -cnotmatch "^desktop-v2\.2\.0-$($env:PREPARED_RUN)-[1-9][0-9]*$") { throw 'Artifact does not belong to preparation run' }
           # Prove absence rather than treating authentication/network failures as absence.
-          foreach ($resource in @('git/ref/tags/v2.1.2', 'releases/tags/v2.1.2')) {
+          foreach ($resource in @('git/ref/tags/v2.2.0', 'releases/tags/v2.2.0')) {
             $status = gh api --include "repos/$repo/$resource" 2>&1 | Out-String
             if ($status -notmatch 'HTTP/[^ ]+ 404') { throw 'Cannot prove release and tag are absent' }
           }
@@ -178,7 +183,7 @@ jobs:
           APPROVED_MANIFEST: ${{ inputs.approved_manifest_sha256 }}
           PREPARED_RUN: ${{ inputs.prepared_run_id }}
         run: |
-          python control/scripts/verify_publication.py verify --directory prepared --approved-manifest $env:APPROVED_MANIFEST --workflow-commit '${{ github.sha }}' --run-id $env:PREPARED_RUN
+          python -B control/scripts/verify_publication.py verify --directory prepared --approved-manifest $env:APPROVED_MANIFEST --workflow-commit '${{ github.sha }}' --run-id $env:PREPARED_RUN
           if ($LASTEXITCODE) { throw 'Publication integrity check failed' }
           Get-ChildItem prepared -File | Where-Object Name -ne 'provenance.sigstore.json' | ForEach-Object {
             gh attestation verify $_.FullName --bundle prepared/provenance.sigstore.json --repo '${{ github.repository }}' --signer-workflow '${{ github.repository }}/.github/workflows/release.yml' --signer-digest '${{ github.sha }}' --deny-self-hosted-runners
@@ -187,7 +192,7 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.1.2
+          tag_name: v2.2.0
           target_commitish: ${{ env.APPROVED_SOURCE }}
           draft: false
           prerelease: false
@@ -197,9 +202,9 @@ jobs:
           fail_on_unmatched_files: true
           overwrite_files: false
           files: |
-            prepared/SoulsTrackerV2.1.2.exe
-            prepared/SoulsTrackerV2.1.2-portable.zip
-            prepared/SoulsTrackerV2.1.2.sbom.spdx.json
+            prepared/SoulsTrackerV2.2.0.exe
+            prepared/SoulsTrackerV2.2.0-portable.zip
+            prepared/SoulsTrackerV2.2.0.sbom.spdx.json
             prepared/SHA256SUMS.txt
             prepared/release-manifest.json
             prepared/provenance.sigstore.json

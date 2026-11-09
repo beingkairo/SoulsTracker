@@ -61,7 +61,16 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
     throw 'README is missing its release link or current hotkey feature.'
 }
 $expectedChanges = if ($version -eq '2.2.0') {
-    '- Added persistent Hollow Knight death tracking through an installable game plugin, with separate save totals retained while SoulsTracker is closed.'
+    @(
+        '- Added persistent Hollow Knight death tracking through an installable game plugin, with separate save totals retained while SoulsTracker is closed.',
+        '- Added per-save manual death additions for Hollow Knight. The main counter, Preview, TXT exports and hosted overlay show the recorded total plus those additions.',
+        '- Hollow Knight setup discovers the game directory and provides Install Death Tracking and Uninstall Death Tracking. Uninstall preserves shared API files, other mods, saves and recorded totals.',
+        '- Supports original Hollow Knight on Windows: 1.5.78.11833 with official Modding API v77, and the verified Steam 1.5.12620 files with source-built API 1.5.12620.0-78. Other builds are unsupported.',
+        '- API v78 uses pinned upstream development source from [PR #164](https://github.com/hk-modding/api/pull/164), revision `468f579f25e63da2188f39fe5ece15c25d2854d7`; it is not an official API v78 release. Other mods may need their own compatibility updates.',
+        '- Hollow Knight totals start when tracking is installed for that save. Earlier deaths and periods with the plugin disabled cannot be recovered automatically.',
+        '- Dream/Godhome encounters and Steel Soul gameplay were not fully validated in live gameplay.',
+        '- Save-based readers show Loading. during initial reads and keep validated totals stable during refresh.'
+    ) -join "`n"
 } elseif ($version -eq '2.1.2') {
     @(
         '- Expanded Bloodborne 1.09 death tracking to compatible PC runtimes, including Mrsuss60 bbport, Lantern Engine and deadinside28 Windows bbport, while preserving existing shadPS4 tracking.',

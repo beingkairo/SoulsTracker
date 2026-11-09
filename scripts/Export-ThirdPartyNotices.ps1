@@ -1,11 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$PayloadPath,
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+    [string]$SourceRoot
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = if ($SourceRoot) { [IO.Path]::GetFullPath($SourceRoot) } else { Split-Path -Parent $PSScriptRoot }
 Add-Type -AssemblyName System.Reflection.Metadata
 
 function Assert-Distribution([bool]$Condition, [string]$Message) {

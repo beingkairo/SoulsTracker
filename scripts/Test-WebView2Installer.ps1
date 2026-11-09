@@ -204,7 +204,7 @@ try {
     foreach ($required in @(
         'Test-WebView2Installer.ps1',
         'Get-WebView2Bootstrapper.ps1',
-        'artifacts\staging\webview2',
+        '$webView2StagingPath = Join-Path $stagingRoot "webview2"',
         '/DWebView2Bootstrapper=',
         '/DWebView2BootstrapperSha256=',
         'WebView2 bootstrapper changed after signature verification',
