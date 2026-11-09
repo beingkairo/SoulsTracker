@@ -5,7 +5,7 @@ on:
     inputs:
       action:
         type: choice
-        options: [prepare, publish]
+        options: [prepare, publish, probe-input]
         default: prepare
         required: true
       prepared_run_id:
@@ -217,3 +217,31 @@ jobs:
             prepared/SHA256SUMS.txt
             prepared/release-manifest.json
             prepared/provenance.sigstore.json
+
+  probe_input:
+    if: inputs.action == 'probe-input'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Read-only API v78 input access probe
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ('${{ github.repository }}' -cne 'beingkairo/SoulsTracker' -or '${{ github.server_url }}' -cne 'https://github.com' -or -not $env:GH_TOKEN) { throw 'Unexpected input probe context' }
+          $json = gh api --hostname github.com repos/beingkairo/SoulsTracker/releases/439458049
+          if ($LASTEXITCODE) { throw 'Read-only CI token cannot inspect the unpublished API input draft' }
+          $draft = $json | ConvertFrom-Json
+          if ($draft.id -ne 439458049 -or $draft.draft -ne $true -or $null -ne $draft.published_at -or $draft.prerelease -ne $true -or $draft.tag_name -cne 'build-input-hollow-knight-api78-468f579' -or $draft.target_commitish -cne 'c89b0c0be5a1d08573427ea48e6b70aa3d5c6c56' -or $draft.author.id -ne 281211480 -or $draft.author.login -cne 'beingkairo') { throw 'Unpublished API input identity differs' }
+          $pins = @{
+            '728414179' = @('api-12620.zip', 5493138, '61d285874ec0a3a1aba5f4b29854917e54456fd6dc985f966c10215a5d416be4', 'application/zip')
+            '728411439' = @('api-12620.receipt.json', 4739, 'd58db460bbd163d656645958e5554dd52ff878a7f1e126458df04ae3814dd862', 'application/json')
+          }
+          $assets = @($draft.assets)
+          if ($assets.Count -ne 2 -or @($assets.id | Select-Object -Unique).Count -ne 2) { throw 'API input asset inventory differs' }
+          foreach ($asset in $assets) {
+            $pin = $pins[[string]$asset.id]
+            if ($null -eq $pin -or $asset.name -cne $pin[0] -or $asset.size -ne $pin[1] -or $asset.digest -cne ('sha256:' + $pin[2]) -or $asset.content_type -cne $pin[3] -or $asset.state -cne 'uploaded' -or $asset.uploader.id -ne 281211480 -or $asset.uploader.login -cne 'beingkairo') { throw 'Pinned API input asset metadata differs' }
+          }
+          'Read-only CI access verified for unpublished input draft 439458049 and its two pinned assets. Binary verification remains required before preparation.' >> $env:GITHUB_STEP_SUMMARY

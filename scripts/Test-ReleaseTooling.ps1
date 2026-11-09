@@ -289,6 +289,11 @@ try {
     Assert-True ([regex]::Matches($workflow, 'run: ../control/scripts/Build-Release.ps1').Count -eq 1) 'Exactly one qualification path is required.'
     Assert-True ([regex]::Matches($workflow, 'git -C control diff --exit-code HEAD').Count -eq 3) 'Control cleanliness must be checked before source verification, signing preparation and publication verification.'
     Assert-True ([regex]::Matches($workflow, "throw 'Publication control commit differs'").Count -eq 3) 'Control HEAD must match the immutable workflow commit at every verification boundary.'
+    $probe = $workflow.Substring($workflow.IndexOf("`n  probe_input:"))
+    foreach ($required in @("if: inputs.action == 'probe-input'", 'contents: read', 'GH_TOKEN: ${{ github.token }}', 'repos/beingkairo/SoulsTracker/releases/439458049', '728414179', '728411439', 'Read-only CI token cannot inspect')) {
+        Assert-True ($probe.Contains($required)) "Missing input probe contract: $required"
+    }
+    Assert-True ($probe -notmatch 'contents: write|id-token: write|attestations: write|upload-artifact|action-gh-release|--method|--input') 'Input access probe must perform read-only requests without uploads or signing.'
     Write-Output 'Release tooling characterization passed. Synthetic payloads are not distribution evidence.'
     $global:LASTEXITCODE = 0
 } finally {
