@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -94,8 +95,25 @@ public sealed class HollowKnightRefinementTests
             Assert.Equal("Synced", vm.RuntimeReaderStatusText);
             Assert.Equal("0", vm.TotalDeathsText);
             Assert.True(increment.IsEnabled);
+            int savesBeforeIncrement = repository.Saves.Count;
+            repository.SaveEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            repository.ReleaseSave = new(TaskCreationOptions.RunContinuationsAsynchronously);
             increment.BringIntoView(); await Idle(); increment.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle();
+            await repository.SaveEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
+            // Dispatcher idleness does not complete the coordinator's pending save.
+            Assert.True(vm.IsBusy);
+            Assert.Equal("0", total.Text);
+            Assert.Equal(savesBeforeIncrement, repository.Saves.Count);
+            repository.ReleaseSave.TrySetResult();
+            await WaitForTextAsync(total, "1");
+            await Idle();
             Assert.Equal("1", vm.TotalDeathsText);
+            Assert.Equal("1", total.Text);
+            Assert.False(vm.IsBusy);
+            Assert.True(increment.IsEnabled);
+            Assert.Null(vm.ErrorMessage);
+            Assert.Equal(1, Assert.Single(repository.Saves.Skip(savesBeforeIncrement)).HollowKnight.DeathAdjustments.Get(fixture.Installation, fixture.Run));
             Assert.Equal(1, vm.HollowKnightAddedDeaths);
             Assert.Equal("0", vm.HollowKnightSavedDeathsText);
             Assert.Equal("0", Tree(window).OfType<TextBlock>().Single(x => AutomationProperties.GetName(x) == "Hollow Knight saved deaths").Text);
@@ -114,7 +132,7 @@ public sealed class HollowKnightRefinementTests
             ((ScrollViewer)window.FindName("MainContentScrollViewer")).ScrollToTop(); await Idle();
             Render(window, "hollow-knight-unavailable-top-" + width + "-" + height);
         }
-        finally { window.Close(); }
+        finally { repository.ReleaseSave?.TrySetResult(); window.Close(); }
     });
 
     [Fact]
@@ -381,6 +399,23 @@ public sealed class HollowKnightRefinementTests
             Assert.Equal(4, outputs);
         }
         Assert.Equal(original, await File.ReadAllBytesAsync(path));
+    }
+
+    private static async Task WaitForTextAsync(TextBlock control, string expected)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var property = DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock));
+        void Changed(object? sender, EventArgs args)
+        {
+            if (control.Text == expected) completion.TrySetResult();
+        }
+        property.AddValueChanged(control, Changed);
+        try
+        {
+            Changed(null, EventArgs.Empty);
+            await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { property.RemoveValueChanged(control, Changed); }
     }
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
