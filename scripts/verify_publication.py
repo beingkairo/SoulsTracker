@@ -8,6 +8,7 @@ import subprocess
 import zipfile
 
 import verify_hollow_knight_input as hollow_knight
+import get_hollow_knight_input as ci_input
 
 IMPLEMENTATION = "695e535f551e04a11ff84f3aef5190098b574a64"
 SOURCE = "a620585494a8143959cf584bf82962616cee5f18"
@@ -124,7 +125,7 @@ def check_zip(path, files):
                     "Portable payload hash differs")
 
 
-def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=False):
+def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=False, input_origin=None):
     if not local:
         require(re.fullmatch("[a-f0-9]{40}", workflow_commit or ""), "Workflow commit required")
         require(re.fullmatch("[1-9][0-9]*", str(run_id or "")), "Prepared run ID required")
@@ -132,6 +133,9 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=Fa
         require(not workflow_commit and not run_id, "Local metadata cannot claim a workflow run")
     notes = NOTES.read_bytes() if local else verify_control(workflow_commit)
     identity = verify_source(source, local)
+    require((local and input_origin is None) or (not local and input_origin is not None),
+            "Signed preparation requires authenticated input origin; local preparation cannot claim it")
+    transport = None if local else ci_input.load_origin(input_origin)
     subprocess.run(["git", "-C", str(source), "diff", "--exit-code", "HEAD"], check=True, capture_output=True)
     hollow_knight.reject_links(folder)
     require(not (folder / "release-manifest.json").exists(), "Refusing to replace a prepared manifest")
@@ -151,7 +155,7 @@ def prepare(folder, payload, source, workflow_commit=None, run_id=None, local=Fa
         "schema_version": 2, "version": VERSION, **identity,
         "preparation_mode": "local_unsigned" if local else "github_actions",
         "workflow_commit": workflow_commit, "prepared_run_id": str(run_id) if run_id else None,
-        "api78_input": api, "release_notes_sha256": digest(notes),
+        "api78_input": api, "api78_transport": transport, "release_notes_sha256": digest(notes),
         "artifacts": hashes, "payload_files": files, "payload_inventory_sha256": inventory_digest(files),
         "matches_approved_local_candidate": comparison,
         "different_artifacts_require_explicit_manifest_hash_approval": not all(comparison.values()),
@@ -172,12 +176,14 @@ def inspect(folder):
         notes = verify_control(manifest["workflow_commit"])
         require(manifest["source_commit"] == SOURCE and manifest["source_tree"] == SOURCE_TREE,
                 "Unapproved release source")
+        ci_input.verify_origin(manifest.get("api78_transport"))
     else:
         notes = NOTES.read_bytes()
         require(re.fullmatch("[a-f0-9]{40}", manifest.get("source_commit", "")) and
                 re.fullmatch("[a-f0-9]{40}", manifest.get("source_tree", "")), "Invalid local checkout identity")
         require(manifest.get("workflow_commit") is None and manifest.get("prepared_run_id") is None,
                 "Local metadata cannot claim a workflow run")
+        require(manifest.get("api78_transport") is None, "Local metadata cannot claim authenticated CI retrieval")
     require(manifest.get("api78_input") == {
         "package_sha256": hollow_knight.PACKAGE_SHA256, "profile_sha256": hollow_knight.PROFILE_SHA256,
         "source_revision": hollow_knight.SOURCE_REVISION, "runtime_files": hollow_knight.RUNTIME_FILE_COUNT},
@@ -228,6 +234,7 @@ if __name__ == "__main__":
     parser.add_argument("--workflow-commit")
     parser.add_argument("--run-id")
     parser.add_argument("--approved-manifest")
+    parser.add_argument("--input-origin", type=Path)
     args = parser.parse_args()
     if args.mode in ["source", "source-local"]:
         require(args.source is not None, "Source checkout required")
@@ -237,7 +244,7 @@ if __name__ == "__main__":
         if args.mode in ["prepare", "prepare-local"]:
             require(args.payload is not None and args.source is not None, "Source and payload required")
             value = prepare(args.directory, args.payload, args.source, args.workflow_commit, args.run_id,
-                            args.mode == "prepare-local")
+                            args.mode == "prepare-local", args.input_origin)
         elif args.mode == "verify":
             value = verify(args.directory, args.approved_manifest, args.workflow_commit, args.run_id)
         else:

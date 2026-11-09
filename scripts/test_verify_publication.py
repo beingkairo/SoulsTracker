@@ -28,6 +28,14 @@ class PublicationTests(unittest.TestCase):
         self.control_git("add", ".")
         self.control_git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Control fixture")
         self.control_commit = self.control_git("rev-parse", "HEAD")
+        receipt = {"synthetic": "build receipt fixture"}
+        receipt_patch = mock.patch.object(release.ci_input, "RECEIPT_CANONICAL_SHA256", release.digest(
+            json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()))
+        receipt_patch.start()
+        self.addCleanup(receipt_patch.stop)
+        self.origin = {**release.ci_input.identity(), "build_receipt": receipt}
+        self.origin_path = self.root / "input-origin.json"
+        self.origin_path.write_text(json.dumps(self.origin))
         for patch in [mock.patch.object(release, "CONTROL_ROOT", self.control),
                       mock.patch.object(release, "NOTES", control_notes)]:
             patch.start()
@@ -61,7 +69,7 @@ class PublicationTests(unittest.TestCase):
                                          "runtime_files": release.hollow_knight.RUNTIME_FILE_COUNT},
                          "payload_files": files, "payload_inventory_sha256": release.inventory_digest(files),
                          "preparation_mode": "github_actions", "workflow_commit": self.control_commit,
-                         "prepared_run_id": "123"}
+                         "prepared_run_id": "123", "api78_transport": self.origin}
         (self.folder / "provenance.sigstore.json").write_text("fixture; no cryptographic claim")
         self.save()
 
@@ -113,6 +121,7 @@ class PublicationTests(unittest.TestCase):
         self.manifest["preparation_mode"] = "local_unsigned"
         self.manifest["workflow_commit"] = None
         self.manifest["prepared_run_id"] = None
+        self.manifest["api78_transport"] = None
         self.save()
         with self.assertRaisesRegex(ValueError, "not signed CI provenance"):
             self.verify()
@@ -209,9 +218,25 @@ class PublicationTests(unittest.TestCase):
         # API bytes have separate verification tests; isolate this control/notes boundary.
         with mock.patch.object(release, "verify_source", return_value=identity), \
                 mock.patch.object(release.hollow_knight, "verify", return_value=self.manifest["api78_input"]):
-            manifest = release.prepare(self.folder, self.payload, self.control, self.control_commit, "123")
+            manifest = release.prepare(self.folder, self.payload, self.control, self.control_commit, "123",
+                                       input_origin=self.origin_path)
         self.assertEqual((self.folder / "release-notes.md").read_bytes(), committed)
         self.assertEqual(manifest["release_notes_sha256"], release.digest(committed))
+
+    def test_missing_or_changed_authenticated_origin_rejected(self):
+        for changed in [None, {**self.origin, "release_id": 1}, {**self.origin, "build_receipt": {}}]:
+            with self.subTest(changed=changed):
+                self.manifest["api78_transport"] = changed
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.verify()
+
+    def test_signed_preparation_requires_origin_before_payload_processing(self):
+        with mock.patch.object(release, "verify_source", return_value={}), \
+                mock.patch.object(release.hollow_knight, "verify") as package_check:
+            with self.assertRaisesRegex(ValueError, "requires authenticated input origin"):
+                release.prepare(self.folder, self.payload, self.control, self.control_commit, "123")
+            package_check.assert_not_called()
 
     def change_output_notes(self, notes):
         (self.folder / "release-notes.md").write_bytes(notes)

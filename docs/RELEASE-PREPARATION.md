@@ -8,7 +8,9 @@ Release packaging requires the verified API v78 ZIP. Its SHA-256 is `61d285874ec
 
 The reproducible recipe is `eng/Build-HollowKnightApi12620.ps1`. It requires the hash-pinned clean Steam managed references, .NET SDK 10.0.301, the pinned upstream source archive and locked, signature-verified NuGet packages. It reads the references and writes generated build outputs. Keep proprietary references out of source control and public build artifacts.
 
-Authenticated CI provisioning is not configured. Preparation intentionally stops before building or signing until an approved input source and access verification are implemented. A local checksum or build receipt does not constitute signed CI provenance. API source and dependency licenses do not replace the original terms covering game-owned assemblies.
+CI retrieves the existing prebuilt ZIP and sanitized receipt from unpublished input draft `439458049`, pinned to archive asset `728414179` and receipt asset `728411439`. `scripts/get_hollow_knight_input.py` uses the Actions token through GitHub CLI, verifies repository ownership, unpublished state, exact asset metadata, downloaded hashes, receipt provenance, source recipe/locks and all 21 components. It requires a fresh runner input directory and rejects every discrepancy before building. Global permissions remain read-only; the input probe and preparation jobs require job-scoped Contents(write) for GitHub draft access. Checkout credentials are not persisted. `action=probe-input` tests the same binary retrieval without building, signing or uploading artifacts.
+
+The release manifest and signed predicate record the consumed asset identities, hashes and complete sanitized build receipt. CI consumes the verified locally reproduced API package; it does not rebuild that package. A local checksum or build receipt does not itself constitute signed CI provenance. API source and dependency licenses do not replace the original terms covering game-owned assemblies.
 
 ## Local qualification
 

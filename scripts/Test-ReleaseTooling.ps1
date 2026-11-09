@@ -274,7 +274,7 @@ try {
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
     Assert-True ($workflow.Contains('path: release-output/desktop')) 'SBOM must scan the prepared Desktop payload.'
-    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: a620585494a8143959cf584bf82962616cee5f18', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.2.0', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ../control/scripts/Build-Release.ps1', '--require-ci-input', 'verify_publication.py source --source source', '-SourceRoot', '-OutputRoot', '-HollowKnightApiPackage')) {
+    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: a620585494a8143959cf584bf82962616cee5f18', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.2.0', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ../control/scripts/Build-Release.ps1', 'get_hollow_knight_input.py --source source', '--input-origin', 'externalParameters.api78Input', 'verify_publication.py source --source source', '-SourceRoot', '-OutputRoot', '-HollowKnightApiPackage')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }
     $last = -1
@@ -290,11 +290,11 @@ try {
     Assert-True ([regex]::Matches($workflow, 'git -C control diff --exit-code HEAD').Count -eq 3) 'Control cleanliness must be checked before source verification, signing preparation and publication verification.'
     Assert-True ([regex]::Matches($workflow, "throw 'Publication control commit differs'").Count -eq 3) 'Control HEAD must match the immutable workflow commit at every verification boundary.'
     $probe = $workflow.Substring($workflow.IndexOf("`n  probe_input:"))
-    foreach ($required in @("if: inputs.action == 'probe-input'", 'contents: write', 'GH_TOKEN: ${{ github.token }}', 'repos/beingkairo/SoulsTracker/releases/439458049', '728414179', '728411439', 'Read-only CI token cannot inspect')) {
+    foreach ($required in @("if: inputs.action == 'probe-input'", 'contents: write', 'GH_TOKEN: ${{ github.token }}', 'persist-credentials: false', 'get_hollow_knight_input.py --source .', 'Authenticated API v78 binary access or verification failed')) {
         Assert-True ($probe.Contains($required)) "Missing input probe contract: $required"
     }
     Assert-True ($workflow -match '(?m)^permissions:\r?\n  contents: read\r?$') 'Global token permission must remain read-only.'
-    Assert-True ($workflow -match '(?s)  prepare:.*?    permissions:\r?\n      contents: read\r?\n') 'Preparation content permission must remain read-only.'
+    Assert-True ($workflow -match '(?s)  prepare:.*?    permissions:\r?\n      contents: write\r?\n') 'Preparation requires job-scoped permission for unpublished input retrieval.'
     Assert-True ($probe -notmatch 'id-token: write|attestations: write|upload-artifact|action-gh-release|--method|--input') 'Input access probe must perform read-only requests without uploads or signing.'
     Write-Output 'Release tooling characterization passed. Synthetic payloads are not distribution evidence.'
     $global:LASTEXITCODE = 0

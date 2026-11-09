@@ -34,7 +34,7 @@ jobs:
     if: inputs.action == 'prepare'
     runs-on: windows-latest
     permissions:
-      contents: read
+      contents: write
       attestations: write
       id-token: write
     steps:
@@ -42,11 +42,13 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: control
+          persist-credentials: false
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.APPROVED_SOURCE }}
           path: source
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.301
@@ -68,9 +70,11 @@ jobs:
           if ($metadata.Version -ne '2.2.0') { throw 'Unexpected version' }
       - name: Require approved API v78 input provisioning
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python -B control/scripts/verify_hollow_knight_input.py --require-ci-input
-          if ($LASTEXITCODE) { throw 'Authenticated API v78 input provisioning is not approved or available' }
+          python -B control/scripts/get_hollow_knight_input.py --source source --destination "$env:RUNNER_TEMP/SoulsTracker-input"
+          if ($LASTEXITCODE) { throw 'Authenticated API v78 input verification failed' }
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
@@ -99,7 +103,7 @@ jobs:
           if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
           git -C control diff --exit-code HEAD
           if ($LASTEXITCODE) { throw 'Publication controls changed during qualification' }
-          python -B control/scripts/verify_publication.py prepare --directory release --payload "$env:GITHUB_WORKSPACE/release-output/desktop" --source source --workflow-commit '${{ github.sha }}' --run-id '${{ github.run_id }}'
+          python -B control/scripts/verify_publication.py prepare --directory release --payload "$env:GITHUB_WORKSPACE/release-output/desktop" --source source --workflow-commit '${{ github.sha }}' --run-id '${{ github.run_id }}' --input-origin "$env:RUNNER_TEMP/SoulsTracker-input/input-origin.json"
           if ($LASTEXITCODE) { throw 'Release reconciliation failed' }
       - name: Generate GitHub build predicate
         id: predicate
@@ -113,6 +117,11 @@ jobs:
           $p.buildDefinition.resolvedDependencies += @{ uri = 'git+https://github.com/${{ github.repository }}'; digest = @{ gitCommit = $env:APPROVED_SOURCE } }
           $p.buildDefinition.externalParameters.approvedApplicationCommit = $env:APPROVED_SOURCE
           $p.buildDefinition.externalParameters.approvedImplementationCommit = $env:APPROVED_IMPLEMENTATION
+          $origin = (Get-Content release/release-manifest.json -Raw | ConvertFrom-Json -AsHashtable).api78_transport
+          $p.buildDefinition.externalParameters.api78Input = $origin
+          foreach ($asset in $origin.assets.Values) {
+            $p.buildDefinition.resolvedDependencies += @{ uri = "https://api.github.com/repos/$($origin.repository)/releases/assets/$($asset.id)"; digest = @{ sha256 = $asset.sha256 } }
+          }
           $p | ConvertTo-Json -Depth 100 | Set-Content predicate.json -Encoding utf8NoBOM
       - name: Attest release artifacts
         id: attest
@@ -224,24 +233,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Read-only API v78 input access probe
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify authenticated API v78 binary access
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ('${{ github.repository }}' -cne 'beingkairo/SoulsTracker' -or '${{ github.server_url }}' -cne 'https://github.com' -or -not $env:GH_TOKEN) { throw 'Unexpected input probe context' }
-          $json = gh api --hostname github.com repos/beingkairo/SoulsTracker/releases/439458049
-          if ($LASTEXITCODE) { throw 'Read-only CI token cannot inspect the unpublished API input draft' }
-          $draft = $json | ConvertFrom-Json
-          if ($draft.id -ne 439458049 -or $draft.draft -ne $true -or $null -ne $draft.published_at -or $draft.prerelease -ne $true -or $draft.tag_name -cne 'build-input-hollow-knight-api78-468f579' -or $draft.target_commitish -cne 'c89b0c0be5a1d08573427ea48e6b70aa3d5c6c56' -or $draft.author.id -ne 281211480 -or $draft.author.login -cne 'beingkairo') { throw 'Unpublished API input identity differs' }
-          $pins = @{
-            '728414179' = @('api-12620.zip', 5493138, '61d285874ec0a3a1aba5f4b29854917e54456fd6dc985f966c10215a5d416be4', 'application/zip')
-            '728411439' = @('api-12620.receipt.json', 4739, 'd58db460bbd163d656645958e5554dd52ff878a7f1e126458df04ae3814dd862', 'application/json')
-          }
-          $assets = @($draft.assets)
-          if ($assets.Count -ne 2 -or @($assets.id | Select-Object -Unique).Count -ne 2) { throw 'API input asset inventory differs' }
-          foreach ($asset in $assets) {
-            $pin = $pins[[string]$asset.id]
-            if ($null -eq $pin -or $asset.name -cne $pin[0] -or $asset.size -ne $pin[1] -or $asset.digest -cne ('sha256:' + $pin[2]) -or $asset.content_type -cne $pin[3] -or $asset.state -cne 'uploaded' -or $asset.uploader.id -ne 281211480 -or $asset.uploader.login -cne 'beingkairo') { throw 'Pinned API input asset metadata differs' }
-          }
-          'Read-only CI access verified for unpublished input draft 439458049 and its two pinned assets. Binary verification remains required before preparation.' >> $env:GITHUB_STEP_SUMMARY
+          python -B scripts/get_hollow_knight_input.py --source . --destination "$env:RUNNER_TEMP/SoulsTracker-input"
+          if ($LASTEXITCODE) { throw 'Authenticated API v78 binary access or verification failed' }
+          'Authenticated binary access, receipt and all 21 API components verified.' >> $env:GITHUB_STEP_SUMMARY
