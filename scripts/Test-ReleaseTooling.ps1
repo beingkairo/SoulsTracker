@@ -169,6 +169,7 @@ try {
     $null = New-Item -ItemType Directory -Path $existingOutput
     Set-Content -LiteralPath (Join-Path $existingOutput 'preserved.txt') 'protected synthetic output'
     $isolatedBuilder = Join-Path $isolationFixture 'scripts/Build-Release.ps1'
+    Assert-Rejected { & $isolatedBuilder -LocalQualification -SkipInstaller } 'requires an explicit fresh OutputRoot'
     Assert-Rejected { & $isolatedBuilder -OutputRoot $existingOutput -SkipInstaller } 'must not already exist'
     Assert-True ((Get-Content -LiteralPath (Join-Path $existingOutput 'preserved.txt')) -eq 'protected synthetic output') 'Existing isolated output changed.'
     Assert-Rejected { & $isolatedBuilder -OutputRoot (Join-Path $isolationFixture 'artifacts/new-output') -SkipInstaller } 'historical artifact directories'

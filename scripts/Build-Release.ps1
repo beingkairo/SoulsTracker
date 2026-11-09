@@ -22,6 +22,10 @@ $installerOutput = if ($OutputRoot) { Join-Path $artifactsRoot 'installer' } els
 $overlayPath = Join-Path $root "web_overlay"
 $version = & (Join-Path $root "eng\Get-Version.ps1")
 
+if ($LocalQualification -and -not $OutputRoot) {
+    throw 'Local qualification requires an explicit fresh OutputRoot.'
+}
+
 function Assert-UnlinkedPath([string]$Path) {
     $cursor = [IO.Path]::GetFullPath($Path)
     if ($cursor.StartsWith('\\')) { throw 'Network release paths are unsupported.' }

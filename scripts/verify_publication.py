@@ -16,10 +16,13 @@ SOURCE_TREE = "d43e25ebfe46c9fe5d84d4b6966acab23a5f0f24"
 VERSION = "2.2.0"
 STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495
-# Qualified local hashes are recorded after the first complete local build.
-# An absent comparison never counts as a match or authorizes publication.
-APPROVED = {f"{STEM}.exe": None, f"{STEM}-portable.zip": None}
-PAYLOAD = None
+# Comparison reference: qualified local build 70c1071. These hashes do not
+# authorize publication; the signed CI manifest still needs explicit approval.
+APPROVED = {
+    f"{STEM}.exe": "fa295a994ae96bbea543a5c45c66d35e3c6a41e4e6fc354223fb83f2519066c6",
+    f"{STEM}-portable.zip": "c58841ae33523e44b0221a2eab7b2155608fafe241a8ba023aea4ffbee4b1197",
+}
+PAYLOAD = "cf2ad8ba00c828c4a687004294e8a505dd68f76ffe1b31e885a9e2ee4d8c6959"
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
 NOTES = Path(__file__).resolve().parent.parent / f"docs/releases/v{VERSION}.md"
 PROTECTED_INPUTS = ["src", "plugins", "assets", "eng", "web_overlay", "cloud_overlay", "installer",
