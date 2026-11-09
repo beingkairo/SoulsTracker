@@ -64,6 +64,6 @@ if __name__ == "__main__":
     parser.add_argument("--require-ci-input", action="store_true")
     args = parser.parse_args()
     if args.require_ci_input:
-        raise ValueError("Release preparation is blocked: authenticated API v78 input provisioning requires approval")
+        raise ValueError("Release preparation is blocked: redistribution-cleared, reproducible API v78 patch-only inputs are unavailable; complete patched game assemblies are not approved release inputs")
     require(args.package is not None and args.profile is not None, "Explicit API package and profile inputs are required")
     print(json.dumps(verify(args.package, args.profile), sort_keys=True))

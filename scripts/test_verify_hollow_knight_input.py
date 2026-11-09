@@ -94,7 +94,8 @@ class ApiInputTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(Path(api.__file__)), "--require-ci-input"],
                                 capture_output=True, text=True, check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("authenticated API v78 input provisioning requires approval", result.stderr)
+        self.assertIn("redistribution-cleared, reproducible API v78 patch-only inputs are unavailable", result.stderr)
+        self.assertIn("complete patched game assemblies are not approved release inputs", result.stderr)
 
 
 if __name__ == "__main__":
