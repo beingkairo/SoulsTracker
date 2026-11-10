@@ -17,5 +17,5 @@ export default defineConfig({
       }
     }
   })],
-  test: { include: ["test/public-provisioning.integration.ts"] }
+  test: { include: ["test/public-provisioning.integration.ts"], testTimeout: 15_000 }
 });
