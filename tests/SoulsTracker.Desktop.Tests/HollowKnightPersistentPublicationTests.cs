@@ -79,7 +79,12 @@ public sealed class HollowKnightPersistentPublicationTests
         var repository = new SaveDirectoryWorkflowTests.MemoryRepository(GameId.HollowKnight) { State = State };
         await using var coordinator = new SerializedTrackerCoordinator(repository, new SaveDirectoryWorkflowTests.NullPublisher());
         await using var vm = SaveDirectoryWorkflowTests.CreateViewModel(coordinator);
+        vm.HollowKnightDirectoryInspector = directory => Task.FromResult((
+            (HollowKnightInstallation?)new(directory, "1.5.78.11833", true, true),
+            State.HollowKnight.InstallationId));
         await vm.InitializeAsync();
+        await vm.DiscoverHollowKnightAsync();
+        Assert.True(vm.IsHollowKnightInstalled);
         vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.FromHollowKnight(Observation(901), "Tracking active"));
         Assert.Equal("901", vm.TotalDeathsText);
         Assert.Equal("Synced", vm.RuntimeReaderStatusText);
@@ -123,6 +128,43 @@ public sealed class HollowKnightPersistentPublicationTests
                 Assert.False(Directory.Exists(Path.Combine(directory, ".soulstracker-death-tracking")));
                 Assert.False(Directory.Exists(Path.Combine(managed, "Mods")));
             }
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DirectorySelectionReportsSaveFailureAndSameDirectoryCanBeCommittedOnRetry()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "SoulsTracker.PluginSetup", Guid.NewGuid().ToString("N"));
+        try
+        {
+            string? repositoryPath = AppContext.BaseDirectory;
+            while (repositoryPath is not null && !File.Exists(Path.Combine(repositoryPath, "SoulsTracker.sln"))) repositoryPath = Path.GetDirectoryName(repositoryPath);
+            Assert.NotNull(repositoryPath);
+            string directory = Path.Combine(root, "game");
+            string managed = Path.Combine(directory, "hollow_knight_Data", "Managed");
+            Directory.CreateDirectory(managed);
+            File.WriteAllText(Path.Combine(directory, "hollow_knight.exe"), "fixture");
+            using (var zip = ZipFile.OpenRead(Path.Combine(repositoryPath, "plugins", "Soulstracker.DeathTracker", "obj", "api-v77", "api.zip")))
+                zip.GetEntry("Assembly-CSharp.dll")!.ExtractToFile(Path.Combine(managed, "Assembly-CSharp.dll"));
+
+            var repository = new SaveDirectoryWorkflowTests.MemoryRepository(GameId.HollowKnight) { FailSave = true };
+            await using var coordinator = new SerializedTrackerCoordinator(repository, new SaveDirectoryWorkflowTests.NullPublisher());
+            await using var vm = SaveDirectoryWorkflowTests.CreateViewModel(coordinator);
+            await vm.InitializeAsync();
+
+            Assert.False(await vm.SetHollowKnightGameDirectoryAsync(directory));
+            Assert.Null(vm.HollowKnightGameDirectory);
+            Assert.False(vm.HollowKnightDirectoryWasAutomatic);
+            Assert.Contains("couldn't be saved", vm.HollowKnightDirectoryFeedback, StringComparison.OrdinalIgnoreCase);
+
+            repository.FailSave = false;
+            Assert.True(await vm.SetHollowKnightGameDirectoryAsync(directory));
+            Assert.Equal(directory, vm.HollowKnightGameDirectory);
+            Assert.Null(vm.HollowKnightDirectoryFeedback);
+            Assert.False(vm.HollowKnightDirectoryWasAutomatic);
+            Assert.True(await vm.SetHollowKnightGameDirectoryAsync(directory));
+            Assert.Equal(directory, repository.State.HollowKnight.GameDirectory);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }

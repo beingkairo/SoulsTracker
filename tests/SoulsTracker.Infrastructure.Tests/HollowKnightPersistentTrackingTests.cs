@@ -241,6 +241,17 @@ public sealed class HollowKnightPersistentTrackingTests : IDisposable
     }
 
     [Fact]
+    public void SteamRootAliasesDoNotCountOneInstallationTwice()
+    {
+        string steam = Path.Combine(root, "steam"), candidate = Path.Combine(root, "steam", "steamapps", "common", "Hollow Knight");
+        Directory.CreateDirectory(Path.Combine(steam, "steamapps"));
+        File.WriteAllText(Path.Combine(steam, "steamapps", "libraryfolders.vdf"), "\"path\" \"" + steam.Replace("\\", "\\\\", StringComparison.Ordinal) + "\"");
+        CreateInspectable(candidate);
+        string alias = steam.Replace('/', '\\').TrimEnd('\\') + "\\";
+        Assert.Equal(Path.GetFullPath(candidate), HollowKnightInstallDiscovery.DiscoverFromSteamRoots([steam, alias]));
+    }
+
+    [Fact]
     public void LinkedInstallationsAreRejectedWithoutChangingTheTargetWhenSupported()
     {
         CreateInspectable(Game);

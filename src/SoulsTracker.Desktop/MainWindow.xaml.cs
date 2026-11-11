@@ -24,6 +24,8 @@ public partial class MainWindow : Window
     private bool isRestoringBlackMythWukongSaveSelection;
     private bool isRestoringLiesOfPSaveSelection;
     private readonly Func<string, string?, string?> chooseSaveDirectory;
+    internal Func<string, MessageBoxResult>? HollowKnightInstallConfirmation { get; set; }
+    internal Func<DesktopTrackerViewModel, Task<HollowKnightInstallPlan?>>? HollowKnightInstallPlanProvider { get; set; }
     private readonly Action<string> copyDirectoryPath = text => System.Windows.Clipboard.SetText(text);
     private DesktopTrackerViewModel? directoryCopyViewModel;
     private (GameId? Game, string? Path) directoryCopyContext;
@@ -54,6 +56,9 @@ public partial class MainWindow : Window
     private StartupUpdateDialog? updateDialog;
     private bool updateDialogShown;
     private FrameworkElement? trayFocus;
+
+    internal static string BuildHollowKnightInstallConfirmation(HollowKnightInstallPlan plan) =>
+        $"Install death tracking in {plan.Directory}?\n\nThis will write {plan.Files.Count} files to Hollow Knight.\n\nOther installed mods will remain.\n\nClose Hollow Knight before continuing.";
 
     internal void RememberTrayFocus() => trayFocus = Keyboard.FocusedElement as FrameworkElement;
 
@@ -658,13 +663,14 @@ public partial class MainWindow : Window
             await vm.RollbackHollowKnightAsync();
             if (vm.ErrorMessage is not null) return;
         }
-        var plan = await vm.PrepareHollowKnightInstallAsync();
+        var plan = HollowKnightInstallPlanProvider is { } planProvider
+            ? await planProvider(vm)
+            : await vm.PrepareHollowKnightInstallAsync();
         if (plan is null) return;
-        if (System.Windows.MessageBox.Show(this, $"Install death tracking in {plan.Directory}?\n\nThis will write {plan.Files.Count} files. " +
-            (plan.ReusesApi ? "The verified Modding API will be reused." : plan.ApiProfile == HollowKnightPluginInstaller.ApiTag
-                ? "The official Modding API v77 will replace game assemblies; originals will be backed up."
-                : "The verified API 78 build from upstream PR #164 will replace game assemblies; originals will be backed up. This API is unreleased and still requires gameplay validation.") +
-            "\nOther mods will remain. Close Hollow Knight before continuing.", "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        string confirmation = BuildHollowKnightInstallConfirmation(plan);
+        MessageBoxResult response = HollowKnightInstallConfirmation?.Invoke(confirmation) ??
+            System.Windows.MessageBox.Show(this, confirmation, "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (response == MessageBoxResult.Yes)
             await vm.ApplyHollowKnightInstallAsync(plan);
     }
 

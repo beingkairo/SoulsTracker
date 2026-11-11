@@ -524,7 +524,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             }
 
             if (isInitialDeathReadPending) return "Loading.";
-            if (selectedGameId == GameId.HollowKnight) return state is not null && EffectiveDeathTotalResult.Resolve(state, null, pluginObservation).EffectiveDisplayedTotal.HasValue ? GameSyncedMessage : GameUnavailableMessage;
+            if (selectedGameId == GameId.HollowKnight) return HollowKnightReaderStatusText;
             if (selectedGameId == GameId.DemonsSouls) return "Manual";
 
             if (runtimeReaderStatus == RuntimeGameReaderStatus.PendingLowerValue)
@@ -695,9 +695,12 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             return;
         }
 
+        bool hollowKnightUninstalled = IsHollowKnightTrackingVerifiedUninstalled;
         isInitialDeathReadPending = false;
-        pluginObservation = result?.GameId == state?.SelectedGameId ? result?.PluginObservation : null;
-        pluginStatus = result?.GameId == state?.SelectedGameId ? result?.PluginStatus : null;
+        if (hollowKnightUninstalled && result?.GameId == GameId.HollowKnight)
+            CaptureHollowKnightHistoricalTotal(result.PluginObservation);
+        pluginObservation = hollowKnightUninstalled ? null : result?.GameId == state?.SelectedGameId ? result?.PluginObservation : null;
+        pluginStatus = hollowKnightUninstalled ? null : result?.GameId == state?.SelectedGameId ? result?.PluginStatus : null;
         InvalidateWukongMetadataOperations();
         if (state is null)
         {
@@ -1394,7 +1397,7 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
     private async Task SubmitCounterAsync(ITrackerCommand command,
         Func<long> getCount, string countProperty, Func<bool> canDecrement, string canDecrementProperty,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Func<bool>? canIncrement = null, string? canIncrementProperty = null)
     {
         ErrorMessage = null;
         try
@@ -1404,10 +1407,13 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
             {
                 long previousDeaths = getCount();
                 bool previousCanDecrement = canDecrement();
+                bool previousCanIncrement = canIncrement?.Invoke() ?? false;
                 state = result.CommittedState;
                 UpdateTotalDeathsText();
                 if (getCount() != previousDeaths) OnPropertyChanged(countProperty);
                 if (canDecrement() != previousCanDecrement) OnPropertyChanged(canDecrementProperty);
+                if (canIncrement is not null && canIncrementProperty is not null && canIncrement() != previousCanIncrement)
+                    OnPropertyChanged(canIncrementProperty);
             }
             if (result.Status is TrackerCommandExecutionStatus.SaveFailed or TrackerCommandExecutionStatus.NotInitialized)
                 ErrorMessage = "SoulsTracker could not save the requested tracker change. The displayed state was not changed.";
@@ -1543,6 +1549,21 @@ public sealed partial class DesktopTrackerViewModel : INotifyPropertyChanged, IA
 
         GameId selectedId = state.SelectedGameId;
         if (isInitialDeathReadPending) { TotalDeathsText = "Loading."; return; }
+        if (selectedId == GameId.HollowKnight)
+        {
+            if (IsHollowKnightTrackingVerifiedUninstalled)
+            {
+                CaptureHollowKnightHistoricalTotal(pluginObservation);
+                TotalDeathsText = hollowKnightHistoricalTotal?.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    ?? GameTotalDeathsUnavailableMessage;
+                return;
+            }
+            if (!IsHollowKnightInstalled)
+            {
+                TotalDeathsText = GameTotalDeathsUnavailableMessage;
+                return;
+            }
+        }
         if (runtimeReaderHasNoRecordedDeaths)
         {
             TotalDeathsText = NoDeathsRecordedMessage;

@@ -35,22 +35,24 @@ public static partial class HollowKnightInstallDiscovery
 
     internal static string? DiscoverFromSteamRoots(IEnumerable<string> supplied)
     {
-        var roots = new HashSet<string>(supplied, StringComparer.OrdinalIgnoreCase);
+        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static string Canonical(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         foreach (string steam in supplied.Take(16))
         {
+            try { roots.Add(Canonical(steam)); } catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException) { }
             try
             {
                 string file = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
                 if (new FileInfo(file) is { Exists: true, Length: <= 262144 })
                     foreach (Match match in LibraryPath().Matches(File.ReadAllText(file)).Cast<Match>().Take(64))
-                        roots.Add(match.Groups[1].Value.Replace(@"\\", @"\", StringComparison.Ordinal));
+                        roots.Add(Canonical(match.Groups[1].Value.Replace(@"\\", @"\", StringComparison.Ordinal)));
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
         string[] candidates = roots.Select(root => Path.Combine(root, "steamapps", "common", "Hollow Knight"))
-            .Where(path => Inspect(path) is not null).ToArray();
-        return candidates.Length == 1 ? Path.GetFullPath(candidates[0]) : null;
+            .Where(path => Inspect(path) is not null).Select(Canonical).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return candidates.Length == 1 ? candidates[0] : null;
     }
 
     [GeneratedRegex("\"path\"\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase)]
