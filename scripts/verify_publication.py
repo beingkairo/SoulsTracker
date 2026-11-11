@@ -11,8 +11,8 @@ import verify_hollow_knight_input as hollow_knight
 import get_hollow_knight_input as ci_input
 
 IMPLEMENTATION = "5b36fd839e9de545218aa1892f532da35098013f"
-SOURCE = "1a6ced76a0f971c0f99105e62cf3169cb0bbd436"
-SOURCE_TREE = "9e9a7b64a938c90bf1b38c1afaf956e945e7c0df"
+SOURCE = "ea328f56543b790d24c4a771fb687f4cebbcd84c"
+SOURCE_TREE = "4ecc9ed493fb436e8c1ca86f5117c078bfca8d31"
 VERSION = "2.2.1"
 STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495

@@ -1,6 +1,6 @@
 # Release preparation
 
-The v2.2.1 release source is pinned to `1a6ced76a0f971c0f99105e62cf3169cb0bbd436`, with source tree `9e9a7b64a938c90bf1b38c1afaf956e945e7c0df`. Its tested Hollow Knight fixes are in implementation commit `5b36fd839e9de545218aa1892f532da35098013f`. Release-control changes are committed separately and pin these immutable identities. Build inputs must match the pinned release source.
+The v2.2.1 release source is pinned to `ea328f56543b790d24c4a771fb687f4cebbcd84c`, with source tree `4ecc9ed493fb436e8c1ca86f5117c078bfca8d31`. Its tested Hollow Knight fixes are in implementation commit `5b36fd839e9de545218aa1892f532da35098013f`. Release-control changes are committed separately and pin these immutable identities. Build inputs must match the pinned release source.
 
 ## Hollow Knight build input
 
