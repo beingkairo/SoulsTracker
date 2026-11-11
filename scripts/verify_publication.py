@@ -18,10 +18,10 @@ STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495
 # Qualified local v2.2.1 reference; publication still requires signed CI provenance.
 APPROVED = {
-    f"{STEM}.exe": "52f681f9cbae1da63a048b26a676c9b5aa848184f9a8a468a3d209eeda05f401",
-    f"{STEM}-portable.zip": "b97f249ccd82ce8a9fe19101cab5518e65f3e5eed9e308067ba190de217126ab",
+    f"{STEM}.exe": "e3022ada904f2d2d81bf234fc58fd23a16354818f72c86a166212fbc0241340c",
+    f"{STEM}-portable.zip": "27b20d6d0d6eb528f1b29b8ead103dade91a5b32750cd799404b0d149b80ab4e",
 }
-PAYLOAD = "2886ea4967a5bd85f1cc515157fa2dd8bc7aff992c7f5fe04df15fb49c818bba"
+PAYLOAD = "8b7952d9cafc39440b5a68d069c761e82f10bb3a859622bdbe7570878fe7d97a"
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
 CONTROL_ROOT = Path(__file__).resolve().parent.parent
 NOTES_RELATIVE = f"docs/releases/v{VERSION}.md"
