@@ -55,6 +55,29 @@ public sealed class HollowKnightRefinementTests
         }
     }
 
+    private sealed class InspectionGate(DesktopTrackerViewModel viewModel)
+    {
+        private readonly Func<string, Task<(HollowKnightInstallation? Game, Guid? Id)>> original = viewModel.HollowKnightDirectoryInspector;
+        private readonly TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource completed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task WaitUntilEnteredAsync() => entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        public Task WaitUntilCompletedAsync() => completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        public void Release() => released.TrySetResult();
+
+        public void Install()
+        {
+            viewModel.HollowKnightDirectoryInspector = async directory =>
+            {
+                entered.TrySetResult();
+                await released.Task;
+                try { return await original(directory); }
+                finally { completed.TrySetResult(); }
+            };
+        }
+    }
+
     [Fact]
     public Task HollowKnightSetupStatesUseTheSharedReaderStatusPanel() => HostedConnectionTests.OnDispatcher(async () =>
     {
@@ -349,12 +372,19 @@ public sealed class HollowKnightRefinementTests
         text.PublishRuntimeObservation(repository.State, observation);
 
         var window = new MainWindow { DataContext = vm, ShowInTaskbar = false };
+        var inspection = new InspectionGate(vm);
+        inspection.Install();
         try
         {
             window.Show(); await Idle();
             var status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
             var total = (TextBlock)window.FindName("TotalDeathsTextBlock");
             var historical = (TextBlock)window.FindName("HollowKnightHistoricalTotalLabel");
+            await inspection.WaitUntilEnteredAsync();
+            Assert.Equal("Checking the Hollow Knight game folder...", status.Text);
+            inspection.Release();
+            await WaitForPropertyAsync(vm, nameof(vm.RuntimeReaderStatusText), () => vm.RuntimeReaderStatusText == "Synced");
+            await Idle();
             Assert.True(vm.IsHollowKnightInstalled);
             Assert.Equal("Synced", status.Text);
             Assert.Equal("12", total.Text);
@@ -405,7 +435,38 @@ public sealed class HollowKnightRefinementTests
             Assert.False(historical.IsVisible);
             Assert.Equal("Total Deaths: 13", await File.ReadAllTextAsync(repository.State.TextExports.DeathsPath!));
         }
-        finally { window.Close(); }
+        finally { inspection.Release(); window.Close(); }
+    });
+
+    [Fact]
+    public Task ValidReaderObservationRemainsCheckingUntilDelayedDirectoryInspectionCompletes() => HostedConnectionTests.OnDispatcher(async () =>
+    {
+        using var fixture = new Fixture(false);
+        var repository = new MemoryRepository(GameId.HollowKnight) { State = fixture.State };
+        await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
+        await using var vm = CreateViewModel(coordinator);
+        await vm.InitializeAsync();
+        await vm.DiscoverHollowKnightAsync();
+        await InstallFixtureTrackingAsync(vm);
+        vm.ApplyRuntimeReaderResult(fixture.Read(repository.State, 8));
+
+        var inspection = new InspectionGate(vm);
+        inspection.Install();
+        var window = new MainWindow { DataContext = vm, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            await inspection.WaitUntilEnteredAsync();
+            var status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
+            Assert.Equal("Checking the Hollow Knight game folder...", status.Text);
+            inspection.Release();
+            await inspection.WaitUntilCompletedAsync();
+            await WaitForPropertyAsync(vm, nameof(vm.RuntimeReaderStatusText), () => vm.RuntimeReaderStatusText == "Synced");
+            await Idle();
+            Assert.Equal("Synced", status.Text);
+            Assert.Equal("8", ((TextBlock)window.FindName("TotalDeathsTextBlock")).Text);
+        }
+        finally { inspection.Release(); window.Close(); }
     });
 
     [Fact]
@@ -655,11 +716,17 @@ public sealed class HollowKnightRefinementTests
         await using var vm = CreateViewModel(coordinator);
         await vm.InitializeAsync();
         await vm.DiscoverHollowKnightAsync();
+        var inspection = new InspectionGate(vm);
+        inspection.Install();
         string? copied = null;
         var window = new MainWindow((_, _) => null, value => copied = value) { DataContext = vm, Width = width, Height = height, ShowInTaskbar = false };
         try
         {
             window.Show(); await Idle();
+            await inspection.WaitUntilEnteredAsync();
+            inspection.Release();
+            await inspection.WaitUntilCompletedAsync();
+            await Idle();
             var buttons = Tree(window).OfType<Button>().ToArray();
             Assert.Single(buttons, x => x.IsVisible && Equals(x.Content, "Uninstall Death Tracking"));
             Assert.DoesNotContain(buttons, x => x.IsVisible && Equals(x.Content, "Install Death Tracking"));
@@ -680,7 +747,9 @@ public sealed class HollowKnightRefinementTests
             Assert.Equal(fixture.Game, copied);
             var increment = buttons.Single(x => AutomationProperties.GetName(x) == "Add Hollow Knight death");
             Assert.False(increment.IsEnabled);
-            vm.ApplyRuntimeReaderResult(fixture.Read(repository.State, 0)); await Idle();
+            vm.ApplyRuntimeReaderResult(fixture.Read(repository.State, 0));
+            await WaitForPropertyAsync(vm, nameof(vm.RuntimeReaderStatusText), () => vm.RuntimeReaderStatusText == "Synced");
+            await Idle();
             Assert.Equal("Synced", vm.RuntimeReaderStatusText);
             Assert.Equal("0", vm.TotalDeathsText);
             Assert.True(increment.IsEnabled);
@@ -723,7 +792,7 @@ public sealed class HollowKnightRefinementTests
             ((ScrollViewer)window.FindName("MainContentScrollViewer")).ScrollToTop(); await Idle();
             Render(window, "hollow-knight-unavailable-top-" + width + "-" + height);
         }
-        finally { repository.ReleaseSave?.TrySetResult(); window.Close(); }
+        finally { inspection.Release(); repository.ReleaseSave?.TrySetResult(); window.Close(); }
     });
 
     [Fact]
@@ -1041,6 +1110,22 @@ public sealed class HollowKnightRefinementTests
             await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
         finally { property.RemoveValueChanged(control, Changed); }
+    }
+
+    private static async Task WaitForPropertyAsync(INotifyPropertyChanged source, string propertyName, Func<bool> condition)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Changed(object? sender, PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName == propertyName && condition()) completion.TrySetResult();
+        }
+        source.PropertyChanged += Changed;
+        try
+        {
+            if (condition()) return;
+            await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { source.PropertyChanged -= Changed; }
     }
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task;
