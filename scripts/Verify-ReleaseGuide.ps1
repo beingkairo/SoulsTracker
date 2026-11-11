@@ -13,6 +13,7 @@ $readme = Get-Content -Raw -Encoding utf8 $readmePath
 $releaseGuide = Get-Content -Raw -Encoding utf8 $releaseGuidePath
 $releaseBody = Get-Content -Raw -Encoding utf8 $releaseBodyPath
 $releaseWorkflow = Get-Content -Raw -Encoding utf8 $releaseWorkflowPath
+$changesHeading = if ($version -eq '2.2.0') { 'What''s new' } else { 'Latest changes' }
 # Publication remains pinned to its independently approved source/version until release approval.
 $workflowVersionMatch = [regex]::Match($releaseWorkflow, "metadata.Version -ne '([0-9]+\.[0-9]+\.[0-9]+)'")
 if (-not $workflowVersionMatch.Success) { throw 'Release workflow is missing its pinned version guard.' }
@@ -24,7 +25,7 @@ $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "docs/RELEASE-GETTING-STARTED.md" },
     @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "https://github.com/beingkairo/SoulsTracker#getting-started" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "# SoulsTracker v$version" },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
+    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## $changesHeading" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/release-notes.md" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SoulsTrackerV$workflowVersion.exe" },
@@ -62,14 +63,17 @@ if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com
 }
 $expectedChanges = if ($version -eq '2.2.0') {
     @(
-        '- Added persistent Hollow Knight death tracking through an installable game plugin, with separate save totals retained while SoulsTracker is closed.',
-        '- Added per-save manual death additions for Hollow Knight. The main counter, Preview, TXT exports and hosted overlay show the recorded total plus those additions.',
-        '- Hollow Knight setup discovers the game directory and provides Install Death Tracking and Uninstall Death Tracking. Uninstall preserves shared API files, other mods, saves and recorded totals.',
-        '- Supports original Hollow Knight on Windows: 1.5.78.11833 with official Modding API v77, and the verified Steam 1.5.12620 files with source-built API 1.5.12620.0-78. Other builds are unsupported.',
-        '- API v78 uses pinned upstream development source from [PR #164](https://github.com/hk-modding/api/pull/164), revision `468f579f25e63da2188f39fe5ece15c25d2854d7`; it is not an official API v78 release. Other mods may need their own compatibility updates.',
-        '- Hollow Knight totals start when tracking is installed for that save. Earlier deaths and periods with the plugin disabled cannot be recovered automatically.',
-        '- Dream/Godhome encounters and Steel Soul gameplay were not fully validated in live gameplay.',
-        '- Save-based readers show Loading. during initial reads and keep validated totals stable during refresh.'
+        '- Added Hollow Knight death tracking.',
+        '- Deaths are saved automatically, even when SoulsTracker is closed.',
+        '- Each save file has its own death counter.',
+        '- Added buttons to adjust missed deaths.',
+        '- Tracking starts after installation. Earlier deaths aren''t counted automatically.'
+    ) -join "`n"
+} elseif ($version -eq '2.2.1') {
+    @(
+        '- Fixed Hollow Knight game directory detection.',
+        '- Fixed flickering when adjusting Hollow Knight deaths.',
+        '- Improved Hollow Knight setup and status messages.'
     ) -join "`n"
 } elseif ($version -eq '2.1.2') {
     @(
@@ -91,16 +95,30 @@ $expectedChanges = if ($version -eq '2.2.0') {
         '- Settings organization and Hosted Overlay disabled-state behavior have been refined.'
     ) -join "`n"
 }
-$changesMatch = [regex]::Match($releaseBody, '(?ms)^## Latest changes\s*\r?\n(.*?)(?=^## |\z)')
+    $changesMatch = [regex]::Match($releaseBody, "(?ms)^## $([regex]::Escape($changesHeading))\s*\r?\n(.*?)(?=^## |\z)")
 if (-not $changesMatch.Success -or $changesMatch.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedChanges) {
     throw 'Release notes must contain exactly the approved latest changes.'
 }
 if ($releaseBody -match '(?m)^## Notes\s*$' -or $releaseBody -match 'Existing local OBS URLs must be replaced\.') {
     throw 'Release notes contain removed disclosure or migration commentary.'
 }
-$expectedReleaseBody = "# SoulsTracker v$version`n`n## Compatible games`n`n$expectedList`n`n## Latest changes`n`n$expectedChanges"
+$expectedReleaseBody = "# SoulsTracker v$version`n`n## Compatible games`n`n$expectedList`n`n## $changesHeading`n`n$expectedChanges"
 if ($releaseBody.Trim().Replace("`r`n", "`n") -cne $expectedReleaseBody) {
     throw 'Release notes must match the checked version''s title and two sections.'
+}
+
+$hotfixNotesPath = Join-Path $root 'docs\releases\v2.2.1.md'
+$hotfixNotes = Get-Content -Raw -Encoding utf8 $hotfixNotesPath
+$expectedHotfixChanges = @(
+    '- Fixed Hollow Knight game directory detection.',
+    '- Fixed flickering when adjusting Hollow Knight deaths.',
+    '- Improved Hollow Knight setup and status messages.'
+) -join "`n"
+$hotfixChangesMatch = [regex]::Match($hotfixNotes, '(?ms)^## Latest changes\s*\r?\n(.*?)(?=^## |\z)')
+$expectedHotfixNotes = "# SoulsTracker v2.2.1`n`n## Compatible games`n`n$expectedList`n`n## Latest changes`n`n$expectedHotfixChanges"
+if (-not $hotfixChangesMatch.Success -or $hotfixChangesMatch.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedHotfixChanges -or
+    $hotfixNotes.Trim().Replace("`r`n", "`n") -cne $expectedHotfixNotes) {
+    throw 'The local v2.2.1 draft must contain only its concise compatible-games list and latest changes.'
 }
 if ($releaseWorkflow -notmatch '(?m)^\s+generate_release_notes: false\s*$' -or
     $releaseWorkflow -notmatch '(?m)^\s+body_path: prepared/release-notes\.md\s*$' -or

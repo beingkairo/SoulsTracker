@@ -17,6 +17,7 @@ try {
         "README.md",
         "docs\RELEASE-GETTING-STARTED.md",
         "docs\releases\v$version.md",
+        "docs\releases\v2.2.1.md",
         ".github\workflows\release.yml"
     )) {
         $destination = Join-Path $fixture $relativePath

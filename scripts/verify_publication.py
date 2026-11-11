@@ -10,19 +10,18 @@ import zipfile
 import verify_hollow_knight_input as hollow_knight
 import get_hollow_knight_input as ci_input
 
-IMPLEMENTATION = "695e535f551e04a11ff84f3aef5190098b574a64"
-SOURCE = "a839e3df43a4b2ab37c115d675d01cb2a9427739"
-SOURCE_TREE = "4df2061b7a107a4cef085c3ae51b2cfdca883168"
-VERSION = "2.2.0"
+IMPLEMENTATION = "5b36fd839e9de545218aa1892f532da35098013f"
+SOURCE = "1a6ced76a0f971c0f99105e62cf3169cb0bbd436"
+SOURCE_TREE = "9e9a7b64a938c90bf1b38c1afaf956e945e7c0df"
+VERSION = "2.2.1"
 STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495
-# Comparison reference: qualified local build 70c1071. These hashes do not
-# authorize publication; the signed CI manifest still needs explicit approval.
+# v2.2.1 artifact hashes are recorded from its authenticated preparation run.
 APPROVED = {
-    f"{STEM}.exe": "fa295a994ae96bbea543a5c45c66d35e3c6a41e4e6fc354223fb83f2519066c6",
-    f"{STEM}-portable.zip": "c58841ae33523e44b0221a2eab7b2155608fafe241a8ba023aea4ffbee4b1197",
+    f"{STEM}.exe": None,
+    f"{STEM}-portable.zip": None,
 }
-PAYLOAD = "cf2ad8ba00c828c4a687004294e8a505dd68f76ffe1b31e885a9e2ee4d8c6959"
+PAYLOAD = None
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
 CONTROL_ROOT = Path(__file__).resolve().parent.parent
 NOTES_RELATIVE = f"docs/releases/v{VERSION}.md"
