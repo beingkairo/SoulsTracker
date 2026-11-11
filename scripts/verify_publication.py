@@ -16,12 +16,12 @@ SOURCE_TREE = "9e9a7b64a938c90bf1b38c1afaf956e945e7c0df"
 VERSION = "2.2.1"
 STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495
-# v2.2.1 artifact hashes are recorded from its authenticated preparation run.
+# Qualified local v2.2.1 reference; publication still requires signed CI provenance.
 APPROVED = {
-    f"{STEM}.exe": None,
-    f"{STEM}-portable.zip": None,
+    f"{STEM}.exe": "52f681f9cbae1da63a048b26a676c9b5aa848184f9a8a468a3d209eeda05f401",
+    f"{STEM}-portable.zip": "b97f249ccd82ce8a9fe19101cab5518e65f3e5eed9e308067ba190de217126ab",
 }
-PAYLOAD = None
+PAYLOAD = "2886ea4967a5bd85f1cc515157fa2dd8bc7aff992c7f5fe04df15fb49c818bba"
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
 CONTROL_ROOT = Path(__file__).resolve().parent.parent
 NOTES_RELATIVE = f"docs/releases/v{VERSION}.md"
