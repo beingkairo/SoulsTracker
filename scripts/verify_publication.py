@@ -11,17 +11,17 @@ import verify_hollow_knight_input as hollow_knight
 import get_hollow_knight_input as ci_input
 
 IMPLEMENTATION = "5b36fd839e9de545218aa1892f532da35098013f"
-SOURCE = "ea328f56543b790d24c4a771fb687f4cebbcd84c"
-SOURCE_TREE = "4ecc9ed493fb436e8c1ca86f5117c078bfca8d31"
+SOURCE = "1a0825a1df4f62ccd25986abfb931cf71359f546"
+SOURCE_TREE = "29af11edf6f771e1dc9117fe8604b283e9a5f428"
 VERSION = "2.2.1"
 STEM = f"SoulsTrackerV{VERSION}"
 PAYLOAD_COUNT = 495
 # Qualified local v2.2.1 reference; publication still requires signed CI provenance.
 APPROVED = {
-    f"{STEM}.exe": "e3022ada904f2d2d81bf234fc58fd23a16354818f72c86a166212fbc0241340c",
-    f"{STEM}-portable.zip": "27b20d6d0d6eb528f1b29b8ead103dade91a5b32750cd799404b0d149b80ab4e",
+    f"{STEM}.exe": "c6c09e59dfcce411b8744fca1c84abac47a0c1bdd8ccb0547459458039dd3fad",
+    f"{STEM}-portable.zip": "1a3ccaf46f868d59ad00f45fecc72d9fb0a33a898e3840d376e1807fe0deeb1e",
 }
-PAYLOAD = "8b7952d9cafc39440b5a68d069c761e82f10bb3a859622bdbe7570878fe7d97a"
+PAYLOAD = "f321c166820c705c1167de296ee75717d244287195de2fa875b40a311afd80b4"
 NAMES = [*APPROVED, f"{STEM}.sbom.spdx.json"]
 CONTROL_ROOT = Path(__file__).resolve().parent.parent
 NOTES_RELATIVE = f"docs/releases/v{VERSION}.md"
