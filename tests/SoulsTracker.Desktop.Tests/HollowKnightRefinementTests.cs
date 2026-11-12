@@ -165,11 +165,19 @@ public sealed class HollowKnightRefinementTests
         vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.Unavailable(GameId.HollowKnight));
         vm.HollowKnightDirectoryDiscovery = () => Task.FromResult<string?>(fixture.Game);
         var window = new MainWindow { DataContext = vm, ShowInTaskbar = false };
+        var inspection = new InspectionGate(vm);
+        inspection.Install();
         try
         {
             window.Show(); await Idle();
             var status = (TextBlock)window.FindName("RuntimeReaderStatusTextBlock");
-            await vm.DiscoverHollowKnightAsync(); await Idle();
+            Task discovery = vm.DiscoverHollowKnightAsync();
+            await inspection.WaitUntilEnteredAsync();
+            inspection.Release();
+            await inspection.WaitUntilCompletedAsync();
+            await discovery;
+            await WaitForPropertyAsync(vm, nameof(vm.HollowKnightDirectoryWasAutomatic), () => vm.HollowKnightDirectoryWasAutomatic);
+            await Idle();
             Assert.Equal(fixture.Game, vm.HollowKnightGameDirectory);
             vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.Unavailable(GameId.HollowKnight));
             await Idle();
@@ -179,7 +187,7 @@ public sealed class HollowKnightRefinementTests
             Assert.DoesNotContain("verified", status.Text, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(fixture.Game, vm.HollowKnightDirectoryPath);
         }
-        finally { window.Close(); }
+        finally { inspection.Release(); window.Close(); }
     });
 
     [Theory]
