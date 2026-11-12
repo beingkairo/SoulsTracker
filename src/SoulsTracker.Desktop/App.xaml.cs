@@ -28,6 +28,7 @@ public partial class App : System.Windows.Application, IDisposable
     private EldenRingSaveDeathReader? eldenRingSaveReader;
     private BlackMythWukongSaveDeathReader? blackMythWukongSaveReader;
     private LiesOfPSaveDeathReader? liesOfPSaveReader;
+    private HollowKnightRecordReader? hollowKnightReader;
     private CancellationTokenSource? runtimeReaderCancellation;
     private Task? runtimeReaderPollingTask;
     private readonly RuntimePublicationSession runtimePublication = new();
@@ -187,6 +188,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
         catch { TrayFailed(window); }
         await viewModel.InitializeAsync(startupCancellation.Token);
+        if (!mainWindowCloseRequested) await viewModel.DiscoverHollowKnightAsync();
         if (!mainWindowCloseRequested && viewModel.CurrentState is { } initializedState)
         {
             runtimePublication.SelectState(initializedState);
@@ -208,6 +210,7 @@ public partial class App : System.Windows.Application, IDisposable
             eldenRingSaveReader = new EldenRingSaveDeathReader();
             blackMythWukongSaveReader = new BlackMythWukongSaveDeathReader();
             liesOfPSaveReader = new LiesOfPSaveDeathReader();
+            hollowKnightReader = new HollowKnightRecordReader();
             runtimeReaders = new RuntimeGameReaderCoordinator([
                 new DarkSoulsRemasteredActiveCharacterDeathReader(
                     new ExactNameDarkSoulsRemasteredProcessEnumerator(),
@@ -241,12 +244,11 @@ public partial class App : System.Windows.Application, IDisposable
                         "1.6.0.0",
                         "1.6.0.0",
                         "637ACA527538C0EC6E1F136C8ED66046E95DFBDBB1F51926E134D9916398B856"))),
-                new BloodborneActiveCharacterDeathReader(
-                    new ExactNameBloodborneProcessEnumerator(),
-                    new WindowsReadOnlyProcessAttachmentFactory()),
+                new BloodborneRuntimeDeathReader(),
                 eldenRingSaveReader,
                 blackMythWukongSaveReader,
                 liesOfPSaveReader,
+                hollowKnightReader,
             ]);
             runtimeReaderCancellation = new CancellationTokenSource();
             runtimeReaderPollingTask = PollRuntimeReadersAsync(viewModel, runtimeReaderCancellation.Token);
@@ -469,25 +471,34 @@ public partial class App : System.Windows.Application, IDisposable
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     PersistentTrackerState currentState = runtimePublication.CurrentState!;
-                    eldenRingSaveReader?.Configure(currentState.EldenRingSave);
-                    blackMythWukongSaveReader?.Configure(currentState.BlackMythWukongSave);
+                    var ticket = runtimePublication.BeginRead(currentState);
+                    eldenRingSaveReader?.Configure(currentState.EldenRingSave,
+                        currentState.SelectedGameId == GameId.EldenRing && runtimePublication.RequiresFreshSaveRead);
+                    blackMythWukongSaveReader?.Configure(currentState.BlackMythWukongSave,
+                        currentState.SelectedGameId == GameId.BlackMythWukong && runtimePublication.RequiresFreshSaveRead);
                     liesOfPSaveReader?.Configure(currentState.LiesOfPSave);
-                    return (Ticket: runtimePublication.BeginRead(currentState), currentState.SelectedGameId);
+                    hollowKnightReader?.Configure(currentState.HollowKnight);
+                    return (Ticket: ticket, currentState.SelectedGameId,
+                        Ready: !viewModel.IsSaveReaderSourcePending, ResolutionVersion: viewModel.SaveReaderResolutionVersion,
+                        SourceIdentity: EffectiveDeathTotalResult.SourceIdentityFor(currentState));
                 });
-                RuntimeGameReadResult? result = await runtimeReaders!
-                    .PollAsync(read.SelectedGameId, cancellationToken)
-                    .ConfigureAwait(false);
-                await Dispatcher.InvokeAsync(() =>
+                if (read.Ready)
                 {
-                    if (mainWindowCloseRequested) return;
-                    PersistentTrackerState currentState = viewModel.CurrentState!;
-                    runtimePublication.CompleteRead(read.Ticket, currentState, result,
-                        viewModel.ApplyRuntimeReaderResult, publication =>
-                        {
-                            textExportPublisher?.PublishRuntimeObservation(runtimePublication.CurrentState!, publication);
-                            hostedConnection?.PublishAccepted(runtimePublication.CurrentState!, publication);
-                        }, cancellationToken);
-                });
+                    RuntimeGameReadResult? result = await runtimeReaders!
+                        .PollAsync(read.SelectedGameId, cancellationToken, read.SourceIdentity)
+                        .ConfigureAwait(false);
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (mainWindowCloseRequested || !viewModel.CanPublishSaveReaderResult(read.ResolutionVersion)) return;
+                        PersistentTrackerState currentState = viewModel.CurrentState!;
+                        runtimePublication.CompleteRead(read.Ticket, currentState, result,
+                            viewModel.ApplyRuntimeReaderResult, publication =>
+                            {
+                                textExportPublisher?.PublishRuntimeObservation(runtimePublication.CurrentState!, publication);
+                                hostedConnection?.PublishAccepted(runtimePublication.CurrentState!, publication);
+                            }, cancellationToken);
+                    });
+                }
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
             }
         }

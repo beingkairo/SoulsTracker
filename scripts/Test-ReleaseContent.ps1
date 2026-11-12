@@ -22,6 +22,25 @@ function New-DistributionFixture([string]$Fixture, [string]$PublishPath) {
         Copy-Item -LiteralPath (Join-Path $root $relative) -Destination $destination
     }
     $null = New-Item -ItemType Directory -Path $PublishPath -Force
+    foreach ($relative in @('plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll', 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt', 'docs/licenses/HOLLOW-KNIGHT-API-12620-NOTICES.txt')) {
+        $source = Join-Path $Fixture $relative
+        $null = New-Item -ItemType Directory -Path (Split-Path $source) -Force
+        Set-Content -LiteralPath $source 'synthetic plugin distribution asset'
+        $destination = Join-Path $PublishPath ('HollowKnight/' + (Split-Path $relative -Leaf))
+        $null = New-Item -ItemType Directory -Path (Split-Path $destination) -Force
+        Copy-Item -LiteralPath $source -Destination $destination
+    }
+    $package = Join-Path $Fixture 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip'
+    $null = New-Item -ItemType Directory -Path (Split-Path $package) -Force
+    $zip = [IO.Compression.ZipFile]::Open($package, [IO.Compression.ZipArchiveMode]::Create)
+    $entry = $zip.CreateEntry('Assembly-CSharp.dll')
+    $stream = $entry.Open()
+    $bytes = [Text.Encoding]::UTF8.GetBytes('synthetic API component')
+    $stream.Write($bytes, 0, $bytes.Length); $stream.Dispose(); $zip.Dispose()
+    $profilePath = Join-Path $Fixture 'src/SoulsTracker.Infrastructure/HollowKnightApi12620.json'
+    $null = New-Item -ItemType Directory -Path (Split-Path $profilePath) -Force
+    @{ RuntimeFiles = @{ 'Assembly-CSharp.dll' = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)) } } | ConvertTo-Json | Set-Content -LiteralPath $profilePath
+    Copy-Item -LiteralPath $package -Destination (Join-Path $PublishPath 'HollowKnight/api-12620.zip')
     $version = & (Join-Path $root 'eng/Get-Version.ps1')
     $targetName = '.NETCoreApp,Version=v10.0/win-x64'
     $deps = @{ runtimeTarget = @{ name = $targetName }; targets = @{ $targetName = @{} }; libraries = @{} }
@@ -86,7 +105,7 @@ if ($DefineFixturesOnly) { return }
 if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
     $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('SoulsTracker-release-content-' + [guid]::NewGuid().ToString('N'))
     try {
-        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'project-runtime-drift', 'floating-runtime', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record')) {
+        foreach ($case in @('valid', 'missing-license', 'missing-notices', 'missing-text', 'changed-text', 'changed-upstream-notice', 'drift', 'target-extra', 'target-missing', 'dependency-extra', 'dependency-missing', 'project-missing', 'product-extra', 'product-version', 'product-unsafe', 'reference-extra', 'reference-version', 'reference-unsafe', 'unsafe-key', 'lock-drift', 'runtime-drift', 'project-runtime-drift', 'floating-runtime', 'missing-runtime', 'missing-satellite', 'symbol', 'private-directory', 'database', 'save', 'pairing', 'unknown-file', 'local-path', 'upstream-path', 'changed-upstream', 'upstream-private-path', 'template-path', 'template-private-path', 'template-changed-section', 'product-private-path', 'product-debug-record', 'api-package-component', 'api-package-duplicate')) {
             $fixture = Join-Path $fixtureRoot $case
             $payload = Join-Path $fixture 'payload'
             New-DistributionFixture $fixture $payload
@@ -95,6 +114,16 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
             $expected = ''
             $diagnostics = @()
             switch ($case) {
+                { $_ -in @('api-package-component', 'api-package-duplicate') } {
+                    $zipPath = Join-Path $payload 'HollowKnight/api-12620.zip'
+                    $zip = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Update)
+                    if ($case -eq 'api-package-component') { $zip.GetEntry('Assembly-CSharp.dll').Delete() }
+                    $entry = $zip.CreateEntry('Assembly-CSharp.dll')
+                    $stream = $entry.Open()
+                    $stream.WriteByte(1); $stream.Dispose(); $zip.Dispose()
+                    Copy-Item -LiteralPath $zipPath -Destination (Join-Path $fixture 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip') -Force
+                    $expected = if ($case -eq 'api-package-component') { 'API package component differs' } else { 'API package entry count differs' }
+                }
                 'missing-license' { Remove-Item (Join-Path $fixture 'LICENSE'); $expected = 'Required distribution input is missing' }
                 'missing-notices' { Remove-Item (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'Required distribution input is missing' }
                 'missing-text' { (Get-Content -Raw (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md')).Replace('<!-- BEGIN sqlitepcl-notice -->', '<!-- absent -->') | Set-Content (Join-Path $fixture 'docs/THIRD_PARTY_NOTICES.md'); $expected = 'text is missing' }
@@ -106,11 +135,11 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                     $fixtureTarget = $fixtureDeps.targets['.NETCoreApp,Version=v10.0/win-x64']
                     switch ($case) {
                         'drift' {
-                            $key = 'Microsoft.Data.Sqlite.Core/10.0.10'
+                            $key = 'Microsoft.Data.Sqlite.Core/10.0.13'
                             $fixtureDeps.libraries['Microsoft.Data.Sqlite.Core/99.0.0'] = $fixtureDeps.libraries[$key]
                             $fixtureTarget['Microsoft.Data.Sqlite.Core/99.0.0'] = $fixtureTarget[$key]
                             $fixtureDeps.libraries.Remove($key); $fixtureTarget.Remove($key)
-                            $diagnostics = @('version mismatch', 'Microsoft.Data.Sqlite.Core/99.0.0', 'Microsoft.Data.Sqlite.Core/10.0.10')
+                            $diagnostics = @('version mismatch', 'Microsoft.Data.Sqlite.Core/99.0.0', 'Microsoft.Data.Sqlite.Core/10.0.13')
                         }
                         'target-extra' { $fixtureTarget['Extra.Package/1.0.0'] = @{}; $diagnostics = @('target/libraries', 'unexpected [Extra.Package/1.0.0]', 'missing []') }
                         'target-missing' { $fixtureTarget.Remove('SourceGear.sqlite3/3.50.4.5'); $diagnostics = @('target/libraries', 'missing [SourceGear.sqlite3/3.50.4.5]') }
@@ -163,7 +192,7 @@ if ([string]::IsNullOrWhiteSpace($PayloadPath)) {
                     $fixtureDeps | ConvertTo-Json -Depth 30 | Set-Content $depsPath
                     $expected = 'inventory drift'
                 }
-                'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
+                'lock-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json')).Replace('10.0.13', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/packages.lock.json'); $expected = 'inventory drift' }
                 'runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json')).Replace('10.0.9', '99.0.0') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/obj/project.assets.json'); $expected = 'runtime pack differs from the Desktop project pin' }
                 'project-runtime-drift' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>', '<RuntimeFrameworkVersion>10.0.11</RuntimeFrameworkVersion>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'version mismatch' }
                 'floating-runtime' { (Get-Content -Raw (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')).Replace('<TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>', '<TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>') | Set-Content (Join-Path $fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj'); $expected = 'must pin one exact runtime version' }

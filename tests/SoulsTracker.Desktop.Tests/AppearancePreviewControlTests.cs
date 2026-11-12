@@ -40,8 +40,10 @@ public sealed class AppearancePreviewControlTests
         finally { window.Close(); }
     });
 
-    [Fact]
-    public Task OfflineBrowserRendersDraftWithoutRequests() => HostedConnectionTests.OnDispatcher(async () =>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(250)]
+    public Task OfflineBrowserRendersDraftWithoutRequests(int frameDelayMilliseconds) => HostedConnectionTests.OnDispatcher(async () =>
     {
         var repository = new MemoryRepository(GameId.DemonsSouls);
         await using var coordinator = new SerializedTrackerCoordinator(repository, new NullPublisher());
@@ -68,15 +70,21 @@ public sealed class AppearancePreviewControlTests
             }
             string content = await browser.CoreWebView2.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
             Assert.Contains("0", content);
+            if (frameDelayMilliseconds > 0)
+                await core.ExecuteScriptAsync($$"""
+                    const requestFrame = window.requestAnimationFrame.bind(window);
+                    window.requestAnimationFrame = callback => requestFrame(time => setTimeout(() => callback(time), {{frameDelayMilliseconds}}));
+                    """);
             vm.TotalDeathsAppearanceDraft.Title = "Offline test"; await Idle();
-            // WPF idle does not join WebView2's posted message and animation frame.
-            // Wait for the browser DOM that the assertion actually observes.
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            // WPF's idle queue does not drain WebView2's message/animation-frame queue.
+            // Observe the rendered draft instead of assuming one arrived within 100 ms.
+            var rendered = System.Diagnostics.Stopwatch.StartNew();
             do
             {
-                content = await core.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent").WaitAsync(timeout.Token);
-                if (!content.Contains("Offline test", StringComparison.Ordinal)) await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            } while (!content.Contains("Offline test", StringComparison.Ordinal));
+                content = await core.ExecuteScriptAsync("document.querySelector('.overlay-heading').textContent");
+                if (content.Contains("Offline test", StringComparison.Ordinal)) break;
+                await Task.Delay(10);
+            } while (rendered.Elapsed < TimeSpan.FromSeconds(5));
             Assert.Contains("Offline test", content);
             Assert.Empty(repository.Saves);
             Assert.Equal(0, (int)preview.GetType().GetProperty("BlockedRequestCount")!.GetValue(preview)!);

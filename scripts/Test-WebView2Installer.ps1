@@ -16,6 +16,25 @@ function Assert-Rejected([scriptblock]$Action, [string]$Expected) {
     Assert-True ($null -ne $caught -and $caught.Contains($Expected)) "Expected rejection containing '$Expected'; got '$caught'."
 }
 
+function Get-Sha256Hex([byte[]]$Bytes) {
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return [BitConverter]::ToString($sha256.ComputeHash($Bytes)).Replace('-', '').ToLowerInvariant()
+    } finally { $sha256.Dispose() }
+}
+
+function Assert-Sha256Hash([byte[]]$Bytes, [string]$ExpectedHash) {
+    if ((Get-Sha256Hex $Bytes) -cne $ExpectedHash) { throw 'SHA-256 mismatch.' }
+}
+
+$knownHashBytes = [Text.Encoding]::UTF8.GetBytes('abc')
+Assert-True ((Get-Sha256Hex $knownHashBytes) -ceq 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') 'SHA-256 known-vector verification failed.'
+Assert-Sha256Hash -Bytes $knownHashBytes -ExpectedHash 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+Assert-Rejected {
+    Assert-Sha256Hash -Bytes $knownHashBytes -ExpectedHash '0000000000000000000000000000000000000000000000000000000000000000'
+} 'SHA-256 mismatch.'
+Write-Output 'SHA-256 known-good and deliberate mismatch cases passed.'
+
 function Get-SyntheticWebView2Detection([AllowNull()] [object[]]$Registrations) {
     $sawMalformed = $false
     foreach ($registration in $Registrations) {
@@ -185,7 +204,7 @@ try {
     foreach ($required in @(
         'Test-WebView2Installer.ps1',
         'Get-WebView2Bootstrapper.ps1',
-        'artifacts\staging\webview2',
+        '$webView2StagingPath = Join-Path $stagingRoot "webview2"',
         '/DWebView2Bootstrapper=',
         '/DWebView2BootstrapperSha256=',
         'WebView2 bootstrapper changed after signature verification',
@@ -201,8 +220,9 @@ try {
     Assert-True (Test-Path -LiteralPath $runtimeLicensePath -PathType Leaf) 'The official WebView2 Runtime license terms must be retained for installer acceptance.'
     $runtimeLicense = [IO.File]::ReadAllText($runtimeLicensePath).Replace("`r`n", "`n")
     Assert-True ($runtimeLicense.Contains('MICROSOFT EDGE WEBVIEW2 RUNTIME') -and $runtimeLicense.Contains('9.    REQUIRED NOTICES TO END USERS.')) 'The retained Runtime terms are incomplete.'
-    $runtimeLicenseHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($runtimeLicense))).ToLowerInvariant()
-    Assert-True ($runtimeLicenseHash -ceq '241ede13d0d26886ab2a998926245a76db6a68237e3229f3d0c918db13da3b5e') 'The retained Runtime terms differ from the reviewed official Microsoft source.'
+    try {
+        Assert-Sha256Hash -Bytes ([Text.Encoding]::UTF8.GetBytes($runtimeLicense)) -ExpectedHash '241ede13d0d26886ab2a998926245a76db6a68237e3229f3d0c918db13da3b5e'
+    } catch { throw 'The retained Runtime terms differ from the reviewed official Microsoft source.' }
     Assert-True ($installer.Contains('LicenseFile=..\docs\WEBVIEW2_RUNTIME_LICENSE.txt')) 'Installer users must accept the retained WebView2 Runtime terms.'
     $thirdPartyNotices = [IO.File]::ReadAllText((Join-Path $root 'docs/THIRD_PARTY_NOTICES.md'))
     Assert-True ($thirdPartyNotices.Contains('https://developer.microsoft.com/microsoft-edge/api/eula/webview2')) 'Runtime terms must record the exact official Microsoft source.'

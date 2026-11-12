@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { maximumHostedBytes, validateHostedJsonTokens } from "../../web_overlay/src/hosted-contracts";
 import type { HostedAppearance, HostedDeath, HostedEnvelope } from "../../web_overlay/src/hosted-contracts";
 import type { Env } from "./index";
-import { acquisition, authorize, capability, channelStatus, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, shape, stateWrite, verifier, verifierV2, type Provisioning } from "./protocol";
+import { acquisition, authorize, capability, channelStatus, clientProtocol, defaultAppearance, digest, equalVerifier, failure, increment, readBody, reject, response, rotation, route, shape, stateWrite, verifier, verifierV2, type Provisioning } from "./protocol";
 
 interface Status {
   v: 1; epoch: string; generation: string;
@@ -10,7 +10,7 @@ interface Status {
 }
 interface StateAck extends Status { sessionRequestId: string; sequence: string; changed: string[] }
 interface RotationAck { v: 1; rotationId: string; epoch: string; generation: string; readGeneration: string }
-interface CommitResult { ack: Status | StateAck | RotationAck; changed: HostedEnvelope | null }
+interface CommitResult { ack: Status | StateAck | RotationAck | null; changed: HostedEnvelope | null; legacy?: boolean; renewed?: boolean }
 
 interface Control {
   readVerifier: string;
@@ -23,10 +23,15 @@ interface Control {
   rotation: { rotationId: string; digest: string; ack: RotationAck } | null;
   authVersion?: 2;
   requestId?: string;
+  leaseExpiresAt?: number;
+  lastAcceptedAt?: number;
+  presenceGeneration?: number;
+  legacyContactExpiresAt?: number;
 }
 
 type ReaderAttachment = { phase: "pending"; id: string; deadline: number } |
-  { phase: "authenticated"; generation: string };
+  { phase: "authenticated"; generation: string; protocolVersion: 1 | 2 };
+const leaseMs = 180000;
 
 export class OverlayState extends DurableObject<Env> {
   private pendingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -79,8 +84,10 @@ export class OverlayState extends DurableObject<Env> {
       if (typeof message !== "string" || new TextEncoder().encode(message).length > maximumHostedBytes) throw new Error();
       const parsed: unknown = JSON.parse(message);
       validateHostedJsonTokens(message);
-      const auth = shape(parsed, ["v", "type", "readCapability"]);
+      const auth = shape(parsed, ["v", "type", "readCapability", "protocolVersion"], ["v", "type", "readCapability"]);
       if (auth.v !== 1 || auth.type !== "auth") throw new Error();
+      const protocolVersion = clientProtocol(auth.protocolVersion);
+      if (protocolVersion !== undefined && protocolVersion !== 2) throw new Error();
       const token = capability(auth.readCapability);
       const attachment = socket.deserializeAttachment() as ReaderAttachment;
       if (attachment.phase !== "pending") throw new Error();
@@ -91,9 +98,11 @@ export class OverlayState extends DurableObject<Env> {
       const count = this.ctx.getWebSockets().filter(s => s.readyState === WebSocket.OPEN &&
         (s.deserializeAttachment() as ReaderAttachment).phase === "authenticated").length;
       if (count >= 8) { socket.close(4429, "Socket capacity"); return; }
-      socket.serializeAttachment({ phase: "authenticated", generation: control.readGeneration } satisfies ReaderAttachment);
-      socket.send(JSON.stringify({ v: 1, type: "snapshot", death: this.load<HostedDeath>("death") ?? null,
-        appearance: this.load<HostedAppearance>("appearance") ?? defaultAppearance }));
+      socket.serializeAttachment({ phase: "authenticated", generation: control.readGeneration,
+        protocolVersion: protocolVersion === 2 ? 2 : 1 } satisfies ReaderAttachment);
+      socket.send(JSON.stringify({ v: protocolVersion === 2 ? 2 : 1, type: "snapshot", death: this.load<HostedDeath>("death") ?? null,
+        appearance: this.load<HostedAppearance>("appearance") ?? defaultAppearance,
+        ...(protocolVersion === 2 ? { presence: this.presence(control) } : {}) }));
     } catch { socket.close(4400, "Invalid protocol"); }
     finally { this.cleanReaders(); }
   }
@@ -101,13 +110,25 @@ export class OverlayState extends DurableObject<Env> {
   webSocketClose(socket: WebSocket): void { socket.close(1000); this.cleanReaders(); }
   webSocketError(socket: WebSocket): void { socket.close(1011, "Connection failure"); this.cleanReaders(); }
 
-  private broadcast(envelope: HostedEnvelope): void {
+  private presence(control: Control): { generation: number; serverTime: number; leaseExpiresAt: number | null; legacyContactExpiresAt: number | null; confirmed: boolean } {
+    return { generation: control.presenceGeneration ?? 0, serverTime: Date.now(),
+      leaseExpiresAt: control.leaseExpiresAt ?? null, legacyContactExpiresAt: control.legacyContactExpiresAt ?? null,
+      confirmed: control.lastAcceptedAt !== undefined };
+  }
+
+  private broadcast(envelope: HostedEnvelope | null, presence = false): void {
     this.cleanReaders();
-    const generation = this.load<Control>("control")?.readGeneration;
+    const control = this.load<Control>("control");
+    const generation = control?.readGeneration;
     for (const socket of this.ctx.getWebSockets()) {
       const attachment = socket.deserializeAttachment() as ReaderAttachment;
       if (socket.readyState === WebSocket.OPEN && attachment.phase === "authenticated" && attachment.generation === generation) {
-        try { socket.send(JSON.stringify(envelope)); } catch { socket.close(1011, "Connection failure"); }
+        try {
+          if (attachment.protocolVersion === 2 && control && (envelope || presence))
+            socket.send(JSON.stringify({ v: 2, type: "update", ...(envelope?.death ? { death: envelope.death } : {}),
+              ...(envelope?.appearance ? { appearance: envelope.appearance } : {}), presence: this.presence(control) }));
+          else if (envelope) socket.send(JSON.stringify(envelope));
+        } catch { socket.close(1011, "Connection failure"); }
       }
     }
   }
@@ -160,7 +181,7 @@ export class OverlayState extends DurableObject<Env> {
     } catch { return false; }
   }
 
-  private initialControl(id: string, token: string): Control {
+  private initialControl(id: string, token: string, persist: boolean): Control {
     // Installed only through authenticated deployment; ignored once control exists.
     try {
       const config = shape(this.env.BOOTSTRAP, ["v", "overlayId", "readVerifier", "writeVerifier"]);
@@ -174,7 +195,7 @@ export class OverlayState extends DurableObject<Env> {
         equalVerifier(config.readVerifier, verifier(id, "read", token))) return reject(403, "forbidden");
       const control: Control = { readVerifier: config.readVerifier, writeVerifier: config.writeVerifier,
         epoch: "0", generation: "0", readGeneration: "0", session: null, last: null, rotation: null };
-      this.ctx.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?)", JSON.stringify(control));
+      if (persist) this.ctx.storage.sql.exec("INSERT INTO records (key,value) VALUES ('control',?)", JSON.stringify(control));
       return control;
     } catch { return reject(403, "forbidden"); }
   }
@@ -188,10 +209,24 @@ export class OverlayState extends DurableObject<Env> {
       const session = action === "session" ? acquisition(body) : undefined;
       const write = action === "state" ? stateWrite(body) : undefined;
       const rotate = action === "credentials" ? rotation(body) : undefined;
+      const header = request.headers.get("X-SoulsTracker-Protocol");
+      if (header !== null && !/^(?:[1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])$/.test(header))
+        return reject(400, "invalid_body");
+      const bodyProtocol = (session ?? write ?? rotate)?.protocolVersion;
+      if (header !== null && bodyProtocol !== undefined && Number(header) !== bodyProtocol) return reject(400, "invalid_body");
+      const protocolVersion = action === "publisher" ? clientProtocol(header === null ? undefined : Number(header)) : bodyProtocol;
       const committed = this.ctx.storage.transactionSync((): CommitResult => {
         const control = this.load<Control>("control") ??
-          (action === "publisher" ? this.initialControl(id, token) : reject(403, "forbidden"));
+          (action === "publisher" ? this.initialControl(id, token, protocolVersion === 2) : reject(403, "forbidden"));
         if (!control || !equalVerifier(control.writeVerifier, this.roleVerifier(control, id, "write", token))) return reject(403, "forbidden");
+        if (protocolVersion !== 2) {
+          if (action !== "publisher") {
+            control.legacyContactExpiresAt = Date.now() + leaseMs;
+            this.save("control", control);
+            return { ack: null, changed: null, legacy: true };
+          }
+          return reject(409, "client_update_required");
+        }
         let death = this.load<HostedDeath | null>("death") ?? null;
         let appearance = this.load<HostedAppearance>("appearance") ?? defaultAppearance;
         if (this.load("death") === undefined) this.save("death", death);
@@ -219,11 +254,14 @@ export class OverlayState extends DurableObject<Env> {
           if (writeVerifier) control.writeVerifier = writeVerifier;
           control.session = null;
           control.last = null;
+          control.leaseExpiresAt = undefined;
+          control.lastAcceptedAt = undefined;
+          control.presenceGeneration = (control.presenceGeneration ?? 0) + 1;
           const ack: RotationAck = { v: 1, rotationId: rotate.rotationId, epoch: control.epoch,
             generation: control.generation, readGeneration: control.readGeneration };
           control.rotation = { rotationId: rotate.rotationId, digest: requestDigest, ack };
           this.save("control", control);
-          return { ack, changed: null };
+          return { ack, changed: null, renewed: true };
         }
         if (session) {
           if (control.session?.sessionRequestId === session.sessionRequestId) {
@@ -235,8 +273,11 @@ export class OverlayState extends DurableObject<Env> {
           const ack = { ...status(), sessionRequestId: session.sessionRequestId };
           control.session = { ...session, ack };
           control.last = null;
+          control.leaseExpiresAt = undefined;
+          control.lastAcceptedAt = undefined;
+          control.presenceGeneration = (control.presenceGeneration ?? 0) + 1;
           this.save("control", control);
-          return { ack, changed: null };
+          return { ack, changed: null, renewed: true };
         }
         if (write) {
           if (write.epoch !== control.epoch || write.sessionRequestId !== control.session?.sessionRequestId)
@@ -254,18 +295,30 @@ export class OverlayState extends DurableObject<Env> {
               ? { appearance: { ...write.appearance, revision: increment(appearance.revision) } } : {}) };
           if (changed.death) { death = changed.death; this.save("death", death); }
           if (changed.appearance) { appearance = changed.appearance; this.save("appearance", appearance); }
+          const acceptedAt = Date.now();
+          if (write.death) control.lastAcceptedAt = acceptedAt;
+          control.leaseExpiresAt = acceptedAt + leaseMs;
+          control.presenceGeneration = (control.presenceGeneration ?? 0) + 1;
           const channels = [ ...(changed.death ? ["death"] : []), ...(changed.appearance ? ["appearance"] : []) ];
           const ack = { ...status(), sessionRequestId: write.sessionRequestId, sequence: write.sequence, changed: channels };
           control.last = { sequence: write.sequence, digest: requestDigest, ack };
           this.save("control", control);
-          return { ack, changed: channels.length ? changed : null };
+          return { ack, changed: channels.length ? changed : null, renewed: true };
         }
         if (action !== "publisher") return reject(404, "not_found");
         return { ack: status(), changed: null };
       });
       this.cleanReaders();
-      if (committed.changed) this.broadcast(committed.changed);
-      return response(200, committed.ack);
+      if (committed.legacy) {
+        this.broadcast(null, true);
+        return response(409, { error: "client_update_required" });
+      }
+      if (committed.changed || committed.renewed) this.broadcast(committed.changed, true);
+      const result = response(200, committed.ack);
+      const presence = this.presence(this.load<Control>("control")!);
+      result.headers.set("X-SoulsTracker-Server-Time", String(presence.serverTime));
+      result.headers.set("X-SoulsTracker-Lease-Expires", String(presence.leaseExpiresAt ?? 0));
+      return result;
     } catch (error) { return failure(error); }
   }
 }

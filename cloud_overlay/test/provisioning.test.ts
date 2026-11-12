@@ -135,8 +135,8 @@ it("supports version-2 publisher authentication and rejects role or domain swaps
   const created = await (await worker.fetch(request(), environment())).json() as { overlayId: string };
   const authorized = (action: string, method: string, capability: string, body?: unknown) => new Request(
     `https://overlay.test/api/v1/overlays/${created.overlayId}/${action}`,
-    { method, headers: { Authorization: "Bearer " + capability, "Content-Type": "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    { method, headers: { Authorization: "Bearer " + capability, "Content-Type": "application/json", "X-SoulsTracker-Protocol": "2" },
+      ...(body === undefined ? {} : { body: JSON.stringify({ protocolVersion: 2, ...body as object }) }) });
   const publisher = (capability: string) => authorized("publisher", "GET", capability);
   expect((await worker.fetch(publisher(writeCapability), environment())).status).toBe(200);
   expect((await worker.fetch(publisher(readCapability), environment())).status).toBe(403);

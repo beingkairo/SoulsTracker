@@ -9,6 +9,25 @@ public sealed class EldenRingSaveDeathReaderTests : IDisposable
     private readonly string root = Path.Combine(Path.GetTempPath(), "SoulsTrackerTests", Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public async Task NewSelectionCanRequireAParsedResultInsteadOfThePreviousSelectionsCache()
+    {
+        string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 22)));
+        var configuration = new EldenRingSaveConfiguration(path, 0);
+        var reader = new EldenRingSaveDeathReader();
+        reader.Configure(configuration);
+        Assert.Equal(RuntimeGameReaderStatus.Synced, (await reader.ReadAsync(default))!.Status);
+        Assert.Equal(RuntimeGameReaderStatus.Cached, (await reader.ReadAsync(default))!.Status);
+        reader.Configure(configuration, requireFreshRead: true);
+        var fresh = (await reader.ReadAsync(default))!;
+        Assert.Equal(RuntimeGameReaderStatus.Synced, fresh.Status);
+        Assert.Equal(22, fresh.Observation!.TotalDeaths.Value);
+        Assert.Equal(RuntimeGameReaderStatus.Cached, (await reader.ReadAsync(default))!.Status);
+        File.Delete(path);
+        reader.Configure(configuration, requireFreshRead: true);
+        Assert.Null(await reader.ReadAsync(default));
+    }
+
+    [Fact]
     public async Task ReaderCachesWithinTenSecondsThenRevalidates()
     {
         string path = WriteFixture("ER0000.sl2", EldenRingSaveFixture.Create((0, 22)));

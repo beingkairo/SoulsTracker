@@ -105,13 +105,15 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
             var initial = await InitializeRequestAsync("publisher", null).ConfigureAwait(false);
             string session = Guid.NewGuid().ToString("N");
             string expected = checked(long.Parse(initial.Epoch, CultureInfo.InvariantCulture) + 1).ToString(CultureInfo.InvariantCulture);
-            string acquisition = HostedPublisherProtocol.Canonical(new { v = 1, expectedEpoch = initial.Epoch, sessionRequestId = session });
+            string acquisition = HostedPublisherProtocol.Canonical(new { v = 1, protocolVersion = 2, expectedEpoch = initial.Epoch, sessionRequestId = session });
             var current = await InitializeRequestAsync("session", acquisition).ConfigureAwait(false);
             if (current.Epoch != expected || current.Session != session || current.Generation != initial.Generation) throw new JsonException();
             long sequence = 0;
             Candidate? retry = null;
             bool uncertainDeath = false, uncertainAppearance = false;
+            bool confirmedDeath = false;
             int failures = 0;
+            long lastAccepted = clock.GetTimestamp();
             while (true)
             {
                 stop.Token.ThrowIfCancellationRequested();
@@ -121,16 +123,27 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
                     if (IsPaused(status)) return;
                     if (!uncertainDeath && death is not null && HostedPublisherProtocol.Digest(death) == current.Death.Digest) deathAcknowledged = deathGeneration;
                     if (!uncertainAppearance && appearance is not null && HostedPublisherProtocol.Digest(appearance) == current.Appearance.Digest) appearanceAcknowledged = appearanceGeneration;
-                    var d = deathGeneration != deathAcknowledged ? death : null;
+                    var d = !confirmedDeath || deathGeneration != deathAcknowledged ? death : null;
                     var a = appearanceGeneration != appearanceAcknowledged ? appearance : null;
-                    candidate = d is null && a is null ? null : retry is not null && retry.Death == d && retry.Appearance == a
-                        ? retry : new Candidate(d, a, deathGeneration, appearanceGeneration,
+                    candidate = retry is not null && retry.Death == d && retry.Appearance == a
+                        ? retry : d is null && a is null ? null : new Candidate(d, a, deathGeneration, appearanceGeneration,
                             HostedPublisherProtocol.State(current.Epoch, session, checked(++sequence), d, a), sequence);
                     if (candidate is null && closing) return;
                     status = candidate is null ? HostedPublisherStatus.Ready : HostedPublisherStatus.Sending;
                 }
                 NotifyStatus();
-                if (candidate is null) { await wake.WaitAsync(stop.Token).ConfigureAwait(false); continue; }
+                if (candidate is null)
+                {
+                    var remaining = TimeSpan.FromSeconds(60) - clock.GetElapsedTime(lastAccepted);
+                    if (await WaitForWorkAsync(remaining).ConfigureAwait(false)) continue;
+                    lock (gate)
+                    {
+                        if (closing) return;
+                        if (deathGeneration != deathAcknowledged || appearanceGeneration != appearanceAcknowledged) continue;
+                        candidate = new Candidate(null, null, deathGeneration, appearanceGeneration,
+                            HostedPublisherProtocol.State(current.Epoch, session, checked(++sequence), null, null), sequence);
+                    }
+                }
                 bool deathWasUncertain = uncertainDeath, appearanceWasUncertain = uncertainAppearance;
                 uncertainDeath |= candidate.Death is not null;
                 uncertainAppearance |= candidate.Appearance is not null;
@@ -149,6 +162,8 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
                         if (candidate.Appearance is not null) appearanceAcknowledged = candidate.AppearanceGeneration;
                     }
                     current = ack;
+                    lastAccepted = clock.GetTimestamp();
+                    if (candidate.Death is not null) confirmedDeath = true;
                     uncertainDeath = uncertainAppearance = false;
                     retry = null;
                     failures = 0;
@@ -169,6 +184,19 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
     }
 
     private sealed record Candidate(HostedDeath? Death, HostedAppearance? Appearance, long DeathGeneration, long AppearanceGeneration, string Body, long Sequence);
+    private async Task<bool> WaitForWorkAsync(TimeSpan remaining)
+    {
+        if (remaining <= TimeSpan.Zero) return false;
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+        var signal = wake.WaitAsync(wait.Token);
+        var deadline = Task.Delay(remaining, clock, wait.Token);
+        var first = await Task.WhenAny(signal, deadline).ConfigureAwait(false);
+        await wait.CancelAsync().ConfigureAwait(false);
+        try { await (first == signal ? deadline : signal).ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        await first.ConfigureAwait(false);
+        return first == signal;
+    }
     private sealed class PauseFailure(HostedPublisherStatus status) : Exception { internal HostedPublisherStatus Status { get; } = status; }
     private sealed class TransientFailure(TimeSpan? retryAfter = null) : Exception { internal TimeSpan? RetryAfter { get; } = retryAfter; }
 
@@ -221,6 +249,7 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
             using var request = new HttpRequestMessage(action == "publisher" ? HttpMethod.Get : action == "session" ? HttpMethod.Post : HttpMethod.Put,
                 $"{configuration.Origin}/api/v1/overlays/{configuration.OverlayId}/{action}");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration.WriteCapability);
+            request.Headers.TryAddWithoutValidation("X-SoulsTracker-Protocol", "2");
             request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
             if (body is not null)
             {
@@ -235,7 +264,29 @@ public sealed class HostedOverlayPublisher : IAsyncDisposable
                 throw new TransientFailure(after?.Delta ?? (after?.Date - clock.GetUtcNow()));
             }
             if (code is 401 or 403) throw new PauseFailure(HostedPublisherStatus.CredentialsRequired);
-            if (code == 409) throw new PauseFailure(HostedPublisherStatus.Conflict);
+            if (code == 409)
+            {
+                if (response.Content.Headers.ContentType?.MediaType == "application/json" &&
+                    response.Content.Headers.ContentLength is null or <= 64)
+                {
+                    await using var errorStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                    byte[] errorBytes = new byte[65];
+                    int errorLength = 0, read;
+                    while (errorLength < errorBytes.Length && (read = await errorStream.ReadAsync(errorBytes.AsMemory(errorLength), ct).ConfigureAwait(false)) != 0)
+                        errorLength += read;
+                    if (errorLength < errorBytes.Length)
+                    {
+                        try
+                        {
+                            using var error = JsonDocument.Parse(errorBytes.AsMemory(0, errorLength));
+                            if (error.RootElement.TryGetProperty("error", out var value) && value.GetString() == "client_update_required")
+                                throw new PauseFailure(HostedPublisherStatus.InvalidProtocol);
+                        }
+                        catch (JsonException) { }
+                    }
+                }
+                throw new PauseFailure(HostedPublisherStatus.Conflict);
+            }
             if (code != 200) throw new PauseFailure(HostedPublisherStatus.InvalidProtocol);
             if (response.Content.Headers.ContentLength > HostedOverlayJson.MaximumBytes ||
                 response.Content.Headers.ContentType?.MediaType != "application/json" || response.Content.Headers.ContentEncoding.Count != 0) throw new JsonException();

@@ -10,17 +10,27 @@
   "observability": { "enabled": false },
   "ratelimits": [
     { "name": "PUBLISHER_RATE_LIMITER", "namespace_id": "450501", "simple": { "limit": 60, "period": 60 } },
-    { "name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": { "limit": 120, "period": 60 } }
+    { "name": "LIVE_RATE_LIMITER", "namespace_id": "450502", "simple": { "limit": 120, "period": 60 } },
+    { "name": "CREATE_CLIENT_RATE_LIMITER", "namespace_id": "450503", "simple": { "limit": 6, "period": 60 } },
+    { "name": "CREATE_SERVICE_RATE_LIMITER", "namespace_id": "450504", "simple": { "limit": 20, "period": 60 } }
   ],
-  "vars": { "PROVISIONED_IDS": [], "BROWSER_ORIGIN": "https://overlay.beingkairo.com" },
+  "vars": {
+    "BROWSER_ORIGIN": "https://overlay.beingkairo.com",
+    "PROVISIONED_IDS": ["082fb2c001a4ea02a5e97a3a31fe2234"],
+    "PROVISIONING_CEILING": "100",
+    "PROVISIONING_CONFIGURATION_VERSION": "3",
+    "PROVISIONING_HARD_MAXIMUM": "100"
+  },
   "routes": [{ "pattern": "overlay.beingkairo.com", "custom_domain": true }],
   "assets": { "directory": "../web_overlay/dist/hosted", "run_worker_first": ["/api/*"] },
   "durable_objects": {
     "bindings": [
-      { "name": "OVERLAYS", "class_name": "OverlayState" }
+      { "name": "OVERLAYS", "class_name": "OverlayState" },
+      { "name": "PROVISIONING_AUTHORITY", "class_name": "ProvisioningAuthority" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["OverlayState"] }
+    { "tag": "v1", "new_sqlite_classes": ["OverlayState"] },
+    { "tag": "v2", "new_sqlite_classes": ["ProvisioningAuthority"] }
   ]
 }

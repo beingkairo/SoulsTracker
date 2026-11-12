@@ -23,6 +23,7 @@ function New-PackageFixture([string]$Name) {
     foreach ($relative in @(
         "scripts/Build-Release.ps1", "scripts/Get-WebView2Bootstrapper.ps1", "scripts/Test-WebView2Installer.ps1",
         "scripts/Verify-Version.ps1", "scripts/Verify-ReleaseGuide.ps1", "installer/SoulsTracker.iss",
+        "scripts/verify_publication.py", "scripts/verify_hollow_knight_input.py",
         "eng/Get-Version.ps1", "eng/Version.props", "README.md", "docs/RELEASE-GETTING-STARTED.md", "docs/THIRD_PARTY_NOTICES.md", "docs/WEBVIEW2_RUNTIME_LICENSE.txt",
         "docs/releases/v$version.md", ".github/workflows/release.yml",
         "web_overlay/package.json", "web_overlay/package-lock.json"
@@ -51,10 +52,12 @@ function Invoke-FakeCommand([string]$Tool, [object[]]$Arguments) {
         Assert-True ($Arguments[1] -eq (Join-Path $packageCaseState.Fixture 'src\SoulsTracker.Desktop\SoulsTracker.Desktop.csproj')) 'Publish must name Desktop explicitly.'
         Assert-True (($Arguments[2..5] -join ' ') -eq '--configuration Release --no-restore --output') 'Publish configuration changed.'
         $output = $Arguments[6]
-        Assert-True ($output -eq (Join-Path $packageCaseState.Fixture 'artifacts\staging\desktop')) 'Publish must use staging.'
+        Assert-True ($output -eq (Join-Path $packageCaseState.OutputRoot 'staging\desktop')) 'Publish must use staging.'
         foreach ($option in @('-p:DebugType=None', '-p:DebugSymbols=false', '-p:CopyOutputSymbolsToPublishDirectory=false')) {
             Assert-True ($Arguments -ccontains $option) 'Publish must suppress end-user debug symbols without changing developer builds.'
         }
+        $fixtureApiOutput = Join-Path $packageCaseState.Fixture 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip'
+        if (Test-Path -LiteralPath $fixtureApiOutput) { Remove-Item -LiteralPath $fixtureApiOutput }
         New-DistributionFixture $packageCaseState.Fixture $output
         Set-Content (Join-Path $output 'partial.txt') 'synthetic staged payload'
         if ($packageCaseState.Failure -ne 'missing-executable') {
@@ -62,7 +65,11 @@ function Invoke-FakeCommand([string]$Tool, [object[]]$Arguments) {
         }
         switch ($packageCaseState.Failure) {
             'content-notices' { Remove-Item (Join-Path $packageCaseState.Fixture 'docs/THIRD_PARTY_NOTICES.md') }
-            'content-drift' { (Get-Content -Raw (Join-Path $output 'SoulsTracker.Desktop.deps.json')).Replace('10.0.10', '99.0.0') | Set-Content (Join-Path $output 'SoulsTracker.Desktop.deps.json') }
+            'content-drift' {
+                [xml]$project = Get-Content -Raw (Join-Path $packageCaseState.Fixture 'src/SoulsTracker.Desktop/SoulsTracker.Desktop.csproj')
+                $pin = @($project.Project.PropertyGroup.RuntimeFrameworkVersion | Where-Object { $_ })[0]
+                (Get-Content -Raw (Join-Path $output 'SoulsTracker.Desktop.deps.json')).Replace([string]$pin, '99.0.0') | Set-Content (Join-Path $output 'SoulsTracker.Desktop.deps.json')
+            }
             'content-symbol' { Set-Content (Join-Path $output 'synthetic.pdb') 'synthetic symbol' }
             'content-upstream' { Add-Content (Join-Path $output 'fr/Example.resources.dll') 'C:\Users\Synthetic\private\example.pdb' }
             'content-path' { Set-Content (Join-Path $output 'SoulsTracker.Desktop.exe') 'C:\Users\Synthetic\private\example.pdb' }
@@ -73,16 +80,21 @@ function Invoke-FakeCommand([string]$Tool, [object[]]$Arguments) {
 }
 function dotnet { Invoke-FakeCommand 'dotnet' $args }
 function npm { Invoke-FakeCommand 'npm' $args }
+function python { Invoke-FakeCommand 'python' $args }
 
-function Invoke-PackageCase([string]$Name, [string]$Failure = '', [string]$InvalidInput = '', [bool]$Previous = $true) {
+function Invoke-PackageCase([string]$Name, [string]$Failure = '', [string]$InvalidInput = '', [bool]$Previous = $true, [bool]$Isolated = $false) {
     $packageCaseState = @{
         Fixture = New-PackageFixture $Name
         Failure = $Failure
         Calls = [Collections.Generic.List[string]]::new()
         Publishes = 0
     }
-    $release = Join-Path $packageCaseState.Fixture 'artifacts/desktop'
-    $staging = Join-Path $packageCaseState.Fixture 'artifacts/staging/desktop'
+    $outputRoot = if ($Isolated) { Join-Path $fixtureRoot "$Name-output" } else { Join-Path $packageCaseState.Fixture 'artifacts' }
+    $packageCaseState.OutputRoot = $outputRoot
+    $release = Join-Path $outputRoot 'desktop'
+    $staging = Join-Path $outputRoot 'staging/desktop'
+    $apiInput = Join-Path $packageCaseState.Fixture 'api-input.zip'
+    Set-Content -LiteralPath $apiInput 'synthetic prevalidated API fixture'
     if ($Previous) {
         $null = New-Item -ItemType Directory -Path $release -Force
         Set-Content (Join-Path $release 'previous.txt') 'previous release'
@@ -93,7 +105,9 @@ function Invoke-PackageCase([string]$Name, [string]$Failure = '', [string]$Inval
         Set-Content (Join-Path $packageCaseState.Fixture 'docs/RELEASE-GETTING-STARTED.md') 'obsolete guide'
     }
     $errorMessage = $null
-    try { & (Join-Path $packageCaseState.Fixture 'scripts/Build-Release.ps1') -SkipInstaller | Out-Null }
+    $options = @{ SkipInstaller = $true; HollowKnightApiPackage = $apiInput }
+    if ($Isolated) { $options.OutputRoot = $outputRoot }
+    try { & (Join-Path $packageCaseState.Fixture 'scripts/Build-Release.ps1') @options | Out-Null }
     catch { $errorMessage = "$($_.Exception.Message)`n$($_.ScriptStackTrace)" }
     if ($Failure -or $InvalidInput) {
         $expected = if ($InvalidInput -eq 'version') { 'internal private package' }
@@ -149,6 +163,17 @@ function Invoke-Git([string[]]$Arguments) {
 try {
     Invoke-PackageCase 'cold' -Previous $false
     Invoke-PackageCase 'replace'
+    Invoke-PackageCase 'isolated' -Previous $false -Isolated $true
+    $isolationFixture = New-PackageFixture 'isolation-rejections'
+    $existingOutput = Join-Path $fixtureRoot 'existing-output'
+    $null = New-Item -ItemType Directory -Path $existingOutput
+    Set-Content -LiteralPath (Join-Path $existingOutput 'preserved.txt') 'protected synthetic output'
+    $isolatedBuilder = Join-Path $isolationFixture 'scripts/Build-Release.ps1'
+    Assert-Rejected { & $isolatedBuilder -LocalQualification -SkipInstaller } 'requires an explicit fresh OutputRoot'
+    Assert-Rejected { & $isolatedBuilder -OutputRoot $existingOutput -SkipInstaller } 'must not already exist'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $existingOutput 'preserved.txt')) -eq 'protected synthetic output') 'Existing isolated output changed.'
+    Assert-Rejected { & $isolatedBuilder -OutputRoot (Join-Path $isolationFixture 'artifacts/new-output') -SkipInstaller } 'historical artifact directories'
+    Assert-Rejected { & $isolatedBuilder -OutputRoot $fixtureRoot -SkipInstaller } 'must not already exist'
     foreach ($failure in @('content-notices', 'content-drift', 'content-symbol', 'content-upstream', 'content-path')) {
         Invoke-PackageCase $failure -Failure $failure
     }
@@ -248,20 +273,32 @@ try {
     Write-Output 'Release target fixture cases passed.'
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
-    Assert-True ($workflow.Contains('path: artifacts/desktop')) 'SBOM must scan the prepared Desktop payload.'
-    foreach ($required in @('ref: ${{ github.sha }}', 'RELEASE_EVENT: ${{ github.event_name }}', 'RELEASE_REF: ${{ github.ref }}', 'RELEASE_COMMIT: ${{ github.sha }}', '-EventName $env:RELEASE_EVENT -EventRef $env:RELEASE_REF -ExpectedCommit $env:RELEASE_COMMIT', 'tag_name: ${{ steps.target.outputs.tag }}', 'generate_release_notes: false', 'body_path: ${{ steps.version.outputs.release_notes }}', 'run: ./scripts/Build-Release.ps1')) {
+    Assert-True ($workflow.Contains('path: release-output/desktop')) 'SBOM must scan the prepared Desktop payload.'
+    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: 1a0825a1df4f62ccd25986abfb931cf71359f546', 'APPROVED_IMPLEMENTATION: 5b36fd839e9de545218aa1892f532da35098013f', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-artifact: false', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.2.1', 'desktop-v2.2.1-', 'desktop-v2\.2\.1-', 'git/ref/tags/v2.2.1', 'releases/tags/v2.2.1', 'prepared/SoulsTrackerV2.2.1.exe', 'prepared/SoulsTrackerV2.2.1-portable.zip', 'prepared/SoulsTrackerV2.2.1.sbom.spdx.json', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ../control/scripts/Build-Release.ps1', 'get_hollow_knight_input.py --source source', '--input-origin', 'externalParameters.api78Input', 'verify_publication.py source --source source', '-SourceRoot', '-OutputRoot', '-HollowKnightApiPackage')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }
+    Assert-True ($workflow -notmatch 'tag_name: v2\.2\.0|releases/tags/v2\.2\.0|prepared/SoulsTrackerV2\.2\.0') 'v2.2.1 workflow must not target or overwrite v2.2.0.'
     $last = -1
-    foreach ($step in @('actions/checkout@', 'id: target', 'actions/setup-dotnet@', 'Install Inno Setup', 'run: ./scripts/Build-Release.ps1', 'Create portable archive', 'Attest release artifacts', 'Publish GitHub release')) {
+    foreach ($step in @('actions/checkout@', 'actions/setup-dotnet@', 'Require approved API v78 input provisioning', 'Install Inno Setup', 'run: ../control/scripts/Build-Release.ps1', 'Create portable archive', 'Generate SBOM', 'Reconcile candidate checksums', 'Attest release artifacts', 'actions/upload-artifact@', 'Validate immutable preparation', 'actions/download-artifact@', 'Verify approved bytes and signed provenance', 'Publish GitHub release')) {
         $index = $workflow.IndexOf($step)
         Assert-True ($index -gt $last) "Workflow ordering invalid at $step."
         $last = $index
     }
     Assert-True ($workflow -notmatch 'Append setup guide|generate_release_notes: true|gh api --method PATCH') 'Published release body must not gain appended or generated prose.'
-    Assert-True ($workflow -notmatch 'SkipTests|SkipInstaller|continue-on-error|always\(\)|GITHUB_REF_NAME') 'Workflow contains a qualification bypass or unvalidated target.'
-    Assert-True ([regex]::Matches($workflow, 'run: ./scripts/Build-Release.ps1').Count -eq 1) 'Exactly one qualification path is required.'
+    Assert-True ($workflow -notmatch 'SkipTests|SkipInstaller|LocalQualification|continue-on-error|always\(\)|GITHUB_REF_NAME') 'Workflow contains a qualification bypass or unvalidated target.'
+    Assert-True ($workflow -notmatch '(?m)^  push:') 'Tag push must not silently build or publish different artifacts.'
+    Assert-True ([regex]::Matches($workflow, 'run: ../control/scripts/Build-Release.ps1').Count -eq 1) 'Exactly one qualification path is required.'
+    Assert-True ([regex]::Matches($workflow, 'git -C control diff --exit-code HEAD').Count -eq 3) 'Control cleanliness must be checked before source verification, signing preparation and publication verification.'
+    Assert-True ([regex]::Matches($workflow, "throw 'Publication control commit differs'").Count -eq 3) 'Control HEAD must match the immutable workflow commit at every verification boundary.'
+    $probe = $workflow.Substring($workflow.IndexOf("`n  probe_input:"))
+    foreach ($required in @("if: inputs.action == 'probe-input'", 'contents: write', 'GH_TOKEN: ${{ github.token }}', 'persist-credentials: false', 'get_hollow_knight_input.py --source .', 'Authenticated API v78 binary access or verification failed')) {
+        Assert-True ($probe.Contains($required)) "Missing input probe contract: $required"
+    }
+    Assert-True ($workflow -match '(?m)^permissions:\r?\n  contents: read\r?$') 'Global token permission must remain read-only.'
+    Assert-True ($workflow -match '(?s)  prepare:.*?    permissions:\r?\n      contents: write\r?\n') 'Preparation requires job-scoped permission for unpublished input retrieval.'
+    Assert-True ($probe -notmatch 'id-token: write|attestations: write|upload-artifact|action-gh-release|--method|--input') 'Input access probe must perform read-only requests without uploads or signing.'
     Write-Output 'Release tooling characterization passed. Synthetic payloads are not distribution evidence.'
+    $global:LASTEXITCODE = 0
 } finally {
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
 }

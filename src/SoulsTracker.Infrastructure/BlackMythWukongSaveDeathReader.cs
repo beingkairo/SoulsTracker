@@ -23,10 +23,10 @@ public sealed class BlackMythWukongSaveDeathReader : IRuntimeGameDeathReader
     public GameId GameId => GameId.BlackMythWukong;
 
     /// <summary>Updates only the private local selection used by the next poll.</summary>
-    public void Configure(BlackMythWukongSaveConfiguration value)
+    public void Configure(BlackMythWukongSaveConfiguration value, bool requireFreshRead = false)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (configuration.LocalPath != value.LocalPath)
+        if (requireFreshRead || configuration.LocalPath != value.LocalPath)
         {
             configuration = value;
             lastFingerprint = null;

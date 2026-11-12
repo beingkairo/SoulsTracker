@@ -7,15 +7,17 @@
   "scripts": {
     "check": "tsc --noEmit",
     "build": "wrangler deploy --dry-run --outdir dist",
-    "test": "vitest run"
+    "test": "vitest run && vitest run --config vitest.provisioning.config.ts && vitest run --config vitest.operator.config.ts && node --disable-warning=ExperimentalWarning test/operator-node/access-compatibility.test.mjs",
+    "build:operator": "cd operator_gateway && wrangler deploy --dry-run --config wrangler.jsonc --outdir ../dist/policy-gateway && wrangler deploy --dry-run --config diagnostic.wrangler.jsonc --outdir ../dist/diagnostic-gateway",
+    "build:diagnostic": "wrangler deploy src/diagnostic-index.ts --dry-run --outdir dist/diagnostic-target"
   },
-  "overrides": { "sharp": "0.35.4" },
+  "overrides": { "sharp": "0.35.5", "undici": "7.30.1", "zod": "4.6.7" },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.22.0",
     "@cloudflare/workers-types": "5.20260916.1",
     "@types/node": "22.20.3",
     "typescript": "7.0.2",
-    "vitest": "4.1.11",
+    "vitest": "4.1.12",
     "wrangler": "4.124.0"
   }
 }

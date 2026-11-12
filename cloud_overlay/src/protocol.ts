@@ -67,6 +67,11 @@ export function identity(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{32}$/.test(value)) return reject(400, "invalid_body");
   return value;
 }
+export function clientProtocol(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 255) return reject(400, "invalid_body");
+  return value;
+}
 export function increment(value: string): string {
   if (value === "9223372036854775807") return reject(409, "counter_exhausted");
   return (BigInt(value) + 1n).toString();
@@ -98,12 +103,13 @@ export async function readBody(request: Request): Promise<unknown> {
     return reject(400, "invalid_body");
   } finally { reader.releaseLock(); }
 }
-export interface Acquisition { v: 1; expectedEpoch: string; sessionRequestId: string }
+export interface Acquisition { v: 1; expectedEpoch: string; sessionRequestId: string; protocolVersion?: number }
 export function acquisition(value: unknown): Acquisition {
   try {
-    const body = shape(value, ["v", "expectedEpoch", "sessionRequestId"]);
+    const body = shape(value, ["v", "expectedEpoch", "sessionRequestId", "protocolVersion"], ["v", "expectedEpoch", "sessionRequestId"]);
     if (body.v !== 1) return reject(400, "invalid_body");
-    return { v: 1, expectedEpoch: validateHostedDecimal(body.expectedEpoch), sessionRequestId: identity(body.sessionRequestId) };
+    return { v: 1, expectedEpoch: validateHostedDecimal(body.expectedEpoch), sessionRequestId: identity(body.sessionRequestId),
+      protocolVersion: clientProtocol(body.protocolVersion) };
   } catch { return reject(400, "invalid_body"); }
 }
 
@@ -121,32 +127,34 @@ export function provisioning(value: unknown): Provisioning {
 
 export interface StateWrite {
   v: 1; epoch: string; sessionRequestId: string; sequence: string;
+  protocolVersion?: number;
   death?: HostedDeath; appearance?: HostedAppearance;
 }
-export interface Rotation { v: 1; rotationId: string; expectedGeneration: string; readCapability?: string; writeCapability?: string }
+export interface Rotation { v: 1; rotationId: string; expectedGeneration: string; protocolVersion?: number; readCapability?: string; writeCapability?: string }
 export function rotation(value: unknown): Rotation {
   try {
-    const body = shape(value, ["v", "rotationId", "expectedGeneration", "readCapability", "writeCapability"], ["v", "rotationId", "expectedGeneration"]);
+    const body = shape(value, ["v", "rotationId", "expectedGeneration", "protocolVersion", "readCapability", "writeCapability"], ["v", "rotationId", "expectedGeneration"]);
     const read = Object.hasOwn(body, "readCapability"), write = Object.hasOwn(body, "writeCapability");
     if (body.v !== 1 || (!read && !write)) return reject(400, "invalid_body");
     return { v: 1, rotationId: identity(body.rotationId), expectedGeneration: validateHostedDecimal(body.expectedGeneration),
+      protocolVersion: clientProtocol(body.protocolVersion),
       ...(read ? { readCapability: capability(body.readCapability) } : {}),
       ...(write ? { writeCapability: capability(body.writeCapability) } : {}) };
   } catch { return reject(400, "invalid_body"); }
 }
 export function stateWrite(value: unknown): StateWrite {
   try {
-    const body = shape(value, ["v", "epoch", "sessionRequestId", "sequence", "death", "appearance"],
+    const body = shape(value, ["v", "epoch", "sessionRequestId", "sequence", "protocolVersion", "death", "appearance"],
       ["v", "epoch", "sessionRequestId", "sequence"]);
     const hasDeath = Object.hasOwn(body, "death"), hasAppearance = Object.hasOwn(body, "appearance");
-    if (body.v !== 1 || (!hasDeath && !hasAppearance)) return reject(400, "invalid_body");
+    if (body.v !== 1 || (!hasDeath && !hasAppearance && body.protocolVersion === undefined)) return reject(400, "invalid_body");
     const channel = (value: unknown) => {
       if (value === null || typeof value !== "object" || Array.isArray(value) || Object.hasOwn(value, "revision"))
         return reject(400, "invalid_body");
       return { ...value, revision: "0" };
     };
     return { v: 1, epoch: validateHostedDecimal(body.epoch), sessionRequestId: identity(body.sessionRequestId),
-      sequence: validateHostedDecimal(body.sequence),
+      sequence: validateHostedDecimal(body.sequence), protocolVersion: clientProtocol(body.protocolVersion),
       ...(hasDeath ? { death: normalizeHostedDeath(channel(body.death)) } : {}),
       ...(hasAppearance ? { appearance: normalizeHostedAppearance(channel(body.appearance)) } : {}) };
   } catch { return reject(400, "invalid_body"); }

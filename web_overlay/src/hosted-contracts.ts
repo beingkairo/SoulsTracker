@@ -30,6 +30,16 @@ export interface HostedAppearance {
 export type HostedEnvelope =
   | { readonly v: 1; readonly type: "snapshot"; readonly death: HostedDeath | null; readonly appearance: HostedAppearance }
   | { readonly v: 1; readonly type: "update"; readonly death?: HostedDeath; readonly appearance?: HostedAppearance };
+export interface HostedPresence {
+  readonly generation: number;
+  readonly serverTime: number;
+  readonly leaseExpiresAt: number | null;
+  readonly legacyContactExpiresAt: number | null;
+  readonly confirmed: boolean;
+}
+export type HostedV2Envelope =
+  | { readonly v: 2; readonly type: "snapshot"; readonly death: HostedDeath | null; readonly appearance: HostedAppearance; readonly presence: HostedPresence }
+  | { readonly v: 2; readonly type: "update"; readonly death?: HostedDeath; readonly appearance?: HostedAppearance; readonly presence: HostedPresence };
 
 export const maximumHostedBytes = 8192;
 // Shared by the write protocol; callers still validate their own envelope shape.
@@ -133,6 +143,32 @@ export function parseHostedOverlay(json: string): HostedEnvelope {
   if (!hasDeath && !hasAppearance) return invalid();
   return { v: 1, type: "update", ...(hasDeath ? { death: death(root.death) } : {}),
     ...(hasAppearance ? { appearance: appearance(root.appearance) } : {}) };
+}
+export function parseHostedV2(json: string): HostedV2Envelope {
+  if (new TextEncoder().encode(json).length > maximumHostedBytes) return invalid();
+  const parsed: unknown = JSON.parse(json);
+  rejectDuplicateFields(json);
+  const root = object(parsed, ["v", "type", "death", "appearance", "presence"], ["v", "type", "presence"]);
+  if (root.v !== 2 || (root.type !== "snapshot" && root.type !== "update")) return invalid();
+  const p = object(root.presence, ["generation", "serverTime", "leaseExpiresAt", "legacyContactExpiresAt", "confirmed"]);
+  const timestamp = (value: unknown, nullable: boolean): number | null => {
+    if (value === null && nullable) return null;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) return invalid();
+    return value;
+  };
+  const generation = timestamp(p.generation, false)!;
+  const serverTime = timestamp(p.serverTime, false)!;
+  const leaseExpiresAt = timestamp(p.leaseExpiresAt, true);
+  const legacyContactExpiresAt = timestamp(p.legacyContactExpiresAt, true);
+  if (typeof p.confirmed !== "boolean") return invalid();
+  const presence = { generation, serverTime, leaseExpiresAt, legacyContactExpiresAt, confirmed: p.confirmed };
+  const hasDeath = Object.hasOwn(root, "death"), hasAppearance = Object.hasOwn(root, "appearance");
+  if (root.type === "snapshot") {
+    if (!hasDeath || !hasAppearance) return invalid();
+    return { v: 2, type: "snapshot", death: root.death === null ? null : death(root.death), appearance: appearance(root.appearance), presence };
+  }
+  return { v: 2, type: "update", ...(hasDeath ? { death: death(root.death) } : {}),
+    ...(hasAppearance ? { appearance: appearance(root.appearance) } : {}), presence };
 }
 export function serializeHostedOverlay(envelope: HostedEnvelope): string {
   return JSON.stringify(parseHostedOverlay(JSON.stringify(envelope)));

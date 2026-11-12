@@ -34,7 +34,7 @@ public sealed class DesktopTrackerViewModelCharacterizationTests
 
         Assert.True(tracker.CanCheckForUpdates);
         Assert.Equal("Unavailable", tracker.UpdateLatestVersion);
-        Assert.Equal(new Uri("https://beingkairo.com/tools/souls-tracker/"), tracker.AvailableUpdateReleasePage);
+        Assert.Equal(new Uri("https://beingkairo.com/tools/soulstracker/"), tracker.AvailableUpdateReleasePage);
     }
 
     [Fact]

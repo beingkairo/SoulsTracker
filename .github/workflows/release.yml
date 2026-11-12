@@ -1,96 +1,247 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [prepare, publish, probe-input]
+        default: prepare
+        required: true
+      prepared_run_id:
+        description: Successful preparation run ID (publish only)
+        type: string
+      artifact_id:
+        description: Immutable prepared artifact ID (publish only)
+        type: string
+      approved_manifest_sha256:
+        description: Owner-approved release-manifest SHA256 (publish only)
+        type: string
+
+concurrency:
+  group: desktop-v2.2.1-publication
+  cancel-in-progress: false
 
 permissions:
-  contents: write
-  attestations: write
-  id-token: write
+  contents: read
+
+env:
+  APPROVED_SOURCE: 1a0825a1df4f62ccd25986abfb931cf71359f546
+  APPROVED_IMPLEMENTATION: 5b36fd839e9de545218aa1892f532da35098013f
 
 jobs:
-  package:
+  prepare:
+    if: inputs.action == 'prepare'
     runs-on: windows-latest
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SOURCE }}
+          path: source
           fetch-depth: 0
-
-      - name: Verify release target
-        id: target
-        shell: pwsh
-        env:
-          RELEASE_EVENT: ${{ github.event_name }}
-          RELEASE_REF: ${{ github.ref }}
-          RELEASE_COMMIT: ${{ github.sha }}
-        run: |
-          $tag = & ./scripts/Verify-ReleaseTarget.ps1 -EventName $env:RELEASE_EVENT -EventRef $env:RELEASE_REF -ExpectedCommit $env:RELEASE_COMMIT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.301
-
       - uses: actions/setup-node@v4
         with:
-          node-version-file: web_overlay/.nvmrc
+          node-version-file: source/web_overlay/.nvmrc
           cache: npm
-          cache-dependency-path: web_overlay/package-lock.json
-
-      - name: Read product version
-        id: version
+          cache-dependency-path: source/web_overlay/package-lock.json
+      - name: Verify source and read version
         shell: pwsh
         run: |
-          $metadata = & ./eng/Get-ReleaseMetadata.ps1
-          "value=$($metadata.Version)" >> $env:GITHUB_OUTPUT
-          "artifact_stem=$($metadata.ArtifactStem)" >> $env:GITHUB_OUTPUT
-          "release_notes=$($metadata.ReleaseNotesPath)" >> $env:GITHUB_OUTPUT
-
+          if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
+          git -C control diff --exit-code HEAD
+          if ($LASTEXITCODE) { throw 'Publication controls changed' }
+          if ((git -C source rev-parse HEAD) -cne $env:APPROVED_SOURCE) { throw 'Unapproved source' }
+          python -B control/scripts/verify_publication.py source --source source
+          if ($LASTEXITCODE) { throw 'Application implementation changed' }
+          $metadata = & ./source/eng/Get-ReleaseMetadata.ps1
+          if ($metadata.Version -ne '2.2.1') { throw 'Unexpected version' }
+      - name: Require approved API v78 input provisioning
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -B control/scripts/get_hollow_knight_input.py --source source --destination "$env:RUNNER_TEMP/SoulsTracker-input"
+          if ($LASTEXITCODE) { throw 'Authenticated API v78 input verification failed' }
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
-
-      - name: Build and test release candidate
+      - name: Build and test approved application source
         shell: pwsh
-        run: ./scripts/Build-Release.ps1
-
-      - name: Create portable archive and checksums
+        working-directory: source
+        run: ../control/scripts/Build-Release.ps1 -SourceRoot "$pwd" -OutputRoot "$env:GITHUB_WORKSPACE/release-output" -HollowKnightApiPackage "$env:RUNNER_TEMP/SoulsTracker-input/api-12620.zip"
+      - name: Create portable archive
         shell: pwsh
         run: |
-          $release = 'artifacts/desktop'
-          $artifactStem = '${{ steps.version.outputs.artifact_stem }}'
-          Compress-Archive -Path "$release/*" -DestinationPath "artifacts/$artifactStem-portable.zip" -Force
-          Get-FileHash "installer/Output/$artifactStem.exe", "artifacts/$artifactStem-portable.zip" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path | Split-Path -Leaf)" } |
-            Set-Content -Encoding ascii 'artifacts/SHA256SUMS.txt'
-
+          New-Item -ItemType Directory release | Out-Null
+          Copy-Item "$env:GITHUB_WORKSPACE/release-output/installer/SoulsTrackerV2.2.1.exe" release/
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE/release-output/desktop/*" -DestinationPath release/SoulsTrackerV2.2.1-portable.zip
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: artifacts/desktop
+          path: release-output/desktop
           format: spdx-json
-          output-file: artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
-
+          syft-version: v1.52.0
+          output-file: release/SoulsTrackerV2.2.1.sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Reconcile candidate checksums and record exact inputs
+        shell: pwsh
+        run: |
+          if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
+          git -C control diff --exit-code HEAD
+          if ($LASTEXITCODE) { throw 'Publication controls changed during qualification' }
+          python -B control/scripts/verify_publication.py prepare --directory release --payload "$env:GITHUB_WORKSPACE/release-output/desktop" --source source --workflow-commit '${{ github.sha }}' --run-id '${{ github.run_id }}' --input-origin "$env:RUNNER_TEMP/SoulsTracker-input/input-origin.json"
+          if ($LASTEXITCODE) { throw 'Release reconciliation failed' }
+      - name: Generate GitHub build predicate
+        id: predicate
+        uses: actions/attest-build-provenance/predicate@1176ef556905f349f669722abf30bce1a6e16e01
+      - name: Record separately checked out application source
+        shell: pwsh
+        env:
+          PREDICATE: ${{ steps.predicate.outputs.predicate }}
+        run: |
+          $p = $env:PREDICATE | ConvertFrom-Json -AsHashtable
+          $p.buildDefinition.resolvedDependencies += @{ uri = 'git+https://github.com/${{ github.repository }}'; digest = @{ gitCommit = $env:APPROVED_SOURCE } }
+          $p.buildDefinition.externalParameters.approvedApplicationCommit = $env:APPROVED_SOURCE
+          $p.buildDefinition.externalParameters.approvedImplementationCommit = $env:APPROVED_IMPLEMENTATION
+          $origin = (Get-Content release/release-manifest.json -Raw | ConvertFrom-Json -AsHashtable).api78_transport
+          $p.buildDefinition.externalParameters.api78Input = $origin
+          foreach ($asset in $origin.assets.Values) {
+            $p.buildDefinition.resolvedDependencies += @{ uri = "https://api.github.com/repos/$($origin.repository)/releases/assets/$($asset.id)"; digest = @{ sha256 = $asset.sha256 } }
+          }
+          $p | ConvertTo-Json -Depth 100 | Set-Content predicate.json -Encoding utf8NoBOM
       - name: Attest release artifacts
-        uses: actions/attest-build-provenance@v2
+        id: attest
+        uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc
         with:
-          subject-path: |
-            installer/Output/${{ steps.version.outputs.artifact_stem }}.exe
-            artifacts/${{ steps.version.outputs.artifact_stem }}-portable.zip
-            artifacts/SHA256SUMS.txt
-            artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
+          subject-path: release/*
+          predicate-type: ${{ steps.predicate.outputs.predicate-type }}
+          predicate-path: predicate.json
+      - name: Include signed bundle and approval digest
+        shell: pwsh
+        run: |
+          Copy-Item '${{ steps.attest.outputs.bundle-path }}' release/provenance.sigstore.json
+          $hash = (Get-FileHash release/release-manifest.json -Algorithm SHA256).Hash.ToLowerInvariant()
+          "Preparation run: ${{ github.run_id }}; manifest SHA256: $hash" >> $env:GITHUB_STEP_SUMMARY
+          Get-Content release/SHA256SUMS.txt >> $env:GITHUB_STEP_SUMMARY
+          Get-Content release/release-manifest.json >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: desktop-v2.2.1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/*
+          retention-days: 30
+          if-no-files-found: error
+      - shell: pwsh
+        run: '"Immutable artifact ID: ${{ steps.upload.outputs.artifact-id }}" >> $env:GITHUB_STEP_SUMMARY'
 
+  publish:
+    if: inputs.action == 'publish'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: control
+      - name: Validate immutable preparation selection
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARED_RUN: ${{ inputs.prepared_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          APPROVED_MANIFEST: ${{ inputs.approved_manifest_sha256 }}
+        run: |
+          if ($env:PREPARED_RUN -cnotmatch '^[1-9][0-9]*$' -or $env:ARTIFACT_ID -cnotmatch '^[1-9][0-9]*$' -or $env:APPROVED_MANIFEST -cnotmatch '^[a-f0-9]{64}$') { throw 'Explicit run, artifact and manifest approval required' }
+          $repo = '${{ github.repository }}'
+          $run = gh api "repos/$repo/actions/runs/$env:PREPARED_RUN" | ConvertFrom-Json
+          if ($LASTEXITCODE) { throw 'Cannot inspect preparation run' }
+          $current = gh api "repos/$repo/actions/runs/${{ github.run_id }}" | ConvertFrom-Json
+          if ($LASTEXITCODE) { throw 'Cannot inspect current run' }
+          if ($run.conclusion -ne 'success' -or $run.head_sha -cne '${{ github.sha }}' -or $run.workflow_id -ne $current.workflow_id -or $run.event -ne 'workflow_dispatch') { throw 'Preparation run or workflow differs' }
+          $artifact = gh api "repos/$repo/actions/artifacts/$env:ARTIFACT_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE) { throw 'Cannot inspect artifact' }
+          if ($artifact.expired -or $artifact.workflow_run.id.ToString() -cne $env:PREPARED_RUN -or $artifact.name -cnotmatch "^desktop-v2\.2\.1-$($env:PREPARED_RUN)-[1-9][0-9]*$") { throw 'Artifact does not belong to preparation run' }
+          # Prove absence rather than treating authentication/network failures as absence.
+          foreach ($resource in @('git/ref/tags/v2.2.1', 'releases/tags/v2.2.1')) {
+            $status = gh api --include "repos/$repo/$resource" 2>&1 | Out-String
+            if ($status -notmatch 'HTTP/[^ ]+ 404') { throw 'Cannot prove release and tag are absent' }
+          }
+          $global:LASTEXITCODE = 0
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact_id }}
+          run-id: ${{ inputs.prepared_run_id }}
+          github-token: ${{ github.token }}
+          path: prepared
+          merge-multiple: true
+      - name: Verify approved bytes and signed provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_MANIFEST: ${{ inputs.approved_manifest_sha256 }}
+          PREPARED_RUN: ${{ inputs.prepared_run_id }}
+        run: |
+          if ((git -C control rev-parse HEAD) -cne '${{ github.sha }}') { throw 'Publication control commit differs' }
+          git -C control diff --exit-code HEAD
+          if ($LASTEXITCODE) { throw 'Publication controls changed before verification' }
+          python -B control/scripts/verify_publication.py verify --directory prepared --approved-manifest $env:APPROVED_MANIFEST --workflow-commit '${{ github.sha }}' --run-id $env:PREPARED_RUN
+          if ($LASTEXITCODE) { throw 'Publication integrity check failed' }
+          Get-ChildItem prepared -File | Where-Object Name -ne 'provenance.sigstore.json' | ForEach-Object {
+            gh attestation verify $_.FullName --bundle prepared/provenance.sigstore.json --repo '${{ github.repository }}' --signer-workflow '${{ github.repository }}/.github/workflows/release.yml' --signer-digest '${{ github.sha }}' --deny-self-hosted-runners
+            if ($LASTEXITCODE) { throw 'Signed provenance verification failed' }
+          }
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.target.outputs.tag }}
+          tag_name: v2.2.1
+          target_commitish: ${{ env.APPROVED_SOURCE }}
+          draft: false
+          prerelease: false
+          make_latest: true
           generate_release_notes: false
-          body_path: ${{ steps.version.outputs.release_notes }}
+          body_path: prepared/release-notes.md
+          fail_on_unmatched_files: true
+          overwrite_files: false
           files: |
-            installer/Output/${{ steps.version.outputs.artifact_stem }}.exe
-            artifacts/${{ steps.version.outputs.artifact_stem }}-portable.zip
-            artifacts/SHA256SUMS.txt
-            artifacts/${{ steps.version.outputs.artifact_stem }}.sbom.spdx.json
+            prepared/SoulsTrackerV2.2.1.exe
+            prepared/SoulsTrackerV2.2.1-portable.zip
+            prepared/SoulsTrackerV2.2.1.sbom.spdx.json
+            prepared/SHA256SUMS.txt
+            prepared/release-manifest.json
+            prepared/provenance.sigstore.json
+
+  probe_input:
+    if: inputs.action == 'probe-input'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify authenticated API v78 binary access
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -B scripts/get_hollow_knight_input.py --source . --destination "$env:RUNNER_TEMP/SoulsTracker-input"
+          if ($LASTEXITCODE) { throw 'Authenticated API v78 binary access or verification failed' }
+          'Authenticated binary access, receipt and all 21 API components verified.' >> $env:GITHUB_STEP_SUMMARY

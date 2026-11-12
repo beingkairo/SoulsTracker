@@ -50,6 +50,12 @@ public sealed record RuntimeGameReadResult
     public RuntimeGameReaderStatus Status { get; }
 
     public RuntimeGameObservation? Observation { get; }
+    public PersistentPluginObservation? PluginObservation { get; private init; }
+    public string? PluginStatus { get; private init; }
+
+    public static RuntimeGameReadResult FromHollowKnight(PersistentPluginObservation? observation, string status) =>
+        new(GameId.HollowKnight, observation is null ? RuntimeGameReaderStatus.Unavailable : RuntimeGameReaderStatus.Synced, null)
+        { PluginObservation = observation, PluginStatus = status };
 
     /// <summary>Contains optional setup-only metadata for a validated Wukong save.</summary>
     public BlackMythWukongSaveMetadata? BlackMythWukongSaveMetadata { get; }
@@ -162,7 +168,8 @@ public sealed class RuntimeGameReaderCoordinator
     /// available for a short loading-screen grace period, but never crosses a
     /// game selection boundary or survives after that bounded period.
     /// </summary>
-    public async ValueTask<RuntimeGameReadResult?> PollAsync(GameId? selectedGameId, CancellationToken cancellationToken)
+    public async ValueTask<RuntimeGameReadResult?> PollAsync(GameId? selectedGameId, CancellationToken cancellationToken,
+        string? expectedSourceIdentity = null)
     {
         RuntimeGameReadResult? result = null;
         if (selectedGameId is not null && readers.TryGetValue(selectedGameId, out IRuntimeGameDeathReader? reader))
@@ -175,6 +182,7 @@ public sealed class RuntimeGameReaderCoordinator
             CurrentResult is { GameId: var previousGameId, Observation: { } previousObservation } &&
             previousGameId == selectedGameId &&
             previousObservation.GameId == selectedGameId &&
+            (expectedSourceIdentity is null || string.Equals(previousObservation.SourceIdentity, expectedSourceIdentity, StringComparison.Ordinal)) &&
             DateTimeOffset.UtcNow - previousObservation.ObservedAtUtc <= TransientUnavailableRetention)
         {
             result = RuntimeGameReadResult.Unavailable(selectedGameId, previousObservation);

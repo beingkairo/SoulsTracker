@@ -10,10 +10,10 @@ namespace SoulsTracker.Desktop.Tests;
 public sealed class UpdateSessionTests
 {
     [Theory]
-    [InlineData("https://beingkairo.com/tools/souls-tracker/", true)]
-    [InlineData("http://beingkairo.com/tools/souls-tracker/", false)]
-    [InlineData("https://beingkairo.com/tools/souls-tracker/?next=other", false)]
-    [InlineData("https://beingkairo.com/tools/souls-tracker/#other", false)]
+    [InlineData("https://beingkairo.com/tools/soulstracker/", true)]
+    [InlineData("http://beingkairo.com/tools/soulstracker/", false)]
+    [InlineData("https://beingkairo.com/tools/soulstracker/?next=other", false)]
+    [InlineData("https://beingkairo.com/tools/soulstracker/#other", false)]
     [InlineData("https://beingkairo.com:443/tools/souls-tracker/", false)]
     [InlineData("https://beingkairo.com/tools/other/../souls-tracker/", false)]
     [InlineData("https://beingkairo.com@other.example/tools/souls-tracker/", false)]
@@ -102,7 +102,7 @@ public sealed class UpdateSessionTests
         var before = (vm.UpdateCurrentVersion, vm.UpdateLatestVersion, vm.UpdateCheckStatus);
         Assert.Null(launcher.Opened);
         vm.OpenAvailableUpdateReleasePage();
-        Assert.Equal(new Uri("https://beingkairo.com/tools/souls-tracker/"), launcher.Opened);
+        Assert.Equal(new Uri("https://beingkairo.com/tools/soulstracker/"), launcher.Opened);
         Assert.Equal(before, (vm.UpdateCurrentVersion, vm.UpdateLatestVersion, vm.UpdateCheckStatus));
         Assert.Equal(!succeeds, vm.UpdatePageActionError.Length > 0);
     }
@@ -370,7 +370,7 @@ public sealed class UpdateSessionTests
         Assert.True(vm.IsUpdateNoticeVisible);
         Assert.Null(launcher.Opened);
         vm.OpenUpdateProductPage();
-        Assert.Equal(new Uri("https://beingkairo.com/tools/souls-tracker/"), launcher.Opened);
+        Assert.Equal(new Uri("https://beingkairo.com/tools/soulstracker/"), launcher.Opened);
         vm.DismissUpdateNotice();
         await vm.CheckForUpdatesAsync();
         Assert.False(vm.IsUpdateNoticeVisible);

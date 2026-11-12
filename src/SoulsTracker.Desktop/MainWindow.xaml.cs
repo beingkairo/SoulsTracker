@@ -24,6 +24,8 @@ public partial class MainWindow : Window
     private bool isRestoringBlackMythWukongSaveSelection;
     private bool isRestoringLiesOfPSaveSelection;
     private readonly Func<string, string?, string?> chooseSaveDirectory;
+    internal Func<string, MessageBoxResult>? HollowKnightInstallConfirmation { get; set; }
+    internal Func<DesktopTrackerViewModel, Task<HollowKnightInstallPlan?>>? HollowKnightInstallPlanProvider { get; set; }
     private readonly Action<string> copyDirectoryPath = text => System.Windows.Clipboard.SetText(text);
     private DesktopTrackerViewModel? directoryCopyViewModel;
     private (GameId? Game, string? Path) directoryCopyContext;
@@ -54,6 +56,9 @@ public partial class MainWindow : Window
     private StartupUpdateDialog? updateDialog;
     private bool updateDialogShown;
     private FrameworkElement? trayFocus;
+
+    internal static string BuildHollowKnightInstallConfirmation(HollowKnightInstallPlan plan) =>
+        $"Install death tracking in {plan.Directory}?\n\nThis will write {plan.Files.Count} files to Hollow Knight.\n\nOther installed mods will remain.\n\nClose Hollow Knight before continuing.";
 
     internal void RememberTrayFocus() => trayFocus = Keyboard.FocusedElement as FrameworkElement;
 
@@ -477,6 +482,7 @@ public partial class MainWindow : Window
             var game when game == GameId.EldenRing => vm?.EldenRingDirectoryPath,
             var game when game == GameId.BlackMythWukong => vm?.BlackMythWukongDirectoryPath,
             var game when game == GameId.LiesOfP => vm?.LiesOfPDirectoryPath,
+            var game when game == GameId.HollowKnight => vm?.HollowKnightGameDirectory,
             _ => null
         });
 
@@ -495,6 +501,7 @@ public partial class MainWindow : Window
         if (e.PropertyName is not (null or "" or nameof(DesktopTrackerViewModel.SelectedGame)
             or nameof(DesktopTrackerViewModel.EldenRingDirectoryPath)
             or nameof(DesktopTrackerViewModel.BlackMythWukongDirectoryPath)
+            or nameof(DesktopTrackerViewModel.HollowKnightGameDirectory)
             or nameof(DesktopTrackerViewModel.LiesOfPDirectoryPath)) || sender is not DesktopTrackerViewModel vm) return;
 
         // Capture each transition before dispatch so returning to an earlier
@@ -565,12 +572,14 @@ public partial class MainWindow : Window
             // from racing a subsequent user selection.
             if (ReferenceEquals(choice, viewModel.SelectedGame))
             {
+                await viewModel.DiscoverHollowKnightAsync();
                 return;
             }
 
             if (viewModel.RequestGameSelection(choice))
             {
                 await SelectGameOnWindowDispatcherAsync(viewModel, choice);
+                await viewModel.DiscoverHollowKnightAsync();
             }
             else
             {
@@ -636,6 +645,54 @@ public partial class MainWindow : Window
         if (hadFocus && !viewModel.CanDecrementManualDeaths && viewModel.IsManualGameSelected &&
             ReferenceEquals(DataContext, viewModel))
             Keyboard.Focus(IncrementManualDeathsButton);
+    }
+
+    private async void BrowseHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm && chooseSaveDirectory("Choose Hollow Knight game folder", vm.HollowKnightGameDirectory) is { } directory)
+            await vm.SetHollowKnightGameDirectoryAsync(directory);
+    }
+
+    private async void InstallHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DesktopTrackerViewModel vm) return;
+        if (vm.HasHollowKnightPendingRollback)
+        {
+            if (System.Windows.MessageBox.Show(this, "Restore the interrupted installation from its verified backups before retrying?",
+                "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            await vm.RollbackHollowKnightAsync();
+            if (vm.ErrorMessage is not null) return;
+        }
+        var plan = HollowKnightInstallPlanProvider is { } planProvider
+            ? await planProvider(vm)
+            : await vm.PrepareHollowKnightInstallAsync();
+        if (plan is null) return;
+        string confirmation = BuildHollowKnightInstallConfirmation(plan);
+        MessageBoxResult response = HollowKnightInstallConfirmation?.Invoke(confirmation) ??
+            System.Windows.MessageBox.Show(this, confirmation, "Install Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (response == MessageBoxResult.Yes)
+            await vm.ApplyHollowKnightInstallAsync(plan);
+    }
+
+    private async void UninstallHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm && System.Windows.MessageBox.Show(this,
+            "Remove only Soulstracker death tracking? Saved totals, the shared Modding API and other mods will remain.",
+            "Uninstall Death Tracking", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            await vm.UninstallHollowKnightAsync();
+    }
+
+    private async void RefreshHollowKnight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm) await vm.DiscoverHollowKnightAsync();
+    }
+    private async void IncrementHollowKnightDeaths_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm) await vm.IncrementHollowKnightDeathsAsync();
+    }
+    private async void DecrementHollowKnightDeaths_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DesktopTrackerViewModel vm) await vm.DecrementHollowKnightDeathsAsync();
     }
 
     private async void BrowseEldenRingSave_Click(object sender, RoutedEventArgs e)

@@ -19,7 +19,7 @@ internal sealed class HostedOverlayProjection
 
     internal HostedOverlayEnvelope FromAcceptedPublication(PersistentTrackerState state, RuntimeGameReadResult? accepted)
     {
-        return Map(state, accepted?.Observation, accepted is { Status: RuntimeGameReaderStatus.Synced, Observation: not null });
+        return Map(state, accepted?.Observation, accepted is { Status: RuntimeGameReaderStatus.Synced }, accepted?.PluginObservation);
     }
 
     // The caller identifies an explicit committed source transition, separately
@@ -30,14 +30,14 @@ internal sealed class HostedOverlayProjection
         return Map(state, null);
     }
 
-    private HostedOverlayEnvelope Map(PersistentTrackerState state, RuntimeGameObservation? observation, bool fresh = false)
+    private HostedOverlayEnvelope Map(PersistentTrackerState state, RuntimeGameObservation? observation, bool fresh = false, PersistentPluginObservation? plugin = null)
     {
         // Keep the established manual fallback, effective adjustment and local
         // unavailable presentation in their existing owner. No arithmetic here.
-        OverlaySnapshot snapshot = OverlaySnapshotFactory.Create(state, observation, 0);
-        if (fresh && snapshot.TotalDeaths.Source == TotalDeathsDisplaySource.GameLifetimeReader)
+        OverlaySnapshot snapshot = OverlaySnapshotFactory.Create(state, observation, 0, plugin);
+        if (fresh && snapshot.TotalDeaths.Source is TotalDeathsDisplaySource.GameLifetimeReader or TotalDeathsDisplaySource.PersistentPlugin)
             mayPublishUnavailable = true;
-        bool includeDeath = mayPublishUnavailable || state.SelectedGameId == GameId.DemonsSouls;
+        bool includeDeath = mayPublishUnavailable || state.SelectedGameId == GameId.DemonsSouls || state.SelectedGameId == GameId.HollowKnight;
         HostedDeath? death = includeDeath ? new()
         {
             Revision = "0",

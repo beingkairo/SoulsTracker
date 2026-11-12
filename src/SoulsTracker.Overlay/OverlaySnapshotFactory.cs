@@ -5,10 +5,17 @@ namespace SoulsTracker.Overlay;
 /// <summary>Creates the display snapshot used by hosted overlay projection.</summary>
 public static class OverlaySnapshotFactory
 {
-    public static OverlaySnapshot Create(PersistentTrackerState state, RuntimeGameObservation? observation, long sequenceNumber)
+    public static OverlaySnapshot Create(PersistentTrackerState state, RuntimeGameObservation? observation, long sequenceNumber, PersistentPluginObservation? plugin = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         OverlayGameMetadata game = new(state.SelectedGameId);
+        if (state.SelectedGameId == GameId.HollowKnight)
+        {
+            long? total = EffectiveDeathTotalResult.Resolve(state, null, plugin).EffectiveDisplayedTotal;
+            return new(OverlaySnapshot.CurrentSchemaVersion, sequenceNumber, DateTimeOffset.UtcNow, game,
+                total.HasValue ? TotalDeathsDisplayValue.FromPersistentPlugin(total.Value) : TotalDeathsDisplayValue.UnavailableForSelectedGame(state.SelectedGameId),
+                OverlayPresentationConfiguration.From(state.OverlayConfiguration));
+        }
         bool usable = EffectiveDeathTotalResult.Resolve(state, observation).Status is not EffectiveDeathTotalStatus.SourceMismatch && observation?.GameId == state.SelectedGameId &&
             (state.SelectedGameId != GameId.BlackMythWukong || state.BlackMythWukongSave.LocalPath is not null) &&
             (state.SelectedGameId != GameId.LiesOfP || state.LiesOfPSave.LocalPath is not null);

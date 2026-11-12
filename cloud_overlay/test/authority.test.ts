@@ -29,8 +29,9 @@ async function provision(identity = id) {
 }
 const request = async (route = "publisher", method = "GET", body?: unknown, capability = write, identity = id) => {
   const response = await exports.default.fetch(`https://overlay.test/api/v1/overlays/${identity}/${route}`, {
-    method, headers: { Authorization: `Bearer ${capability}`, "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    method, headers: { Authorization: `Bearer ${capability}`, "Content-Type": "application/json", "X-SoulsTracker-Protocol": "2" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body && typeof body === "object" && !Array.isArray(body)
+      ? { protocolVersion: 2, ...body } : body) })
   });
   return new Response(await response.text(), response);
 };
@@ -140,7 +141,7 @@ it("preserves the accepted complete-channel, Int64 and Unicode validation corpus
   const invalid: unknown[] = [ { ...candidate(), v: 2 }, { ...candidate(), death: null }, { ...candidate(), appearance: null },
     { ...candidate(), death: { ...candidate().death, revision: "0" } }, { ...candidate(), source: "synthetic" } ];
   const { death: _death, ...base } = candidate();
-  invalid.push(base);
+  invalid.push({ ...base, protocolVersion: undefined });
   for (const field of ["epoch", "sequence"]) for (const value of corpus.invalidDecimals) invalid.push({ ...candidate(), [field]: value });
   for (const [field, values] of Object.entries(corpus.invalidDeath)) {
     if (field === "revision") continue;
@@ -305,7 +306,7 @@ const sessionId = "33333333333333333333333333333333";
 const acquisition = { v: 1, expectedEpoch: "0", sessionRequestId: sessionId };
 const acquire = (body = acquisition) => request("session", "POST", body);
 
-const candidate = (sequence = "1", value = "9007199254740993") => ({ v: 1, epoch: "1", sessionRequestId: sessionId,
+const candidate = (sequence = "1", value = "9007199254740993") => ({ v: 1, protocolVersion: 2, epoch: "1", sessionRequestId: sessionId,
   sequence, death: { value, availability: "available" } });
 const publish = (body: unknown = candidate()) => request("state", "PUT", body);
 const style = () => { const { revision: _revision, ...appearance } = corpus.valid[4].appearance!; return appearance; };

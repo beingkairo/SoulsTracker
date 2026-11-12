@@ -12,14 +12,16 @@ class Socket {
   closed = false;
   send(value: string) { this.sent.push(value); }
   close() { this.closed = true; }
-  message(value: unknown) { this.onmessage?.({ data: typeof value === "string" ? value : JSON.stringify(value) }); }
+  message(value: unknown) { this.onmessage?.({ data: typeof value === "string" ? value : JSON.stringify(
+    value && typeof value === "object" && (value as { v?: number }).v === 1
+      ? { ...value, v: 2, presence: { generation: 0, serverTime: 0, leaseExpiresAt: null, legacyContactExpiresAt: null, confirmed: false } } : value) }); }
 }
 function harness(random = 0.5) {
   let now = 0, next = 0;
   const timers = new Map<number, { due: number; callback: () => void }>();
   const sockets: Socket[] = [], rendered: unknown[] = [], urls: string[] = [];
   const client = new HostedClient({ id: "1".repeat(32), read: "2".repeat(64), origin: "https://overlay.test" },
-    (death, appearance) => { rendered.push({ death, appearance }); }, {
+    (death, appearance, status) => { rendered.push({ death, appearance, status }); }, {
       socket: url => { urls.push(url); const socket = new Socket(); sockets.push(socket); return socket; },
       now: () => now, random: () => random,
       setTimeout: (callback, delay) => { timers.set(++next, { due: now + delay, callback }); return next; },
@@ -51,11 +53,23 @@ test("authenticates only in the first message and applies combined snapshots ato
   const h = harness(); const socket = h.sockets[0];
   expect(h.rendered).toEqual([]); socket.onopen?.();
   expect(h.urls).toEqual([`wss://overlay.test/api/v1/overlays/${"1".repeat(32)}/live`]);
-  expect(JSON.parse(socket.sent[0])).toEqual({ v: 1, type: "auth", readCapability: "2".repeat(64) });
+  expect(JSON.parse(socket.sent[0])).toEqual({ v: 1, type: "auth", protocolVersion: 2, readCapability: "2".repeat(64) });
   socket.message({ ...corpus.valid[4], death: { revision: "9007199254740993", value: "9223372036854775807", availability: "available" } });
   expect(h.rendered).toHaveLength(1);
   expect(h.rendered[0]).toMatchObject({ death: { value: "9223372036854775807" } });
   h.client.stop(); expect(h.timers.size).toBe(0);
+});
+
+test("compatible lease takes priority, then legacy contact expires to inactive", () => {
+  const h = harness(); const socket = h.sockets[0];
+  socket.message({ ...corpus.valid[4], v: 2, presence: { generation: 1, serverTime: 1000,
+    leaseExpiresAt: 3000, legacyContactExpiresAt: 5000, confirmed: true } });
+  expect(h.rendered.at(-1)).toMatchObject({ status: "live" });
+  h.advance(2000);
+  expect(h.rendered.at(-1)).toMatchObject({ status: "update" });
+  h.advance(2000);
+  expect(h.rendered.at(-1)).toMatchObject({ status: "open" });
+  h.client.stop();
 });
 
 test("ignores equal and older revisions independently and renders combined newer channels once", () => {

@@ -10,7 +10,7 @@ public interface IUpdateReleasePageLauncher
 
 internal sealed class ShellUpdateReleasePageLauncher : IUpdateReleasePageLauncher
 {
-    internal static readonly Uri ProductPage = new("https://beingkairo.com/tools/souls-tracker/");
+    internal static readonly Uri ProductPage = new("https://beingkairo.com/tools/soulstracker/");
 
     internal static bool IsAllowed(Uri page) => page.IsAbsoluteUri &&
         page.Scheme == Uri.UriSchemeHttps &&

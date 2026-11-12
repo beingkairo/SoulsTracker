@@ -1,8 +1,16 @@
 import type { HostedAppearance, HostedDeath } from "./hosted-contracts.js";
 
+const renders = new WeakMap<HTMLElement, { pending?: Comment }>();
+const noticeObservers = new WeakMap<HTMLElement, ResizeObserver>();
+
 // The retained compact renderer layout, with wire-validated appearance only.
-export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string): Promise<void> {
-  if (!appearance.enabled) { target.replaceChildren(); return Promise.resolve(); }
+export function renderHosted(target: HTMLElement, death: HostedDeath | null, appearance: HostedAppearance, skullAsset: string, status: "live" | "open" | "update" | "waiting" = "live"): Promise<void> {
+  renders.get(target)?.pending?.remove();
+  const render: { pending?: Comment } = {};
+  renders.set(target, render);
+  noticeObservers.get(target)?.disconnect();
+  noticeObservers.delete(target);
+  if (status === "live" && !appearance.enabled) { target.replaceChildren(); return Promise.resolve(); }
   const panel = document.createElement("section");
   panel.className = "souls-tracker-overlay-panel";
   panel.dataset.testid = "total-deaths-overlay";
@@ -21,6 +29,34 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
     effects.push(`${x}px ${y}px 0 ${appearance.outlineColor}`);
   if (appearance.shadowEnabled) effects.push(`${appearance.shadowOffsetX}px ${appearance.shadowOffsetY}px ${appearance.shadowBlur}px ${appearance.shadowColor}`);
   panel.style.textShadow = effects.join(", ");
+  if (status !== "live") {
+    const message = document.createElement("p");
+    message.className = "overlay-host-notice";
+    message.setAttribute("role", "status");
+    message.textContent = status === "open" ? "Please open SoulsTracker." : status === "update" ? "Please update SoulsTracker." : "";
+    panel.append(message);
+    panel.classList.add("souls-tracker-overlay-notice");
+    panel.style.padding = `min(${appearance.padding}px, 10vw, 10vh)`;
+    target.className = "souls-tracker-total-deaths-canvas";
+    target.replaceChildren(panel);
+    if (document.documentElement.classList.contains("hosted-overlay")) {
+      // Keep configured typography; only constrain an oversized notice, never
+      // enlarge it. The live counter retains its existing intrinsic placement.
+      const effect = Math.max(width, appearance.shadowEnabled ? appearance.shadowBlur * 1.5 +
+        Math.max(Math.abs(appearance.shadowOffsetX), Math.abs(appearance.shadowOffsetY)) : 0);
+      panel.style.maxWidth = `max(1px, calc(100% - ${effect * 2}px))`;
+      const fit = () => {
+        const scale = Math.min(1, target.clientWidth / (Math.max(panel.offsetWidth, panel.scrollWidth) + effect * 2),
+          target.clientHeight / (panel.offsetHeight + effect * 2));
+        panel.style.transform = `scale(${scale})`;
+      };
+      fit();
+      const observer = new ResizeObserver(fit);
+      observer.observe(target);
+      noticeObservers.set(target, observer);
+    }
+    return Promise.resolve();
+  }
   const value = death?.value ?? "0";
   const hasHeading = appearance.title.trim().length > 0 || appearance.titleIconMode === "skullOnly";
   if (hasHeading) {
@@ -37,16 +73,50 @@ export function renderHosted(target: HTMLElement, death: HostedDeath | null, app
     const number = document.createElement("p"); number.className = "overlay-total-deaths";
     number.dataset.testid = "total-deaths-value"; number.textContent = value; panel.append(number);
   }
-  target.className = "souls-tracker-total-deaths-canvas";
-  target.dataset.alignment = document.documentElement.classList.contains("hosted-overlay") ? "center" : "left";
-  // One replacement keeps both channels visually atomic and bounds SVG state.
-  target.replaceChildren(skullFilter(appearance), panel);
-  return alignContentEdges(panel, appearance.titleIconMode === "prefixSkull").then(() => {
-    if (target.dataset.alignment === "center" && panel.isConnected) centerHostedPaint(panel, appearance);
-  });
+  const hosted = document.documentElement.classList.contains("hosted-overlay");
+  const mount = () => {
+    target.className = "souls-tracker-total-deaths-canvas";
+    target.dataset.alignment = hosted ? "center" : "left";
+    target.replaceChildren(skullFilter(appearance), panel);
+  };
+  if (!hosted) {
+    // Preview owns its asynchronous measurement and immediate draft display.
+    mount();
+    return document.fonts.ready.then(async () => {
+      const image = panel.querySelector("img");
+      if (image) await image.decode();
+      if (renders.get(target) === render && panel.isConnected)
+        alignContentEdges(panel, appearance.titleIconMode === "prefixSkull");
+    }).catch(() => {});
+  }
+  const commit = () => {
+    if (renders.get(target) !== render) return;
+    // Install and measure in one turn, before the browser can paint the new
+    // panel. Keep the previous panel visible while an uncached image loads.
+    mount();
+    alignContentEdges(panel, appearance.titleIconMode === "prefixSkull");
+    if (target.dataset.alignment === "center") centerHostedPaint(panel, appearance);
+  };
+  const ready: Promise<unknown>[] = [];
+  if (document.fonts.status !== "loaded") ready.push(document.fonts.ready);
+  const image = panel.querySelector("img");
+  if (image && !image.complete) ready.push(image.decode().catch(() => {}));
+  if (ready.length) {
+    const marker = document.createComment("Pending overlay layout");
+    render.pending = marker;
+    target.append(marker);
+    return Promise.all(ready).then(() => {
+      // Clearing the source (for example on a URL change) cancels pending paint.
+      if (marker.parentNode !== target) return;
+      marker.remove();
+      commit();
+    });
+  }
+  commit();
+  return Promise.resolve();
 }
 
-// The hosted source never fits or scales. Measure ink/effects on an offscreen
+// The live counter never fits or scales. Measure ink/effects on an offscreen
 // canvas without loading a serialized document or relaxing the page's CSP.
 // A panel-relative translation stays centered through viewport-only resizes.
 function centerHostedPaint(panel: HTMLElement, appearance: HostedAppearance): void {
@@ -111,11 +181,9 @@ function centerHostedPaint(panel: HTMLElement, appearance: HostedAppearance): vo
 // Padding starts at the visible content, not a font's advance box or the
 // bundled image's transparent border. Only Prefix Skull uses compact ink spacing.
 let imageEdges: { source: string; left: number; right: number } | null = null;
-async function alignContentEdges(panel: HTMLElement, compactPrefix: boolean): Promise<void> {
+function alignContentEdges(panel: HTMLElement, compactPrefix: boolean): void {
   try {
-    await document.fonts.ready;
     const image = panel.querySelector("img");
-    if (image) await image.decode();
     if (!panel.isConnected) return;
     const content = panel.firstElementChild as HTMLElement;
     const style = getComputedStyle(content);

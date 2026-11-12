@@ -28,6 +28,8 @@ public sealed class DirectoryPresentationTests
         Assert.Null(SelectedChoice(vm, game));
         Assert.Null(ConfiguredPath(repository.State, game));
         Assert.Empty(repository.Saves);
+        Assert.Equal("Loading.", vm.RuntimeReaderStatusText);
+        vm.ApplyRuntimeReaderResult(RuntimeGameReadResult.WaitingForSaveFile(Game(game)));
         Assert.Equal("Choose a character to continue.", vm.RuntimeReaderStatusText);
         await Rescan(vm, game);
         Assert.Equal(fixture.Root, DirectoryPath(vm, game));

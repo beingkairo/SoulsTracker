@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["./**/*.ts", "../src/**/*.ts", "../test/**/*.ts", "../vitest*.ts",
+    "../operator_gateway/src/**/*.ts", "../../web_overlay/src/hosted-contracts.ts"]
+}

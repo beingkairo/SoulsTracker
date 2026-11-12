@@ -18,6 +18,7 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
     private long generation;
     private bool hasFreshPresentation;
     internal PersistentTrackerState? CurrentState { get; private set; }
+    internal bool RequiresFreshSaveRead => accepted?.Observation is null;
     internal readonly record struct ReadTicket(long Sequence, long CompletedBeforeStart, long Generation);
 
     // Called for every committed selection, including switches between polls.
@@ -47,12 +48,26 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
         if (cancellationToken.IsCancellationRequested) return;
         if (CurrentState is null ||
             !string.Equals(EffectiveDeathTotalResult.SourceIdentityFor(state), source, StringComparison.Ordinal) ||
+            (state.SelectedGameId == GameId.HollowKnight && !state.HollowKnight.DeathAdjustments.Equals(CurrentState.HollowKnight.DeathAdjustments)) ||
             (state.SelectedGameId == GameId.EldenRing && state.EldenRingMissedDeathAdjustments.Get(state.EldenRingSave) !=
                 CurrentState.EldenRingMissedDeathAdjustments.Get(CurrentState.EldenRingSave)) || read.Generation != generation ||
             read.Sequence > sequence || read.Sequence <= completedSequence) return;
         RuntimeGameReadResult? publication = NormalizeRuntimePublication(state, result);
         if (result is not null && publication is null) return;
         completedSequence = read.Sequence;
+        if (state.SelectedGameId == GameId.HollowKnight)
+        {
+            if (publication?.PluginObservation is { } plugin)
+            {
+                if (newestObservation is { } newest && plugin.ObservedAtUtc <= newest) return;
+                if (accepted?.PluginObservation is { } previous && previous.RunId == plugin.RunId && plugin.Revision < previous.Revision) return;
+                newestObservation = plugin.ObservedAtUtc;
+            }
+            accepted = publication;
+            applyDesktop(publication);
+            publishOutputs(publication);
+            return;
+        }
         if (publication?.Status == RuntimeGameReaderStatus.Cached)
         {
             if (accepted is not null && hasFreshPresentation)
@@ -100,7 +115,12 @@ internal sealed class RuntimePublicationSession(TimeProvider? timeProvider = nul
     internal static RuntimeGameReadResult? NormalizeRuntimePublication(PersistentTrackerState state, RuntimeGameReadResult? result)
     {
         if (result is null || result.GameId != state.SelectedGameId) return null;
-        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null) return null;
+        if (state.SelectedGameId == GameId.HollowKnight)
+            return result.Observation is null && EffectiveDeathTotalResult.Resolve(state, null, result.PluginObservation).Status != EffectiveDeathTotalStatus.SourceMismatch ? result : null;
+        if (state.SelectedGameId == GameId.LiesOfP && state.LiesOfPSave.LocalPath is null &&
+            (result.Observation is not null || result.PluginObservation is not null || result.Status is not
+                (RuntimeGameReaderStatus.WaitingForSaveFile or RuntimeGameReaderStatus.WaitingForActiveCharacter or
+                 RuntimeGameReaderStatus.Unavailable or RuntimeGameReaderStatus.SelectedSaveUnreadable))) return null;
         if (result.Observation is not null &&
             EffectiveDeathTotalResult.Resolve(state, result.Observation).Status == EffectiveDeathTotalStatus.SourceMismatch)
         {

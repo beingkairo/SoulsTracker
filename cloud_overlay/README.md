@@ -25,11 +25,10 @@ npm audit
 It does not deploy. Do not omit that flag. Tests use the official Cloudflare
 Vitest pool and local workerd with SQLite storage. They inject synthetic
 verifiers through `runInDurableObject`; no application database is accessed.
-The tracked production configuration omits anonymous-create rate bindings, the
-provisioning-authority binding and migration, and all ceiling configuration, so
-anonymous creation fails closed until a later owner-approved deployment configuration
-supplies them. The separate test Worker configuration provides deterministic local
-authority, limiter, configuration-version, ceiling and hard-maximum fixtures only.
+The tracked production configuration includes anonymous-create admission bindings
+and a versioned provisioning authority. Its current lifetime ceiling is a temporary
+rollout safety stop, not a permanent product capacity policy. The separate test
+Worker configuration supplies deterministic local authority and limiter fixtures.
 There is no production HTTP override. Playwright starts a separate test-only
 Wrangler configuration on local TLS at port 8799. That harness injects synthetic
 credentials into isolated workerd storage and can disconnect readers; its entry
@@ -73,6 +72,23 @@ These write-authorized HTTPS endpoints exist under `/api/v1/overlays/{id}`:
 - `POST /session`: `{v, expectedEpoch, sessionRequestId}`.
 - `PUT /state`: `{v, epoch, sessionRequestId, sequence, death?, appearance?}`.
 - `POST /credentials`: `{v, rotationId, expectedGeneration, readCapability?, writeCapability?}`.
+
+Desktop v2.1.1 identifies itself with Hosted Overlay `protocolVersion:2`, separate
+from the `v:1` transport shape. Publisher GET uses the `X-SoulsTracker-Protocol: 2`
+header; mutations carry `protocolVersion:2` in the JSON body and the matching
+header. Missing/unsupported versions on otherwise authenticated, valid mutations
+return 409 `client_update_required`. They cannot publish or rotate credentials;
+they can only refresh a 180-second incompatible-contact marker. Legacy publisher
+GET and browser readers never mark contact. The current client confirms death or
+appearance on the existing state route and sends presence-only state requests
+every 60 seconds without changing channel revisions. Each accepted request grants
+a 180-second server-clock publisher lease. Exact replay does not extend the lease.
+Expired publishers leave stored identity, URL, and last values intact. A new
+compatible session must confirm state or renew presence to become live. The v2
+reader shows `Please update SoulsTracker.` only during recent authenticated legacy
+contact with no live compatible publisher; otherwise an inactive publisher shows
+`Please open SoulsTracker.` Old browser assets require refresh to display these
+states, so a rollout must retain prior hashed assets while existing readers drain.
 
 Every endpoint requires `Authorization: Bearer <write-capability>`. Query
 credentials, cookie authentication, CORS access and other routes/methods are not
@@ -185,6 +201,161 @@ referrers and set nosniff. Rendering uses textContent and typed CSS properties,
 without inline scripts, style text or external resources. Dynamic responses are
 no-store and do not enable CORS or authentication cookies. Local browser tests
 check actual CSP behavior, asset loading and cache headers.
+
+## Provisioning and rollout gate
+
+Existing protected Desktop pairings and reserved create requests reuse their
+original identity and URL. Disabling Hosted Overlay stops network activity but does
+not revoke identity or remove the last stored display. The checked-in deployment
+configuration retains its versioned lifetime ceiling. The authority also supports
+an explicitly configured window budget for new allocations, verified locally with
+synthetic settings. No Production window budget has been selected or enabled. Do not
+increase or remove the existing stop based on a guessed Cloudflare account limit. First
+reconcile aggregate active/reserved ledger counts, legacy seed count, distinct union
+and overlap, effective deployed and persisted configuration, account plan, usage,
+and resource headroom using an authorized read-only operator report. Record an
+evidence-backed creation budget and emergency stop procedure before changing the
+authority policy. Existing reads, authenticated compatible writes and exact pending
+replay must remain available when new creation is stopped. Deployment also requires
+an explicit checked-in/deployed/persisted config comparison; a source match to
+deployed metadata alone does not establish persisted authority equality.
+
+### Windowed allocation policy
+
+`PROVISIONING_ALLOCATION_POLICY` is an optional structured Worker variable with
+exactly these fields. It is not supplied by the public creation request:
+
+| Field | Contract |
+| --- | --- |
+| `v` | Policy schema version, exactly `1` |
+| `revision` | Positive safe integer; first activation is `1`, changes advance exactly one revision |
+| `enabled` | Boolean; `false` stops new reservations |
+| `windowSeconds` | Positive integer duration whose milliseconds and server-time deadline are safe integers |
+| `maxNewAllocations` | Positive safe integer maximum new reservations in one window |
+
+No default duration or budget is inferred. Without the variable and without prior
+activation, the existing lifetime ceiling continues to apply. Once activated,
+missing, malformed, stale, skipped, or conflicting policy settings deny new
+allocations. The retained authority version, ceiling, hard maximum and seed digest
+must still match their separate configuration contract. Windowed admission does
+not use the lifetime ceiling as an identity limit; it does not delete or recycle
+any identity. Removing the variable after activation cannot restore the old mode.
+
+One singleton `allocation_policy` row tracks revision, configuration digest,
+window deadline, consumed reservations and last observed server time. Explicit
+application starts the first fixed-duration window. At expiry, the next request
+starts one new window. Budget is consumed atomically with the allocation INSERT,
+before target initialization, and survives restart. A failed target keeps its
+charged reservation for recovery; it receives no refund. An allocation INSERT
+failure rolls back its charge. No full-ledger count runs on windowed admission.
+Policy changes retain unexpired consumption and can extend its deadline; stop,
+resume and duration edits cannot reset a consumed budget. Server clock regression,
+unsafe arithmetic and missing/corrupt policy state fail closed without repair.
+
+To stop new reservations, configure `enabled=false` in the next consecutive policy
+revision and explicitly apply it. Configuration mismatch already denies new
+reservations while application is pending. Resume requires explicit application
+of another consecutive revision with an approved budget.
+Exact verifier-bound replay and reserved-target recovery run before this gate and
+spend no additional slots, including while stopped or when policy settings are
+unavailable. Existing authority configuration checks still apply. Publisher and
+viewer authentication, leases, rates and socket limits remain independent.
+The anonymous create route retains both pre-parse rate limiters, fixed origin,
+bounded strict body and request-bound verifier checks. It does not establish a
+human identity or prevent distributed abuse by itself. The authority budget is
+separate from the provider's per-key admission counters.
+
+Before activation, review real persisted authority/seed/allocation aggregates,
+account-wide plan/usage/headroom, expected growth and spending tolerance. Measure
+reservation/heartbeat storage writes and global-authority throughput. No test
+budget is a recommended operational value. Deployment needs a separately reviewed
+policy revision, additive storage transition and rollback that retains policy
+enforcement; an older binary does not enforce the new singleton. The local
+version-1 reconciliation report returns `unsupported_policy` after activation,
+with null aggregates. The separate policy status report below supports policy
+state; it does not supply identity-population or account-resource aggregates.
+
+### Explicit policy application and readback
+
+The authority RPC `applyConfiguredPolicy(credential, expectedRevision)` implements
+the `apply-configured-policy` operation. It reads only the reviewed
+`PROVISIONING_ALLOCATION_POLICY` Worker variable; the caller cannot submit a policy.
+It requires a matching persisted authority configuration, including seed equality,
+before doing any policy work. It never initializes authority configuration, inserts
+seed/allocation rows, generates identities or accesses overlay objects. Public
+creation cannot initialize the policy table or advance its revision. Configured
+but unapplied policy, missing policy after activation and any mismatch fail closed
+for new reservations. Exact reservation replay retains its existing checks.
+
+`expectedRevision` is the persisted revision the operator has reviewed, or `0`
+before first activation. The configured revision must be exactly one greater.
+Conflicting content at the same revision and stale/skipped revisions are rejected.
+An exact repeat with the original expected revision returns `already_applied`
+without changing storage, consumption, clock or deadline. Applying a new revision
+preserves an unexpired window's consumption and never shortens its deadline;
+the deadline may extend to the new duration measured from application. An expired
+window starts a new window with zero consumption. A disabled policy consumes no
+new reservations. Clock regression or unsafe deadline arithmetic rejects apply.
+
+Apply requires the independent secret `PROVISIONING_POLICY_APPLY_KEY`; status
+requires `PROVISIONING_POLICY_READ_KEY`. Each is a separately generated 32-byte
+lowercase hex credential supplied as a Worker secret, never a checked-in variable,
+URL parameter or log value. Missing/malformed keys and using the same key for both
+permissions fail closed. Each RPC authenticates independently before storage
+access. Possession of a Service Binding or namespace binding alone does not confer
+either permission. Remove an apply credential to disable apply access without
+removing read access. Publisher/read capabilities authorize neither operation.
+No HTTP, public creation, publisher or browser route dispatches these RPCs.
+
+`policyStatus(credential)` performs only SELECT statements within one synchronous
+authority transaction. It never initializes schema, repairs state, rolls windows,
+updates the clock or calls overlay objects. Its schema-version-1 report includes
+activation state, persisted revision, configured-policy validity and equality,
+configured enabled state, stored window consumption/deadline/last observed time,
+observation time, clock validity and window expiry. `new_allocation_state` describes
+only this policy gate, not overall creation eligibility or available account
+resources. `active` means policy storage exists and is valid, including a stopped
+policy. It is not publisher activity. Missing/corrupt storage and failed reads
+produce explicit unavailable/null fields. An absent table means never activated;
+an existing table with a missing singleton is invalid and is never repaired.
+
+The persisted row stores an equality digest, not a reconstructable policy.
+`persisted_enabled` and `persisted_limits` are therefore null with an explicit
+reason. Configured enabled state must not be reported as persisted truth when
+equality fails. No report returns credentials, digests, identity rows or URLs.
+Worker configuration is outside the storage transaction; verify the deployed
+artifact/configuration separately. The legacy aggregate report remains separate
+and must not label a retained lifetime ceiling as an active window-policy cap.
+
+Any apply transport failure, timeout or `outcome_unknown` is ambiguous. There is
+no automatic retry. Obtain separately authorized readback and compare revision,
+equality, consumption and deadline before deciding whether to perform an explicit
+repeat with the same expected revision. If readback is unavailable, stop and
+escalate operationally; do not infer failure or advance the revision. An unexpected
+storage failure during apply is also reported as unknown without exception details.
+
+### Rollback and ongoing emergency-stop gate
+
+Before activation, a rollback retaining the legacy configuration and absent policy
+uses the existing lifetime gate. After activation, rollback must retain this
+explicit-apply and exact-match admission implementation, the policy table, the
+legacy-write rejection boundary, existing namespace/classes/migrations, seed list,
+authority version and all identity/reservation rows. Removing the policy variable
+or reverting to a lower configured revision blocks new reservations while exact
+recovery and existing identities remain available. Never drop the policy table or
+restore a pre-policy binary to resume creation. Resume with a reviewed consecutive
+revision; do not reuse an old revision or refund consumed budget. Pin and verify
+a compatible rollback artifact before any live change.
+
+The separate disabled operator gateway and optional temporary aggregate module
+are documented in [operator operations](operator/README.md). Permanent read/apply
+controls retain separate target credentials and survive diagnostic removal. The
+offline stop-proposal helper cannot deploy or apply configuration. No ongoing
+Production ingress, Access policies or credentials are installed. Verified live
+operator access and the controlled configuration-staging workflow remain activation
+gates. Temporary diagnostics are not an emergency-stop mechanism. The complete
+local deployment/rollback inventory explicitly requires Production parity and
+resource evidence before any separately authorized use.
 
 ## Before any live use
 

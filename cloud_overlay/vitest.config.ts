@@ -16,5 +16,6 @@ export default defineConfig({
         PROVISIONED_IDS: ["11111111111111111111111111111111", "22222222222222222222222222222222"] }
     }
   })],
-  test: { include: ["test/**/*.test.ts"] }
+  // Simulator RPC and storage work need headroom on shared runners.
+  test: { include: ["test/**/*.test.ts"], exclude: ["test/operator-node/**"], testTimeout: 15_000 }
 });

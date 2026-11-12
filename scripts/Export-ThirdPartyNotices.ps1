@@ -1,15 +1,20 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$PayloadPath,
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+    [string]$SourceRoot
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = if ($SourceRoot) { [IO.Path]::GetFullPath($SourceRoot) } else { Split-Path -Parent $PSScriptRoot }
 Add-Type -AssemblyName System.Reflection.Metadata
 
 function Assert-Distribution([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
+}
+
+function ConvertTo-HexString([byte[]]$Bytes) {
+    return [BitConverter]::ToString($Bytes).Replace('-', '')
 }
 
 function Format-InventoryKey([string]$Key) {
@@ -71,8 +76,8 @@ function Test-ApphostTemplatePaths([byte[]]$Bytes, [object[]]$PathMatches) {
             if ($original.Count -ne 1 -or ($section.PointerToRawData + $section.SizeOfRawData) -gt $Bytes.Length -or ($section.PointerToRawData + $section.SizeOfRawData) -gt $templateBytes.Length) { return $false }
             $hash = [Security.Cryptography.SHA256]::Create()
             try {
-                $actualHash = [Convert]::ToHexString($hash.ComputeHash($Bytes, $section.PointerToRawData, $section.SizeOfRawData))
-                $originalHash = [Convert]::ToHexString($hash.ComputeHash($templateBytes, $section.PointerToRawData, $section.SizeOfRawData))
+                $actualHash = ConvertTo-HexString ($hash.ComputeHash($Bytes, $section.PointerToRawData, $section.SizeOfRawData))
+                $originalHash = ConvertTo-HexString ($hash.ComputeHash($templateBytes, $section.PointerToRawData, $section.SizeOfRawData))
                 if ($actualHash -cne $originalHash) { return $false }
             } finally { $hash.Dispose() }
         }
@@ -95,7 +100,7 @@ $expected = @{
     'Microsoft.NETCore.App.Runtime.win-x64' = $desktopRuntimeVersion
     'Microsoft.WindowsDesktop.App.Runtime.win-x64' = $desktopRuntimeVersion
     'Microsoft.Web.WebView2' = '1.0.4191.47'
-    'Microsoft.Data.Sqlite.Core' = '10.0.10'
+    'Microsoft.Data.Sqlite.Core' = '10.0.13'
     'SourceGear.sqlite3' = '3.50.4.5'
     'SQLitePCLRaw.bundle_e_sqlite3' = '3.0.3'
     'SQLitePCLRaw.config.e_sqlite3' = '3.0.3'
@@ -181,7 +186,10 @@ $normalized = $reviewed.Replace("`r`n", "`n")
 foreach ($id in $textHashes.Keys) {
     $sections = [regex]::Matches($normalized, "(?s)<!-- BEGIN $id -->`n(.*?)`n<!-- END $id -->")
     Assert-Distribution ($sections.Count -eq 1) 'Required upstream license/notice text is missing or duplicated.'
-    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sections[0].Groups[1].Value)))
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = ConvertTo-HexString ($sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($sections[0].Groups[1].Value)))
+    } finally { $sha256.Dispose() }
     Assert-Distribution ($hash -eq $textHashes[$id]) 'Required upstream license/notice text has changed.'
 }
 $restoredWebView2Notice = (Read-RequiredText (Resolve-RestoredFile 'microsoft.web.webview2/1.0.4191.47/NOTICE.txt')).Replace("`r`n", "`n")
@@ -248,6 +256,34 @@ foreach ($relative in $allowed) {
 foreach ($relative in @('SoulsTracker.Desktop.exe', 'SoulsTracker.Desktop.deps.json', 'SoulsTracker.Desktop.runtimeconfig.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
     $null = $allowed.Add($relative)
 }
+$pluginAssets = @{
+    'HollowKnight/Soulstracker.DeathTracker.dll' = 'plugins/Soulstracker.DeathTracker/bin/Release/net472/Soulstracker.DeathTracker.dll'
+    'HollowKnight/HOLLOW-KNIGHT-MODDING-API.txt' = 'docs/licenses/HOLLOW-KNIGHT-MODDING-API.txt'
+    'HollowKnight/HOLLOW-KNIGHT-API-12620-NOTICES.txt' = 'docs/licenses/HOLLOW-KNIGHT-API-12620-NOTICES.txt'
+    'HollowKnight/api-12620.zip' = 'plugins/Soulstracker.DeathTracker/obj/api-12620/api-12620.zip'
+}
+foreach ($relative in $pluginAssets.Keys) {
+    $null = $allowed.Add($relative)
+    $source = Join-Path $root $pluginAssets[$relative]
+    $destination = Join-Path $payload $relative
+    Assert-Distribution ((Test-Path -LiteralPath $source -PathType Leaf) -and (Test-Path -LiteralPath $destination -PathType Leaf)) 'A required Hollow Knight plugin asset is missing.'
+    Assert-Distribution ((Get-FileHash -LiteralPath $source).Hash -ceq (Get-FileHash -LiteralPath $destination).Hash) 'Hollow Knight plugin asset differs from the reviewed build or license.'
+}
+# The API package is verified independently of its container or download source.
+Add-Type -AssemblyName System.IO.Compression
+$apiProfile = (Read-RequiredText (Join-Path $root 'src/SoulsTracker.Infrastructure/HollowKnightApi12620.json')) | ConvertFrom-Json -AsHashtable
+$apiPackage = [IO.Compression.ZipFile]::OpenRead((Join-Path $payload 'HollowKnight/api-12620.zip'))
+try {
+    Assert-Distribution ($apiPackage.Entries.Count -eq $apiProfile.RuntimeFiles.Count) 'API package entry count differs from its verified profile.'
+    $seenApiFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $apiPackage.Entries) {
+        Assert-Distribution ($apiProfile.RuntimeFiles.ContainsKey($entry.FullName) -and $entry.Length -le 16777216 -and $seenApiFiles.Add($entry.FullName)) 'API package contains an unexpected entry.'
+        $stream = $entry.Open()
+        $hash = [Security.Cryptography.SHA256]::Create()
+        try { $actual = ConvertTo-HexString ($hash.ComputeHash($stream)) } finally { $hash.Dispose(); $stream.Dispose() }
+        Assert-Distribution ($actual -ceq $apiProfile.RuntimeFiles[$entry.FullName]) 'API package component differs from the verified source build.'
+    }
+} finally { $apiPackage.Dispose() }
 foreach ($file in Get-ChildItem -LiteralPath $payload -Recurse -Force) {
     Assert-Distribution (-not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'Distribution contains a prohibited link.'
     $relative = [IO.Path]::GetRelativePath($payload, $file.FullName).Replace('\', '/')

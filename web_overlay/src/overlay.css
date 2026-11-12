@@ -10,7 +10,7 @@ body {
   font-family: "Segoe UI", sans-serif;
 }
 
-/* Hosted sources keep their configured size. Oversized content clips only at
+/* Hosted counters keep their configured size. Oversized content clips only at
    the source viewport; the offline preview owns its separate proportional fit. */
 html.hosted-overlay,
 .hosted-overlay body {
@@ -104,7 +104,20 @@ html.hosted-overlay,
   font-weight: 800;
 }
 
+.souls-tracker-overlay-notice {
+  min-width: min-content;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.overlay-host-notice {
+  margin: 0;
+  font: inherit;
+  line-height: 1.2;
+}
+
 .overlay-heading,
+.overlay-host-notice,
 .overlay-total-deaths,
 .overlay-empty-state,
 .overlay-game-name {

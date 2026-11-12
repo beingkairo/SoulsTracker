@@ -118,6 +118,7 @@ public sealed partial class DesktopTrackerViewModel
     private async Task SetSaveDirectoryAsync(GameId game, string directory, CancellationToken cancellationToken, bool allowReplacement = true)
     {
         if (IsBusy || (allowReplacement && !ControlsEnabled) || state?.SelectedGameId != game) return;
+        using var resolution = BeginSaveReaderSourceResolution(game);
         long version = saveGameConfigurationWorkflow.BeginOperation();
         Interlocked.Increment(ref eldenRingDiscoveryVersion);
         InvalidateWukongOperations();
@@ -173,6 +174,7 @@ public sealed partial class DesktopTrackerViewModel
 
     private async Task CommitDirectoryChoiceAsync(GameId game, DiscoveredLocalSave choice, long version, CancellationToken cancellationToken, bool preserveProfileSelection = false)
     {
+        using var resolution = BeginSaveReaderSourceResolution(game);
         string? directory = DirectoryFor(game);
         bool valid = await SaveGameConfigurationWorkflow.ValidateDirectoryChoiceAsync(game, choice.LocalPath, cancellationToken);
         if (!IsCurrentDirectoryOperation(game, version)) return;

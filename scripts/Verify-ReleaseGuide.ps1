@@ -13,6 +13,11 @@ $readme = Get-Content -Raw -Encoding utf8 $readmePath
 $releaseGuide = Get-Content -Raw -Encoding utf8 $releaseGuidePath
 $releaseBody = Get-Content -Raw -Encoding utf8 $releaseBodyPath
 $releaseWorkflow = Get-Content -Raw -Encoding utf8 $releaseWorkflowPath
+$changesHeading = if ($version -eq '2.2.0') { 'What''s new' } else { 'Latest changes' }
+# Publication remains pinned to its independently approved source/version until release approval.
+$workflowVersionMatch = [regex]::Match($releaseWorkflow, "metadata.Version -ne '([0-9]+\.[0-9]+\.[0-9]+)'")
+if (-not $workflowVersionMatch.Success) { throw 'Release workflow is missing its pinned version guard.' }
+$workflowVersion = $workflowVersionMatch.Groups[1].Value
 
 $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "## Compatible games" },
@@ -20,13 +25,11 @@ $requirements = @(
     @{ Path = $readmePath; Content = $readme; Text = "docs/RELEASE-GETTING-STARTED.md" },
     @{ Path = $releaseGuidePath; Content = $releaseGuide; Text = "https://github.com/beingkairo/SoulsTracker#getting-started" },
     @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "# SoulsTracker v$version" },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## Latest changes" },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Choose whether to enable Hosted Overlay." },
-    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "- Fixed Sticky Preview scrollbar stutter" },
+    @{ Path = $releaseBodyPath; Content = $releaseBody; Text = "## $changesHeading" },
     @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "Get-ReleaseMetadata.ps1" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.release_notes" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "steps.version.outputs.artifact_stem" },
-    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "artifacts/SHA256SUMS.txt" }
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/release-notes.md" },
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SoulsTrackerV$workflowVersion.exe" },
+    @{ Path = $releaseWorkflowPath; Content = $releaseWorkflow; Text = "prepared/SHA256SUMS.txt" }
 )
 
 foreach ($requirement in $requirements) {
@@ -46,36 +49,79 @@ $expectedGames = @(
     'Black Myth: Wukong',
     'Lies of P'
 )
+if ([version]$version -ge [version]'2.2.0') { $expectedGames += 'Hollow Knight' }
 $expectedList = ($expectedGames | ForEach-Object { "- $_" }) -join "`n"
 foreach ($document in @(@{ Name = 'README'; Body = $readme }, @{ Name = 'release notes'; Body = $releaseBody })) {
     $match = [regex]::Match($document.Body, '(?ms)^## Compatible games\s*\r?\n(.*?)(?=^## |\z)')
     if (-not $match.Success -or $match.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedList) {
-        throw "$($document.Name) must list exactly the nine current compatible game names in order."
+        throw "$($document.Name) must list exactly the current compatible game names in order."
     }
 }
 if ($readme -notmatch '(?m)^\[Download the latest release\]\(https://github\.com/beingkairo/SoulsTracker/releases/latest\)\.$' -or
     $readme -notmatch '(?m)^- Global hotkeys$') {
     throw 'README is missing its release link or current hotkey feature.'
 }
-$expectedChanges = @(
-    '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
-    '- Choose whether closing the window minimizes SoulsTracker to the tray with the optional Minimize to tray on close setting.',
-    '- Fixed Sticky Preview scrollbar stutter while docking and undocking.',
-    '- Settings organization and Hosted Overlay disabled-state behavior have been refined.'
-) -join "`n"
-$changesMatch = [regex]::Match($releaseBody, '(?ms)^## Latest changes\s*\r?\n(.*?)(?=^## |\z)')
+$expectedChanges = if ($version -eq '2.2.0') {
+    @(
+        '- Added Hollow Knight death tracking.',
+        '- Deaths are saved automatically, even when SoulsTracker is closed.',
+        '- Each save file has its own death counter.',
+        '- Added buttons to adjust missed deaths.',
+        '- Tracking starts after installation. Earlier deaths aren''t counted automatically.'
+    ) -join "`n"
+} elseif ($version -eq '2.2.1') {
+    @(
+        '- Fixed Hollow Knight game directory detection.',
+        '- Fixed flickering when adjusting Hollow Knight deaths.',
+        '- Improved Hollow Knight setup and status messages.'
+    ) -join "`n"
+} elseif ($version -eq '2.1.2') {
+    @(
+        '- Expanded Bloodborne 1.09 death tracking to compatible PC runtimes, including Mrsuss60 bbport, Lantern Engine and deadinside28 Windows bbport, while preserving existing shadPS4 tracking.',
+        '- Compatible Bloodborne PC runtimes are detected independently of their executable filenames, with stable tracking through character changes and game restarts.'
+    ) -join "`n"
+} elseif ($version -eq '2.1.1') {
+    @(
+        '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
+        '- Hosted Overlay shows when SoulsTracker is closed or an older client needs an update.',
+        '- Hosted Overlay URLs stay the same when updating to this version.',
+        '- The update popup opens the SoulsTracker product page.'
+    ) -join "`n"
+} else {
+    @(
+        '- Choose whether to enable Hosted Overlay. Fresh installs start with it disabled; local tracking, Preview and text exports remain available independently.',
+        '- Choose whether closing the window minimizes SoulsTracker to the tray with the optional Minimize to tray on close setting.',
+        '- Fixed Sticky Preview scrollbar stutter while docking and undocking.',
+        '- Settings organization and Hosted Overlay disabled-state behavior have been refined.'
+    ) -join "`n"
+}
+    $changesMatch = [regex]::Match($releaseBody, "(?ms)^## $([regex]::Escape($changesHeading))\s*\r?\n(.*?)(?=^## |\z)")
 if (-not $changesMatch.Success -or $changesMatch.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedChanges) {
     throw 'Release notes must contain exactly the approved latest changes.'
 }
 if ($releaseBody -match '(?m)^## Notes\s*$' -or $releaseBody -match 'Existing local OBS URLs must be replaced\.') {
     throw 'Release notes contain removed disclosure or migration commentary.'
 }
-$expectedReleaseBody = "# SoulsTracker v$version`n`n## Compatible games`n`n$expectedList`n`n## Latest changes`n`n$expectedChanges"
+$expectedReleaseBody = "# SoulsTracker v$version`n`n## Compatible games`n`n$expectedList`n`n## $changesHeading`n`n$expectedChanges"
 if ($releaseBody.Trim().Replace("`r`n", "`n") -cne $expectedReleaseBody) {
-    throw 'Release notes must be exactly the approved title and two sections.'
+    throw 'Release notes must match the checked version''s title and two sections.'
+}
+
+$hotfixNotesPath = Join-Path $root 'docs\releases\v2.2.1.md'
+$hotfixNotes = Get-Content -Raw -Encoding utf8 $hotfixNotesPath
+$expectedHotfixChanges = @(
+    '- Fixed Hollow Knight game directory detection.',
+    '- Fixed flickering when adjusting Hollow Knight deaths.',
+    '- Improved Hollow Knight setup and status messages.'
+) -join "`n"
+$hotfixChangesMatch = [regex]::Match($hotfixNotes, '(?ms)^## Latest changes\s*\r?\n(.*?)(?=^## |\z)')
+$expectedHotfixNotes = "# SoulsTracker v2.2.1`n`n## Compatible games`n`n$expectedList`n`n## Latest changes`n`n$expectedHotfixChanges"
+if (-not $hotfixChangesMatch.Success -or $hotfixChangesMatch.Groups[1].Value.Trim().Replace("`r`n", "`n") -cne $expectedHotfixChanges -or
+    $hotfixNotes.Trim().Replace("`r`n", "`n") -cne $expectedHotfixNotes) {
+    throw 'The local v2.2.1 draft must contain only its concise compatible-games list and latest changes.'
 }
 if ($releaseWorkflow -notmatch '(?m)^\s+generate_release_notes: false\s*$' -or
-    $releaseWorkflow -notmatch '(?m)^\s+body_path: \$\{\{ steps\.version\.outputs\.release_notes \}\}\s*$' -or
+    $releaseWorkflow -notmatch '(?m)^\s+body_path: prepared/release-notes\.md\s*$' -or
     $releaseWorkflow -match 'Append setup guide|gh api --method PATCH|generate_release_notes: true') {
     throw 'Release workflow must publish only the static release notes without generated or appended prose.'
 }
