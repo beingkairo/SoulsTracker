@@ -133,7 +133,7 @@ function Promote-VerifiedDesktopArtifact {
 & (Join-Path $PSScriptRoot "Verify-Version.ps1")
 & (Join-Path $PSScriptRoot "Verify-ReleaseGuide.ps1")
 & (Join-Path $PSScriptRoot "Test-WebView2Installer.ps1")
-if ($version -eq '2.2.1') {
+if ([version]$version -ge [version]'2.2.1') {
     $sourceMode = if ($LocalQualification) { 'source-local' } else { 'source' }
     Invoke-External python @('-B', (Join-Path $PSScriptRoot 'verify_publication.py'), $sourceMode, '--source', $root)
     if (-not $HollowKnightApiPackage) { throw 'An explicit verified Hollow Knight API v78 package is required.' }

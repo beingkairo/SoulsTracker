@@ -25,7 +25,7 @@ function New-PackageFixture([string]$Name) {
         "scripts/Verify-Version.ps1", "scripts/Verify-ReleaseGuide.ps1", "installer/SoulsTracker.iss",
         "scripts/verify_publication.py", "scripts/verify_hollow_knight_input.py",
         "eng/Get-Version.ps1", "eng/Version.props", "README.md", "docs/RELEASE-GETTING-STARTED.md", "docs/THIRD_PARTY_NOTICES.md", "docs/WEBVIEW2_RUNTIME_LICENSE.txt",
-        "docs/releases/v$version.md", ".github/workflows/release.yml",
+        "docs/releases/v$version.md", "docs/releases/v2.2.1.md", ".github/workflows/release.yml",
         "web_overlay/package.json", "web_overlay/package-lock.json"
     )) {
         $destination = Join-Path $fixture $relative
@@ -274,10 +274,10 @@ try {
 
     $workflow = Get-Content -Raw (Join-Path $root '.github/workflows/release.yml')
     Assert-True ($workflow.Contains('path: release-output/desktop')) 'SBOM must scan the prepared Desktop payload.'
-    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: 1a0825a1df4f62ccd25986abfb931cf71359f546', 'APPROVED_IMPLEMENTATION: 5b36fd839e9de545218aa1892f532da35098013f', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-artifact: false', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.2.1', 'desktop-v2.2.1-', 'desktop-v2\.2\.1-', 'git/ref/tags/v2.2.1', 'releases/tags/v2.2.1', 'prepared/SoulsTrackerV2.2.1.exe', 'prepared/SoulsTrackerV2.2.1-portable.zip', 'prepared/SoulsTrackerV2.2.1.sbom.spdx.json', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ../control/scripts/Build-Release.ps1', 'get_hollow_knight_input.py --source source', '--input-origin', 'externalParameters.api78Input', 'verify_publication.py source --source source', '-SourceRoot', '-OutputRoot', '-HollowKnightApiPackage')) {
+    foreach ($required in @('ref: ${{ github.sha }}', 'APPROVED_SOURCE: f59ae325356c0290ef9f1ea9965353c844b90030', 'APPROVED_IMPLEMENTATION: f59ae325356c0290ef9f1ea9965353c844b90030', 'ref: ${{ env.APPROVED_SOURCE }}', "if: inputs.action == 'prepare'", "if: inputs.action == 'publish'", 'default: prepare', 'upload-artifact: false', 'upload-release-assets: false', 'artifact-ids: ${{ inputs.artifact_id }}', 'run-id: ${{ inputs.prepared_run_id }}', 'approved_manifest_sha256:', '--approved-manifest $env:APPROVED_MANIFEST', '--signer-digest', '--deny-self-hosted-runners', 'tag_name: v2.2.2', 'desktop-v2.2.2-', 'desktop-v2\.2\.2-', 'git/ref/tags/v2.2.2', 'releases/tags/v2.2.2', 'prepared/SoulsTrackerV2.2.2.exe', 'prepared/SoulsTrackerV2.2.2-portable.zip', 'prepared/SoulsTrackerV2.2.2.sbom.spdx.json', 'target_commitish: ${{ env.APPROVED_SOURCE }}', 'generate_release_notes: false', 'body_path: prepared/release-notes.md', 'overwrite_files: false', 'run: ../control/scripts/Build-Release.ps1', 'get_hollow_knight_input.py --source source', '--input-origin', 'externalParameters.api78Input', 'verify_publication.py source --source source', '-SourceRoot', '-OutputRoot', '-HollowKnightApiPackage')) {
         Assert-True ($workflow.Contains($required)) "Missing workflow contract: $required"
     }
-    Assert-True ($workflow -notmatch 'tag_name: v2\.2\.0|releases/tags/v2\.2\.0|prepared/SoulsTrackerV2\.2\.0') 'v2.2.1 workflow must not target or overwrite v2.2.0.'
+    Assert-True ($workflow -notmatch 'tag_name: v2\.2\.[01]|releases/tags/v2\.2\.[01]|prepared/SoulsTrackerV2\.2\.[01]') 'v2.2.2 workflow must not target or overwrite frozen v2.2.0 or v2.2.1 releases.'
     $last = -1
     foreach ($step in @('actions/checkout@', 'actions/setup-dotnet@', 'Require approved API v78 input provisioning', 'Install Inno Setup', 'run: ../control/scripts/Build-Release.ps1', 'Create portable archive', 'Generate SBOM', 'Reconcile candidate checksums', 'Attest release artifacts', 'actions/upload-artifact@', 'Validate immutable preparation', 'actions/download-artifact@', 'Verify approved bytes and signed provenance', 'Publish GitHub release')) {
         $index = $workflow.IndexOf($step)
