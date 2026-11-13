@@ -67,6 +67,11 @@ class RetrievalTests(unittest.TestCase):
     def canonical(value):
         return get.api.sha(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
 
+    def test_recreated_github_input_identity_is_pinned(self):
+        self.assertEqual(get.RELEASE_ID, 444814994)
+        self.assertEqual(get.ASSETS["api-12620.zip"]["id"], 745462808)
+        self.assertEqual(get.ASSETS["api-12620.receipt.json"]["id"], 745462807)
+
     @staticmethod
     def git_output(args, **kwargs):
         recipe = args[-1].endswith("fixture.ps1")
@@ -91,7 +96,8 @@ class RetrievalTests(unittest.TestCase):
         self.assertEqual(get.load_origin(self.destination / "input-origin.json"), origin)
         self.assertEqual(origin["build_receipt"], self.receipt)
         self.assertEqual(sum(binary for _, binary in self.requests), 2)
-        self.assertEqual((self.destination / "api-12620.zip").read_bytes(), self.binary[728414179])
+        self.assertEqual((self.destination / "api-12620.zip").read_bytes(),
+                         self.binary[get.ASSETS["api-12620.zip"]["id"]])
 
     def test_bad_context_or_absent_token_stops_before_network(self):
         for variable in ["GITHUB_ACTIONS", "GITHUB_REPOSITORY", "GITHUB_SERVER_URL", "GITHUB_API_URL", "GH_TOKEN"]:
@@ -134,7 +140,7 @@ class RetrievalTests(unittest.TestCase):
         self.assertFalse((self.destination / "input-origin.json").exists())
 
     def test_modified_or_missing_binary_rejected(self):
-        self.binary[728414179] = b"changed archive"
+        self.binary[get.ASSETS["api-12620.zip"]["id"]] = b"changed archive"
         with self.assertRaisesRegex(ValueError, "checksum differs"):
             self.fetch()
         self.assertFalse((self.destination / "input-origin.json").exists())
@@ -187,10 +193,11 @@ class RetrievalTests(unittest.TestCase):
         result = subprocess.CompletedProcess([], 0, stdout=b"synthetic download", stderr=b"")
         with mock.patch.dict(os.environ, {"GH_DEBUG": "api"}), \
                 mock.patch.object(get.subprocess, "run", return_value=result) as run:
-            self.assertEqual(get.github_get(f"{get.ENDPOINT}/releases/assets/728414179", True), result.stdout)
+            asset_path = f"{get.ENDPOINT}/releases/assets/{get.ASSETS['api-12620.zip']['id']}"
+            self.assertEqual(get.github_get(asset_path, True), result.stdout)
             args, options = run.call_args
             self.assertEqual(args[0], ["gh", "api", "--hostname", "github.com",
-                                      f"{get.ENDPOINT}/releases/assets/728414179", "-H", "Accept: application/octet-stream"])
+                                      asset_path, "-H", "Accept: application/octet-stream"])
             self.assertNotIn(os.environ["GH_TOKEN"], args[0])
             self.assertNotIn("GH_DEBUG", options["env"])
             self.assertEqual(options["env"]["GH_TOKEN"], os.environ["GH_TOKEN"])
