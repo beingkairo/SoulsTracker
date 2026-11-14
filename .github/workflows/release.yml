@@ -19,15 +19,15 @@ on:
         type: string
 
 concurrency:
-  group: desktop-v2.2.1-publication
+  group: desktop-v2.2.2-publication
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  APPROVED_SOURCE: 1a0825a1df4f62ccd25986abfb931cf71359f546
-  APPROVED_IMPLEMENTATION: 5b36fd839e9de545218aa1892f532da35098013f
+  APPROVED_SOURCE: ad1ecee92c587ec9d5e68746f3a7588f83a333db
+  APPROVED_IMPLEMENTATION: ad1ecee92c587ec9d5e68746f3a7588f83a333db
 
 jobs:
   prepare:
@@ -67,7 +67,7 @@ jobs:
           python -B control/scripts/verify_publication.py source --source source
           if ($LASTEXITCODE) { throw 'Application implementation changed' }
           $metadata = & ./source/eng/Get-ReleaseMetadata.ps1
-          if ($metadata.Version -ne '2.2.1') { throw 'Unexpected version' }
+          if ($metadata.Version -ne '2.2.2') { throw 'Unexpected version' }
       - name: Require approved API v78 input provisioning
         shell: pwsh
         env:
@@ -86,15 +86,15 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory release | Out-Null
-          Copy-Item "$env:GITHUB_WORKSPACE/release-output/installer/SoulsTrackerV2.2.1.exe" release/
-          Compress-Archive -Path "$env:GITHUB_WORKSPACE/release-output/desktop/*" -DestinationPath release/SoulsTrackerV2.2.1-portable.zip
+          Copy-Item "$env:GITHUB_WORKSPACE/release-output/installer/SoulsTrackerV2.2.2.exe" release/
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE/release-output/desktop/*" -DestinationPath release/SoulsTrackerV2.2.2-portable.zip
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
           path: release-output/desktop
           format: spdx-json
           syft-version: v1.52.0
-          output-file: release/SoulsTrackerV2.2.1.sbom.spdx.json
+          output-file: release/SoulsTrackerV2.2.2.sbom.spdx.json
           upload-artifact: false
           upload-release-assets: false
       - name: Reconcile candidate checksums and record exact inputs
@@ -141,7 +141,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         id: upload
         with:
-          name: desktop-v2.2.1-${{ github.run_id }}-${{ github.run_attempt }}
+          name: desktop-v2.2.2-${{ github.run_id }}-${{ github.run_attempt }}
           path: release/*
           retention-days: 30
           if-no-files-found: error
@@ -177,9 +177,9 @@ jobs:
           if ($run.conclusion -ne 'success' -or $run.head_sha -cne '${{ github.sha }}' -or $run.workflow_id -ne $current.workflow_id -or $run.event -ne 'workflow_dispatch') { throw 'Preparation run or workflow differs' }
           $artifact = gh api "repos/$repo/actions/artifacts/$env:ARTIFACT_ID" | ConvertFrom-Json
           if ($LASTEXITCODE) { throw 'Cannot inspect artifact' }
-          if ($artifact.expired -or $artifact.workflow_run.id.ToString() -cne $env:PREPARED_RUN -or $artifact.name -cnotmatch "^desktop-v2\.2\.1-$($env:PREPARED_RUN)-[1-9][0-9]*$") { throw 'Artifact does not belong to preparation run' }
+          if ($artifact.expired -or $artifact.workflow_run.id.ToString() -cne $env:PREPARED_RUN -or $artifact.name -cnotmatch "^desktop-v2\.2\.2-$($env:PREPARED_RUN)-[1-9][0-9]*$") { throw 'Artifact does not belong to preparation run' }
           # Prove absence rather than treating authentication/network failures as absence.
-          foreach ($resource in @('git/ref/tags/v2.2.1', 'releases/tags/v2.2.1')) {
+          foreach ($resource in @('git/ref/tags/v2.2.2', 'releases/tags/v2.2.2')) {
             $status = gh api --include "repos/$repo/$resource" 2>&1 | Out-String
             if ($status -notmatch 'HTTP/[^ ]+ 404') { throw 'Cannot prove release and tag are absent' }
           }
@@ -210,7 +210,7 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.2.1
+          tag_name: v2.2.2
           target_commitish: ${{ env.APPROVED_SOURCE }}
           draft: false
           prerelease: false
@@ -220,9 +220,9 @@ jobs:
           fail_on_unmatched_files: true
           overwrite_files: false
           files: |
-            prepared/SoulsTrackerV2.2.1.exe
-            prepared/SoulsTrackerV2.2.1-portable.zip
-            prepared/SoulsTrackerV2.2.1.sbom.spdx.json
+            prepared/SoulsTrackerV2.2.2.exe
+            prepared/SoulsTrackerV2.2.2-portable.zip
+            prepared/SoulsTrackerV2.2.2.sbom.spdx.json
             prepared/SHA256SUMS.txt
             prepared/release-manifest.json
             prepared/provenance.sigstore.json

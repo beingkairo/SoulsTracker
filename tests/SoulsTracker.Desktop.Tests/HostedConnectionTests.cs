@@ -131,30 +131,104 @@ public sealed class HostedConnectionTests
 
     internal static async Task OnDispatcher(Func<Task> test)
     {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcherReady = new TaskCompletionSource<Dispatcher>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackCompleted = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcherExited = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
-            var dispatcher = Dispatcher.CurrentDispatcher;
-            Exception? failure = null;
-            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
-            dispatcher.BeginInvoke(async () =>
+            try
             {
-                try { await test(); }
-                catch (Exception error) { failure = error; }
-                finally
+                var dispatcher = Dispatcher.CurrentDispatcher;
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+                dispatcherReady.TrySetResult(dispatcher);
+                dispatcher.BeginInvoke(new Action(async () =>
                 {
-                    // Let the callback unwind and queued UI cleanup finish before
-                    // stopping the pump. Completion owns the whole dispatcher loop.
-                    dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
-                }
-            });
-            Dispatcher.Run();
-            if (failure is null) completion.SetResult();
-            else completion.SetException(failure);
+                    Exception? callbackFailure = null;
+                    try { await test(); }
+                    catch (Exception error) { callbackFailure = error; }
+                    finally
+                    {
+                        try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Background); }
+                        catch (Exception error) { callbackFailure ??= error; }
+                        callbackCompleted.TrySetResult(callbackFailure);
+                    }
+                }));
+                Dispatcher.Run();
+                dispatcherExited.TrySetResult(null);
+            }
+            catch (Exception error)
+            {
+                dispatcherReady.TrySetException(error);
+                callbackCompleted.TrySetException(error);
+                dispatcherExited.TrySetResult(error);
+            }
+            finally
+            {
+                if (!callbackCompleted.Task.IsCompleted)
+                    callbackCompleted.TrySetException(new InvalidOperationException("Dispatcher exited before the test callback completed."));
+            }
         })
         { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
-        try { await completion.Task.WaitAsync(TimeSpan.FromSeconds(30)); }
-        finally { Assert.True(thread.Join(TimeSpan.FromSeconds(5))); }
+
+        Dispatcher? dispatcher = null;
+        Exception? harnessFailure = null;
+        Exception? callbackFailure = null;
+        Exception? exitFailure = null;
+        try
+        {
+            dispatcher = await dispatcherReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            callbackFailure = await callbackCompleted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (TimeoutException error)
+        {
+            if (callbackCompleted.Task.IsCompleted)
+            {
+                harnessFailure = error;
+                dispatcher = dispatcherReady.Task.IsCompletedSuccessfully ? dispatcherReady.Task.Result : null;
+            }
+            else
+            {
+                var phase = dispatcher is null ? "startup" : "test callback";
+                if (dispatcher is not null)
+                {
+                    try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Send); }
+                    catch (Exception shutdownError) { error.Data["ShutdownError"] = shutdownError.GetType().Name; }
+                    var exited = await Task.WhenAny(dispatcherExited.Task, Task.Delay(TimeSpan.FromSeconds(5))) == dispatcherExited.Task;
+                    error.Data["DispatcherExitedAfterTimeout"] = exited;
+                }
+                harnessFailure = new TimeoutException($"Dispatcher {phase} exceeded its timeout.", error);
+            }
+        }
+        catch (Exception error)
+        {
+            harnessFailure = error;
+        }
+
+        if (harnessFailure is null)
+        {
+            try { exitFailure = await dispatcherExited.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (TimeoutException)
+            {
+                // A lower-priority shutdown can wait behind sustained UI work. Escalate
+                // once after the callback has finished instead of abandoning the pump.
+                Exception? escalationFailure = null;
+                try { dispatcher?.BeginInvokeShutdown(DispatcherPriority.Send); }
+                catch (Exception error) { escalationFailure = error; }
+                try { exitFailure = await dispatcherExited.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+                catch (Exception error)
+                {
+                    exitFailure = new TimeoutException("Dispatcher did not exit after graceful and immediate shutdown requests.", error);
+                    if (escalationFailure is not null) exitFailure.Data["EscalationError"] = escalationFailure.GetType().Name;
+                }
+            }
+            catch (Exception error) { exitFailure = error; }
+        }
+
+        var threadExited = thread.Join(TimeSpan.FromSeconds(5));
+        if (harnessFailure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(harnessFailure).Throw();
+        if (callbackFailure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(callbackFailure).Throw();
+        if (exitFailure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exitFailure).Throw();
+        if (!threadExited) throw new TimeoutException("Dispatcher callback completed, but the dispatcher thread did not exit within five seconds.");
     }
 }

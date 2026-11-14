@@ -468,3 +468,14 @@ test("a corrected read fragment starts one new client after invalid credentials"
   await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 7");
   expect(reconnects).toBe(1);
 });
+
+test("LIVE Studio winName query preserves the URL and hydrates the hosted counter", async ({ page, request }) => {
+  await publish(request, { death: { value: "42", availability: "available" } });
+  const url = `${origin}/soulstracker/?winName=browser_7aacec82-8171-450d-9529-b2c7b2bfa4b0#id=${credentials.id}&read=${credentials.read}`;
+  const socketEvent = page.waitForEvent("websocket");
+  await page.goto(url);
+  const socket = await socketEvent;
+  expect(socket.url()).toBe(`${origin.replace("https:", "wss:")}/api/v1/overlays/${credentials.id}/live`);
+  await expect(page.getByTestId("total-deaths-overlay")).toHaveText("Total Deaths: 42");
+  expect(page.url()).toBe(url);
+});
