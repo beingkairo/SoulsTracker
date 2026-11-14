@@ -10,13 +10,13 @@ import verify_hollow_knight_input as api
 REPOSITORY = "beingkairo/SoulsTracker"
 REPOSITORY_ID = 1304056819
 OWNER_ID = 281211480
-RELEASE_ID = 439458049
+RELEASE_ID = 444814994
 INPUT_SOURCE = "c89b0c0be5a1d08573427ea48e6b70aa3d5c6c56"
 RECEIPT_CANONICAL_SHA256 = "5c566d0d4c0d2c0e38c041433b243ed4b1250e9fc4b01a8ba32de69d2d3d8855"
 ASSETS = {
-    "api-12620.zip": {"id": 728414179, "bytes": 5493138, "sha256": api.PACKAGE_SHA256,
+    "api-12620.zip": {"id": 745462808, "bytes": 5493138, "sha256": api.PACKAGE_SHA256,
                       "content_type": "application/zip"},
-    "api-12620.receipt.json": {"id": 728411439, "bytes": 4739,
+    "api-12620.receipt.json": {"id": 745462807, "bytes": 4739,
                              "sha256": "d58db460bbd163d656645958e5554dd52ff878a7f1e126458df04ae3814dd862",
                              "content_type": "application/json"},
 }

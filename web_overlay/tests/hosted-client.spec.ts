@@ -40,13 +40,26 @@ function harness(random = 0.5) {
   return { client, sockets, rendered, urls, timers, advance };
 }
 
-test("strict canonical page and fragment-only identity reject alternate routes, duplicates, styles, queries and malformed encodings", () => {
+test("strict canonical page and fragment-only identity allow only the observed LIVE Studio window query", () => {
   const base = `https://overlay.test/soulstracker/#id=${"1".repeat(32)}&read=${"2".repeat(64)}`;
+  const windowName = "browser_7aacec82-8171-450d-9529-b2c7b2bfa4b0";
   expect(parseHostedLocation(base)?.id).toBe("1".repeat(32));
-  for (const url of [base + "&read=x", base + "&title=x", base.replace("/soulstracker/#", "/soulstracker/?id=x#"),
+  // This is the observed LIVE Studio request shape.
+  expect(parseHostedLocation(base.replace("#", `?winName=${windowName}#`))?.read).toBe("2".repeat(64));
+  for (const url of [
+    "https://overlay.test/soulstracker/?winName=" + windowName,
+    base.replace("#", `?winName=${windowName}#`).replace("read=" + "2".repeat(64), "read=invalid"),
+    base.replace("#", `?read=${"2".repeat(64)}#`),
+    base.replace("#", "?unknown=value#"),
+    base.replace("#", `?winName=${windowName}&winName=${windowName}#`),
+    base.replace("#", "?winName=browser_bad#"),
+    base.replace("#", `?winName=${"browser_" + "a".repeat(200)}#`),
+    base.replace("#", `?utm_source=chatgpt.com&winName=${windowName}#`),
+    base + "&read=x", base + "&title=x", base.replace("/soulstracker/#", "/soulstracker/?id=x#"),
     base.replace("/soulstracker/", "/overlay/"), base.replace("/soulstracker/", "/"), base.replace("/soulstracker/", "/soulstracker"),
     base.replace("https:", "http:"), base.replace("overlay.test", "user@overlay.test"), base.replace("#id=", "#%69d="),
-    base.replace("&read=", "&write="), base + "&", base.replace("#id=", "#id=%")])
+    base.replace("&read=", "&write="), base + "&", base.replace("#id=", "#id=%")
+  ])
     expect(parseHostedLocation(url)).toBeNull();
 });
 test("authenticates only in the first message and applies combined snapshots atomically without precision loss", () => {
