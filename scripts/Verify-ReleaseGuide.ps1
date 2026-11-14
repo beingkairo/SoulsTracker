@@ -75,6 +75,10 @@ $expectedChanges = if ($version -eq '2.2.0') {
         '- Fixed flickering when adjusting Hollow Knight deaths.',
         '- Improved Hollow Knight setup and status messages.'
     ) -join "`n"
+} elseif ($version -eq '2.2.2') {
+    @(
+        '- Fixed hosted overlay compatibility with TikTok LIVE Studio Link sources.'
+    ) -join "`n"
 } elseif ($version -eq '2.1.2') {
     @(
         '- Expanded Bloodborne 1.09 death tracking to compatible PC runtimes, including Mrsuss60 bbport, Lantern Engine and deadinside28 Windows bbport, while preserving existing shadPS4 tracking.',
