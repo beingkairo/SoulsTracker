@@ -74,8 +74,8 @@
       },
       "SQLitePCLRaw.core": {
         "type": "Transitive",
-        "resolved": "3.0.3",
-        "contentHash": "bjm6FY4lZyP+t7GmiuvSM0QXpFihAvyE0Y9O2yibm3g95AAWJPNnHOKVNJGyPTGIKuK7Pr4Wh8Rd8/aOtAclQw=="
+        "resolved": "3.0.5",
+        "contentHash": "k81AYXXRCw3Zj8rOhyBoCsx/U97KYDFI2CSKr/ijl5BwpsW/hX/4kBiDmerFaoust8nxBwa0IHQFw8MmSHRtnQ=="
       },
       "SQLitePCLRaw.provider.e_sqlite3": {
         "type": "Transitive",
@@ -128,16 +128,16 @@
       "soulstracker.application": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[2.0.0, )"
+          "SoulsTracker.Domain": "[2.2.2, )"
         }
       },
       "soulstracker.desktop": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Web.WebView2": "[1.0.4191.47, )",
-          "SoulsTracker.Application": "[2.0.0, )",
-          "SoulsTracker.Infrastructure": "[2.0.0, )",
-          "SoulsTracker.Overlay": "[2.0.0, )"
+          "SoulsTracker.Application": "[2.2.2, )",
+          "SoulsTracker.Infrastructure": "[2.2.2, )",
+          "SoulsTracker.Overlay": "[2.2.2, )"
         }
       },
       "soulstracker.domain": {
@@ -146,25 +146,25 @@
       "soulstracker.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Data.Sqlite.Core": "[10.0.13, )",
+          "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
-          "SoulsTracker.Application": "[2.0.0, )",
-          "SoulsTracker.Domain": "[2.0.0, )"
+          "SoulsTracker.Application": "[2.2.2, )",
+          "SoulsTracker.Domain": "[2.2.2, )"
         }
       },
       "soulstracker.overlay": {
         "type": "Project",
         "dependencies": {
-          "SoulsTracker.Domain": "[2.0.0, )"
+          "SoulsTracker.Domain": "[2.2.2, )"
         }
       },
       "Microsoft.Data.Sqlite.Core": {
         "type": "CentralTransitive",
-        "requested": "[10.0.13, )",
-        "resolved": "10.0.13",
-        "contentHash": "Gge8XsSCOwcbkbdmt2UDAe6kIv9Q0vA6yb3wsTStjjexaMFLTWfc/1gH4kbhJ+zWiXRTRA4lG2sOQNVfir204w==",
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "aWaF2LDjuFZwE9UsAGRYGNyS48xqaXoKPAjwpJI85fsaM/43s5NTRnl4xtqbTGKq8of2M/W8mo7DJk7v4zzHGQ==",
         "dependencies": {
-          "SQLitePCLRaw.core": "2.1.13"
+          "SQLitePCLRaw.core": "3.0.5"
         }
       },
       "Microsoft.Web.WebView2": {
